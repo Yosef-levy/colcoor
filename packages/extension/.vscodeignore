@@ -1,0 +1,6 @@
+.vscode/**
+src/**
+tsconfig.json
+eslint.config.mjs
+**/*.map
+package-lock.json

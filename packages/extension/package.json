@@ -1,0 +1,51 @@
+{
+  "name": "colcoor-extension",
+  "displayName": "Colcoor",
+  "description": "Colcoor conversation orchestrator for Cursor (see repo docs/).",
+  "version": "0.0.1",
+  "publisher": "colcoor",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "colcoor.refreshConversations",
+        "title": "Colcoor: Refresh conversations"
+      },
+      {
+        "command": "colcoor.openAbout",
+        "title": "Colcoor: About"
+      }
+    ],
+    "configuration": {
+      "title": "Colcoor",
+      "properties": {
+        "colcoor.backendBaseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "Base URL of the Colcoor extension backend (no trailing slash)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint .",
+    "test": "node -e \"console.log('no extension tests yet')\"",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.16.0",
+    "@types/node": "^20.17.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "eslint": "^9.16.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0"
+  }
+}

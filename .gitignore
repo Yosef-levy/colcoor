@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Build / dist
+dist/
+out/
+*.vsix
+*.egg-info/
+.eggs/
+build/
+*.so
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# IDE / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# UV / lock (optional: commit uv.lock for reproducibility)
+# uv.lock

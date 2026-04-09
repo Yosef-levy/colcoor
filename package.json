@@ -1,0 +1,11 @@
+{
+  "name": "colcoor",
+  "private": true,
+  "workspaces": ["packages/extension"],
+  "scripts": {
+    "build": "npm run build -w colcoor-extension",
+    "lint": "npm run lint -w colcoor-extension",
+    "test": "npm run test -w colcoor-extension",
+    "package:extension": "npm run package -w colcoor-extension"
+  }
+}

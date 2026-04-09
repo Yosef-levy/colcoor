@@ -1,0 +1,20 @@
+# Local stack for the extension-dedicated backend (see docs/architecture.md).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: colcoor
+      POSTGRES_PASSWORD: colcoor
+      POSTGRES_DB: colcoor
+    ports:
+      - "5432:5432"
+    volumes:
+      - colcoor_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U colcoor -d colcoor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  colcoor_pgdata:

@@ -1,0 +1,39 @@
+[project]
+name = "colcoor-backend"
+version = "0.1.0"
+description = "Colcoor extension-dedicated API (event graph, tree, side chat, auth)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "pydantic-settings>=2.6.0",
+]
+
+[project.optional-dependencies]
+db = [
+  "sqlalchemy[asyncio]>=2.0.36",
+  "asyncpg>=0.30.0",
+]
+dev = [
+  "httpx>=0.28.0",
+  "pytest>=8.3.0",
+  "ruff>=0.8.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["colcoor_backend", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["colcoor_backend"]
