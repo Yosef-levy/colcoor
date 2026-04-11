@@ -8,19 +8,18 @@ dependencies = [
   "uvicorn[standard]>=0.32.0",
   "gunicorn>=23.0.0",
   "pydantic-settings>=2.6.0",
+  "sqlalchemy[asyncio]>=2.0.36",
+  "asyncpg>=0.30.0",
+  "alembic>=1.14.0",
+  "PyJWT>=2.9.0",
+  "psycopg[binary]>=3.2.0",
 ]
 
 [project.optional-dependencies]
-db = [
-  "sqlalchemy[asyncio]>=2.0.36",
-  "asyncpg>=0.30.0",
-]
 dev = [
   "httpx>=0.28.0",
   "pytest>=8.3.0",
   "ruff>=0.8.0",
-  "sqlalchemy[asyncio]>=2.0.36",
-  "asyncpg>=0.30.0",
 ]
 
 [tool.ruff]

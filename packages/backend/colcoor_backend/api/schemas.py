@@ -1,7 +1,8 @@
+from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EventKind(str, Enum):
@@ -26,7 +27,43 @@ class AuthCursorRequest(BaseModel):
 
 
 class AuthResponse(BaseModel):
-    """Aligned with web AuthResponse shape when reusing clients; stub until JWT is implemented."""
-
     access_token: str
     token_type: str = "bearer"
+
+
+class DevLoginRequest(BaseModel):
+    cursor_sub: str = Field(..., min_length=1)
+    email: str = Field(..., min_length=3)
+    display_name: str = ""
+
+
+class ConversationCreate(BaseModel):
+    title: str | None = None
+
+
+class ConversationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    title: str | None
+    pinned: bool
+    updated_at: datetime
+
+
+class EventNodeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, extra="ignore")
+
+    id: UUID
+    conversation_id: UUID
+    parent_event_id: UUID | None
+    kind: str
+    actor_type: str
+    actor_user_id: UUID | None
+    content_text: str | None
+    visible_to: UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TreeResponse(BaseModel):
+    events: list[EventNodeOut]

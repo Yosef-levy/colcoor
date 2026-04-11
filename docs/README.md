@@ -32,6 +32,7 @@ This folder describes the **Colcoor** **Cursor IDE extension**: same conversatio
 | [git-integration.md](git-integration.md) | Loose coupling; optional subtree metadata |
 | [ui-features.md](ui-features.md) | User-visible UI feature set (parity with web, exclusions, avatar) |
 | [production.md](production.md) | VM deployment: Docker Compose, nginx, Postgres, env, health, operations |
+| [database.md](database.md) | PostgreSQL schema: users, conversations, events graph, side chat, billing, usage |
 
 ## Authoritative references (repo root)
 

@@ -19,7 +19,7 @@ ENV PATH="/opt/venv/bin:$PATH" VIRTUAL_ENV=/opt/venv
 COPY pyproject.toml ./
 COPY colcoor_backend ./colcoor_backend
 RUN pip install --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir ".[db]"
+    && pip install --no-cache-dir .
 
 # --- runtime ---
 FROM python:3.12-slim AS runtime
@@ -39,17 +39,16 @@ RUN groupadd --gid 10001 colcoor \
 COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
-RUN chown colcoor:colcoor /app
+COPY alembic.ini ./
+COPY alembic ./alembic
+RUN chown -R colcoor:colcoor /app
 
 USER colcoor
 
-# Internal port only; compose/nginx use this. Do not publish this port on the host in production.
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import os, urllib.request; p=os.environ.get('PORT', '8000'); urllib.request.urlopen(f'http://127.0.0.1:{p}/health', timeout=4)" || exit 1
 
-# Production WSGI/ASGI: Gunicorn + UvicornWorker (no dev reload).
-# Default WEB_CONCURRENCY=2 is conservative for small VMs; override via compose/env.
-# Logs to stdout/stderr for Docker. PORT must match nginx upstream (default 8000).
-CMD ["sh", "-c", "exec gunicorn colcoor_backend.main:app -k uvicorn.workers.UvicornWorker -w \"${WEB_CONCURRENCY:-2}\" -b \"0.0.0.0:${PORT:-8000}\" --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]
+# Apply DB migrations then start API (DATABASE_URL must use +asyncpg for the app; Alembic uses +psycopg via env.py).
+CMD ["sh", "-c", "alembic upgrade head && exec gunicorn colcoor_backend.main:app -k uvicorn.workers.UvicornWorker -w \"${WEB_CONCURRENCY:-2}\" -b \"0.0.0.0:${PORT:-8000}\" --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]

@@ -9,6 +9,10 @@ Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated back
 | [`packages/extension`](packages/extension) | VS Code / Cursor extension (transcript construction, agent invocation, UI shell) |
 | [`packages/backend`](packages/backend) | HTTP API: event graph, tree, side chat, auth — **no** main-thread LLM or transcript-over-HTTP |
 
+## Database
+
+Canonical PostgreSQL schema (tables, columns, constraints, DDL): **[`docs/database.md`](docs/database.md)**.
+
 ## Prerequisites
 
 - Node.js 20+ and npm (for the extension workspace)

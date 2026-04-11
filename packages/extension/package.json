@@ -13,6 +13,14 @@
   "contributes": {
     "commands": [
       {
+        "command": "colcoor.signInDev",
+        "title": "Colcoor: Sign in (dev)"
+      },
+      {
+        "command": "colcoor.signOut",
+        "title": "Colcoor: Sign out"
+      },
+      {
         "command": "colcoor.refreshConversations",
         "title": "Colcoor: Refresh conversations"
       },
@@ -37,7 +45,8 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint .",
     "test": "node -e \"console.log('no extension tests yet')\"",
-    "package": "npm run build && vsce package --no-dependencies"
+    "package": "npm run build && vsce package --no-dependencies",
+    "open-in-cursor": "npm run build && cursor --extensionDevelopmentPath=\"$PWD\""
   },
   "devDependencies": {
     "@eslint/js": "^9.16.0",

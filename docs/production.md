@@ -156,6 +156,7 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_
 
 ## Related docs
 
+- [database.md](database.md) — PostgreSQL schema (DDL)
 - [architecture.md](architecture.md) — backend role vs extension vs Cursor
 - [authentication.md](authentication.md) — Cursor account and JWT intent
 - [data-flow-and-api.md](data-flow-and-api.md) — API contracts (append-event, no transcript HTTP)

@@ -5,12 +5,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from colcoor_backend.api.router import api_router
 from colcoor_backend.core.config import get_settings
 from colcoor_backend.core.readiness import ping_database
 from colcoor_backend.core.validation import validate_cors_origins_non_wildcard, validate_production_settings
+import colcoor_backend.db.models  # noqa: F401 — register ORM mappers
+from colcoor_backend.db.session import create_engine, create_session_factory
 from colcoor_backend.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -23,15 +24,13 @@ async def lifespan(app: FastAPI):
     validate_production_settings(settings)
 
     if settings.database_url:
-        app.state.db_engine = create_async_engine(
-            settings.database_url,
-            pool_pre_ping=True,
-            pool_size=2,
-            max_overflow=0,
-        )
-        logger.info("async database engine created for readiness checks")
+        engine = create_engine(settings.database_url)
+        app.state.db_engine = engine
+        app.state.session_factory = create_session_factory(engine)
+        logger.info("async database engine and session factory configured")
     else:
         app.state.db_engine = None
+        app.state.session_factory = None
 
     logger.info(
         "startup complete env=%s database_configured=%s cors_origins=%s",

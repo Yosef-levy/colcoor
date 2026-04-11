@@ -17,6 +17,8 @@ The backend is the **source of truth** for:
 - Permissions
 - Billing / entitlements ([monetization.md](monetization.md))
 
+Persistent layout: **[database.md](database.md)** (PostgreSQL tables, FKs, indexes).
+
 The backend **does not**:
 
 - Run the **main-thread** LLM
