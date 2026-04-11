@@ -40,3 +40,17 @@ Open `packages/extension` in the editor and use the generated launch configurati
 ## CI
 
 GitHub Actions runs lint/build for the extension and ruff/pytest for the backend (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+## Production (Linux VM, Docker Compose + nginx)
+
+Full runbook: **[`docs/production.md`](docs/production.md)** (architecture, env, health, nginx, backups checklist).
+
+Quick start from repo root:
+
+```bash
+cp .env.example .env
+# Edit secrets and DATABASE_URL; then:
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The **API is Python (FastAPI)** in `packages/backend/`. Root `package.json` is for the editor extension only.

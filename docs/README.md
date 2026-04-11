@@ -31,6 +31,7 @@ This folder describes the **Colcoor** **Cursor IDE extension**: same conversatio
 | [monetization.md](monetization.md) | Tokens on every request, free vs paid feature intent |
 | [git-integration.md](git-integration.md) | Loose coupling; optional subtree metadata |
 | [ui-features.md](ui-features.md) | User-visible UI feature set (parity with web, exclusions, avatar) |
+| [production.md](production.md) | VM deployment: Docker Compose, nginx, Postgres, env, health, operations |
 
 ## Authoritative references (repo root)
 

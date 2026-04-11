@@ -1,0 +1,26 @@
+# Git / IDE
+.git
+.gitignore
+**/.DS_Store
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Local env (never bake secrets into the image)
+.env
+.env.*
+
+# Tests and docs (not needed in runtime image)
+tests
+*.md
