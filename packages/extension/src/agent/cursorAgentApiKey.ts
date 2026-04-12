@@ -18,7 +18,7 @@ export async function promptStoreCursorAgentApiKey(secrets: vscode.SecretStorage
     },
     {
       label: "$(key) I have my key — paste it now",
-      description: "Opens a secure field to save it for Colcoor’s agent runs",
+      description: "Saved for Colcoor only; replaces a stale CURSOR_API_KEY from the editor process",
       action: "paste",
     },
     {

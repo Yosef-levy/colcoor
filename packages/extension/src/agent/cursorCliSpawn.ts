@@ -7,6 +7,22 @@ const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
 export type CursorCliSpawnResult = { stdout: string; stderr: string; exitCode: number | null };
 
 /**
+ * Child env for `agent`: PATH includes common install dirs. If Colcoor has a stored API key,
+ * drop any inherited `CURSOR_API_KEY` from the editor process so the secret wins (stale env keys
+ * often cause "invalid API key loaded from environment variable").
+ */
+export function buildEnvForAgentSpawn(storedCursorApiKey: string | undefined): NodeJS.ProcessEnv {
+  const base = processEnvForCursorCli();
+  const trimmed = storedCursorApiKey?.trim();
+  if (!trimmed) {
+    return base;
+  }
+  const rest = { ...base };
+  delete rest.CURSOR_API_KEY;
+  return { ...rest, CURSOR_API_KEY: trimmed };
+}
+
+/**
  * Runs `agent -p` (Cursor headless CLI) with the given prompt; cwd and `--workspace` are set.
  * @see https://cursor.com/docs/cli/headless
  */
@@ -15,14 +31,11 @@ export function spawnCursorAgentPrint(params: {
   workspaceRoot: string;
   prompt: string;
   timeoutMs: number;
-  /** Merged onto PATH-augmented env (e.g. `CURSOR_API_KEY` from Colcoor secrets). */
-  extraEnv?: Record<string, string>;
+  /** When set, becomes the only `CURSOR_API_KEY` seen by `agent` (replaces editor env). */
+  storedCursorApiKey?: string;
 }): Promise<CursorCliSpawnResult> {
   const cwd = params.workspaceRoot.trim() || process.cwd();
-  const env =
-    params.extraEnv && Object.keys(params.extraEnv).length > 0
-      ? { ...processEnvForCursorCli(), ...params.extraEnv }
-      : processEnvForCursorCli();
+  const env = buildEnvForAgentSpawn(params.storedCursorApiKey);
   const args = [
     "-p",
     "--output-format",

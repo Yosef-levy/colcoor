@@ -8,6 +8,12 @@ import * as vscode from "vscode";
 import { SECRET_CURSOR_AGENT_API_KEY } from "./cursorAgentApiKey";
 import { spawnCursorAgentPrint } from "./cursorCliSpawn";
 
+/** Strip ANSI SGR codes from CLI stderr (Cursor colors output). */
+function stripAnsi(s: string): string {
+  // eslint-disable-next-line no-control-regex -- match ESC [ … m from `agent` stderr
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 export type AgentMode = "auto" | "headless" | "stub";
 
 /** How the assistant body was produced (for UI; persisted text stays short when CLI is missing). */
@@ -40,29 +46,33 @@ export class AgentRunner {
 
     try {
       const storedKey = await this.secrets.get(SECRET_CURSOR_AGENT_API_KEY);
-      const extraEnv: Record<string, string> = {};
-      if (storedKey?.trim()) {
-        extraEnv.CURSOR_API_KEY = storedKey.trim();
-      }
 
       const { stdout, stderr, exitCode } = await spawnCursorAgentPrint({
         executable,
         workspaceRoot: cwd,
         prompt: input.transcriptText,
         timeoutMs: Math.max(10_000, timeoutMs),
-        extraEnv: Object.keys(extraEnv).length > 0 ? extraEnv : undefined,
+        storedCursorApiKey: storedKey?.trim() || undefined,
       });
       if (exitCode !== 0) {
-        const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n---\n") || "(no output)";
-        const authHint = /authentication|CURSOR_API_KEY|agent login/i.test(detail)
-          ? '\n\nColcoor: Command Palette → "Colcoor: Set Cursor API key for agent" (stores key for agent -p), ' +
+        const raw = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n---\n") || "(no output)";
+        const detail = stripAnsi(raw);
+        const invalidKey = /invalid.*api key|api key is invalid/i.test(detail);
+        const authHint = /authentication|CURSOR_API_KEY|agent login/i.test(detail) || invalidKey
+          ? '\n\nColcoor: Command Palette → "Colcoor: Set Cursor API key for agent" (replaces a bad CURSOR_API_KEY from the editor env), ' +
             "or run `agent login` in a terminal. Docs: https://cursor.com/docs/cli/reference/authentication"
           : "";
-        throw new Error(`Cursor agent exited with code ${exitCode}.\n${detail}${authHint}`);
+        const envHint = invalidKey && !storedKey?.trim()
+          ? "\n\nThe key came from the Cursor process environment (CURSOR_API_KEY). Unset it or set Colcoor’s key to override."
+          : invalidKey && storedKey?.trim()
+            ? "\n\nColcoor sent your stored key; create a new API key in Cursor if it is still rejected."
+            : "";
+        throw new Error(`Cursor agent exited with code ${exitCode}.\n${detail}${envHint}${authHint}`);
       }
       const text = stdout.trim();
       if (!text) {
-        throw new Error(`Cursor agent returned empty stdout.${stderr ? `\n${stderr.trim()}` : ""}`);
+        const errTail = stderr ? `\n${stripAnsi(stderr.trim())}` : "";
+        throw new Error(`Cursor agent returned empty stdout.${errTail}`);
       }
       return { text, stub: "none" };
     } catch (e) {
