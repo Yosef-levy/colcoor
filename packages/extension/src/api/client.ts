@@ -3,12 +3,6 @@ export type ColcoorApiClientOptions = {
   getAccessToken: () => Promise<string | undefined>;
 };
 
-export type DevLoginBody = {
-  cursor_sub: string;
-  email: string;
-  display_name?: string;
-};
-
 export type AuthResponseBody = {
   access_token: string;
 };
@@ -99,25 +93,6 @@ export class ColcoorApiClient {
     }
     const url = this.apiUrl(path);
     return this.fetchOrThrow(url, { ...init, headers });
-  }
-
-  /** Non-production only: POST /auth/dev-login (no bearer). */
-  async devLogin(body: DevLoginBody): Promise<AuthResponseBody> {
-    const url = this.apiUrl("/auth/dev-login");
-    const res = await this.fetchOrThrow(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        cursor_sub: body.cursor_sub,
-        email: body.email,
-        display_name: body.display_name ?? "",
-      }),
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`dev-login failed (${res.status}): ${text || res.statusText}`);
-    }
-    return JSON.parse(text) as AuthResponseBody;
   }
 
   /** Production: exchange VS Code / Cursor IdP token for Colcoor API JWT. */

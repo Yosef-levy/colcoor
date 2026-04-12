@@ -25,10 +25,6 @@
         "title": "Colcoor: Sign in"
       },
       {
-        "command": "colcoor.signInDev",
-        "title": "Colcoor: Sign in (dev)"
-      },
-      {
         "command": "colcoor.signOut",
         "title": "Colcoor: Sign out"
       },
@@ -75,7 +71,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign in (dev only)](command:colcoor.signInDev)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)"
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)"
       }
     ],
     "menus": {

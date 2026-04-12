@@ -104,43 +104,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
       }
     }),
-    vscode.commands.registerCommand("colcoor.signInDev", async () => {
-      const cursorSub = await vscode.window.showInputBox({
-        title: "Colcoor dev sign-in",
-        prompt: "Cursor subject / stable id (cursor_sub)",
-        ignoreFocusOut: true,
-      });
-      if (!cursorSub?.trim()) {
-        return;
-      }
-      const email = await vscode.window.showInputBox({
-        title: "Colcoor dev sign-in",
-        prompt: "Email",
-        ignoreFocusOut: true,
-      });
-      if (!email?.trim()) {
-        return;
-      }
-      const displayName =
-        (await vscode.window.showInputBox({
-          title: "Colcoor dev sign-in",
-          prompt: "Display name (optional)",
-          ignoreFocusOut: true,
-        })) ?? "";
-      try {
-        const { access_token: accessToken } = await api.devLogin({
-          cursor_sub: cursorSub.trim(),
-          email: email.trim(),
-          display_name: displayName.trim(),
-        });
-        await session.setBackendAccessToken(accessToken);
-        refreshTree();
-        await offerCursorAgentApiKeyAfterSignIn(context.secrets);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
-      }
-    }),
     vscode.commands.registerCommand("colcoor.signOut", async () => {
       await session.clearBackendAccessToken();
       refreshTree();
