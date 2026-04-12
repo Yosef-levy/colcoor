@@ -355,6 +355,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     function traceSummaryLine(ev) {
       if (!ev || typeof ev !== "object") return "Event";
+      if (ev.colcoor_compact === true && typeof ev.summary === "string") {
+        const s = ev.summary;
+        const first = s.split("\n")[0];
+        return first.length > 120 ? first.slice(0, 120) + "…" : first;
+      }
       const t = ev.type;
       if (t === "tool_call") {
         const st = ev.subtype != null ? String(ev.subtype) : "";
@@ -377,6 +382,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     function formatTraceEntryHtml(ev, idx) {
       const sum = esc(traceSummaryLine(ev));
+      if (ev && typeof ev === "object" && ev.colcoor_compact === true) {
+        const kind = ev.kind != null ? String(ev.kind) : "";
+        let body = "";
+        if (kind === "edit_diff" && typeof ev.diff === "string" && ev.diff.length) {
+          body = '<pre class="trace-pre trace-diff">' + esc(ev.diff) + "</pre>";
+        } else if (typeof ev.summary === "string") {
+          body = '<pre class="trace-pre">' + esc(ev.summary) + "</pre>";
+        } else {
+          body = '<pre class="trace-pre">(empty)</pre>';
+        }
+        return (
+          '<div class="trace-entry"><div class="trace-meta">' +
+          String(idx + 1) +
+          ". " +
+          sum +
+          "</div>" +
+          body +
+          "</div>"
+        );
+      }
       let raw;
       try {
         raw = esc(JSON.stringify(ev, null, 2));
@@ -518,7 +543,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             html +=
               '<details open class="agent-trace"><summary class="trace-summary">CLI trace — ' +
               s.traceEntries.length +
-              " event(s) · tools &amp; session (collapse)</summary>";
+              " line(s) · reads, edits, shell (collapse)</summary>";
             for (let i = 0; i < s.traceEntries.length; i++) {
               html += formatTraceEntryHtml(s.traceEntries[i], i);
             }
@@ -527,7 +552,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             html +=
               '<p class="agent-trace-missing hint">' +
               esc(
-                "No CLI trace for this reply. Traces are saved for new messages with stream-json or stream-json-partial (not text/stub). The trace lists tool calls and session metadata only — not the prompt or per-token assistant stream.",
+                "No CLI trace for this reply. Traces are saved for new messages with stream-json or stream-json-partial (not text/stub). When present, the trace lists completed file reads, completed edits (diff), and shell commands — not the prompt or assistant token stream.",
               ) +
               "</p>";
           }

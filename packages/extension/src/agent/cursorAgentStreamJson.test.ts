@@ -57,7 +57,7 @@ describe("parseCursorAgentNdjsonLine", () => {
 });
 
 describe("slimNdjsonForTimeline", () => {
-  it("drops user and assistant NDJSON rows", () => {
+  it("drops user assistant system and result rows", () => {
     expect(slimNdjsonForTimeline({ type: "user", message: { role: "user", content: [] } })).toBeNull();
     expect(
       slimNdjsonForTimeline({
@@ -65,35 +65,29 @@ describe("slimNdjsonForTimeline", () => {
         message: { role: "assistant", content: [{ type: "text", text: "tok" }] },
       }),
     ).toBeNull();
+    expect(slimNdjsonForTimeline({ type: "system", subtype: "init", model: "M" })).toBeNull();
+    expect(
+      slimNdjsonForTimeline({
+        type: "result",
+        subtype: "success",
+        result: "body",
+        duration_ms: 1,
+      }),
+    ).toBeNull();
   });
 
-  it("keeps slim system without cwd", () => {
+  it("keeps compact read on completed readToolCall", () => {
     const s = slimNdjsonForTimeline({
-      type: "system",
-      subtype: "init",
-      model: "M",
-      cwd: "/very/long/path",
-      session_id: "sid",
+      type: "tool_call",
+      subtype: "completed",
+      tool_call: {
+        readToolCall: {
+          args: { path: "f.py", startLine: 1, endLine: 2 },
+          result: { success: {} },
+        },
+      },
     });
-    expect(s).toEqual({ type: "system", subtype: "init", model: "M", session_id: "sid" });
-    expect(s).not.toHaveProperty("cwd");
-  });
-
-  it("keeps result metadata without duplicate result text", () => {
-    const s = slimNdjsonForTimeline({
-      type: "result",
-      subtype: "success",
-      result: "full assistant body",
-      duration_ms: 99,
-      session_id: "sid",
-    });
-    expect(s).toEqual({
-      type: "result",
-      subtype: "success",
-      duration_ms: 99,
-      session_id: "sid",
-    });
-    expect(s).not.toHaveProperty("result");
+    expect(s).toMatchObject({ colcoor_compact: true, kind: "read" });
   });
 });
 
@@ -145,20 +139,28 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(feed.getResolvedText()).toBe("z");
   });
 
-  it("records timeline for system and tool_call lines", () => {
+  it("records only compact tool lines in timeline", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push('{"type":"system","subtype":"init","model":"TestModel"}\n');
     feed.push(
-      '{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}\n',
+      JSON.stringify({
+        type: "tool_call",
+        subtype: "completed",
+        tool_call: {
+          readToolCall: {
+            args: { path: "README.md", startLine: 1, endLine: 3 },
+            result: { success: {} },
+          },
+        },
+      }) + "\n",
     );
     feed.flushTail();
     const t = feed.getTimeline();
-    expect(t).toHaveLength(2);
-    expect((t[0] as { type: string }).type).toBe("system");
-    expect((t[1] as { type: string }).type).toBe("tool_call");
+    expect(t).toHaveLength(1);
+    expect((t[0] as { colcoor_compact?: boolean; kind?: string }).kind).toBe("read");
   });
 
-  it("does not put user or assistant stream rows in the timeline", () => {
+  it("does not put user assistant or system in the timeline", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push(
       '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"' + "x".repeat(200) + '"}]}}\n',
@@ -170,9 +172,18 @@ describe("createStreamJsonStdoutFeed", () => {
       '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"b"}]}}\n',
     );
     feed.push('{"type":"system","subtype":"init","model":"M"}\n');
+    feed.push(
+      JSON.stringify({
+        type: "tool_call",
+        subtype: "started",
+        tool_call: {
+          shellToolCall: { args: { command: "ls", description: "List files" } },
+        },
+      }) + "\n",
+    );
     feed.flushTail();
     expect(feed.getTimeline()).toHaveLength(1);
-    expect((feed.getTimeline()[0] as { type: string }).type).toBe("system");
+    expect((feed.getTimeline()[0] as { kind?: string }).kind).toBe("shell_start");
     expect(feed.getResolvedText()).toBe("ab");
   });
 });

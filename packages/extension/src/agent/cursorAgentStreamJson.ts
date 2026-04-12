@@ -4,7 +4,8 @@
  * @see https://cursor.com/docs/cli/reference/output-format
  */
 
-import { appendTimelineEntry, sanitizeForAgentTimeline } from "./cursorAgentTimelineSanitize";
+import { compactToolCallForTimeline } from "./cursorAgentTimelineCompact";
+import { appendTimelineEntry } from "./cursorAgentTimelineSanitize";
 
 export type StreamJsonLineEffect =
   | { kind: "append_assistant"; delta: string }
@@ -48,34 +49,16 @@ export function tryParseNdjsonObject(line: string): Record<string, unknown> | nu
 }
 
 /**
- * Shapes NDJSON for persistence/UI: drop transcript echo (`user`) and token stream (`assistant`)
- * — the reply body is already `content_text`. Keep tools, slim system, slim result metadata.
+ * Shapes NDJSON for persistence/UI: drop everything except compact read/edit/shell tool lines
+ * (see cursorAgentTimelineCompact). User/transcript and assistant token stream are omitted.
  */
 export function slimNdjsonForTimeline(o: Record<string, unknown>): Record<string, unknown> | null {
   const typ = o.type;
-  if (typ === "user" || typ === "assistant") {
+  if (typ === "user" || typ === "assistant" || typ === "system" || typ === "result") {
     return null;
   }
-  if (typ === "system") {
-    const out: Record<string, unknown> = { type: "system" };
-    for (const k of ["subtype", "model", "session_id", "apiKeySource", "permissionMode"]) {
-      if (o[k] !== undefined) {
-        out[k] = o[k];
-      }
-    }
-    return out;
-  }
-  if (typ === "result") {
-    const out: Record<string, unknown> = { type: "result" };
-    for (const k of ["subtype", "is_error", "duration_ms", "duration_api_ms", "request_id", "session_id"]) {
-      if (o[k] !== undefined) {
-        out[k] = o[k];
-      }
-    }
-    return out;
-  }
   if (typ === "tool_call") {
-    return sanitizeForAgentTimeline(o) as Record<string, unknown>;
+    return compactToolCallForTimeline(o);
   }
   return null;
 }
