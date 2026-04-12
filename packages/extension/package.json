@@ -17,6 +17,10 @@
         "title": "Colcoor: Set up Cursor CLI (agent)"
       },
       {
+        "command": "colcoor.setCursorAgentApiKey",
+        "title": "Colcoor: Set Cursor API key for agent"
+      },
+      {
         "command": "colcoor.signIn",
         "title": "Colcoor: Sign in"
       },
@@ -71,7 +75,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign in (dev only)](command:colcoor.signInDev)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)"
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign in (dev only)](command:colcoor.signInDev)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)"
       }
     ],
     "menus": {

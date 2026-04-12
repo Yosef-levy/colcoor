@@ -7,6 +7,9 @@
 import * as vscode from "vscode";
 import { spawnCursorAgentPrint } from "./cursorCliSpawn";
 
+/** VS Code secret for `CURSOR_API_KEY` when spawning `agent -p` (headless auth). */
+export const SECRET_CURSOR_AGENT_API_KEY = "colcoor.cursorAgentApiKey";
+
 export type AgentMode = "auto" | "headless" | "stub";
 
 /** How the assistant body was produced (for UI; persisted text stays short when CLI is missing). */
@@ -18,6 +21,8 @@ export type AgentRunResult = {
 };
 
 export class AgentRunner {
+  constructor(private readonly secrets: vscode.SecretStorage) {}
+
   async run(input: {
     transcriptText: string;
     userMessage: string;
@@ -36,15 +41,26 @@ export class AgentRunner {
     }
 
     try {
+      const storedKey = await this.secrets.get(SECRET_CURSOR_AGENT_API_KEY);
+      const extraEnv: Record<string, string> = {};
+      if (storedKey?.trim()) {
+        extraEnv.CURSOR_API_KEY = storedKey.trim();
+      }
+
       const { stdout, stderr, exitCode } = await spawnCursorAgentPrint({
         executable,
         workspaceRoot: cwd,
         prompt: input.transcriptText,
         timeoutMs: Math.max(10_000, timeoutMs),
+        extraEnv: Object.keys(extraEnv).length > 0 ? extraEnv : undefined,
       });
       if (exitCode !== 0) {
         const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n---\n") || "(no output)";
-        throw new Error(`Cursor agent exited with code ${exitCode}.\n${detail}`);
+        const authHint = /authentication|CURSOR_API_KEY|agent login/i.test(detail)
+          ? '\n\nColcoor: Command Palette → "Colcoor: Set Cursor API key for agent" (stores key for agent -p), ' +
+            "or run `agent login` in a terminal. Docs: https://cursor.com/docs/cli/reference/authentication"
+          : "";
+        throw new Error(`Cursor agent exited with code ${exitCode}.\n${detail}${authHint}`);
       }
       const text = stdout.trim();
       if (!text) {

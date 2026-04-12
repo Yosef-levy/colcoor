@@ -3,7 +3,7 @@ import { ColcoorApiClient } from "./api/client";
 import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
-import { AgentRunner } from "./agent/agentRunner";
+import { AgentRunner, SECRET_CURSOR_AGENT_API_KEY } from "./agent/agentRunner";
 import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./agent/cursorCliSetup";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
@@ -25,7 +25,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     baseUrl,
     getAccessToken: () => session.getBackendAccessToken(),
   });
-  const agent = new AgentRunner();
+  const agent = new AgentRunner(context.secrets);
 
   const treeProvider = new ConversationsTreeProvider(api, async () =>
     Boolean(await session.getBackendAccessToken()),
@@ -43,6 +43,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand("colcoor.setupCursorCli", async () => {
       await setupCursorCliInteractive();
+    }),
+    vscode.commands.registerCommand("colcoor.setCursorAgentApiKey", async () => {
+      const current = await context.secrets.get(SECRET_CURSOR_AGENT_API_KEY);
+      const key = await vscode.window.showInputBox({
+        title: "Colcoor — Cursor API key for headless `agent`",
+        prompt:
+          "Paste your API key (same as CURSOR_API_KEY). Leave empty and press Enter to remove a stored key.",
+        password: true,
+        ignoreFocusOut: true,
+        placeHolder: current ? "Key on file — paste to replace, or clear to remove" : undefined,
+      });
+      if (key === undefined) {
+        return;
+      }
+      const trimmed = key.trim();
+      if (trimmed === "") {
+        await context.secrets.delete(SECRET_CURSOR_AGENT_API_KEY);
+        await vscode.window.showInformationMessage("Colcoor: stored Cursor API key for agent removed.");
+        return;
+      }
+      await context.secrets.store(SECRET_CURSOR_AGENT_API_KEY, trimmed);
+      await vscode.window.showInformationMessage(
+        "Colcoor: Cursor API key for agent saved (used as CURSOR_API_KEY when running `agent -p`).",
+      );
     }),
   );
   scheduleCursorCliPresenceCheck(context);

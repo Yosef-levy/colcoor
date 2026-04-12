@@ -15,8 +15,14 @@ export function spawnCursorAgentPrint(params: {
   workspaceRoot: string;
   prompt: string;
   timeoutMs: number;
+  /** Merged onto PATH-augmented env (e.g. `CURSOR_API_KEY` from Colcoor secrets). */
+  extraEnv?: Record<string, string>;
 }): Promise<CursorCliSpawnResult> {
   const cwd = params.workspaceRoot.trim() || process.cwd();
+  const env =
+    params.extraEnv && Object.keys(params.extraEnv).length > 0
+      ? { ...processEnvForCursorCli(), ...params.extraEnv }
+      : processEnvForCursorCli();
   const args = [
     "-p",
     "--output-format",
@@ -30,7 +36,7 @@ export function spawnCursorAgentPrint(params: {
   return new Promise((resolve, reject) => {
     const child = spawn(params.executable, args, {
       cwd,
-      env: processEnvForCursorCli(),
+      env,
       shell: false,
       windowsHide: true,
     });
