@@ -38,6 +38,8 @@ export type CursorCliSpawnResult = {
   exitCode: number | null;
   /** User cancelled via AbortSignal; stdout may contain partial output. */
   cancelled?: boolean;
+  /** Present for stream-json modes: sanitized NDJSON objects in order (for `content_json`). */
+  ndjsonTimeline?: unknown[];
 };
 
 /**
@@ -180,15 +182,23 @@ export function spawnCursorAgentPrint(params: {
         return;
       }
       let stdoutForResult: string;
+      let ndjsonTimeline: unknown[] | undefined;
       if (jsonFeed) {
         jsonFeed.flushTail(params.onStdoutAccumulated);
         const resolved = jsonFeed.getResolvedText();
         stdoutForResult = resolved || rawStdout;
+        ndjsonTimeline = jsonFeed.getTimeline();
       } else {
         stdoutForResult = rawStdout;
       }
       if (killReason === "user_abort") {
-        finish({ stdout: stdoutForResult, stderr, exitCode: exitCode ?? null, cancelled: true });
+        finish({
+          stdout: stdoutForResult,
+          stderr,
+          exitCode: exitCode ?? null,
+          cancelled: true,
+          ndjsonTimeline,
+        });
         return;
       }
       if (killReason === "timeout") {
@@ -203,7 +213,7 @@ export function spawnCursorAgentPrint(params: {
         fail(new Error(`Cursor agent terminated by signal ${closeSignal}.`));
         return;
       }
-      finish({ stdout: stdoutForResult, stderr, exitCode: exitCode ?? null });
+      finish({ stdout: stdoutForResult, stderr, exitCode: exitCode ?? null, ndjsonTimeline });
     });
   });
 }

@@ -103,6 +103,7 @@ async def append_event(
             parent_event_id=body.parent_event_id,
             content=body.content,
             private_branch=body.private_branch,
+            content_json=body.content_json,
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None

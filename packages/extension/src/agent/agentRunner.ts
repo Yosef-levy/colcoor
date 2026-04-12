@@ -28,6 +28,8 @@ export type AgentRunResult = {
   stub: AssistantStubKind;
   /** Set when the user aborted the CLI run; `text` may be partial stdout. */
   cancelled?: boolean;
+  /** Sanitized stream-json timeline for `assistant_output.content_json` (headless CLI only). */
+  cursorCliTimeline?: unknown[];
 };
 
 export class AgentRunner {
@@ -64,7 +66,7 @@ export class AgentRunner {
     try {
       const storedKey = await this.secrets.get(SECRET_CURSOR_AGENT_API_KEY);
 
-      const { stdout, stderr, exitCode, cancelled } = await spawnCursorAgentPrint({
+      const { stdout, stderr, exitCode, cancelled, ndjsonTimeline } = await spawnCursorAgentPrint({
         executable,
         workspaceRoot: cwd,
         prompt: input.transcriptText,
@@ -75,7 +77,12 @@ export class AgentRunner {
         outputMode,
       });
       if (cancelled) {
-        return { text: stdout.trim(), stub: "none", cancelled: true };
+        return {
+          text: stdout.trim(),
+          stub: "none",
+          cancelled: true,
+          cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
+        };
       }
       if (exitCode !== 0) {
         const raw = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n---\n") || "(no output)";
@@ -101,7 +108,11 @@ export class AgentRunner {
         const errTail = stderr ? `\n${stripAnsi(stderr.trim())}` : "";
         throw new Error(`Cursor agent returned empty stdout.${errTail}`);
       }
-      return { text, stub: "none" };
+      return {
+        text,
+        stub: "none",
+        cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
+      };
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         throw e;

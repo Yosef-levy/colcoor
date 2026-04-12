@@ -4,6 +4,8 @@
  * @see https://cursor.com/docs/cli/reference/output-format
  */
 
+import { appendTimelineEntry } from "./cursorAgentTimelineSanitize";
+
 export type StreamJsonLineEffect =
   | { kind: "append_assistant"; delta: string }
   | { kind: "terminal_success"; fullText: string };
@@ -29,18 +31,23 @@ function extractAssistantTextFromMessage(message: unknown): string {
   return s;
 }
 
-/** Parse one NDJSON line from the agent; returns null for non-text events or invalid JSON. */
-export function parseCursorAgentNdjsonLine(line: string): StreamJsonLineEffect | null {
+export function tryParseNdjsonObject(line: string): Record<string, unknown> | null {
   const trimmed = line.trim();
   if (!trimmed) {
     return null;
   }
-  let o: Record<string, unknown>;
   try {
-    o = JSON.parse(trimmed) as Record<string, unknown>;
+    const o = JSON.parse(trimmed) as unknown;
+    if (o && typeof o === "object" && !Array.isArray(o)) {
+      return o as Record<string, unknown>;
+    }
   } catch {
-    return null;
+    /* ignore */
   }
+  return null;
+}
+
+export function effectFromNdjsonObject(o: Record<string, unknown>): StreamJsonLineEffect | null {
   const typ = o.type;
   if (typ === "assistant") {
     const delta = extractAssistantTextFromMessage(o.message);
@@ -55,9 +62,18 @@ export function parseCursorAgentNdjsonLine(line: string): StreamJsonLineEffect |
   return null;
 }
 
+/** Parse one NDJSON line from the agent; returns null for lines that do not drive assistant text. */
+export function parseCursorAgentNdjsonLine(line: string): StreamJsonLineEffect | null {
+  const o = tryParseNdjsonObject(line);
+  if (!o) {
+    return null;
+  }
+  return effectFromNdjsonObject(o);
+}
+
 /**
- * Buffers stdout chunks, splits NDJSON lines, accumulates assistant text, and applies a terminal
- * `result` event when present.
+ * Buffers stdout chunks, splits NDJSON lines, accumulates assistant text, applies a terminal
+ * `result` event when present, and records a sanitized timeline of parsed objects for persistence.
  */
 export function createStreamJsonStdoutFeed(): {
   push(chunk: string, onResolvedSoFar?: (textSoFar: string) => void): void;
@@ -65,10 +81,13 @@ export function createStreamJsonStdoutFeed(): {
   flushTail(onResolvedSoFar?: (textSoFar: string) => void): void;
   /** Plain assistant text for persistence (prefers terminal `result` over summed assistant deltas). */
   getResolvedText(): string;
+  /** Sanitized NDJSON-derived objects in stream order (for `events.content_json`). */
+  getTimeline(): unknown[];
 } {
   let lineBuf = "";
   let fromAssistant = "";
   let terminal: string | null = null;
+  const timeline: unknown[] = [];
 
   function resolvedSoFar(): string {
     return terminal ?? fromAssistant;
@@ -87,16 +106,24 @@ export function createStreamJsonStdoutFeed(): {
     on?.(resolvedSoFar());
   }
 
+  function processCompleteLine(line: string, onResolvedSoFar?: (textSoFar: string) => void): void {
+    const o = tryParseNdjsonObject(line);
+    if (o) {
+      appendTimelineEntry(timeline, o);
+    }
+    const effect = o ? effectFromNdjsonObject(o) : null;
+    if (effect) {
+      applyEffect(effect, onResolvedSoFar);
+    }
+  }
+
   return {
     push(chunk: string, onResolvedSoFar?: (textSoFar: string) => void) {
       lineBuf += chunk;
       const parts = lineBuf.split("\n");
       lineBuf = parts.pop() ?? "";
       for (const line of parts) {
-        const effect = parseCursorAgentNdjsonLine(line);
-        if (effect) {
-          applyEffect(effect, onResolvedSoFar);
-        }
+        processCompleteLine(line, onResolvedSoFar);
       }
     },
     flushTail(onResolvedSoFar?: (textSoFar: string) => void) {
@@ -105,13 +132,13 @@ export function createStreamJsonStdoutFeed(): {
       if (!tail) {
         return;
       }
-      const effect = parseCursorAgentNdjsonLine(tail);
-      if (effect) {
-        applyEffect(effect, onResolvedSoFar);
-      }
+      processCompleteLine(tail, onResolvedSoFar);
     },
     getResolvedText() {
       return resolvedSoFar().trim();
+    },
+    getTimeline() {
+      return [...timeline];
     },
   };
 }

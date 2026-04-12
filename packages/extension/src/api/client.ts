@@ -26,6 +26,8 @@ export type GraphEventNode = {
   actor_type: string;
   actor_user_id: string | null;
   content_text: string | null;
+  /** Cursor CLI stream-json timeline envelope (`colcoor_agent_trace`), when present. */
+  content_json?: Record<string, unknown> | null;
   visible_to: string | null;
   created_at: string;
   updated_at: string;
@@ -41,6 +43,7 @@ export type AppendEventBody = {
   content: string;
   author: string;
   private_branch?: boolean;
+  content_json?: Record<string, unknown>;
 };
 
 export type AppendEventResponse = {
@@ -163,16 +166,20 @@ export class ColcoorApiClient {
   }
 
   async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {
+    const payload: Record<string, unknown> = {
+      kind: body.kind,
+      parent_event_id: body.parent_event_id,
+      content: body.content,
+      author: body.author,
+      private_branch: body.private_branch ?? false,
+    };
+    if (body.content_json !== undefined) {
+      payload.content_json = body.content_json;
+    }
     const res = await this.fetchApi(`/conversations/${conversationId}/append-event`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kind: body.kind,
-        parent_event_id: body.parent_event_id,
-        content: body.content,
-        author: body.author,
-        private_branch: body.private_branch ?? false,
-      }),
+      body: JSON.stringify(payload),
     });
     const text = await res.text();
     if (!res.ok) {

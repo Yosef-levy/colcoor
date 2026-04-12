@@ -125,6 +125,7 @@ async def append_graph_event(
     parent_event_id: uuid.UUID,
     content: str,
     private_branch: bool,
+    content_json: dict | None = None,
 ) -> Event:
     await ensure_conversation_member(session, conversation_id, user_id)
     parent = await load_event(session, conversation_id, parent_event_id)
@@ -148,7 +149,7 @@ async def append_graph_event(
         actor_type=actor_type,
         actor_user_id=actor_user_id,
         content_text=content,
-        content_json=None,
+        content_json=content_json,
         visible_to=visible_to,
         deleted_at=None,
         created_at=now,

@@ -120,6 +120,36 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .msg.user { background: var(--vscode-editor-inactiveSelectionBackground); }
     .msg.assistant { background: var(--vscode-textBlockQuote-background); }
     .msg.assistant.streaming { box-shadow: inset 0 0 0 1px var(--vscode-focusBorder, var(--vscode-panel-border)); }
+    .agent-trace {
+      margin-top: 10px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      padding: 6px 8px;
+      background: var(--vscode-editor-background);
+    }
+    .agent-trace > summary.trace-summary {
+      cursor: pointer;
+      font-size: 0.88em;
+      color: var(--vscode-descriptionForeground);
+      user-select: none;
+    }
+    .trace-entry { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid var(--vscode-panel-border); }
+    .trace-entry:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+    .trace-meta { font-size: 0.85em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .trace-pre {
+      margin: 0;
+      max-height: 240px;
+      overflow: auto;
+      font-size: 0.78em;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: var(--vscode-editor-font-family);
+      background: var(--vscode-textCodeBlock-background);
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 4px;
+      padding: 8px;
+    }
     .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
     /* Thread bodies: GFM markdown from host (sanitized HTML). */
     .thread .msg .body.md {
@@ -312,6 +342,47 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return chain.reverse();
     }
 
+    function traceSummaryLine(ev) {
+      if (!ev || typeof ev !== "object") return "Event";
+      const t = ev.type;
+      if (t === "tool_call") {
+        const st = ev.subtype != null ? String(ev.subtype) : "";
+        const tc = ev.tool_call;
+        if (tc && typeof tc === "object") {
+          if (tc.readToolCall && tc.readToolCall.args && tc.readToolCall.args.path)
+            return "Read " + String(tc.readToolCall.args.path);
+          if (tc.writeToolCall && tc.writeToolCall.args && tc.writeToolCall.args.path)
+            return "Write " + String(tc.writeToolCall.args.path);
+        }
+        return "Tool " + (st || "?");
+      }
+      if (t === "system") return "Session · " + (ev.model ? String(ev.model) : "init");
+      if (t === "assistant") return "Assistant (stream)";
+      if (t === "user") return "User (echo)";
+      if (t === "result") return "Result";
+      if (t === "colcoor_truncated") return "Truncated";
+      return t ? String(t) : "Event";
+    }
+
+    function formatTraceEntryHtml(ev, idx) {
+      const sum = esc(traceSummaryLine(ev));
+      let raw;
+      try {
+        raw = esc(JSON.stringify(ev, null, 2));
+      } catch {
+        raw = esc(String(ev));
+      }
+      return (
+        '<div class="trace-entry"><div class="trace-meta">' +
+        String(idx + 1) +
+        ". " +
+        sum +
+        '</div><pre class="trace-pre">' +
+        raw +
+        "</pre></div>"
+      );
+    }
+
     function renderDetailBar() {
       const crumb = document.getElementById("breadcrumb");
       const copyBtn = document.getElementById("btnCopy");
@@ -430,7 +501,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           role +
           '</div><div class="body md">' +
           s.html +
-          "</div></div>";
+          "</div>";
+        if (s.traceEntries && s.traceEntries.length) {
+          html +=
+            '<details class="agent-trace"><summary class="trace-summary">Agent activity (' +
+            s.traceEntries.length +
+            " events)</summary>";
+          for (let i = 0; i < s.traceEntries.length; i++) {
+            html += formatTraceEntryHtml(s.traceEntries[i], i);
+          }
+          html += "</details>";
+        }
+        html += "</div>";
       }
       if (state.streamingHtml) {
         html +=

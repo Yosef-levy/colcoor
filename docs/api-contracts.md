@@ -215,6 +215,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `actor_type` | string | yes | `user` \| `assistant` |
 | `actor_user_id` | uuid \| null | yes |
 | `content_text` | string \| null | yes |
+| `content_json` | object \| null | no | Structured payload when present (e.g. `colcoor_agent_trace` from Cursor CLI stream-json) |
 | `visible_to` | uuid \| null | yes |
 | `created_at` | string (ISO-8601) | yes |
 | `updated_at` | string (ISO-8601) | yes |
@@ -274,6 +275,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `content` | string | yes | persisted as `content_text` |
 | `author` | string | yes | e.g. `end_user`, `cursor_agent` |
 | `private_branch` | boolean | no | default `false`; **only** valid when `kind` is `user_input`; must be `false` when `kind` is `assistant_output` |
+| `content_json` | object | no | **Only** when `kind` is `assistant_output`: optional JSON stored on the event (e.g. `{ "colcoor_agent_trace": { "version": 1, "entries": [...] } }` from NDJSON timeline) |
 
 ---
 

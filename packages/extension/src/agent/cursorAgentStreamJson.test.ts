@@ -102,4 +102,17 @@ describe("createStreamJsonStdoutFeed", () => {
     feed.flushTail();
     expect(feed.getResolvedText()).toBe("z");
   });
+
+  it("records timeline for system and tool_call lines", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push('{"type":"system","subtype":"init","model":"TestModel"}\n');
+    feed.push(
+      '{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}\n',
+    );
+    feed.flushTail();
+    const t = feed.getTimeline();
+    expect(t).toHaveLength(2);
+    expect((t[0] as { type: string }).type).toBe("system");
+    expect((t[1] as { type: string }).type).toBe("tool_call");
+  });
 });

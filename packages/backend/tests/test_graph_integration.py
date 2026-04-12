@@ -232,8 +232,20 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
                 "content": "from assistant",
                 "author": "cursor_agent",
                 "private_branch": False,
+                "content_json": {
+                    "colcoor_agent_trace": {
+                        "version": 1,
+                        "entries": [{"type": "tool_call", "subtype": "started"}],
+                    }
+                },
             },
         )
         assert r.status_code == 200, r.text
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        asst = next(e for e in r.json()["events"] if e.get("content_text") == "from assistant")
+        assert asst["content_json"]["colcoor_agent_trace"]["version"] == 1
+        assert asst["content_json"]["colcoor_agent_trace"]["entries"][0]["type"] == "tool_call"
 
     get_settings.cache_clear()

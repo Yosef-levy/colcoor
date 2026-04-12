@@ -1,10 +1,9 @@
 from datetime import datetime
 from enum import Enum
+from typing import Any, Literal
 from uuid import UUID
 
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class EventKind(str, Enum):
@@ -20,6 +19,16 @@ class AppendEventBody(BaseModel):
     content: str
     author: str = Field(..., description="e.g. end_user, cursor_agent")
     private_branch: bool = False
+    content_json: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional structured payload (e.g. Cursor CLI stream-json timeline on assistant_output).",
+    )
+
+    @model_validator(mode="after")
+    def _content_json_only_for_assistant(self) -> AppendEventBody:
+        if self.content_json is not None and self.kind != EventKind.assistant_output:
+            raise ValueError("content_json is only allowed when kind is assistant_output")
+        return self
 
 
 class AuthCursorRequest(BaseModel):
@@ -69,6 +78,7 @@ class EventNodeOut(BaseModel):
     actor_type: str
     actor_user_id: UUID | None
     content_text: str | None
+    content_json: dict[str, Any] | None = None
     visible_to: UUID | None
     created_at: datetime
     updated_at: datetime
