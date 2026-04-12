@@ -103,6 +103,12 @@ export async function offerCursorAgentApiKeyAfterSignIn(
   variant: "production" | "dev",
 ): Promise<void> {
   const suffix = variant === "dev" ? " (dev)" : "";
+  const existing = (await secrets.get(SECRET_CURSOR_AGENT_API_KEY))?.trim();
+  if (existing) {
+    await vscode.window.showInformationMessage(`Colcoor: signed in${suffix}.`);
+    return;
+  }
+
   const choice = await vscode.window.showInformationMessage(
     `Colcoor: signed in${suffix}. For Send message with the Cursor CLI, you can store the same key as ` +
       "environment variable CURSOR_API_KEY (optional).",
