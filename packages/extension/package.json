@@ -25,14 +25,68 @@
         "title": "Colcoor: Sign out"
       },
       {
+        "command": "colcoor.newConversation",
+        "title": "Colcoor: New conversation",
+        "icon": "$(add)"
+      },
+      {
         "command": "colcoor.refreshConversations",
-        "title": "Colcoor: Refresh conversations"
+        "title": "Colcoor: Refresh conversations",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "colcoor.copyConversationId",
+        "title": "Colcoor: Copy conversation ID"
       },
       {
         "command": "colcoor.openAbout",
         "title": "Colcoor: About"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "colcoor",
+          "title": "Colcoor",
+          "icon": "media/colcoor-activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "colcoor": [
+        {
+          "id": "colcoor.conversations",
+          "name": "Conversations"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "colcoor.conversations",
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign in (dev only)](command:colcoor.signInDev)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "colcoor.newConversation",
+          "when": "view == colcoor.conversations",
+          "group": "navigation@1"
+        },
+        {
+          "command": "colcoor.refreshConversations",
+          "when": "view == colcoor.conversations",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "colcoor.copyConversationId",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@1"
+        }
+      ]
+    },
     "configuration": {
       "title": "Colcoor",
       "properties": {

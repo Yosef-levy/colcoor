@@ -1,6 +1,8 @@
 # Principles and constraints — Colcoor Cursor extension
 
-This document **complements and overrides** [README.md](README.md), [architecture.md](architecture.md), and [data-flow-and-api.md](data-flow-and-api.md) where they conflict. **Colcoor** is the orchestrator product (tree, transcript, backend); **Cursor** provides execution and code understanding.
+This document **complements and overrides** other files in this folder where noted. **Colcoor** is the orchestrator (tree, transcript, backend); **Cursor** provides execution and code understanding.
+
+**Normative HTTP surface:** [api-contracts.md](api-contracts.md).
 
 ---
 
@@ -32,11 +34,11 @@ The extension is responsible for:
 1. Constructing the transcript **deterministically**
 2. Providing the user message
 3. Triggering the agent
-4. Persisting results via the backend
+4. Persisting results via the Colcoor backend
 
 The system **may** use Cursor-native execution (Composer / agent environment) and does **not** need to bypass it completely.
 
-**Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported** paths — see [data-flow-and-api.md](data-flow-and-api.md) §3 (CLI / ACP) and Composer as **fallback**.
+**Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported** paths — see [data-flow-and-api.md](data-flow-and-api.md) §2 (CLI / ACP) and Composer as **fallback**.
 
 ---
 
@@ -67,12 +69,14 @@ Colcoor **does not** fully replace or replicate this behavior.
 
 ## Transcript rules
 
-- Transcript is built **client-side** (extension only).
-- Same semantics as web:
-  - path-based context
-  - rebuild when `needs_context_rebuild`
-  - no hidden history
-- **No server transcript endpoints** on the extension backend: the backend does not serve or assemble transcripts for the agent; it stores the event graph only.
+- Transcript is built **only in the extension**.
+- Semantics:
+  - **Path-based** context along the active branch ([domain-model.md](domain-model.md)).
+  - **Rebuild** when `needs_context_rebuild` is true ([domain-model.md](domain-model.md) §4).
+  - **No hidden history** in the transcript: only what the tree path and notes encode.
+- **No server transcript endpoints:** the backend does not return or assemble LLM execution transcripts; it stores the event graph only.
+
+Format: [transcript-format.md](transcript-format.md).
 
 ---
 
@@ -124,6 +128,6 @@ The user must **not** be exposed to:
 - Prompt formatting details
 - Backend orchestration internals
 
-The experience should feel **native**: select node → run → see result. Implementation details live in logs or developer mode only, not in default UI.
+The experience should feel **native**: select node → run → see result. Implementation details belong in logs or developer mode only, not in default UI.
 
-For a **concrete checklist** of screens and controls (settings scope, thread, side chat, collaboration), see [ui-features.md](ui-features.md).
+For a **concrete checklist** of screens and controls, see [ui-features.md](ui-features.md).

@@ -1,6 +1,6 @@
 # Colcoor (Cursor extension)
 
-Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated backend**. Product semantics and boundaries are defined under [`docs/`](docs/README.md) (see especially [`docs/principles.md`](docs/principles.md)).
+Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated backend**. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/api-contracts.md`](docs/api-contracts.md). **Roles:** [`docs/permissions.md`](docs/permissions.md). **Usage / billing:** [`docs/billing-usage.md`](docs/billing-usage.md).
 
 ## Layout
 

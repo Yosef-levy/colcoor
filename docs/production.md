@@ -167,7 +167,7 @@ When the API runs on a **remote VM** (this Compose stack), configure the extensi
 3. **Firewall / cloud security group:** allow inbound **80** and/or **443** on the VM from the network where you run Cursor (home IP, office VPN, etc.).
 4. **TLS:** use a certificate Node trusts (e.g. Let’s Encrypt). **Self-signed** HTTPS typically causes **fetch / certificate** errors until the system trusts the CA or you terminate TLS with a public cert.
 5. **`CORS_ORIGINS`:** the extension issues requests from the **Node extension host**, not a browser tab, so **empty `CORS_ORIGINS` is fine** for extension-only traffic (see [`.env.example`](../.env.example)). Set `CORS_ORIGINS` when **browser** clients must call the API cross-origin.
-6. **Auth:** with **`COLCOOR_ENV=production`**, **`POST /api/v1/auth/dev-login` is disabled** (403). Use **Colcoor: Sign in** (`POST /api/v1/auth/cursor` with GitHub / Microsoft / Google tokens); see [authentication.md](authentication.md). For local-only testing, use a **staging** API or **Sign in (dev)** when dev-login is enabled.
+6. **Auth:** production clients **MUST** use **`POST /api/v1/auth/cursor`** only ([authentication.md](authentication.md), [api-contracts.md](api-contracts.md) §2.1).
 
 ---
 

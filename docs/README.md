@@ -1,44 +1,33 @@
 # Colcoor — Cursor extension documentation
 
-This folder describes the **Colcoor** **Cursor IDE extension**: same conversation-orchestrator concepts as the web app (tree, active node, transcript, notes, side chat), with a **dedicated extension backend** and the **Cursor agent** for **main-thread** generation.
+Standalone **product specification** for the **Colcoor Cursor extension** and its **Colcoor HTTP backend**: branching conversations (tree, active node, transcript, notes, side chat), with the **Cursor agent** as the main-thread generator.
 
-**Normative product principles** (context layers, transcript authority, CLI preference, determinism, UX): see **[principles.md](principles.md)**. If other docs in this folder disagree, **principles.md** wins unless explicitly marked as subordinate.
+**Normative principles** (transcript authority, context layers, determinism, UX): **[principles.md](principles.md)**. On conflict, **principles.md** wins unless another doc explicitly defers.
 
-## What is different from the web app
+## What Colcoor is
 
-| Aspect | Web app | Colcoor extension |
-|--------|---------|-------------------|
-| **Client** | Browser (React) | Cursor extension (VS Code extension host) |
-| **Main-thread LLM** | Backend streams from a provider | **Cursor agent**; Colcoor supplies **authoritative** transcript + user message |
-| **Backend deployment** | Web backend | **Separate** extension-dedicated backend (no shared service or data with web) |
-| **Auth** | Google Sign-In + JWT (see `implementation.md` §9a) | **Cursor account** → backend session (see [authentication.md](authentication.md)) |
-| **Server tools on main thread** | Web search, code execution flags on send | **Not used** |
-| **Transcript over HTTP** | Web may use debug `GET /transcript` | **No** server transcript endpoints on the extension backend ([principles.md](principles.md)) |
-
-## What stays aligned
-
-- **Domain model** and **user-visible behavior** match the web app where applicable: tree, branching, active node, transcript **semantics** (path, rebuild, no hidden history), notes, private branches (if in scope), **side chat** (server-driven).
-- Side chat uses the same **class** of APIs as `implementation.md` §11 (summary, read, CRUD, SSE).
+- **Structured memory:** explicit **tree** of **`user_input`** / **`assistant_output`** events, **branching**, per-user **active node**.
+- **Notes** on messages (not tree nodes).
+- **Side chat** per conversation ([domain-model.md](domain-model.md) §6).
+- **Transcript:** deterministic text built **only in the extension** ([transcript-format.md](transcript-format.md)); the backend **does not** expose transcript-over-HTTP.
 
 ## Document map
 
 | Doc | Purpose |
 |-----|---------|
-| [principles.md](principles.md) | Core / final principles, context layers, transcript rules, determinism, MCP & cloud scope, UX |
-| [architecture.md](architecture.md) | Components, backend role, boundaries |
-| [data-flow-and-api.md](data-flow-and-api.md) | Execution flow, **append-event**, **CLI / ACP** agent invocation, errors, side chat |
-| [authentication.md](authentication.md) | Cursor-account auth and backend trust |
-| [monetization.md](monetization.md) | Tokens on every request, free vs paid feature intent |
-| [git-integration.md](git-integration.md) | Loose coupling; optional subtree metadata |
-| [ui-features.md](ui-features.md) | User-visible UI feature set (parity with web, exclusions, avatar) |
-| [production.md](production.md) | VM deployment: Docker Compose, nginx, Postgres, env, health, operations |
-| [database.md](database.md) | PostgreSQL schema: users, conversations, events graph, side chat, billing, usage |
+| [principles.md](principles.md) | Transcript authority vs Cursor context; determinism; UX |
+| [api-contracts.md](api-contracts.md) | **Normative REST + SSE** (paths, JSON schemas, status codes, auth) |
+| [permissions.md](permissions.md) | Role matrix (**owner** / **editor** / **viewer**) and enforcement locus |
+| [billing-usage.md](billing-usage.md) | **`usage_monthly`** vs **`usage_events`**; **402** / quotas |
+| [domain-model.md](domain-model.md) | Tree semantics, **`visible_to`**, **`active_event_id`**, notes, side chat |
+| [database.md](database.md) | PostgreSQL DDL aligned to the API |
+| [data-flow-and-api.md](data-flow-and-api.md) | Main-thread turn order and agent handoff (**references api-contracts**) |
+| [transcript-format.md](transcript-format.md) | Agent transcript wire format |
+| [authentication.md](authentication.md) | **`cursor_sub`**; **`POST /api/v1/auth/cursor`** |
+| [monetization.md](monetization.md) | Tokens on every request; links **billing-usage** |
+| [architecture.md](architecture.md) | Components and boundaries |
+| [production.md](production.md) | Docker, nginx, Postgres, env, health |
+| [git-integration.md](git-integration.md) | Optional Git metadata |
+| [ui-features.md](ui-features.md) | User-visible UI checklist |
 
-## Authoritative references (repo root)
-
-Tree and formal semantics:
-
-- [formal_model.md](../formal_model.md)
-- [implementation.md](../implementation.md)
-
-The extension product implements that contract against its **own** backend; it does **not** call the web app’s backend or share its database.
+Cross-references are **within this folder** unless the link is a public standard (e.g. VS Code SecretStorage).

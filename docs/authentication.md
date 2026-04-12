@@ -1,74 +1,53 @@
-# Authentication — Cursor account (Colcoor extension)
+# Authentication — Colcoor extension
 
-The **Colcoor** extension uses the **same identity providers** that Cursor / VS Code use for editor sign-in (**GitHub**, **Microsoft**, **Google** via `vscode.authentication`), then exchanges that access token for a **Colcoor backend JWT**. This is separate from any web app Google Sign-In flow.
+The extension obtains a **Colcoor API JWT** by calling **`POST /api/v1/auth/cursor`** with a **Cursor / VS Code identity-provider access token**. All other Colcoor APIs use **`Authorization: Bearer <access_token>`**.
 
-**Monetization:** every API call must carry a valid backend JWT so the server can enforce plans and quotas — see [monetization.md](monetization.md).
+**Normative API:** [api-contracts.md](api-contracts.md) §2.1.
 
-## 1. Requirements
+**Billing and quotas:** [monetization.md](monetization.md), [billing-usage.md](billing-usage.md).
 
-- Users can use the orchestrator **without** signing in through a separate web UI.
-- The **extension backend** must know **who** is calling for membership, private branches, side chat identity, and billing.
-- Secrets must **not** live in workspace files; use VS Code / Cursor [SecretStorage](https://code.visualstudio.com/api/references/vscode-api#SecretStorage) for the **backend JWT** only. IdP access tokens are held in memory for the exchange request only.
+---
 
-## 2. Client-side flow (implemented)
+## 1. Stable identity: `cursor_sub`
 
-1. User runs **Colcoor: Sign in** and picks **GitHub**, **Microsoft**, or **Google** (whichever matches how they use Cursor).
-2. The extension calls **`vscode.authentication.getSession(providerId, scopes, { createIfNone: true })`** with:
-   - **github** — scopes `read:user`, `user:email`
-   - **microsoft** — scopes `openid`, `profile`, `email`, `User.Read`
-   - **google** — scopes `openid`, `profile`, `email` (only if the Google auth provider is available in your build)
-3. The extension **`POST`s** `{"cursor_access_token": "<session.accessToken>", "provider_hint": "github"|"microsoft"|"google"}` to **`/api/v1/auth/cursor`**.
-4. On success, the extension stores **`access_token`** (Colcoor JWT) in SecretStorage and sends **`Authorization: Bearer <jwt>`** on later API calls.
+- The **`users.cursor_sub`** column is the **only** stable external identity key for the extension product. It is **unique**, **non-null**, and set when the user is first provisioned via **`POST /api/v1/auth/cursor`**.
+- The value is an **opaque string** produced by the backend after successful verification of the caller’s provider token. Clients **MUST NOT** parse or interpret `cursor_sub`; they **MUST** treat it as an opaque identifier in any UI that surfaces internal ids.
 
-**Non-production:** **Colcoor: Sign in (dev)** still calls **`POST /api/v1/auth/dev-login`** (disabled when `COLCOOR_ENV=production`).
+---
 
-## 3. Backend trust model (implemented)
+## 2. Client flow
 
-**Pattern A — token exchange** (as recommended in earlier drafts):
+1. Acquire a provider access token via **`vscode.authentication.getSession`** (scopes and provider ids are defined in the extension implementation; they are **not** part of this identity spec).
+2. **`POST /api/v1/auth/cursor`** with body **`{ "cursor_access_token": "<token>", "provider_hint": "auto" | "github" | "microsoft" | "google" }`**.
+3. Store **`access_token`** from **`AuthResponse`** in **SecretStorage** (or equivalent). Omit from workspace files.
+4. Send **`Authorization: Bearer <access_token>`** on every **`/api/v1/...`** request until expiry; then repeat from step 1.
 
-- **`POST /api/v1/auth/cursor`** accepts `cursor_access_token` and optional `provider_hint` (`auto` or a single provider).
-- The backend **does not trust opaque strings**. It validates the token by calling the provider’s **HTTPS userinfo API**:
-  - **GitHub:** `GET https://api.github.com/user` (+ `/user/emails` if needed)
-  - **Microsoft:** `GET https://graph.microsoft.com/v1.0/me`
-  - **Google:** `GET https://www.googleapis.com/oauth2/v3/userinfo`
-- On success, the backend **upserts** `users` using a stable **`cursor_sub`**:
-  - `github:{numeric_id}`
-  - `microsoft:{graph_object_id}`
-  - `google:{sub}`
-- It issues an **HS256 JWT** (`sub` = internal user UUID) via **`JWT_SECRET`**. Subsequent requests use **only** this JWT.
+---
 
-**Configuration:**
+## 3. Backend behavior
 
-| Variable | Purpose |
-|----------|---------|
-| `CURSOR_AUTH_PROVIDER_ORDER` | Comma-separated probe order when `provider_hint` is **`auto`** (default `github,microsoft,google`). Unknown entries are ignored. |
-| `CURSOR_AUTH_HTTP_TIMEOUT_SECONDS` | Upstream IdP HTTP timeout (default **12**, max **60**). |
+1. Verify the supplied access token using the configured verifier(s) (HTTPS profile calls to the identity provider). If verification fails, respond **401** ([api-contracts.md](api-contracts.md)).
+2. Derive the opaque **`cursor_sub`** string used for lookup (implementation-defined derivation **MUST** be injective per provider so distinct accounts never collide).
+3. **Find or create** **`users`** by **`cursor_sub`**. Update **`email`**, **`display_name`**, **`avatar_url`**, **`last_login_at`** when the verifier returns new profile data.
+4. Issue the Colcoor JWT (**`sub`** claim = internal **`users.id`** uuid). JWT signing and expiry are implementation-defined but **MUST** use a server secret configured out of band ([production.md](production.md)).
 
-**Errors:** invalid or expired IdP tokens → **401** with a generic message (no token or provider leakage in logs beyond “verification failed”).
+---
 
-## 4. User provisioning
+## 4. Profile
 
-On each successful **`/auth/cursor`**:
+**`PATCH /api/v1/me`** updates **`display_name`** and/or **`avatar_url`** for the authenticated user ([api-contracts.md](api-contracts.md) §9). The response **MAY** include a new **`access_token`** if claims must change.
 
-- **Find or create** `users` by **`cursor_sub`**.
-- Refresh **email**, **display_name**, **last_login_at**; set **avatar_url** when the IdP returns one (existing avatars are not cleared when the IdP omits a URL).
+---
 
-The extension backend is **separate** from a web backend; the same person may have **two user rows** unless you add explicit **account linking** (out of scope here).
+## 5. Security
 
-## 5. Profile and display name
+- **HTTPS only** between extension and Colcoor API in production.
+- Rotate JWT signing keys per operational policy; allow small clock skew on **`exp`**.
+- **Do not** log full bearer tokens or raw provider tokens.
 
-- Profile fields **sync from the IdP** on each **`/auth/cursor`** success.
-- Optional future: **`PATCH /me/profile`** on this API for display name overrides (see earlier `implementation.md` references).
+---
 
-## 6. Security notes
+## Related docs
 
-- Use **HTTPS** between the extension and the Colcoor API in production.
-- **Rotate `JWT_SECRET`** on compromise; use a long random value (see production validation).
-- **Log** auth failures **without** logging full tokens or upstream responses.
-
-## 7. Implementation status
-
-- [x] **`POST /auth/cursor`** with GitHub / Microsoft Graph / Google userinfo verification and Colcoor JWT issuance.
-- [x] Extension **Sign in** command using **`vscode.authentication.getSession`** and token exchange.
-- [x] **`users.cursor_sub`** stable external key and profile upsert.
-- [ ] Confirm any **Cursor-specific** auth provider id if Cursor adds a first-party provider beyond VS Code’s built-ins; extend `extensionAccounts.ts` if needed.
+- [database.md](database.md) — **`users`** table.
+- [permissions.md](permissions.md) — authorization after authentication.

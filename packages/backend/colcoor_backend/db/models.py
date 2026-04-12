@@ -72,6 +72,12 @@ class ConversationMember(Base):
     __table_args__ = (
         CheckConstraint("role IN ('owner', 'editor', 'viewer')", name="ck_conversation_members_role"),
         Index("idx_conversation_members_user_id", "user_id"),
+        Index(
+            "uq_conversation_single_owner",
+            "conversation_id",
+            unique=True,
+            postgresql_where=text("role = 'owner'"),
+        ),
     )
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(

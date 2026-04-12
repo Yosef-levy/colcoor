@@ -1,28 +1,23 @@
-# Monetization and feature gating — extension
+# Monetization and feature gating — Colcoor extension
 
-All **durable state** lives in the **Colcoor extension backend**. The extension must:
+All **durable state** and **entitlement checks** live in the **Colcoor backend**. The extension **MUST**:
 
-- **Authenticate** the user (see [authentication.md](authentication.md))
-- Send a valid **token** on **every** API request
-- **Respect** server-enforced feature gating (HTTP 402/403 or contract-specific error bodies as implemented)
+- **Authenticate** the user ([authentication.md](authentication.md))
+- Send **`Authorization: Bearer <token>`** on **every** `**/api/v1/**` request
+- **Honor** HTTP **402** and **403** responses without client-side bypass
 
-## Tiers (product intent)
+**Counters, ledger rows, and when they increment:** **[billing-usage.md](billing-usage.md)**.
 
-**Free (example policy):**
+**HTTP error shapes:** **[api-contracts.md](api-contracts.md)** (introduction).
 
-- Single-user usage patterns
-- Limited usage (quotas enforced server-side)
+---
 
-**Paid (example policy):**
+## Plans
 
-- **Collaboration** (shared conversations / membership)
-- **Shared trees** (multi-user visibility rules)
-- **Side chat**
-- Other **advanced** features as defined in backend policy / `plans`-style config
+Plan codes, Stripe linkage, and per-plan feature flags are stored in **`subscriptions`** / **`billing_customers`** ([database.md](database.md)). Exact commercial packaging is **operations-defined**; the extension **MUST** surface **`detail`** from error responses and any upgrade affordance the API returns.
 
-Exact limits and entitlements are **backend-defined**; the extension surfaces errors and upgrade paths in UX-appropriate copy (without exposing raw orchestration details — see [principles.md](principles.md) UX section).
+---
 
-## Implementation notes
+## UX
 
-- Reuse or mirror billing and plan enforcement from the web stack **only** inside the **extension** deployment codebase; web and extension backends remain **separate** deployments (see [README.md](README.md)).
-- Side chat and collaboration should be **disabled or hidden** when the server rejects access, not bypassed client-side.
+When the server denies an action, the extension **MUST** show a clear, user-facing message and **MUST NOT** silently retry in a way that bypasses billing ([ui-features.md](ui-features.md) §3).

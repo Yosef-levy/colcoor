@@ -1,10 +1,10 @@
 # UI features — Colcoor Cursor extension
 
-This document lists **user-visible** capabilities the extension should provide, aligned with the web app where noted. It does **not** prescribe implementation (webview vs native views, exact VS Code APIs, etc.).
+**User-visible** capabilities the extension should provide. Does not prescribe implementation (webview vs native UI, exact VS Code APIs).
 
-**Out of scope for this feature set:** web search, code execution, and **any** thread UI for historical **tool / assistant-step** rows (no reliance on stored tool graphs in the thread path).
+**Out of scope for this spec:** server-driven **web search** and **code execution** on the main thread; **any** thread UI rows for **tool calls**, **tool results**, or **assistant steps** (no tool graph in the thread path).
 
-Default UX remains: select node → run → see result; users do not see raw transcript assembly or prompt plumbing ([principles.md](principles.md)).
+Default UX: select node → run → see result; no raw transcript or prompt plumbing in default UI ([principles.md](principles.md)).
 
 ---
 
@@ -12,147 +12,145 @@ Default UX remains: select node → run → see result; users do not see raw tra
 
 ### 1.1 Settings (narrow scope)
 
-A **Settings** surface includes **only**:
+- **Side chat notification sounds** — toggle for new activity; optional distinct sound for **@mentions**.
+- **Display name** — how the user appears in **side chat** (persisted on the backend).
+- **Avatar** — user-set or chosen **avatar** for side chat and account UI (backend persists URL or asset reference; source is product-defined).
 
-- **Side chat notification sounds** — e.g. toggle sound on new activity; optional distinct sound when the user is **@mentioned**.
-- **Display name** — how the user appears to collaborators in **side chat** (saved via backend profile).
-- **Avatar** — **new** for the extension product: user can set or choose an **avatar** shown with their identity in side chat and account UI (exact mechanism—upload, preset picker, or sync from Cursor—is implementation-defined; backend must persist what the product needs).
-
-Theme / editor chrome follows **Cursor**; a separate “dark mode” toggle like the web app is **not** required if the IDE already controls appearance.
+**Theme** follows **Cursor**; a separate global dark/light toggle is optional if the IDE already controls it.
 
 ### 1.2 Refresh conversations
 
-From the account / menu area, **Refresh conversations** reloads the conversation list from the server (same intent as the web user menu).
+Menu action to **reload** the conversation list from the Colcoor backend.
 
-### 1.3 Not in scope for this section
+### 1.3 Legal / policy
 
-Full legal/footer chrome of the web app is optional in the extension; link out or embed policy pages as product policy requires.
+Link or embed **Terms**, **Privacy**, **Refund** as product policy requires.
 
 ---
 
 ## 2. About (help)
 
-An **About** (or **Help**) entry opens content that explains **Colcoor in user terms**: long-running, branching conversations with the user in control of where the dialogue continues; notes and collaboration without expecting users to understand transcripts, agents, or backend orchestration. **No** implementation or architecture detail in this copy.
+**About** / **Help** explains **Colcoor** in plain language: branching conversations, control over where the dialogue continues, notes and collaboration — **no** engineering or implementation jargon.
 
 ---
 
 ## 3. Account management and paywall
 
-- **Account management** — surface where the signed-in user sees **plan / usage / billing-relevant** information consistent with [monetization.md](monetization.md) (wording is user-facing, not API-level).
-- **Paywall / upgrade** — when the backend denies an action for plan reasons, show a clear **modal or panel**: short title, explanation, and **upgrade** path when the product offers one.
+- **Account management** — plan, usage, and billing-related information ([monetization.md](monetization.md)).
+- **Paywall / upgrade** — clear modal when the server denies an action: title, message, upgrade action when offered.
 
 ---
 
 ## 4. Conversation list (sidebar)
 
-- **8 — List** conversations with **pinned** items grouped before unpinned; show title and last-updated time.
-- **9 — Select** a conversation to load its tree and thread.
-- **10 — Per-conversation menu** (e.g. ⋮): **Add editor/viewer**, **Change name** (where role allows), **Pin / Unpin**, **Delete conversation**.
-- **11 — Create conversation**: optional title plus **first message** to start a new conversation (same product intent as the web form).
+- List conversations: **pinned** first, then unpinned; **title** and **last updated**.
+- **Select** a conversation to load tree and thread.
+- **Per-conversation menu** (e.g. ⋮): **Add editor/viewer**, **Change name** (where role allows), **Pin / Unpin**, **Delete conversation**.
+- **Create conversation:** optional title + **first message** to start.
 
-The **conversation list panel** MUST be **minimizable** (collapse to icon or strip) so users can reclaim horizontal space while staying in Colcoor.
+The list panel MUST be **minimizable** (collapse to strip or icon).
 
 ---
 
 ## 5. Resizable layout
 
-- **13** — Resizable **conversation list** width.
-- **14** — Resizable split between **tree** and **message details**.
-- **15** — Resizable **composer** height (or equivalent vertical space for the main input).
-- **16** — Resizable **side chat** panel width.
+- Conversation **list** width.
+- **Tree** vs **message details** split.
+- **Composer** height (or equivalent).
+- **Side chat** panel width.
 
-Persist sizes where reasonable (e.g. workspace or user settings) so layout feels stable across sessions.
+Persist sizes where reasonable (workspace or user storage).
 
 ---
 
 ## 6. Tree view
 
-- **19** — **Branching graph** of **user** and **assistant** message nodes (compact graph of the canonical message tree).
-- **20** — **Active** indicator, **selection** highlight, **private** indicator where private branches exist, **note count** on nodes, snippet or **message title** on the node.
-- **21** — **Click** a node to select it and align **thread** + **details** with that selection.
-- **22** — **Star** control on nodes (with hover behavior acceptable as “reveal on hover” where it matches desktop patterns).
+- **Branching graph** of **user** and **assistant** nodes.
+- **Active**, **selected**, **private**, **note count**, snippet or **message title** on nodes.
+- **Click** to select; syncs **thread** and **details**.
+- **Star** on nodes (hover-reveal acceptable on desktop).
 
 ---
 
 ## 7. Thread view (root → active path)
 
-- **23** — Show the **path from root to the active node** (the main narrative thread).
-- **24** — Render message bodies with **Markdown** (including tables, task lists, etc., as in GFM-style usage on the web).
-- **25** — **Fenced code blocks** with a **copy** control for the code.
-- **26** — Respect **text direction** (e.g. RTL) for message content when applicable.
-- **27** — Show **notes** attached to a message **inline** under that message, with edit/delete affordances when permitted.
-- **28** — While a turn is in progress: show the **pending user line** and **in-flight assistant** content (streaming or updating until the turn completes or is cancelled).
-- **29** — **Star** control on thread message blocks.
-- **31** — **Copy** full message content (at least where the platform makes sense—e.g. message actions).
+- Path **root → active**.
+- **Markdown** rendering (GFM-style: tables, task lists, etc.).
+- **Fenced code** with **copy**.
+- **RTL** where applicable for message text.
+- **Notes** inline under messages with edit/delete when allowed.
+- **In-flight turn:** pending user line + updating assistant text until done or cancelled.
+- **Star** on messages.
+- **Copy** message content where the platform supports it.
 
-**Excluded:** **No** extra rows for **tool calls**, **tool results**, or **assistant steps** in the thread, and **no** dependence on historical tool-graph data in the UI.
+**Excluded:** no tool/step rows in the thread.
 
 ---
 
 ## 8. Message detail pane
 
-- **33** — **Breadcrumb / path** from root to the **selected** message (including **checkpoint name** in the label when the backend stores one—display only).
-- **34** — Full **content** of the selected message.
-- **35** — **Continue from here** — set active node to the selection and continue the conversation from that point.
-- **36** — **Private branch**: **Commit to shared tree** and **Delete draft** where the product supports private turns and role allows.
-- **37** — **Resend** — request another assistant reply from an existing **user** message (new sibling assistant under that user).
-- **38** — **Add NOTE** and **Add message title** (modals or inline editors).
-- **39** — **NOTES (attached)** with list, **edit/delete** per note, and optional **reference in side chat** from a note’s menu.
-- **40** — **Rebuild / context** cues when the tree state implies the next send will rebuild context (same semantics as web `needs_context_rebuild` messaging—user-facing wording only).
-- **41** — **Reference in side chat** for the selected **message**; short help that **notes are not separate tree nodes**.
+- **Breadcrumb** root → **selected** (include **checkpoint** label in UI if the backend exposes it on the node — display-only).
+- Full **message body**.
+- **Continue from here** — set active to selection.
+- **Private branch:** **Commit to shared** and **Delete draft** when supported and role allows.
+- **Resend** — new assistant sibling under an existing **user** message.
+- **Add NOTE** and **Add message title** (modal or inline).
+- **NOTES (attached)** with edit/delete and **Reference in side chat** on notes.
+- **Context / rebuild** messaging when `needs_context_rebuild` is true ([domain-model.md](domain-model.md) §4) — user-facing wording only.
+- **Reference in side chat** for the selected **message**; short note that **notes are not tree nodes**.
 
 ---
 
 ## 9. Composer (main thread)
 
-- **44** — Multiline input; **Enter** sends, **Shift+Enter** newline (or platform-idiomatic equivalent).
-- **45** — **Send** with clear disabled state and messaging while a reply is in progress.
-- **46** — **Private (draft)** mode toggle with **short help** explaining drafts vs shared tree.
-- **47** — **Stop** — cancel an in-flight main-thread generation (extension maps this to agent/CLI cancellation policy in [data-flow-and-api.md](data-flow-and-api.md)).
+- Multiline input; **Enter** send, **Shift+Enter** newline (or idiomatic equivalent).
+- **Send** with disabled state and messaging while a reply is in progress.
+- **Private (draft)** toggle + short help.
+- **Stop** — cancel in-flight generation ([data-flow-and-api.md](data-flow-and-api.md) §4).
 
 ---
 
 ## 10. Side chat
 
-- **48** — Open/close **side chat**; **unread** indicator; **dock** or attach panel; **resizable** width (see §5).
-- **49** — **Message list**, **send**, **edit**, **delete** (per permissions).
-- **50** — **@mentions** with completion and **notifications** (aligned with sound settings in §1).
-- **51** — **Reference** main-thread **message** or **note** so the next side-chat post carries that context (pending attachment UX).
-- **52** — **Realtime updates** for side chat (e.g. SSE) so the thread stays current without manual refresh.
+- Open/close, **unread** badge, **dock**, **resizable** width.
+- **List**, **send**, **edit**, **delete** (per permissions).
+- **@mentions** and notifications (aligned with §1 sounds).
+- **Reference** main-thread **message** or **note** for the next post.
+- **Realtime** (e.g. SSE) so the thread updates without manual refresh.
 
 ---
 
-## 11. Drawers and collaboration signals
+## 11. Drawers and collaboration
 
-- **53** — **Starred messages** drawer: list starred items for the current conversation; **jump** to a message.
-- **54** — **TODO notes** drawer: list notes whose text starts with **TODO** (case-insensitive); **jump** to the host message.
-- **55** — **Presence**: show **other users** currently active on this conversation (exclude self), when collaboration is enabled.
-- **56** — When the **shared tree** changes and the client was **stale**, show a **clear prompt** to refresh (same intent as “conversation updated by another user” on the web).
+- **Starred messages** drawer — jump to message.
+- **TODO notes** drawer — notes whose body starts with `TODO` (case-insensitive); jump to host.
+- **Presence** — other active users on this conversation (when collaboration is on).
+- **Stale tree prompt** — when the shared tree changed and this client was behind, prompt once to refresh.
 
 ---
 
 ## 12. Membership and conversation metadata
 
-- **57** — **Add editor/viewer** flow (email + role); **owner** can **manage members** (list, roles) in the same product area.
-- **58** — **Rename conversation** (title) where role allows.
+- **Add editor/viewer** (email + role); **owner** manages members.
+- **Rename conversation** where role allows.
 
 ---
 
-## Traceability (selection matrix)
+## Spec section index
 
-| Web-inventory ref | In extension spec |
-|-------------------|-------------------|
-| 2–3 (narrowed) | §1 |
-| 4 | §2 |
-| 5–6 | §3 |
-| 8–11 + minimize | §4 |
-| 13–16 | §5 |
-| 19–22 | §6 |
-| 23–29, 31 (not 30) | §7 |
-| 33–41 | §8 |
-| 44–47 | §9 |
-| 48–52 | §10 |
-| 53–56 | §11 |
-| 57–58 | §12 |
+| Section | Topic |
+|---------|--------|
+| §1 | Settings (sounds, name, avatar), refresh |
+| §2 | About |
+| §3 | Account + paywall |
+| §4 | Conversation list + minimize |
+| §5 | Resizers |
+| §6 | Tree |
+| §7 | Thread (no tool rows) |
+| §8 | Details pane |
+| §9 | Composer |
+| §10 | Side chat |
+| §11 | Drawers + presence + stale prompt |
+| §12 | Members + rename |
 
-**Avatar** is **§1.1** (new). **30** (tool/step rows) is **explicitly excluded** in §7.
+**Avatar:** §1.1. **Tool rows:** excluded in §7.

@@ -117,4 +117,18 @@ export class ColcoorApiClient {
     }
     return JSON.parse(text) as ConversationSummary[];
   }
+
+  /** Create a conversation; you are the owner (POST /conversations). */
+  async createConversation(body: { title?: string | null }): Promise<ConversationSummary> {
+    const res = await this.fetchApi("/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: body.title ?? null }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`create conversation failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as ConversationSummary;
+  }
 }

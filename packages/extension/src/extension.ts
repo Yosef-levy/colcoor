@@ -4,6 +4,10 @@ import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
 import { AgentRunner } from "./agent/agentRunner";
+import {
+  ConversationTreeItem,
+  ConversationsTreeProvider,
+} from "./conversations/conversationsTreeProvider";
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
 
@@ -20,6 +24,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     getAccessToken: () => session.getBackendAccessToken(),
   });
   const agent = new AgentRunner();
+
+  const treeProvider = new ConversationsTreeProvider(api, async () =>
+    Boolean(await session.getBackendAccessToken()),
+  );
+  const refreshTree = (): void => {
+    treeProvider.refresh();
+  };
+
+  const treeView = vscode.window.createTreeView("colcoor.conversations", {
+    treeDataProvider: treeProvider,
+    showCollapseAll: false,
+  });
+  context.subscriptions.push(treeView);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colcoor.signIn", async () => {
@@ -64,6 +81,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           provider_hint: pick.provider,
         });
         await session.setBackendAccessToken(backendJwt);
+        refreshTree();
         await vscode.window.showInformationMessage("Colcoor: signed in.");
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -100,6 +118,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           display_name: displayName.trim(),
         });
         await session.setBackendAccessToken(accessToken);
+        refreshTree();
         await vscode.window.showInformationMessage("Colcoor: signed in (dev).");
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -108,25 +127,47 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("colcoor.signOut", async () => {
       await session.clearBackendAccessToken();
+      refreshTree();
       await vscode.window.showInformationMessage("Colcoor: signed out.");
     }),
-    vscode.commands.registerCommand("colcoor.refreshConversations", async () => {
+    vscode.commands.registerCommand("colcoor.newConversation", async () => {
+      const title = await vscode.window.showInputBox({
+        title: "New Colcoor conversation",
+        prompt: "Title (leave blank for untitled)",
+        ignoreFocusOut: true,
+      });
+      if (title === undefined) {
+        return;
+      }
+      const trimmed = title.trim();
       try {
-        const rows = await api.listConversations();
-        if (rows.length === 0) {
-          await vscode.window.showInformationMessage("Colcoor: no conversations yet.");
-          return;
-        }
-        const lines = rows.map((r) => `${r.title ?? "(untitled)"} — ${r.id}`);
-        await vscode.window.showQuickPick(lines, {
-          title: "Colcoor conversations",
-          canPickMany: false,
-        });
+        const conv = await api.createConversation({ title: trimmed || null });
+        refreshTree();
+        await vscode.window.showInformationMessage(
+          `Colcoor: created "${conv.title ?? "(untitled)"}".`,
+        );
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
       }
     }),
+    vscode.commands.registerCommand("colcoor.refreshConversations", () => {
+      refreshTree();
+    }),
+    vscode.commands.registerCommand(
+      "colcoor.copyConversationId",
+      async (item?: ConversationTreeItem) => {
+        const id = item?.conv?.id;
+        if (!id) {
+          await vscode.window.showWarningMessage(
+            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
+          );
+          return;
+        }
+        await vscode.env.clipboard.writeText(id);
+        await vscode.window.showInformationMessage("Colcoor: conversation ID copied.");
+      },
+    ),
     vscode.commands.registerCommand("colcoor.openAbout", async () => {
       await vscode.window.showInformationMessage(
         "Colcoor: branching conversations with you in control of where the dialogue continues. " +

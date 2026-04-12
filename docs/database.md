@@ -2,6 +2,8 @@
 
 Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID PKs; **`timestamptz`**; **`gen_random_uuid()`** defaults (built-in).
 
+**HTTP mapping:** [api-contracts.md](api-contracts.md). **Identity:** [authentication.md](authentication.md) (`cursor_sub`).
+
 ---
 
 ## 1. users
@@ -12,7 +14,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | email | text not null | Contact / billing |
 | display_name | text not null default '' | UI label |
 | avatar_url | text null | Profile image URL |
-| cursor_sub | text not null unique | Cursor IdP subject |
+| cursor_sub | text not null unique | **Stable opaque identity** assigned at first successful **`POST /api/v1/auth/cursor`**; unique key for provisioning |
 | handle | text null unique | Public @handle |
 | created_at | timestamptz not null | Row created |
 | last_login_at | timestamptz not null | Last successful auth |
@@ -48,7 +50,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | id | uuid PK | Event node |
 | conversation_id | uuid FK not null | Owning conversation |
 | parent_event_id | uuid FK null | Tree parent |
-| kind | text not null | user_input \| assistant_output |
+| kind | text not null | **`user_input`** \| **`assistant_output`** only (`CHECK` enforced) |
 | actor_type | text not null | user \| assistant |
 | actor_user_id | uuid FK null | Human actor when applicable |
 | content_text | text null | Plain body |
@@ -193,7 +195,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | user_id | uuid FK not null | Subject |
 | conversation_id | uuid FK null | Scope |
 | event_id | uuid FK null | Related graph event |
-| metric_code | text not null | `messages_sent` \| `branches_created` \| … (CHECK; add values via migration) |
+| metric_code | text not null | `messages_sent` \| `branches_created` \| `assistant_generations` \| `tokens_input` \| `tokens_output` (`CHECK` in DDL) |
 | quantity | int not null | Amount |
 | unit | text not null | unit code |
 | metadata_json | jsonb null | Extra dimensions |
@@ -240,6 +242,8 @@ CREATE TABLE conversation_members (
     CONSTRAINT ck_conversation_members_role CHECK (role IN ('owner', 'editor', 'viewer'))
 );
 CREATE INDEX idx_conversation_members_user_id ON conversation_members (user_id);
+CREATE UNIQUE INDEX uq_conversation_single_owner ON conversation_members (conversation_id)
+    WHERE (role = 'owner');
 
 -- 4. events
 CREATE TABLE events (
@@ -416,6 +420,8 @@ CREATE INDEX idx_usage_events_created_at ON usage_events (created_at);
 
 ---
 
-## Cross-table rule
+## Cross-table rules
 
-`conversation_user_state.active_event_id` must reference an `events.id` whose `events.conversation_id` equals `conversation_user_state.conversation_id` (enforce in app or trigger).
+1. **`conversation_user_state.active_event_id`** must reference an **`events.id`** whose **`events.conversation_id`** equals **`conversation_user_state.conversation_id`** (enforce in application or trigger).
+
+2. **Exactly one owner:** **`uq_conversation_single_owner`** guarantees at most one **`owner`** row per conversation; **`POST /api/v1/conversations`** **MUST** insert the creator as **`owner`** in the same transaction as the conversation row ([permissions.md](permissions.md)).
