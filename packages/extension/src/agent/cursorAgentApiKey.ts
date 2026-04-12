@@ -98,19 +98,15 @@ export async function promptStoreCursorAgentApiKey(secrets: vscode.SecretStorage
 }
 
 /** After backend sign-in, optionally guide the same key used for `CURSOR_API_KEY`. */
-export async function offerCursorAgentApiKeyAfterSignIn(
-  secrets: vscode.SecretStorage,
-  variant: "production" | "dev",
-): Promise<void> {
-  const suffix = variant === "dev" ? " (dev)" : "";
+export async function offerCursorAgentApiKeyAfterSignIn(secrets: vscode.SecretStorage): Promise<void> {
   const existing = (await secrets.get(SECRET_CURSOR_AGENT_API_KEY))?.trim();
   if (existing) {
-    await vscode.window.showInformationMessage(`Colcoor: signed in${suffix}.`);
+    await vscode.window.showInformationMessage("Colcoor: signed in.");
     return;
   }
 
   const choice = await vscode.window.showInformationMessage(
-    `Colcoor: signed in${suffix}. For Send message with the Cursor CLI, you can store the same key as ` +
+    "Colcoor: signed in. For Send message with the Cursor CLI, you can store the same key as " +
       "environment variable CURSOR_API_KEY (optional).",
     "Set Cursor API key",
     "OK",

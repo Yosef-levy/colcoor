@@ -98,7 +98,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
         await session.setBackendAccessToken(backendJwt);
         refreshTree();
-        await offerCursorAgentApiKeyAfterSignIn(context.secrets, "production");
+        await offerCursorAgentApiKeyAfterSignIn(context.secrets);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
@@ -135,7 +135,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
         await session.setBackendAccessToken(accessToken);
         refreshTree();
-        await offerCursorAgentApiKeyAfterSignIn(context.secrets, "dev");
+        await offerCursorAgentApiKeyAfterSignIn(context.secrets);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
