@@ -4,7 +4,7 @@
  * @see https://cursor.com/docs/cli/reference/output-format
  */
 
-import { appendTimelineEntry } from "./cursorAgentTimelineSanitize";
+import { appendTimelineEntry, sanitizeForAgentTimeline } from "./cursorAgentTimelineSanitize";
 
 export type StreamJsonLineEffect =
   | { kind: "append_assistant"; delta: string }
@@ -43,6 +43,39 @@ export function tryParseNdjsonObject(line: string): Record<string, unknown> | nu
     }
   } catch {
     /* ignore */
+  }
+  return null;
+}
+
+/**
+ * Shapes NDJSON for persistence/UI: drop transcript echo (`user`) and token stream (`assistant`)
+ * — the reply body is already `content_text`. Keep tools, slim system, slim result metadata.
+ */
+export function slimNdjsonForTimeline(o: Record<string, unknown>): Record<string, unknown> | null {
+  const typ = o.type;
+  if (typ === "user" || typ === "assistant") {
+    return null;
+  }
+  if (typ === "system") {
+    const out: Record<string, unknown> = { type: "system" };
+    for (const k of ["subtype", "model", "session_id", "apiKeySource", "permissionMode"]) {
+      if (o[k] !== undefined) {
+        out[k] = o[k];
+      }
+    }
+    return out;
+  }
+  if (typ === "result") {
+    const out: Record<string, unknown> = { type: "result" };
+    for (const k of ["subtype", "is_error", "duration_ms", "duration_api_ms", "request_id", "session_id"]) {
+      if (o[k] !== undefined) {
+        out[k] = o[k];
+      }
+    }
+    return out;
+  }
+  if (typ === "tool_call") {
+    return sanitizeForAgentTimeline(o) as Record<string, unknown>;
   }
   return null;
 }
@@ -109,7 +142,10 @@ export function createStreamJsonStdoutFeed(): {
   function processCompleteLine(line: string, onResolvedSoFar?: (textSoFar: string) => void): void {
     const o = tryParseNdjsonObject(line);
     if (o) {
-      appendTimelineEntry(timeline, o);
+      const slim = slimNdjsonForTimeline(o);
+      if (slim) {
+        appendTimelineEntry(timeline, slim);
+      }
     }
     const effect = o ? effectFromNdjsonObject(o) : null;
     if (effect) {

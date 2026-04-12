@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createStreamJsonStdoutFeed,
   parseCursorAgentNdjsonLine,
+  slimNdjsonForTimeline,
 } from "./cursorAgentStreamJson";
 
 describe("parseCursorAgentNdjsonLine", () => {
@@ -52,6 +53,47 @@ describe("parseCursorAgentNdjsonLine", () => {
   it("returns null for unknown lines", () => {
     expect(parseCursorAgentNdjsonLine('{"type":"system"}')).toBeNull();
     expect(parseCursorAgentNdjsonLine("not json")).toBeNull();
+  });
+});
+
+describe("slimNdjsonForTimeline", () => {
+  it("drops user and assistant NDJSON rows", () => {
+    expect(slimNdjsonForTimeline({ type: "user", message: { role: "user", content: [] } })).toBeNull();
+    expect(
+      slimNdjsonForTimeline({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "tok" }] },
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps slim system without cwd", () => {
+    const s = slimNdjsonForTimeline({
+      type: "system",
+      subtype: "init",
+      model: "M",
+      cwd: "/very/long/path",
+      session_id: "sid",
+    });
+    expect(s).toEqual({ type: "system", subtype: "init", model: "M", session_id: "sid" });
+    expect(s).not.toHaveProperty("cwd");
+  });
+
+  it("keeps result metadata without duplicate result text", () => {
+    const s = slimNdjsonForTimeline({
+      type: "result",
+      subtype: "success",
+      result: "full assistant body",
+      duration_ms: 99,
+      session_id: "sid",
+    });
+    expect(s).toEqual({
+      type: "result",
+      subtype: "success",
+      duration_ms: 99,
+      session_id: "sid",
+    });
+    expect(s).not.toHaveProperty("result");
   });
 });
 
@@ -114,5 +156,23 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(t).toHaveLength(2);
     expect((t[0] as { type: string }).type).toBe("system");
     expect((t[1] as { type: string }).type).toBe("tool_call");
+  });
+
+  it("does not put user or assistant stream rows in the timeline", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"' + "x".repeat(200) + '"}]}}\n',
+    );
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"a"}]}}\n',
+    );
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"b"}]}}\n',
+    );
+    feed.push('{"type":"system","subtype":"init","model":"M"}\n');
+    feed.flushTail();
+    expect(feed.getTimeline()).toHaveLength(1);
+    expect((feed.getTimeline()[0] as { type: string }).type).toBe("system");
+    expect(feed.getResolvedText()).toBe("ab");
   });
 });

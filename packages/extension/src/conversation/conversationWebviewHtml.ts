@@ -516,9 +516,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (s.role === "assistant") {
           if (s.traceEntries && s.traceEntries.length) {
             html +=
-              '<details open class="agent-trace"><summary class="trace-summary">CLI event log — ' +
+              '<details open class="agent-trace"><summary class="trace-summary">CLI trace — ' +
               s.traceEntries.length +
-              " NDJSON line(s) (collapse)</summary>";
+              " event(s) · tools &amp; session (collapse)</summary>";
             for (let i = 0; i < s.traceEntries.length; i++) {
               html += formatTraceEntryHtml(s.traceEntries[i], i);
             }
@@ -527,7 +527,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             html +=
               '<p class="agent-trace-missing hint">' +
               esc(
-                "No CLI tool/run log for this reply. It is saved only for new assistant messages when the Cursor agent uses NDJSON: set Colcoor → Agent: CLI output format to stream-json-partial or stream-json (not text), then send again. Stub mode never includes a log.",
+                "No CLI trace for this reply. Traces are saved for new messages with stream-json or stream-json-partial (not text/stub). The trace lists tool calls and session metadata only — not the prompt or per-token assistant stream.",
               ) +
               "</p>";
           }
