@@ -156,6 +156,7 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint .",
     "test": "vitest run",
+    "bench:agent-stream": "node scripts/agent-stream-latency.mjs",
     "package": "npm run build && vsce package --no-dependencies",
     "open-in-cursor": "npm run build && cursor --extensionDevelopmentPath=\"$PWD\""
   },
