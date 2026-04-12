@@ -9,8 +9,8 @@ router = APIRouter()
     "/conversations/{conversation_id}/message/stream",
     status_code=status.HTTP_410_GONE,
 )
-def message_stream_gone(_conversation_id: UUID) -> Response:
-    """Main-thread streaming is not implemented on the extension backend (docs/architecture.md §6)."""
+def message_stream_gone(conversation_id: UUID) -> Response:  # noqa: ARG001
+    """Return 410; transcript main-thread streaming is not implemented on this API."""
     return Response(status_code=status.HTTP_410_GONE)
 
 
@@ -18,5 +18,5 @@ def message_stream_gone(_conversation_id: UUID) -> Response:
     "/conversations/{conversation_id}/resend/stream",
     status_code=status.HTTP_410_GONE,
 )
-def resend_stream_gone(_conversation_id: UUID) -> Response:
+def resend_stream_gone(conversation_id: UUID) -> Response:  # noqa: ARG001
     return Response(status_code=status.HTTP_410_GONE)

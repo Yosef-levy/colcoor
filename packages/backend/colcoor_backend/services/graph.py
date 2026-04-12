@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +14,7 @@ from colcoor_backend.db.models import (
     Event,
     User,
 )
+from colcoor_backend.services.cursor_identity import VerifiedCursorIdentity
 
 
 async def upsert_user_by_cursor_sub(
@@ -36,6 +36,34 @@ async def upsert_user_by_cursor_sub(
             cursor_sub=cursor_sub,
             email=email,
             display_name=display_name or "",
+            last_login_at=now,
+        )
+        session.add(user)
+    await session.flush()
+    await session.refresh(user)
+    return user.id
+
+
+async def upsert_user_from_verified_identity(
+    session: AsyncSession,
+    identity: VerifiedCursorIdentity,
+) -> uuid.UUID:
+    """Create or update user from IdP-verified Cursor / VS Code account (cursor_sub + profile)."""
+    now = datetime.now(tz=UTC)
+    res = await session.execute(select(User).where(User.cursor_sub == identity.cursor_sub))
+    user = res.scalar_one_or_none()
+    if user:
+        user.email = identity.email
+        user.display_name = identity.display_name or user.display_name
+        if identity.avatar_url is not None:
+            user.avatar_url = identity.avatar_url
+        user.last_login_at = now
+    else:
+        user = User(
+            cursor_sub=identity.cursor_sub,
+            email=identity.email,
+            display_name=identity.display_name or "",
+            avatar_url=identity.avatar_url,
             last_login_at=now,
         )
         session.add(user)

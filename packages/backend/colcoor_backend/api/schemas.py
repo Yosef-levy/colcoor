@@ -2,6 +2,8 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -21,9 +23,10 @@ class AppendEventBody(BaseModel):
 
 
 class AuthCursorRequest(BaseModel):
-    """Placeholder: extension sends Cursor-issued token for exchange (docs/authentication.md §3)."""
+    """Exchange a VS Code / Cursor auth provider access token for a Colcoor API JWT."""
 
     cursor_access_token: str = Field(..., min_length=1)
+    provider_hint: Literal["auto", "github", "microsoft", "google"] = "auto"
 
 
 class AuthResponse(BaseModel):

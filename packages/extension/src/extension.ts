@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import { ColcoorApiClient } from "./api/client";
+import { getAccessTokenInteractive } from "./auth/extensionAccounts";
+import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
 import { AgentRunner } from "./agent/agentRunner";
 
@@ -20,6 +22,54 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const agent = new AgentRunner();
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("colcoor.signIn", async () => {
+      const items: {
+        label: string;
+        description: string;
+        provider: ColcoorAuthProvider;
+      }[] = [
+        {
+          label: "GitHub",
+          description: "If you use GitHub with Cursor",
+          provider: "github",
+        },
+        {
+          label: "Microsoft",
+          description: "Work, school, or personal Microsoft account",
+          provider: "microsoft",
+        },
+        {
+          label: "Google",
+          description: "If your Cursor account uses Google",
+          provider: "google",
+        },
+      ];
+      const pick = await vscode.window.showQuickPick(items, {
+        title: "Colcoor — sign in",
+        placeHolder: "Choose the same account type you use in Cursor",
+      });
+      if (!pick) {
+        return;
+      }
+      const accessToken = await getAccessTokenInteractive(pick.provider);
+      if (!accessToken) {
+        await vscode.window.showErrorMessage(
+          "Colcoor: no access token from Cursor — check that you are signed in to the chosen provider.",
+        );
+        return;
+      }
+      try {
+        const { access_token: backendJwt } = await api.cursorExchange({
+          cursor_access_token: accessToken,
+          provider_hint: pick.provider,
+        });
+        await session.setBackendAccessToken(backendJwt);
+        await vscode.window.showInformationMessage("Colcoor: signed in.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      }
+    }),
     vscode.commands.registerCommand("colcoor.signInDev", async () => {
       const cursorSub = await vscode.window.showInputBox({
         title: "Colcoor dev sign-in",

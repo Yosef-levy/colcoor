@@ -13,11 +13,11 @@ dependencies = [
   "alembic>=1.14.0",
   "PyJWT>=2.9.0",
   "psycopg[binary]>=3.2.0",
+  "httpx>=0.28.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28.0",
   "pytest>=8.3.0",
   "ruff>=0.8.0",
 ]

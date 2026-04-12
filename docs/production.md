@@ -103,6 +103,8 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `COLCOOR_LOG_LEVEL` | Optional | `INFO` default; `DEBUG` / `WARNING` / `ERROR` |
 | `PORT` | Fixed in Compose | Backend listens on **8000** inside the stack; must match nginx upstream |
 | `DOMAIN` | Optional | Reserved for future use / docs |
+| `CURSOR_AUTH_PROVIDER_ORDER` | Optional | Comma list: `github`, `microsoft`, `google` — order used when `provider_hint` is `auto` on **`POST /api/v1/auth/cursor`** (default `github,microsoft,google`) |
+| `CURSOR_AUTH_HTTP_TIMEOUT_SECONDS` | Optional | Timeout for upstream IdP HTTP calls (default **12**, min **2**, max **60**) |
 
 Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_URL` is missing, too short, or matches obvious placeholder patterns (see `colcoor_backend.core.validation`).
 
@@ -151,6 +153,21 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_
 - [ ] Enable **HTTPS** when exposing the API beyond lab use.
 - [ ] Set **`CORS_ORIGINS`** if browser clients call the API from web origins.
 - [ ] Rotate **`JWT_SECRET`** and DB credentials on compromise; plan key rotation without downtime where possible.
+
+---
+
+## Cursor / VS Code extension (remote API)
+
+When the API runs on a **remote VM** (this Compose stack), configure the extension to call that host—not `127.0.0.1`.
+
+1. **Settings** (Cursor or VS Code): search **Colcoor** → **Colcoor: Backend base URL**.
+2. Set it to the **public origin** only: scheme + host, optional non-default port, **no path**, **no trailing slash**.  
+   Examples: `https://api.example.com`, `https://203.0.113.10` (HTTPS preferred in production).  
+   The extension appends **`/api/v1`** itself (e.g. `…/api/v1/auth/cursor`).
+3. **Firewall / cloud security group:** allow inbound **80** and/or **443** on the VM from the network where you run Cursor (home IP, office VPN, etc.).
+4. **TLS:** use a certificate Node trusts (e.g. Let’s Encrypt). **Self-signed** HTTPS typically causes **fetch / certificate** errors until the system trusts the CA or you terminate TLS with a public cert.
+5. **`CORS_ORIGINS`:** the extension issues requests from the **Node extension host**, not a browser tab, so **empty `CORS_ORIGINS` is fine** for extension-only traffic (see [`.env.example`](../.env.example)). Set `CORS_ORIGINS` when **browser** clients must call the API cross-origin.
+6. **Auth:** with **`COLCOOR_ENV=production`**, **`POST /api/v1/auth/dev-login` is disabled** (403). Use **Colcoor: Sign in** (`POST /api/v1/auth/cursor` with GitHub / Microsoft / Google tokens); see [authentication.md](authentication.md). For local-only testing, use a **staging** API or **Sign in (dev)** when dev-login is enabled.
 
 ---
 

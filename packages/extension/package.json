@@ -13,6 +13,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "colcoor.signIn",
+        "title": "Colcoor: Sign in"
+      },
+      {
         "command": "colcoor.signInDev",
         "title": "Colcoor: Sign in (dev)"
       },
@@ -35,7 +39,7 @@
         "colcoor.backendBaseUrl": {
           "type": "string",
           "default": "http://127.0.0.1:8000",
-          "description": "Base URL of the Colcoor extension backend (no trailing slash)."
+          "description": "API origin only (no path, no trailing slash). Remote VM: https://your-host. Local docker-compose.prod: http://127.0.0.1 (nginx :80). Local uvicorn: http://127.0.0.1:8000."
         }
       }
     }

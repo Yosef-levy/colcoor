@@ -40,6 +40,23 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("DOMAIN", "COLCOOR_DOMAIN"),
     )
+    cursor_auth_provider_order: str = Field(
+        default="github,microsoft,google",
+        validation_alias=AliasChoices(
+            "CURSOR_AUTH_PROVIDER_ORDER",
+            "COLCOOR_CURSOR_AUTH_PROVIDER_ORDER",
+        ),
+        description="Comma-separated IdP probe order for POST /auth/cursor when provider_hint=auto",
+    )
+    cursor_auth_http_timeout_seconds: float = Field(
+        default=12.0,
+        ge=2.0,
+        le=60.0,
+        validation_alias=AliasChoices(
+            "CURSOR_AUTH_HTTP_TIMEOUT_SECONDS",
+            "COLCOOR_CURSOR_AUTH_HTTP_TIMEOUT_SECONDS",
+        ),
+    )
 
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"
