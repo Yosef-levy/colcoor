@@ -10,6 +10,11 @@ export class ConversationTreeItem extends vscode.TreeItem {
     this.description = conv.pinned ? "pinned" : undefined;
     this.contextValue = "conversation";
     this.iconPath = new vscode.ThemeIcon("comment-discussion");
+    this.command = {
+      command: "colcoor.openConversation",
+      title: "Open conversation",
+      arguments: [conv.id, conv.title],
+    };
   }
 }
 

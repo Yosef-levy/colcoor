@@ -39,6 +39,10 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "colcoor.openConversation",
+        "title": "Colcoor: Open conversation"
+      },
+      {
         "command": "colcoor.sendMessage",
         "title": "Colcoor: Send message"
       },
@@ -71,7 +75,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)"
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
       }
     ],
     "menus": {
@@ -89,14 +93,19 @@
       ],
       "view/item/context": [
         {
-          "command": "colcoor.sendMessage",
+          "command": "colcoor.openConversation",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@0"
         },
         {
-          "command": "colcoor.copyConversationId",
+          "command": "colcoor.sendMessage",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@1"
+        },
+        {
+          "command": "colcoor.copyConversationId",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@2"
         }
       ]
     },

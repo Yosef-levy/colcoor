@@ -7,6 +7,14 @@ import {
   pathFromRootToTip,
 } from "./treeEvents";
 
+export type RunUserTurnOptions = {
+  /**
+   * Event id to attach the new `user_input` under (and build transcript root → this node).
+   * When omitted, uses the default branch tip (`findBranchTip`).
+   */
+  replyParentEventId?: string;
+};
+
 export type UserTurnResult = {
   userEventId: string;
   assistantEventId: string;
@@ -26,6 +34,7 @@ export async function runColcoorUserTurn(
   conversationTitle: string | null | undefined,
   userMessage: string,
   workspaceRoot: string,
+  options?: RunUserTurnOptions,
 ): Promise<UserTurnResult> {
   const trimmed = userMessage.trim();
   if (!trimmed) {
@@ -33,8 +42,21 @@ export async function runColcoorUserTurn(
   }
 
   const { events } = await api.getTree(conversationId);
-  const tip = findBranchTip(events);
-  const path = pathFromRootToTip(events, tip);
+  if (events.length === 0) {
+    throw new Error("conversation has no events");
+  }
+  const byId = new Map(events.map((e) => [e.id, e]));
+  const attach =
+    options?.replyParentEventId !== undefined && options.replyParentEventId !== ""
+      ? (() => {
+          const n = byId.get(options.replyParentEventId);
+          if (!n) {
+            throw new Error("reply parent is not in the current tree");
+          }
+          return n;
+        })()
+      : findBranchTip(events);
+  const path = pathFromRootToTip(events, attach);
   const pathTurns = graphPathToTranscriptTurns(path);
 
   const transcriptText = buildAuthoritativeTranscript({
@@ -45,7 +67,7 @@ export async function runColcoorUserTurn(
 
   const userRes = await api.appendEvent(conversationId, {
     kind: "user_input",
-    parent_event_id: tip.id,
+    parent_event_id: attach.id,
     content: trimmed,
     author: "end_user",
     private_branch: false,

@@ -9,6 +9,7 @@ import {
   promptStoreCursorAgentApiKey,
 } from "./agent/cursorAgentApiKey";
 import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./agent/cursorCliSetup";
+import { createConversationPanelController } from "./conversation/conversationPanel";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
@@ -31,6 +32,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
   const agent = new AgentRunner(context.secrets);
 
+  const conversationPanel = createConversationPanelController(context, {
+    api,
+    agent,
+    getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
+  });
+  context.subscriptions.push(new vscode.Disposable(() => conversationPanel.dispose()));
+
   const treeProvider = new ConversationsTreeProvider(api, async () =>
     Boolean(await session.getBackendAccessToken()),
   );
@@ -43,6 +51,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     showCollapseAll: false,
   });
   context.subscriptions.push(treeView);
+
+  async function pickConversationInteractively(): Promise<
+    { id: string; title: string | null } | undefined
+  > {
+    try {
+      const rows = await api.listConversations();
+      if (rows.length === 0) {
+        await vscode.window.showWarningMessage("Colcoor: no conversations — create one first.");
+        return undefined;
+      }
+      const picked = await vscode.window.showQuickPick<
+        vscode.QuickPickItem & { cid: string; ctitle: string | null }
+      >(
+        rows.map((r) => ({
+          label: r.title?.trim() ? r.title : "(untitled)",
+          description: r.id,
+          cid: r.id,
+          ctitle: r.title,
+        })),
+        { title: "Colcoor — pick conversation", placeHolder: "Choose a conversation" },
+      );
+      if (!picked) {
+        return undefined;
+      }
+      return { id: picked.cid, title: picked.ctitle };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      return undefined;
+    }
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colcoor.setupCursorCli", async () => {
@@ -122,6 +161,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         const conv = await api.createConversation({ title: trimmed || null });
         refreshTree();
+        await conversationPanel.reveal(conv.id, conv.title);
         await vscode.window.showInformationMessage(
           `Colcoor: created "${conv.title ?? "(untitled)"}".`,
         );
@@ -153,6 +193,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           "Details stay in product docs — not raw transcripts or agent plumbing.",
       );
     }),
+    vscode.commands.registerCommand(
+      "colcoor.openConversation",
+      async (arg0?: ConversationTreeItem | string, arg1?: string | null) => {
+        if (arg0 && typeof arg0 === "object" && "conv" in arg0) {
+          const it = arg0 as ConversationTreeItem;
+          await conversationPanel.reveal(it.conv.id, it.conv.title);
+          return;
+        }
+        if (typeof arg0 === "string" && arg0.length > 0) {
+          await conversationPanel.reveal(arg0, arg1 ?? null);
+          return;
+        }
+        const row = await pickConversationInteractively();
+        if (row) {
+          await conversationPanel.reveal(row.id, row.title);
+        }
+      },
+    ),
   );
 
   context.subscriptions.push(
@@ -162,33 +220,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         let convId = item?.conv.id;
         let convTitle: string | null | undefined = item?.conv.title ?? null;
         if (!convId) {
-          try {
-            const rows = await api.listConversations();
-            if (rows.length === 0) {
-              await vscode.window.showWarningMessage("Colcoor: no conversations — create one first.");
-              return;
-            }
-            const picked = await vscode.window.showQuickPick<
-              vscode.QuickPickItem & { cid: string; ctitle: string | null }
-            >(
-              rows.map((r) => ({
-                label: r.title?.trim() ? r.title : "(untitled)",
-                description: r.id,
-                cid: r.id,
-                ctitle: r.title,
-              })),
-              { title: "Colcoor — send message", placeHolder: "Pick a conversation" },
-            );
-            if (!picked) {
-              return;
-            }
-            convId = picked.cid;
-            convTitle = picked.ctitle;
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+          const row = await pickConversationInteractively();
+          if (!row) {
             return;
           }
+          convId = row.id;
+          convTitle = row.title;
         }
         const text = await vscode.window.showInputBox({
           title: "Colcoor — message",
