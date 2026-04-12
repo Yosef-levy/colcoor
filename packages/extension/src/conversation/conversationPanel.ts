@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient, GraphEventNode } from "../api/client";
+import { createThrottledAssistantStreamPusher } from "./assistantStreamWebview";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
 import { runColcoorUserTurn } from "./runUserTurn";
@@ -145,6 +146,10 @@ export function createConversationPanelController(
     sendAbort = new AbortController();
     const signal = sendAbort.signal;
     await loadTreeAndPush(true, null);
+    const stream = createThrottledAssistantStreamPusher(
+      () => panel,
+      () => webviewReady,
+    );
     try {
       const result = await runColcoorUserTurn(
         api,
@@ -153,7 +158,12 @@ export function createConversationPanelController(
         conversationTitle,
         trimmed,
         ws,
-        { replyParentEventId: selectedEventId, privateBranch, signal },
+        {
+          replyParentEventId: selectedEventId,
+          privateBranch,
+          signal,
+          onAssistantTextDelta: (t) => stream.pushDelta(t),
+        },
       );
       const { events } = await api.getTree(conversationId);
       try {
@@ -173,6 +183,7 @@ export function createConversationPanelController(
       const msg = e instanceof Error ? e.message : String(e);
       await loadTreeAndPush(false, msg);
     } finally {
+      stream.dispose();
       sendAbort = undefined;
     }
   }
@@ -186,6 +197,10 @@ export function createConversationPanelController(
     sendAbort = new AbortController();
     const signal = sendAbort.signal;
     await loadTreeAndPush(true, null);
+    const stream = createThrottledAssistantStreamPusher(
+      () => panel,
+      () => webviewReady,
+    );
     try {
       const result = await runResendAssistant(
         api,
@@ -194,7 +209,7 @@ export function createConversationPanelController(
         conversationTitle,
         selectedEventId,
         ws,
-        { signal },
+        { signal, onAssistantTextDelta: (t) => stream.pushDelta(t) },
       );
       const { events } = await api.getTree(conversationId);
       try {
@@ -214,6 +229,7 @@ export function createConversationPanelController(
       const msg = e instanceof Error ? e.message : String(e);
       await loadTreeAndPush(false, msg);
     } finally {
+      stream.dispose();
       sendAbort = undefined;
     }
   }

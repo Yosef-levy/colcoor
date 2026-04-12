@@ -1,11 +1,13 @@
-import type { AgentRunner, AssistantStubKind } from "../agent/agentRunner";
+import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
+import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import { graphPathToTranscriptTurns, pathFromRootToTip } from "./treeEvents";
 import type { UserTurnResult } from "./runUserTurn";
 
 export type RunResendAssistantOptions = {
   signal?: AbortSignal;
+  onAssistantTextDelta?: (textSoFar: string) => void;
 };
 
 /**
@@ -47,56 +49,19 @@ export async function runResendAssistant(
     finalUserMessage: undefined,
   });
 
-  let assistantText: string;
-  let assistantStub: AssistantStubKind | undefined;
   try {
     const runResult = await agent.run({
       transcriptText,
       userMessage: userBody,
       workspaceRoot,
       signal: options?.signal,
+      onTextDelta: options?.onAssistantTextDelta,
     });
-    assistantText = runResult.text;
-    assistantStub = runResult.stub === "none" ? undefined : runResult.stub;
-    if (runResult.cancelled) {
-      const partial = assistantText.trim();
-      if (!partial) {
-        return { userEventId, cancelled: true };
-      }
-      const asstRes = await api.appendEvent(conversationId, {
-        kind: "assistant_output",
-        parent_event_id: userEventId,
-        content: partial,
-        author: "cursor_agent",
-        private_branch: false,
-      });
-      return {
-        userEventId,
-        assistantEventId: asstRes.id,
-        assistantText: partial,
-        assistantStub,
-        cancelled: true,
-      };
-    }
+    return appendAssistantFromAgentResult(api, conversationId, userEventId, runResult);
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       return { userEventId, cancelled: true };
     }
     throw e;
   }
-
-  const asstRes = await api.appendEvent(conversationId, {
-    kind: "assistant_output",
-    parent_event_id: userEventId,
-    content: assistantText,
-    author: "cursor_agent",
-    private_branch: false,
-  });
-
-  return {
-    userEventId,
-    assistantEventId: asstRes.id,
-    assistantText,
-    assistantStub,
-  };
 }

@@ -171,7 +171,7 @@
     "vitest": "^3.0.5"
   },
   "dependencies": {
-    "marked": "^18.0.0",
+    "marked": "^9.1.6",
     "sanitize-html": "^2.17.2"
   }
 }

@@ -34,6 +34,8 @@ export class AgentRunner {
     userMessage: string;
     workspaceRoot: string;
     signal?: AbortSignal;
+    /** Full assistant text so far (CLI stdout grows incrementally). Stub mode invokes once with the full body. */
+    onTextDelta?: (textSoFar: string) => void;
   }): Promise<AgentRunResult> {
     const config = vscode.workspace.getConfiguration("colcoor");
     const rawMode = config.get<string>("agentMode") ?? "auto";
@@ -47,7 +49,9 @@ export class AgentRunner {
       if (input.signal?.aborted) {
         return { text: "", stub: "explicit", cancelled: true };
       }
-      return stubBody(input.userMessage);
+      const out = stubBody(input.userMessage);
+      input.onTextDelta?.(out.text);
+      return out;
     }
 
     try {
@@ -60,6 +64,7 @@ export class AgentRunner {
         timeoutMs: Math.max(10_000, timeoutMs),
         storedCursorApiKey: storedKey?.trim() || undefined,
         signal: input.signal,
+        onStdoutAccumulated: input.onTextDelta,
       });
       if (cancelled) {
         return { text: stdout.trim(), stub: "none", cancelled: true };
@@ -91,10 +96,12 @@ export class AgentRunner {
       }
       if (mode === "auto" && isMissingExecutableError(e)) {
         const u = input.userMessage.trim();
+        const text =
+          "[Colcoor] Cursor CLI (`agent`) not on PATH — placeholder reply only.\n\n" +
+          `Your message:\n${u}`;
+        input.onTextDelta?.(text);
         return {
-          text:
-            "[Colcoor] Cursor CLI (`agent`) not on PATH — placeholder reply only.\n\n" +
-            `Your message:\n${u}`,
+          text,
           stub: "cli_missing",
         };
       }

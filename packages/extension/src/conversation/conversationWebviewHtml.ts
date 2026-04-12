@@ -119,6 +119,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .msg { margin: 8px 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--vscode-focusBorder); }
     .msg.user { background: var(--vscode-editor-inactiveSelectionBackground); }
     .msg.assistant { background: var(--vscode-textBlockQuote-background); }
+    .msg.assistant.streaming { box-shadow: inset 0 0 0 1px var(--vscode-focusBorder, var(--vscode-panel-border)); }
     .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
     /* Thread bodies: GFM markdown from host (sanitized HTML). */
     .thread .msg .body.md {
@@ -278,6 +279,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       threadSegments: [],
       busy: false,
       lastError: null,
+      // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
+      streamingHtml: null,
     };
 
     function esc(s) {
@@ -429,6 +432,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           s.html +
           "</div></div>";
       }
+      if (state.streamingHtml) {
+        html +=
+          '<div class="msg assistant streaming"><div class="role">Assistant</div><div class="body md">' +
+          state.streamingHtml +
+          "</div></div>";
+      }
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
     }
 
@@ -469,8 +478,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     window.addEventListener("message", (event) => {
       const m = event.data;
       if (m && m.type === "state") {
-        state = m;
+        state = { ...m, streamingHtml: null };
         render();
+        return;
+      }
+      if (m && m.type === "assistantStream" && typeof m.html === "string") {
+        state = { ...state, streamingHtml: m.html || null };
+        renderThread();
       }
     });
 

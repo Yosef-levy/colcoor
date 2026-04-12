@@ -41,6 +41,8 @@ export function spawnCursorAgentPrint(params: {
   storedCursorApiKey?: string;
   /** When aborted, the child is killed and the promise resolves with `cancelled: true` and captured stdout. */
   signal?: AbortSignal;
+  /** Called after each stdout chunk with full stdout captured so far (UTF-8). */
+  onStdoutAccumulated?: (stdoutSoFar: string) => void;
 }): Promise<CursorCliSpawnResult> {
   const cwd = params.workspaceRoot.trim() || process.cwd();
   const env = buildEnvForAgentSpawn(params.storedCursorApiKey);
@@ -125,6 +127,7 @@ export function spawnCursorAgentPrint(params: {
         return;
       }
       stdout += s;
+      params.onStdoutAccumulated?.(stdout);
     });
 
     child.stderr?.on("data", (chunk: Buffer | string) => {

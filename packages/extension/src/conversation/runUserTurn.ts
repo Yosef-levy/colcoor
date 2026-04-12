@@ -1,6 +1,7 @@
 import type { AgentRunner, AssistantStubKind } from "../agent/agentRunner";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
+import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
   findBranchTip,
   graphPathToTranscriptTurns,
@@ -17,6 +18,8 @@ export type RunUserTurnOptions = {
   privateBranch?: boolean;
   /** Passed to the Cursor CLI spawn; abort skips assistant append when there is no partial text. */
   signal?: AbortSignal;
+  /** Incremental assistant body while the Cursor CLI prints stdout (same string grows over time). */
+  onAssistantTextDelta?: (textSoFar: string) => void;
 };
 
 export type UserTurnResult = {
@@ -79,56 +82,19 @@ export async function runColcoorUserTurn(
     private_branch: options?.privateBranch ?? false,
   });
 
-  let assistantText: string;
-  let assistantStub: AssistantStubKind | undefined;
   try {
     const runResult = await agent.run({
       transcriptText,
       userMessage: trimmed,
       workspaceRoot,
       signal: options?.signal,
+      onTextDelta: options?.onAssistantTextDelta,
     });
-    assistantText = runResult.text;
-    assistantStub = runResult.stub === "none" ? undefined : runResult.stub;
-    if (runResult.cancelled) {
-      const partial = assistantText.trim();
-      if (!partial) {
-        return { userEventId: userRes.id, cancelled: true };
-      }
-      const asstRes = await api.appendEvent(conversationId, {
-        kind: "assistant_output",
-        parent_event_id: userRes.id,
-        content: partial,
-        author: "cursor_agent",
-        private_branch: false,
-      });
-      return {
-        userEventId: userRes.id,
-        assistantEventId: asstRes.id,
-        assistantText: partial,
-        assistantStub,
-        cancelled: true,
-      };
-    }
+    return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult);
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       return { userEventId: userRes.id, cancelled: true };
     }
     throw e;
   }
-
-  const asstRes = await api.appendEvent(conversationId, {
-    kind: "assistant_output",
-    parent_event_id: userRes.id,
-    content: assistantText,
-    author: "cursor_agent",
-    private_branch: false,
-  });
-
-  return {
-    userEventId: userRes.id,
-    assistantEventId: asstRes.id,
-    assistantText,
-    assistantStub,
-  };
 }
