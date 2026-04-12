@@ -5,7 +5,11 @@ import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
 import { runColcoorUserTurn } from "./runUserTurn";
-import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
+import {
+  buildThreadSegments,
+  extractAgentTraceEntries,
+  type ThreadSegment,
+} from "./threadSegments";
 import { findBranchTip } from "./treeEvents";
 
 type WebviewStateMessage = {
@@ -19,6 +23,18 @@ type WebviewStateMessage = {
   busy: boolean;
   lastError: string | null;
 };
+
+/** Drop bulky `content_json` except CLI trace (webview only needs snippets + trace). */
+function slimEventsForWebviewPostMessage(events: GraphEventNode[]): GraphEventNode[] {
+  return events.map((e) => {
+    const entries = extractAgentTraceEntries(e.content_json ?? undefined);
+    const slimJson =
+      entries && entries.length > 0
+        ? { colcoor_agent_trace: { version: 1 as const, entries } }
+        : null;
+    return { ...e, content_json: slimJson };
+  });
+}
 
 type FromWebview =
   | { type: "ready" }
@@ -99,28 +115,61 @@ export function createConversationPanelController(
     if (!panel || !conversationId || !webviewReady) {
       return;
     }
-    const ids = new Set(events.map((e) => e.id));
-    let sel = selectedEventId;
-    if (!sel || !ids.has(sel)) {
-      try {
-        sel = events.length > 0 ? findBranchTip(events).id : "";
-      } catch {
-        sel = events[0]?.id ?? "";
-      }
-      selectedEventId = sel;
-    }
-    const msg: WebviewStateMessage = {
+    const cid = conversationId;
+    const fallbackMsg = (err: string): WebviewStateMessage => ({
       type: "state",
-      conversationId,
+      conversationId: cid,
       title: conversationTitle ?? null,
       conversationPinned,
-      events,
-      selectedEventId: sel ?? "",
-      threadSegments: buildThreadSegments(events, sel ?? ""),
-      busy,
-      lastError,
-    };
-    void panel.webview.postMessage(msg);
+      events: [],
+      selectedEventId: "",
+      threadSegments: [],
+      busy: false,
+      lastError: err,
+    });
+    try {
+      const ids = new Set(events.map((e) => e.id));
+      let sel = selectedEventId;
+      if (!sel || !ids.has(sel)) {
+        try {
+          sel = events.length > 0 ? findBranchTip(events).id : "";
+        } catch {
+          sel = events[0]?.id ?? "";
+        }
+        selectedEventId = sel;
+      }
+      const threadSegments = buildThreadSegments(events, sel ?? "");
+      const msg: WebviewStateMessage = {
+        type: "state",
+        conversationId: cid,
+        title: conversationTitle ?? null,
+        conversationPinned,
+        events: slimEventsForWebviewPostMessage(events),
+        selectedEventId: sel ?? "",
+        threadSegments,
+        busy,
+        lastError,
+      };
+      try {
+        void panel.webview.postMessage(msg);
+      } catch (postErr) {
+        const detail = postErr instanceof Error ? postErr.message : String(postErr);
+        void panel.webview.postMessage(
+          fallbackMsg(
+            `Could not send conversation state to the panel (payload may be too large). ${detail}`,
+          ),
+        );
+      }
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        void panel.webview.postMessage(
+          fallbackMsg(`Colcoor: failed to build thread view — ${detail}`),
+        );
+      } catch {
+        /* webview may be gone */
+      }
+    }
   }
 
   async function loadTreeAndPush(busy: boolean, lastError: string | null): Promise<void> {

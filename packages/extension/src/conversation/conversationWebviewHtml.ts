@@ -333,7 +333,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     function snippet(ev) {
-      const t = (ev.content_text || "").trim().replace(/\\s+/g, " ");
+      const raw = ev.content_text;
+      const t = String(raw == null ? "" : raw)
+        .trim()
+        .replace(/\\s+/g, " ");
       if (!t) return "(empty)";
       return t.length > 96 ? t.slice(0, 96) + "…" : t;
     }
@@ -454,7 +457,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const last = path[path.length - 1];
       copyBtn.disabled = state.busy;
       const canResend =
-        last.kind === "user_input" && String(last.content_text || "").trim().length > 0;
+        last.kind === "user_input" &&
+        String(last.content_text == null ? "" : last.content_text).trim().length > 0;
       resendBtn.disabled = state.busy || !canResend;
       resendBtn.title = canResend
         ? "New assistant reply for this user message (same user row; transcript per docs)."
@@ -483,7 +487,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         byParent.get(k).push(e);
       }
       for (const arr of byParent.values()) {
-        arr.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+        arr.sort((a, b) =>
+          String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
+        );
       }
       function walk(parentKey) {
         const kids = byParent.get(parentKey) || [];
@@ -578,6 +584,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const ta = document.getElementById("input");
       const priv = document.getElementById("privateBranch");
       const busyEl = document.getElementById("busy");
+      if (!Array.isArray(state.events)) {
+        state = { ...state, events: [] };
+      }
       if (state.lastError && errEl) {
         errEl.style.display = "block";
         errEl.textContent = state.lastError;
@@ -586,10 +595,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         errEl.textContent = "";
       }
       if (titleEl) titleEl.textContent = state.title && state.title.trim() ? state.title : "(untitled)";
+      const n = state.events.length;
       if (subEl) {
         subEl.textContent =
-          state.events.length +
-          " event(s) — reply attaches under the selected tree node.";
+          n + " event(s) — reply attaches under the selected tree node.";
       }
       if (sendBtn) sendBtn.disabled = state.busy;
       if (stopBtn) stopBtn.disabled = !state.busy;
@@ -597,15 +606,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (ta) ta.disabled = state.busy;
       if (priv) priv.disabled = state.busy;
       if (busyEl) busyEl.style.display = state.busy ? "inline" : "none";
-      renderTree();
-      renderThread();
-      renderDetailBar();
+      try {
+        renderTree();
+        renderThread();
+        renderDetailBar();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (errEl) {
+          errEl.style.display = "block";
+          errEl.textContent =
+            (state.lastError ? state.lastError + "\\n\\n" : "") +
+            "Colcoor (webview): " +
+            msg;
+        }
+      }
     }
 
     window.addEventListener("message", (event) => {
       const m = event.data;
       if (m && m.type === "state") {
-        state = { ...m, streamingHtml: null };
+        const evs = Array.isArray(m.events) ? m.events : [];
+        state = { ...m, events: evs, streamingHtml: null };
         render();
         return;
       }

@@ -26,6 +26,23 @@ export function extractAgentTraceEntries(
   return entries;
 }
 
+function escapePlainForWebview(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function bodyHtmlFromContentText(raw: unknown): string {
+  const s = typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+  try {
+    return markdownToSafeHtml(s);
+  } catch {
+    return `<pre>${escapePlainForWebview(s)}</pre>`;
+  }
+}
+
 /** Root → selected path, with markdown rendered to sanitized HTML for the webview. */
 export function buildThreadSegments(
   events: GraphEventNode[],
@@ -39,11 +56,11 @@ export function buildThreadSegments(
   const out: ThreadSegment[] = [];
   for (const ev of path) {
     if (ev.kind === "user_input") {
-      out.push({ role: "user", html: markdownToSafeHtml(ev.content_text ?? "") });
+      out.push({ role: "user", html: bodyHtmlFromContentText(ev.content_text) });
     } else if (ev.kind === "assistant_output") {
       out.push({
         role: "assistant",
-        html: markdownToSafeHtml(ev.content_text ?? ""),
+        html: bodyHtmlFromContentText(ev.content_text),
         traceEntries: extractAgentTraceEntries(ev.content_json ?? undefined),
       });
     }
