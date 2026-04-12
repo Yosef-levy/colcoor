@@ -143,6 +143,16 @@
           "maximum": 3600000,
           "description": "Max time in milliseconds to wait for one `agent -p` run (default 5 minutes)."
         },
+        "colcoor.agentOutputFormat": {
+          "type": "string",
+          "enum": [
+            "stream-json-partial",
+            "stream-json",
+            "text"
+          ],
+          "default": "stream-json-partial",
+          "description": "How Cursor `agent -p` prints stdout (see https://cursor.com/docs/cli/reference/output-format). stream-json-partial: NDJSON + --stream-partial-output (fine-grained UI streaming). stream-json: NDJSON without partial deltas. text: final answer only (works on older CLI; minimal streaming)."
+        },
         "colcoor.promptForCursorCliOnActivate": {
           "type": "boolean",
           "default": true,
@@ -156,7 +166,6 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint .",
     "test": "vitest run",
-    "bench:agent-stream": "node scripts/agent-stream-latency.mjs",
     "package": "npm run build && vsce package --no-dependencies",
     "open-in-cursor": "npm run build && cursor --extensionDevelopmentPath=\"$PWD\""
   },

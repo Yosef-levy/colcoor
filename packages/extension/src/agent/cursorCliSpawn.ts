@@ -5,6 +5,33 @@ import { processEnvForCursorCli } from "./agentPathEnv";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
 
+/** Cursor `agent -p` stdout shape; see https://cursor.com/docs/cli/reference/output-format */
+export type AgentCliOutputMode = "stream-json-partial" | "stream-json" | "text";
+
+export function normalizeAgentCliOutputMode(raw: string | undefined): AgentCliOutputMode {
+  if (raw === "text" || raw === "stream-json") {
+    return raw;
+  }
+  return "stream-json-partial";
+}
+
+export function buildAgentPrintArgs(
+  workspaceRoot: string,
+  prompt: string,
+  mode: AgentCliOutputMode,
+): string[] {
+  const cwd = workspaceRoot.trim() || process.cwd();
+  const tail = ["--trust", "--workspace", cwd, prompt] as const;
+  switch (mode) {
+    case "text":
+      return ["-p", "--output-format", "text", ...tail];
+    case "stream-json":
+      return ["-p", "--output-format", "stream-json", ...tail];
+    default:
+      return ["-p", "--output-format", "stream-json", "--stream-partial-output", ...tail];
+  }
+}
+
 export type CursorCliSpawnResult = {
   stdout: string;
   stderr: string;
@@ -44,19 +71,14 @@ export function spawnCursorAgentPrint(params: {
   signal?: AbortSignal;
   /** Called after each stdout chunk with full stdout captured so far (UTF-8). */
   onStdoutAccumulated?: (stdoutSoFar: string) => void;
+  /** Defaults to stream-json + partial deltas. Use `text` if your `agent` build rejects streaming flags. */
+  outputMode?: AgentCliOutputMode;
 }): Promise<CursorCliSpawnResult> {
   const cwd = params.workspaceRoot.trim() || process.cwd();
   const env = buildEnvForAgentSpawn(params.storedCursorApiKey);
-  const args = [
-    "-p",
-    "--output-format",
-    "stream-json",
-    "--stream-partial-output",
-    "--trust",
-    "--workspace",
-    cwd,
-    params.prompt,
-  ];
+  const outputMode = params.outputMode ?? "stream-json-partial";
+  const args = buildAgentPrintArgs(params.workspaceRoot, params.prompt, outputMode);
+  const useJsonFeed = outputMode !== "text";
 
   if (params.signal?.aborted) {
     return Promise.reject(new DOMException("Aborted", "AbortError"));
@@ -70,7 +92,7 @@ export function spawnCursorAgentPrint(params: {
       windowsHide: true,
     });
 
-    const jsonFeed = createStreamJsonStdoutFeed();
+    const jsonFeed = useJsonFeed ? createStreamJsonStdoutFeed() : null;
     let rawStdout = "";
     let stderr = "";
     let stdoutBytes = 0;
@@ -130,7 +152,11 @@ export function spawnCursorAgentPrint(params: {
         return;
       }
       rawStdout += s;
-      jsonFeed.push(s, params.onStdoutAccumulated);
+      if (jsonFeed) {
+        jsonFeed.push(s, params.onStdoutAccumulated);
+      } else {
+        params.onStdoutAccumulated?.(rawStdout);
+      }
     });
 
     child.stderr?.on("data", (chunk: Buffer | string) => {
@@ -153,9 +179,14 @@ export function spawnCursorAgentPrint(params: {
       if (settled) {
         return;
       }
-      jsonFeed.flushTail(params.onStdoutAccumulated);
-      const resolved = jsonFeed.getResolvedText();
-      const stdoutForResult = resolved || rawStdout;
+      let stdoutForResult: string;
+      if (jsonFeed) {
+        jsonFeed.flushTail(params.onStdoutAccumulated);
+        const resolved = jsonFeed.getResolvedText();
+        stdoutForResult = resolved || rawStdout;
+      } else {
+        stdoutForResult = rawStdout;
+      }
       if (killReason === "user_abort") {
         finish({ stdout: stdoutForResult, stderr, exitCode: exitCode ?? null, cancelled: true });
         return;

@@ -6,7 +6,11 @@
 
 import * as vscode from "vscode";
 import { SECRET_CURSOR_AGENT_API_KEY } from "./cursorAgentApiKey";
-import { spawnCursorAgentPrint } from "./cursorCliSpawn";
+import {
+  normalizeAgentCliOutputMode,
+  spawnCursorAgentPrint,
+  type AgentCliOutputMode,
+} from "./cursorCliSpawn";
 
 /** Strip ANSI SGR codes from CLI stderr (Cursor colors output). */
 function stripAnsi(s: string): string {
@@ -43,6 +47,9 @@ export class AgentRunner {
       rawMode === "headless" || rawMode === "stub" || rawMode === "auto" ? rawMode : "auto";
     const executable = (config.get<string>("agentExecutable") ?? "agent").trim() || "agent";
     const timeoutMs = config.get<number>("agentTimeoutMs") ?? 300_000;
+    const outputMode: AgentCliOutputMode = normalizeAgentCliOutputMode(
+      config.get<string>("agentOutputFormat"),
+    );
     const cwd = input.workspaceRoot.trim() || process.cwd();
 
     if (mode === "stub") {
@@ -65,6 +72,7 @@ export class AgentRunner {
         storedCursorApiKey: storedKey?.trim() || undefined,
         signal: input.signal,
         onStdoutAccumulated: input.onTextDelta,
+        outputMode,
       });
       if (cancelled) {
         return { text: stdout.trim(), stub: "none", cancelled: true };
@@ -82,7 +90,11 @@ export class AgentRunner {
           : invalidKey && storedKey?.trim()
             ? "\n\nColcoor sent your stored key; create a new API key in Cursor if it is still rejected."
             : "";
-        throw new Error(`Cursor agent exited with code ${exitCode}.\n${detail}${envHint}${authHint}`);
+        const flagHint =
+          outputMode !== "text" && /unknown flag|unrecognized|stream-partial|output-format/i.test(detail)
+            ? '\n\nColcoor: Settings → search "Colcoor" → Agent: CLI output format — try "text" (final answer only) or "stream-json" if this agent build rejects streaming flags.'
+            : "";
+        throw new Error(`Cursor agent exited with code ${exitCode}.\n${detail}${envHint}${authHint}${flagHint}`);
       }
       const text = stdout.trim();
       if (!text) {
