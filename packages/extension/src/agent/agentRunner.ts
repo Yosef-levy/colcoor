@@ -7,16 +7,22 @@
 import * as vscode from "vscode";
 import { spawnCursorAgentPrint } from "./cursorCliSpawn";
 
-const STUB_PREFIX = "[Colcoor stub — set colcoor.agentMode to headless or auto with Cursor CLI on PATH.]\n\n";
-
 export type AgentMode = "auto" | "headless" | "stub";
+
+/** How the assistant body was produced (for UI; persisted text stays short when CLI is missing). */
+export type AssistantStubKind = "none" | "explicit" | "cli_missing";
+
+export type AgentRunResult = {
+  text: string;
+  stub: AssistantStubKind;
+};
 
 export class AgentRunner {
   async run(input: {
     transcriptText: string;
     userMessage: string;
     workspaceRoot: string;
-  }): Promise<{ text: string }> {
+  }): Promise<AgentRunResult> {
     const config = vscode.workspace.getConfiguration("colcoor");
     const rawMode = config.get<string>("agentMode") ?? "auto";
     const mode: AgentMode =
@@ -44,15 +50,15 @@ export class AgentRunner {
       if (!text) {
         throw new Error(`Cursor agent returned empty stdout.${stderr ? `\n${stderr.trim()}` : ""}`);
       }
-      return { text };
+      return { text, stub: "none" };
     } catch (e) {
       if (mode === "auto" && isMissingExecutableError(e)) {
+        const u = input.userMessage.trim();
         return {
           text:
-            STUB_PREFIX +
-            `You wrote:\n${input.userMessage.trim()}\n\n` +
-            "(Install Cursor CLI: https://cursor.com/docs/cli/installation — ensure `agent` is on PATH, " +
-            "or set colcoor.agentExecutable.)",
+            "[Colcoor] Cursor CLI (`agent`) not on PATH — placeholder reply only.\n\n" +
+            `Your message:\n${u}`,
+          stub: "cli_missing",
         };
       }
       const msg = e instanceof Error ? e.message : String(e);
@@ -61,9 +67,10 @@ export class AgentRunner {
   }
 }
 
-function stubBody(userMessage: string): { text: string } {
+function stubBody(userMessage: string): AgentRunResult {
   return {
-    text: STUB_PREFIX + `You wrote:\n${userMessage.trim()}`,
+    text: "[Colcoor: stub mode]\n\n" + `You wrote:\n${userMessage.trim()}`,
+    stub: "explicit",
   };
 }
 

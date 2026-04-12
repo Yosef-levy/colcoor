@@ -240,13 +240,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             workspaceRoot,
           );
           refreshTree();
-          const preview =
-            result.assistantText.length > 200
-              ? `${result.assistantText.slice(0, 200)}…`
-              : result.assistantText;
-          await vscode.window.showInformationMessage(
-            `Colcoor: sent. Assistant: ${preview.replace(/\s+/g, " ")}`,
-          );
+          if (result.assistantStub === "cli_missing") {
+            const choice = await vscode.window.showInformationMessage(
+              "Colcoor: message saved. Cursor CLI (`agent`) was not on PATH — only a short placeholder was stored.",
+              "Set up Cursor CLI",
+              "OK",
+            );
+            if (choice === "Set up Cursor CLI") {
+              await vscode.commands.executeCommand("colcoor.setupCursorCli");
+            }
+          } else if (result.assistantStub === "explicit") {
+            await vscode.window.showInformationMessage(
+              "Colcoor: message saved (stub mode — assistant text is a local placeholder).",
+            );
+          } else {
+            const preview =
+              result.assistantText.length > 200
+                ? `${result.assistantText.slice(0, 200)}…`
+                : result.assistantText;
+            await vscode.window.showInformationMessage(
+              `Colcoor: sent. Assistant: ${preview.replace(/\s+/g, " ")}`,
+            );
+          }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           await vscode.window.showErrorMessage(`Colcoor: ${msg}`);

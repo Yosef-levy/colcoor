@@ -1,4 +1,4 @@
-import type { AgentRunner } from "../agent/agentRunner";
+import type { AgentRunner, AssistantStubKind } from "../agent/agentRunner";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import {
@@ -11,6 +11,8 @@ export type UserTurnResult = {
   userEventId: string;
   assistantEventId: string;
   assistantText: string;
+  /** Present when the assistant body is a local placeholder, not Cursor CLI output. */
+  assistantStub?: AssistantStubKind;
 };
 
 /**
@@ -49,7 +51,7 @@ export async function runColcoorUserTurn(
     private_branch: false,
   });
 
-  const { text: assistantText } = await agent.run({
+  const { text: assistantText, stub: assistantStub } = await agent.run({
     transcriptText,
     userMessage: trimmed,
     workspaceRoot,
@@ -66,6 +68,7 @@ export async function runColcoorUserTurn(
   return {
     userEventId: userRes.id,
     assistantEventId: asstRes.id,
-    assistantText: assistantText,
+    assistantText,
+    assistantStub: assistantStub === "none" ? undefined : assistantStub,
   };
 }
