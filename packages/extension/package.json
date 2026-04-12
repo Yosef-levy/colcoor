@@ -13,6 +13,10 @@
   "contributes": {
     "commands": [
       {
+        "command": "colcoor.setupCursorCli",
+        "title": "Colcoor: Set up Cursor CLI (agent)"
+      },
+      {
         "command": "colcoor.signIn",
         "title": "Colcoor: Sign in"
       },
@@ -67,7 +71,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign in (dev only)](command:colcoor.signInDev)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)"
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign in (dev only)](command:colcoor.signInDev)\n[New conversation](command:colcoor.newConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)"
       }
     ],
     "menus": {
@@ -103,6 +107,29 @@
           "type": "string",
           "default": "http://127.0.0.1:8000",
           "description": "API origin only (no path, no trailing slash). Remote VM: https://your-host. Local docker-compose.prod: http://127.0.0.1 (nginx :80). Local uvicorn: http://127.0.0.1:8000."
+        },
+        "colcoor.agentMode": {
+          "type": "string",
+          "enum": ["auto", "headless", "stub"],
+          "default": "auto",
+          "description": "How to run the main-thread assistant after your message is saved. auto: try Cursor CLI `agent -p` when on PATH, otherwise stub. headless: always run CLI (fails loudly if missing or errors). stub: placeholder reply only."
+        },
+        "colcoor.agentExecutable": {
+          "type": "string",
+          "default": "agent",
+          "description": "Executable for Cursor headless agent (see https://cursor.com/docs/cli/headless). Must be on PATH or an absolute path."
+        },
+        "colcoor.agentTimeoutMs": {
+          "type": "number",
+          "default": 300000,
+          "minimum": 10000,
+          "maximum": 3600000,
+          "description": "Max time in milliseconds to wait for one `agent -p` run (default 5 minutes)."
+        },
+        "colcoor.promptForCursorCliOnActivate": {
+          "type": "boolean",
+          "default": true,
+          "description": "If the Cursor CLI (`agent`) is not on PATH, show a setup hint a few seconds after load (only when agent mode is not stub). Colcoor cannot bundle the CLI; use Colcoor: Set up Cursor CLI or the official installer."
         }
       }
     }

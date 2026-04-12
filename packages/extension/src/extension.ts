@@ -4,6 +4,7 @@ import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
 import { AgentRunner } from "./agent/agentRunner";
+import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./agent/cursorCliSetup";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
@@ -38,6 +39,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     showCollapseAll: false,
   });
   context.subscriptions.push(treeView);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("colcoor.setupCursorCli", async () => {
+      await setupCursorCliInteractive();
+    }),
+  );
+  scheduleCursorCliPresenceCheck(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colcoor.signIn", async () => {
@@ -214,7 +222,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
         const text = await vscode.window.showInputBox({
           title: "Colcoor — message",
-          prompt: "Your message (appends to default branch, then stub assistant reply)",
+          prompt:
+            "Your message (saved to the default branch, then Cursor agent per Settings → Colcoor → agent mode).",
           ignoreFocusOut: true,
         });
         if (!text?.trim()) {
@@ -236,7 +245,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               ? `${result.assistantText.slice(0, 200)}…`
               : result.assistantText;
           await vscode.window.showInformationMessage(
-            `Colcoor: sent. Assistant (stub): ${preview.replace(/\s+/g, " ")}`,
+            `Colcoor: sent. Assistant: ${preview.replace(/\s+/g, " ")}`,
           );
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
