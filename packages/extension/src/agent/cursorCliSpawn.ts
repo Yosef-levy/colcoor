@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 
+import { createStreamJsonStdoutFeed } from "./cursorAgentStreamJson";
 import { processEnvForCursorCli } from "./agentPathEnv";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
@@ -49,7 +50,8 @@ export function spawnCursorAgentPrint(params: {
   const args = [
     "-p",
     "--output-format",
-    "text",
+    "stream-json",
+    "--stream-partial-output",
     "--trust",
     "--workspace",
     cwd,
@@ -68,7 +70,8 @@ export function spawnCursorAgentPrint(params: {
       windowsHide: true,
     });
 
-    let stdout = "";
+    const jsonFeed = createStreamJsonStdoutFeed();
+    let rawStdout = "";
     let stderr = "";
     let stdoutBytes = 0;
     let stderrBytes = 0;
@@ -126,8 +129,8 @@ export function spawnCursorAgentPrint(params: {
         fail(new Error("Cursor agent stdout exceeded Colcoor capture limit."));
         return;
       }
-      stdout += s;
-      params.onStdoutAccumulated?.(stdout);
+      rawStdout += s;
+      jsonFeed.push(s, params.onStdoutAccumulated);
     });
 
     child.stderr?.on("data", (chunk: Buffer | string) => {
@@ -150,8 +153,11 @@ export function spawnCursorAgentPrint(params: {
       if (settled) {
         return;
       }
+      jsonFeed.flushTail(params.onStdoutAccumulated);
+      const resolved = jsonFeed.getResolvedText();
+      const stdoutForResult = resolved || rawStdout;
       if (killReason === "user_abort") {
-        finish({ stdout, stderr, exitCode: exitCode ?? null, cancelled: true });
+        finish({ stdout: stdoutForResult, stderr, exitCode: exitCode ?? null, cancelled: true });
         return;
       }
       if (killReason === "timeout") {
@@ -166,7 +172,7 @@ export function spawnCursorAgentPrint(params: {
         fail(new Error(`Cursor agent terminated by signal ${closeSignal}.`));
         return;
       }
-      finish({ stdout, stderr, exitCode: exitCode ?? null });
+      finish({ stdout: stdoutForResult, stderr, exitCode: exitCode ?? null });
     });
   });
 }
