@@ -35,6 +35,10 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "colcoor.sendMessage",
+        "title": "Colcoor: Send message"
+      },
+      {
         "command": "colcoor.copyConversationId",
         "title": "Colcoor: Copy conversation ID"
       },
@@ -80,6 +84,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "colcoor.sendMessage",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@0"
+        },
         {
           "command": "colcoor.copyConversationId",
           "when": "view == colcoor.conversations && viewItem == conversation",

@@ -55,7 +55,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 ### 3.1 `GET /api/v1/conversations`
 
-**Purpose:** List conversations the caller is a member of.
+**Purpose:** List conversations the caller is a member of. **Order:** caller’s **`pinned`** descending (`true` first), then **`conversations.updated_at`** descending.
 
 | | |
 |--|--|
@@ -70,7 +70,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 |-------|------|----------|
 | `id` | uuid | yes |
 | `title` | string \| null | yes |
-| `pinned` | boolean | yes |
+| `pinned` | boolean | yes | **Per authenticated user** — value read from that user’s `conversation_members.pinned` |
 | `updated_at` | string (ISO-8601 timestamptz) | yes |
 
 ### 3.2 `POST /api/v1/conversations`
@@ -93,23 +93,23 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 ### 3.3 `PATCH /api/v1/conversations/{conversation_id}`
 
-**Purpose:** Update title and/or pin. **[permissions.md](permissions.md)** — rename / pin.
+**Purpose:** Update shared **title** (owner/editor only) and/or the caller’s **per-user pin** (any member). **[permissions.md](permissions.md)**.
 
 | | |
 |--|--|
 | **Auth** | Bearer JWT |
 | **200** | `ConversationOut` |
 | **401** | missing/invalid token |
-| **403** | role insufficient |
+| **403** | role insufficient for `title` change |
 | **404** | conversation not found or not a member |
-| **422** | validation error |
+| **422** | validation error (e.g. empty body) |
 
-**Request body (at least one field):**
+**Request body (at least one field must be present in the JSON):**
 
-| Field | Type | Required |
-|-------|------|----------|
-| `title` | string \| null | no |
-| `pinned` | boolean | no |
+| Field | Type | Required | Semantics |
+|-------|------|----------|-----------|
+| `title` | string \| null | no | Omitted = leave unchanged; `null` = clear title |
+| `pinned` | boolean | no | Omitted = leave unchanged; updates **only** the caller’s `conversation_members.pinned` |
 
 ### 3.4 `DELETE /api/v1/conversations/{conversation_id}`
 
@@ -452,12 +452,6 @@ Soft delete. **200** `SideChatMessageOut` with `deleted_at` set, or **204** per 
 | `message` | object | when `type` is `side_chat` | subset or full `SideChatMessageOut` |
 
 Clients **MUST** ignore unknown `type` values.
-
----
-
-## 11. Deprecated
-
-`POST /api/v1/conversations/{id}/message/stream` and `POST /api/v1/conversations/{id}/resend/stream` **MUST** return **410 Gone** with JSON **`{ "detail": "gone" }`** (or equivalent `detail` string).
 
 ---
 

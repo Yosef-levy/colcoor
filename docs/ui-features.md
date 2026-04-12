@@ -43,7 +43,7 @@ Link or embed **Terms**, **Privacy**, **Refund** as product policy requires.
 
 ## 4. Conversation list (sidebar)
 
-- List conversations: **pinned** first, then unpinned; **title** and **last updated**.
+- List conversations: **per-user pinned** rows first, then unpinned, each group by **recency** (`updated_at`); show **title** and **last updated**.
 - **Select** a conversation to load tree and thread.
 - **Per-conversation menu** (e.g. ⋮): **Add editor/viewer**, **Change name** (where role allows), **Pin / Unpin**, **Delete conversation**.
 - **Create conversation:** optional title + **first message** to start.

@@ -44,6 +44,18 @@ class ConversationCreate(BaseModel):
     title: str | None = None
 
 
+class ConversationPatch(BaseModel):
+    """PATCH body: include only fields to change (see api-contracts §3.3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, description="Conversation title; omit key to leave unchanged")
+    pinned: bool | None = Field(
+        default=None,
+        description="Caller’s per-user pin for this conversation; omit key to leave unchanged",
+    )
+
+
 class ConversationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

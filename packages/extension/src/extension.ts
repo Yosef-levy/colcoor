@@ -4,6 +4,7 @@ import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
 import { AgentRunner } from "./agent/agentRunner";
+import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
   ConversationsTreeProvider,
@@ -176,7 +177,74 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  void agent;
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "colcoor.sendMessage",
+      async (item?: ConversationTreeItem) => {
+        let convId = item?.conv.id;
+        let convTitle: string | null | undefined = item?.conv.title ?? null;
+        if (!convId) {
+          try {
+            const rows = await api.listConversations();
+            if (rows.length === 0) {
+              await vscode.window.showWarningMessage("Colcoor: no conversations — create one first.");
+              return;
+            }
+            const picked = await vscode.window.showQuickPick<
+              vscode.QuickPickItem & { cid: string; ctitle: string | null }
+            >(
+              rows.map((r) => ({
+                label: r.title?.trim() ? r.title : "(untitled)",
+                description: r.id,
+                cid: r.id,
+                ctitle: r.title,
+              })),
+              { title: "Colcoor — send message", placeHolder: "Pick a conversation" },
+            );
+            if (!picked) {
+              return;
+            }
+            convId = picked.cid;
+            convTitle = picked.ctitle;
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+            return;
+          }
+        }
+        const text = await vscode.window.showInputBox({
+          title: "Colcoor — message",
+          prompt: "Your message (appends to default branch, then stub assistant reply)",
+          ignoreFocusOut: true,
+        });
+        if (!text?.trim()) {
+          return;
+        }
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+        try {
+          const result = await runColcoorUserTurn(
+            api,
+            agent,
+            convId,
+            convTitle,
+            text.trim(),
+            workspaceRoot,
+          );
+          refreshTree();
+          const preview =
+            result.assistantText.length > 200
+              ? `${result.assistantText.slice(0, 200)}…`
+              : result.assistantText;
+          await vscode.window.showInformationMessage(
+            `Colcoor: sent. Assistant (stub): ${preview.replace(/\s+/g, " ")}`,
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        }
+      },
+    ),
+  );
 }
 
 export function deactivate(): void {}

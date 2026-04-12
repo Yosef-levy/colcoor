@@ -60,7 +60,7 @@ This **documentation set** defines the Colcoor extension product **on its own**.
 
 ## 6. Main-thread boundary
 
-- No server **`POST …/message/stream`** (or equivalent) for main-thread completion; use **`append-event`** + Cursor agent ([data-flow-and-api.md](data-flow-and-api.md)).
+- No server-side main-thread streaming completion API; use **`append-event`** + Cursor agent ([data-flow-and-api.md](data-flow-and-api.md)).
 - **Server-side web search and code execution** as Colcoor-driven main-thread tools are **out of scope** for this product.
 
 ## 7. Side chat

@@ -90,12 +90,15 @@ async def create_conversation_with_owner(
     *,
     user_id: uuid.UUID,
     title: str | None,
-) -> Conversation:
+) -> tuple[Conversation, ConversationMember]:
     now = datetime.now(tz=UTC)
-    conv = Conversation(title=title, pinned=False)
+    conv = Conversation(title=title)
     session.add(conv)
     await session.flush()
-    session.add(ConversationMember(conversation_id=conv.id, user_id=user_id, role="owner"))
+    member = ConversationMember(
+        conversation_id=conv.id, user_id=user_id, role="owner", pinned=False
+    )
+    session.add(member)
     root = Event(
         conversation_id=conv.id,
         parent_event_id=None,
@@ -122,7 +125,8 @@ async def create_conversation_with_owner(
     )
     await session.flush()
     await session.refresh(conv)
-    return conv
+    await session.refresh(member)
+    return conv, member
 
 
 async def load_event(
@@ -207,15 +211,57 @@ async def append_graph_event(
 
 async def list_conversations_for_user(
     session: AsyncSession, user_id: uuid.UUID
-) -> list[Conversation]:
+) -> list[tuple[Conversation, ConversationMember]]:
     stmt = (
-        select(Conversation)
+        select(Conversation, ConversationMember)
         .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
         .where(ConversationMember.user_id == user_id)
-        .order_by(Conversation.updated_at.desc())
+        .order_by(ConversationMember.pinned.desc(), Conversation.updated_at.desc())
     )
     res = await session.execute(stmt)
-    return list(res.scalars().all())
+    return list(res.all())
+
+
+async def get_conversation_member(
+    session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
+) -> ConversationMember | None:
+    res = await session.execute(
+        select(ConversationMember).where(
+            ConversationMember.conversation_id == conversation_id,
+            ConversationMember.user_id == user_id,
+        )
+    )
+    return res.scalar_one_or_none()
+
+
+async def patch_conversation_for_user(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    patch: dict[str, object],
+) -> tuple[Conversation, ConversationMember] | None:
+    """Apply keys from ``patch`` (``title``, ``pinned``). ``title`` requires owner/editor."""
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        return None
+    res = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = res.scalar_one_or_none()
+    if conv is None:
+        return None
+    now = datetime.now(tz=UTC)
+    if "pinned" in patch:
+        member.pinned = bool(patch["pinned"])
+    if "title" in patch:
+        if member.role not in ("owner", "editor"):
+            raise PermissionError("cannot rename conversation")
+        t = patch["title"]
+        conv.title = None if t is None else str(t)
+    conv.updated_at = now
+    await session.flush()
+    await session.refresh(conv)
+    await session.refresh(member)
+    return conv, member
 
 
 async def list_events_for_tree(

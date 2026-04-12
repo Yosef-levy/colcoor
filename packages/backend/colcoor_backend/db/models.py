@@ -49,16 +49,12 @@ class User(Base):
 
 class Conversation(Base):
     __tablename__ = "conversations"
-    __table_args__ = (
-        Index("idx_conversations_pinned", "pinned"),
-        Index("idx_conversations_updated_at", "updated_at"),
-    )
+    __table_args__ = (Index("idx_conversations_updated_at", "updated_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
@@ -87,6 +83,7 @@ class ConversationMember(Base):
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     role: Mapped[str] = mapped_column(Text, nullable=False, server_default="editor")
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
 
 class Event(Base):

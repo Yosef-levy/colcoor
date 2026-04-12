@@ -24,6 +24,35 @@ export type ConversationSummary = {
   pinned: boolean;
 };
 
+export type GraphEventNode = {
+  id: string;
+  conversation_id: string;
+  parent_event_id: string | null;
+  kind: string;
+  actor_type: string;
+  actor_user_id: string | null;
+  content_text: string | null;
+  visible_to: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TreeResponseBody = {
+  events: GraphEventNode[];
+};
+
+export type AppendEventBody = {
+  kind: "user_input" | "assistant_output";
+  parent_event_id: string;
+  content: string;
+  author: string;
+  private_branch?: boolean;
+};
+
+export type AppendEventResponse = {
+  id: string;
+};
+
 /**
  * HTTP client for the extension-dedicated backend.
  * Authenticated requests send Authorization (docs/monetization.md).
@@ -130,5 +159,33 @@ export class ColcoorApiClient {
       throw new Error(`create conversation failed (${res.status}): ${text || res.statusText}`);
     }
     return JSON.parse(text) as ConversationSummary;
+  }
+
+  async getTree(conversationId: string): Promise<TreeResponseBody> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/tree`, { method: "GET" });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`get tree failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as TreeResponseBody;
+  }
+
+  async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/append-event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: body.kind,
+        parent_event_id: body.parent_event_id,
+        content: body.content,
+        author: body.author,
+        private_branch: body.private_branch ?? false,
+      }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`append-event failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as AppendEventResponse;
   }
 }

@@ -58,7 +58,3 @@ There is **no** server-side SSE for main-thread completion. The extension **MUST
 Server persistence and **SSE** are specified in **[api-contracts.md](api-contracts.md)** §10 and **[domain-model.md](domain-model.md)** §6. Side chat **does not** use the main-thread **`append-event`** path.
 
 ---
-
-## 6. Deprecated server routes
-
-**`POST …/message/stream`** and **`POST …/resend/stream`** for main-thread completion **MUST** return **410 Gone** ([api-contracts.md](api-contracts.md) §11).

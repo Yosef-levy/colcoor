@@ -13,7 +13,7 @@ Normative **conversation structure**, **visibility**, **main-thread events**, an
 
 ## 2. Conversations and membership
 
-- **Metadata:** **`title`** (optional), **`pinned`**, timestamps ([database.md](database.md) §2).
+- **Metadata:** **`title`** (optional, shared), timestamps on **`conversations`**; **per-user `pinned`** on **`conversation_members`** ([database.md](database.md) §2–§3).
 - **`conversation_members`:** each member has **`role`** ∈ { **`owner`**, **`editor`**, **`viewer`** }.
 - **Exactly one `owner` per conversation** (product invariant). Enforced by a **partial unique index** on **`(conversation_id)`** where **`role = 'owner'`** and by **application logic** on every membership mutation ([database.md](database.md), [permissions.md](permissions.md)).
 - **Only members** may read or mutate that conversation’s data, subject to [permissions.md](permissions.md).

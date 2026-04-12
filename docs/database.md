@@ -26,8 +26,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | Column | Type | Purpose |
 |--------|------|---------|
 | id | uuid PK | Conversation |
-| title | text null | Display title |
-| pinned | boolean not null default false | Sidebar pin |
+| title | text null | Display title (shared) |
 | created_at | timestamptz not null | Created |
 | updated_at | timestamptz not null | Last structural/content touch |
 
@@ -40,6 +39,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | conversation_id | uuid PK FK | Conversation |
 | user_id | uuid PK FK | Member user |
 | role | text not null default 'editor' | owner \| editor \| viewer |
+| pinned | boolean not null default false | **Per-user** sidebar pin for this conversation |
 
 ---
 
@@ -226,11 +226,9 @@ CREATE INDEX idx_users_last_login_at ON users (last_login_at);
 CREATE TABLE conversations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     title text,
-    pinned boolean NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_conversations_pinned ON conversations (pinned);
 CREATE INDEX idx_conversations_updated_at ON conversations (updated_at);
 
 -- 3. conversation_members
@@ -238,6 +236,7 @@ CREATE TABLE conversation_members (
     conversation_id uuid NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
     user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     role text NOT NULL DEFAULT 'editor',
+    pinned boolean NOT NULL DEFAULT false,
     CONSTRAINT pk_conversation_members PRIMARY KEY (conversation_id, user_id),
     CONSTRAINT ck_conversation_members_role CHECK (role IN ('owner', 'editor', 'viewer'))
 );
