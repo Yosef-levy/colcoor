@@ -4,6 +4,7 @@ import sanitizeHtml from "sanitize-html";
 marked.use({
   gfm: true,
   breaks: true,
+  pedantic: false,
 });
 
 const EXTRA_TAGS = [
@@ -42,6 +43,9 @@ export function markdownToSafeHtml(markdown: string): string {
       input: ["type", "disabled", "checked"],
       th: ["align"],
       td: ["align"],
+      ul: ["class"],
+      ol: ["class"],
+      li: ["class"],
     },
     transformTags: {
       a: (tagName, attribs) => ({

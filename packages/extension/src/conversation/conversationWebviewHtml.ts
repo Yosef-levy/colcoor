@@ -99,29 +99,106 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .msg { margin: 8px 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--vscode-focusBorder); }
     .msg.user { background: var(--vscode-editor-inactiveSelectionBackground); }
     .msg.assistant { background: var(--vscode-textBlockQuote-background); }
-    .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
-    .msg .body { white-space: pre-wrap; word-break: break-word; }
-    .msg .body.md { white-space: normal; }
-    .msg .body.md pre {
+    .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
+    /* Thread bodies: GFM markdown from host (sanitized HTML). */
+    .thread .msg .body.md {
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.58;
+      font-size: var(--vscode-editor-font-size, var(--vscode-font-size));
+      color: var(--vscode-editor-foreground, var(--vscode-foreground));
+    }
+    .thread .msg .body.md > *:first-child { margin-top: 0; }
+    .thread .msg .body.md > *:last-child { margin-bottom: 0; }
+    .thread .msg .body.md h1, .thread .msg .body.md h2, .thread .msg .body.md h3,
+    .thread .msg .body.md h4, .thread .msg .body.md h5, .thread .msg .body.md h6 {
+      font-weight: 600;
+      line-height: 1.28;
+      margin: 0.65em 0 0.4em;
+      color: var(--vscode-foreground);
+    }
+    .thread .msg .body.md h1 { font-size: 1.2em; }
+    .thread .msg .body.md h2 { font-size: 1.12em; }
+    .thread .msg .body.md h3 { font-size: 1.06em; }
+    .thread .msg .body.md h4, .thread .msg .body.md h5, .thread .msg .body.md h6 { font-size: 1.02em; }
+    .thread .msg .body.md p { margin: 0.45em 0; }
+    .thread .msg .body.md strong { font-weight: 600; }
+    .thread .msg .body.md a {
+      color: var(--vscode-textLink-foreground);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .thread .msg .body.md a:hover { color: var(--vscode-textLink-activeForeground); }
+    .thread .msg .body.md pre {
       white-space: pre-wrap;
       word-break: break-word;
-      padding: 8px;
-      border-radius: 4px;
+      margin: 0.55em 0;
+      padding: 10px 12px;
+      border-radius: 6px;
       background: var(--vscode-textCodeBlock-background);
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
       overflow-x: auto;
+      font-family: var(--vscode-editor-font-family);
+      font-size: calc(var(--vscode-editor-font-size, 13px) * 0.95);
     }
-    .msg .body.md code { font-family: var(--vscode-editor-font-family); font-size: 0.95em; }
-    .msg .body.md p { margin: 0.35em 0; }
-    .msg .body.md p:first-child { margin-top: 0; }
-    .msg .body.md p:last-child { margin-bottom: 0; }
-    .msg .body.md ul, .msg .body.md ol { margin: 0.35em 0; padding-left: 1.25em; }
-    .msg .body.md table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 0.95em; }
-    .msg .body.md th, .msg .body.md td { border: 1px solid var(--vscode-panel-border); padding: 4px 6px; }
-    .msg .body.md blockquote {
+    .thread .msg .body.md code {
+      font-family: var(--vscode-editor-font-family);
+      font-size: 0.92em;
+    }
+    .thread .msg .body.md :not(pre) > code {
+      padding: 0.12em 0.4em;
+      border-radius: 4px;
+      background: var(--vscode-textPreformat-background, var(--vscode-textCodeBlock-background));
+      color: var(--vscode-textPreformat-foreground, var(--vscode-foreground));
+    }
+    .thread .msg .body.md pre code {
+      background: transparent;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+    .thread .msg .body.md ul, .thread .msg .body.md ol {
+      margin: 0.45em 0;
+      padding-left: 1.35em;
+    }
+    .thread .msg .body.md li { margin: 0.2em 0; }
+    .thread .msg .body.md ul.contains-task-list,
+    .thread .msg .body.md ol.contains-task-list { padding-left: 1.5em; }
+    .thread .msg .body.md li.task-list-item { list-style-type: none; margin-left: -1.1em; }
+    .thread .msg .body.md li.task-list-item input[type="checkbox"] {
+      margin-right: 0.45em;
+      vertical-align: middle;
+    }
+    .thread .msg .body.md table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0.55em 0;
+      font-size: 0.96em;
+    }
+    .thread .msg .body.md th, .thread .msg .body.md td {
+      border: 1px solid var(--vscode-panel-border);
+      padding: 6px 8px;
+      text-align: left;
+    }
+    .thread .msg .body.md th { background: var(--vscode-editor-inactiveSelectionBackground); font-weight: 600; }
+    .thread .msg .body.md blockquote {
+      margin: 0.5em 0;
+      padding: 0.35em 0 0.35em 12px;
+      border-left: 3px solid var(--vscode-textBlockQuote-border, var(--vscode-focusBorder));
+      color: var(--vscode-textBlockQuote-foreground, var(--vscode-descriptionForeground));
+      background: var(--vscode-textBlockQuote-background);
+      border-radius: 0 4px 4px 0;
+    }
+    .thread .msg .body.md hr {
+      border: 0;
+      border-top: 1px solid var(--vscode-panel-border);
+      margin: 0.85em 0;
+    }
+    .thread .msg .body.md img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
       margin: 0.35em 0;
-      padding-left: 8px;
-      border-left: 3px solid var(--vscode-panel-border);
-      color: var(--vscode-descriptionForeground);
     }
     .composer label.priv { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
     .composer label.priv input { cursor: pointer; }

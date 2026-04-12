@@ -9,4 +9,11 @@ describe("markdownToSafeHtml", () => {
     expect(html).toContain("<ul");
     expect(html).not.toContain("script");
   });
+
+  it("keeps link safety attrs and inline code", () => {
+    const html = markdownToSafeHtml("[x](https://a.test)\n\n`code`");
+    expect(html).toContain("noopener");
+    expect(html).toContain("https://a.test");
+    expect(html).toContain("<code");
+  });
 });
