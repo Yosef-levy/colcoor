@@ -13,14 +13,20 @@ export type RunUserTurnOptions = {
    * When omitted, uses the default branch tip (`findBranchTip`).
    */
   replyParentEventId?: string;
+  /** When true, `user_input` is stored as a private draft (`visible_to` user only). */
+  privateBranch?: boolean;
+  /** Passed to the Cursor CLI spawn; abort skips assistant append when there is no partial text. */
+  signal?: AbortSignal;
 };
 
 export type UserTurnResult = {
   userEventId: string;
-  assistantEventId: string;
-  assistantText: string;
+  assistantEventId?: string;
+  assistantText?: string;
   /** Present when the assistant body is a local placeholder, not Cursor CLI output. */
   assistantStub?: AssistantStubKind;
+  /** User stopped generation before a normal completion; see data-flow-and-api.md §3. */
+  cancelled?: boolean;
 };
 
 /**
@@ -70,14 +76,46 @@ export async function runColcoorUserTurn(
     parent_event_id: attach.id,
     content: trimmed,
     author: "end_user",
-    private_branch: false,
+    private_branch: options?.privateBranch ?? false,
   });
 
-  const { text: assistantText, stub: assistantStub } = await agent.run({
-    transcriptText,
-    userMessage: trimmed,
-    workspaceRoot,
-  });
+  let assistantText: string;
+  let assistantStub: AssistantStubKind | undefined;
+  try {
+    const runResult = await agent.run({
+      transcriptText,
+      userMessage: trimmed,
+      workspaceRoot,
+      signal: options?.signal,
+    });
+    assistantText = runResult.text;
+    assistantStub = runResult.stub === "none" ? undefined : runResult.stub;
+    if (runResult.cancelled) {
+      const partial = assistantText.trim();
+      if (!partial) {
+        return { userEventId: userRes.id, cancelled: true };
+      }
+      const asstRes = await api.appendEvent(conversationId, {
+        kind: "assistant_output",
+        parent_event_id: userRes.id,
+        content: partial,
+        author: "cursor_agent",
+        private_branch: false,
+      });
+      return {
+        userEventId: userRes.id,
+        assistantEventId: asstRes.id,
+        assistantText: partial,
+        assistantStub,
+        cancelled: true,
+      };
+    }
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      return { userEventId: userRes.id, cancelled: true };
+    }
+    throw e;
+  }
 
   const asstRes = await api.appendEvent(conversationId, {
     kind: "assistant_output",
@@ -91,6 +129,6 @@ export async function runColcoorUserTurn(
     userEventId: userRes.id,
     assistantEventId: asstRes.id,
     assistantText,
-    assistantStub: assistantStub === "none" ? undefined : assistantStub,
+    assistantStub,
   };
 }

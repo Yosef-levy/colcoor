@@ -4,7 +4,13 @@ import { processEnvForCursorCli } from "./agentPathEnv";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
 
-export type CursorCliSpawnResult = { stdout: string; stderr: string; exitCode: number | null };
+export type CursorCliSpawnResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  /** User cancelled via AbortSignal; stdout may contain partial output. */
+  cancelled?: boolean;
+};
 
 /**
  * Child env for `agent`: PATH includes common install dirs. If Colcoor has a stored API key,
@@ -33,6 +39,8 @@ export function spawnCursorAgentPrint(params: {
   timeoutMs: number;
   /** When set, becomes the only `CURSOR_API_KEY` seen by `agent` (replaces editor env). */
   storedCursorApiKey?: string;
+  /** When aborted, the child is killed and the promise resolves with `cancelled: true` and captured stdout. */
+  signal?: AbortSignal;
 }): Promise<CursorCliSpawnResult> {
   const cwd = params.workspaceRoot.trim() || process.cwd();
   const env = buildEnvForAgentSpawn(params.storedCursorApiKey);
@@ -45,6 +53,10 @@ export function spawnCursorAgentPrint(params: {
     cwd,
     params.prompt,
   ];
+
+  if (params.signal?.aborted) {
+    return Promise.reject(new DOMException("Aborted", "AbortError"));
+  }
 
   return new Promise((resolve, reject) => {
     const child = spawn(params.executable, args, {
@@ -59,35 +71,47 @@ export function spawnCursorAgentPrint(params: {
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
+    let killReason: null | "timeout" | "user_abort" | "oversized" = null;
+
+    const onAbort = (): void => {
+      if (settled) {
+        return;
+      }
+      killReason = "user_abort";
+      child.kill("SIGTERM");
+    };
+    if (params.signal) {
+      params.signal.addEventListener("abort", onAbort, { once: true });
+    }
 
     const timer = setTimeout(() => {
       if (settled) {
         return;
       }
-      settled = true;
+      killReason = "timeout";
       child.kill("SIGTERM");
-      reject(
-        new Error(
-          `Cursor agent timed out after ${params.timeoutMs}ms (Colcoor: colcoor.agentTimeoutMs).`,
-        ),
-      );
     }, params.timeoutMs);
 
-    const finish = (result: CursorCliSpawnResult) => {
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      params.signal?.removeEventListener("abort", onAbort);
+    };
+
+    const finish = (result: CursorCliSpawnResult): void => {
       if (settled) {
         return;
       }
       settled = true;
-      clearTimeout(timer);
+      cleanup();
       resolve(result);
     };
 
-    const fail = (err: Error) => {
+    const fail = (err: Error): void => {
       if (settled) {
         return;
       }
       settled = true;
-      clearTimeout(timer);
+      cleanup();
       reject(err);
     };
 
@@ -95,6 +119,7 @@ export function spawnCursorAgentPrint(params: {
       const s = typeof chunk === "string" ? chunk : chunk.toString("utf8");
       stdoutBytes += Buffer.byteLength(s, "utf8");
       if (stdoutBytes > MAX_CAPTURE_BYTES) {
+        killReason = "oversized";
         child.kill("SIGTERM");
         fail(new Error("Cursor agent stdout exceeded Colcoor capture limit."));
         return;
@@ -106,6 +131,7 @@ export function spawnCursorAgentPrint(params: {
       const s = typeof chunk === "string" ? chunk : chunk.toString("utf8");
       stderrBytes += Buffer.byteLength(s, "utf8");
       if (stderrBytes > MAX_CAPTURE_BYTES) {
+        killReason = "oversized";
         child.kill("SIGTERM");
         fail(new Error("Cursor agent stderr exceeded Colcoor capture limit."));
         return;
@@ -117,12 +143,24 @@ export function spawnCursorAgentPrint(params: {
       fail(err);
     });
 
-    child.on("close", (exitCode, signal) => {
+    child.on("close", (exitCode, closeSignal) => {
       if (settled) {
         return;
       }
-      if (signal) {
-        fail(new Error(`Cursor agent terminated by signal ${signal}.`));
+      if (killReason === "user_abort") {
+        finish({ stdout, stderr, exitCode: exitCode ?? null, cancelled: true });
+        return;
+      }
+      if (killReason === "timeout") {
+        fail(
+          new Error(
+            `Cursor agent timed out after ${params.timeoutMs}ms (Colcoor: colcoor.agentTimeoutMs).`,
+          ),
+        );
+        return;
+      }
+      if (closeSignal) {
+        fail(new Error(`Cursor agent terminated by signal ${closeSignal}.`));
         return;
       }
       finish({ stdout, stderr, exitCode: exitCode ?? null });

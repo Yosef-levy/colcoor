@@ -22,6 +22,8 @@ export type AssistantStubKind = "none" | "explicit" | "cli_missing";
 export type AgentRunResult = {
   text: string;
   stub: AssistantStubKind;
+  /** Set when the user aborted the CLI run; `text` may be partial stdout. */
+  cancelled?: boolean;
 };
 
 export class AgentRunner {
@@ -31,6 +33,7 @@ export class AgentRunner {
     transcriptText: string;
     userMessage: string;
     workspaceRoot: string;
+    signal?: AbortSignal;
   }): Promise<AgentRunResult> {
     const config = vscode.workspace.getConfiguration("colcoor");
     const rawMode = config.get<string>("agentMode") ?? "auto";
@@ -41,19 +44,26 @@ export class AgentRunner {
     const cwd = input.workspaceRoot.trim() || process.cwd();
 
     if (mode === "stub") {
+      if (input.signal?.aborted) {
+        return { text: "", stub: "explicit", cancelled: true };
+      }
       return stubBody(input.userMessage);
     }
 
     try {
       const storedKey = await this.secrets.get(SECRET_CURSOR_AGENT_API_KEY);
 
-      const { stdout, stderr, exitCode } = await spawnCursorAgentPrint({
+      const { stdout, stderr, exitCode, cancelled } = await spawnCursorAgentPrint({
         executable,
         workspaceRoot: cwd,
         prompt: input.transcriptText,
         timeoutMs: Math.max(10_000, timeoutMs),
         storedCursorApiKey: storedKey?.trim() || undefined,
+        signal: input.signal,
       });
+      if (cancelled) {
+        return { text: stdout.trim(), stub: "none", cancelled: true };
+      }
       if (exitCode !== 0) {
         const raw = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n---\n") || "(no output)";
         const detail = stripAnsi(raw);
@@ -76,6 +86,9 @@ export class AgentRunner {
       }
       return { text, stub: "none" };
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        throw e;
+      }
       if (mode === "auto" && isMissingExecutableError(e)) {
         const u = input.userMessage.trim();
         return {

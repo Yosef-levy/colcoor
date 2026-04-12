@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient, GraphEventNode } from "../api/client";
-import { runColcoorUserTurn } from "./runUserTurn";
-import { findBranchTip } from "./treeEvents";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
+import { runColcoorUserTurn } from "./runUserTurn";
+import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
+import { findBranchTip } from "./treeEvents";
 
 type WebviewStateMessage = {
   type: "state";
@@ -11,15 +12,17 @@ type WebviewStateMessage = {
   title: string | null;
   events: GraphEventNode[];
   selectedEventId: string;
+  threadSegments: ThreadSegment[];
   busy: boolean;
   lastError: string | null;
 };
 
 type FromWebview =
   | { type: "ready" }
-  | { type: "send"; text: string }
+  | { type: "send"; text: string; privateBranch?: boolean }
   | { type: "select"; id: string }
-  | { type: "refresh" };
+  | { type: "refresh" }
+  | { type: "cancel" };
 
 function randomNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -54,8 +57,11 @@ export function createConversationPanelController(
   let conversationId: string | undefined;
   let conversationTitle: string | null | undefined;
   let selectedEventId: string | undefined;
+  let sendAbort: AbortController | undefined;
 
   function disposePanel(): void {
+    sendAbort?.abort();
+    sendAbort = undefined;
     panel?.dispose();
     panel = undefined;
     webviewReady = false;
@@ -85,6 +91,7 @@ export function createConversationPanelController(
       title: conversationTitle ?? null,
       events,
       selectedEventId: sel ?? "",
+      threadSegments: buildThreadSegments(events, sel ?? ""),
       busy,
       lastError,
     };
@@ -104,22 +111,25 @@ export function createConversationPanelController(
     }
   }
 
-  async function handleSend(text: string): Promise<void> {
+  async function handleSend(text: string, privateBranch: boolean): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed || !conversationId || !selectedEventId) {
       return;
     }
     const ws = getWorkspaceRoot();
+    sendAbort?.abort();
+    sendAbort = new AbortController();
+    const signal = sendAbort.signal;
     await loadTreeAndPush(true, null);
     try {
-      await runColcoorUserTurn(
+      const result = await runColcoorUserTurn(
         api,
         agent,
         conversationId,
         conversationTitle,
         trimmed,
         ws,
-        { replyParentEventId: selectedEventId },
+        { replyParentEventId: selectedEventId, privateBranch, signal },
       );
       const { events } = await api.getTree(conversationId);
       try {
@@ -128,9 +138,18 @@ export function createConversationPanelController(
         selectedEventId = events.at(-1)?.id;
       }
       postState(events, false, null);
+      if (result.cancelled) {
+        void vscode.window.showInformationMessage(
+          result.assistantText?.trim()
+            ? "Colcoor: stopped — partial assistant reply was saved."
+            : "Colcoor: stopped — no assistant text was saved.",
+        );
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await loadTreeAndPush(false, msg);
+    } finally {
+      sendAbort = undefined;
     }
   }
 
@@ -179,12 +198,18 @@ export function createConversationPanelController(
         await loadTreeAndPush(false, null);
         return;
       }
+      if (msg.type === "cancel") {
+        sendAbort?.abort();
+        return;
+      }
       if (msg.type === "send" && typeof msg.text === "string") {
-        await handleSend(msg.text);
+        await handleSend(msg.text, Boolean(msg.privateBranch));
       }
     });
 
     p.onDidDispose(() => {
+      sendAbort?.abort();
+      sendAbort = undefined;
       panel = undefined;
       webviewReady = false;
       conversationId = undefined;

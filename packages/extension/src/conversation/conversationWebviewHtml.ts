@@ -101,6 +101,34 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .msg.assistant { background: var(--vscode-textBlockQuote-background); }
     .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
     .msg .body { white-space: pre-wrap; word-break: break-word; }
+    .msg .body.md { white-space: normal; }
+    .msg .body.md pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 8px;
+      border-radius: 4px;
+      background: var(--vscode-textCodeBlock-background);
+      overflow-x: auto;
+    }
+    .msg .body.md code { font-family: var(--vscode-editor-font-family); font-size: 0.95em; }
+    .msg .body.md p { margin: 0.35em 0; }
+    .msg .body.md p:first-child { margin-top: 0; }
+    .msg .body.md p:last-child { margin-bottom: 0; }
+    .msg .body.md ul, .msg .body.md ol { margin: 0.35em 0; padding-left: 1.25em; }
+    .msg .body.md table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 0.95em; }
+    .msg .body.md th, .msg .body.md td { border: 1px solid var(--vscode-panel-border); padding: 4px 6px; }
+    .msg .body.md blockquote {
+      margin: 0.35em 0;
+      padding-left: 8px;
+      border-left: 3px solid var(--vscode-panel-border);
+      color: var(--vscode-descriptionForeground);
+    }
+    .composer label.priv { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+    .composer label.priv input { cursor: pointer; }
+    .btn-secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
     .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
   </style>
 </head>
@@ -120,8 +148,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       </div>
       <div class="composer">
         <textarea id="input" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
+        <label class="priv hint" style="margin-top:6px;display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="privateBranch" />
+          Private draft (only you see this user message until you continue on a shared branch)
+        </label>
         <div class="row">
           <button id="send" type="button">Send</button>
+          <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
           <button id="refresh" type="button">Refresh tree</button>
           <span class="hint" id="busy" style="display:none">Working…</span>
         </div>
@@ -135,6 +168,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       title: null,
       events: [],
       selectedEventId: "",
+      threadSegments: [],
       busy: false,
       lastError: null,
     };
@@ -151,21 +185,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const t = (ev.content_text || "").trim().replace(/\\s+/g, " ");
       if (!t) return "(empty)";
       return t.length > 96 ? t.slice(0, 96) + "…" : t;
-    }
-
-    function pathToSelected(events, selectedId) {
-      const byId = Object.fromEntries(events.map((e) => [e.id, e]));
-      const chain = [];
-      let id = selectedId;
-      const seen = new Set();
-      while (id && !seen.has(id)) {
-        seen.add(id);
-        const ev = byId[id];
-        if (!ev) break;
-        chain.push(ev);
-        id = ev.parent_event_id;
-      }
-      return chain.reverse();
     }
 
     function renderTree() {
@@ -221,24 +240,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function renderThread() {
       const el = document.getElementById("thread");
       if (!el) return;
-      const path = pathToSelected(state.events, state.selectedEventId);
-      if (!path.length) {
+      const segs = state.threadSegments || [];
+      if (!segs.length) {
         el.innerHTML = '<p class="empty">Select an event in the tree.</p>';
         return;
       }
       let html = "";
-      for (const ev of path) {
-        if (ev.kind === "user_input") {
-          html +=
-            '<div class="msg user"><div class="role">User</div><div class="body">' +
-            esc(ev.content_text || "") +
-            "</div></div>";
-        } else if (ev.kind === "assistant_output") {
-          html +=
-            '<div class="msg assistant"><div class="role">Assistant</div><div class="body">' +
-            esc(ev.content_text || "") +
-            "</div></div>";
-        }
+      for (const s of segs) {
+        const cls = s.role === "user" ? "user" : "assistant";
+        const role = s.role === "user" ? "User" : "Assistant";
+        html +=
+          '<div class="msg ' +
+          cls +
+          '"><div class="role">' +
+          role +
+          '</div><div class="body md">' +
+          s.html +
+          "</div></div>";
       }
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
     }
@@ -248,6 +266,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const titleEl = document.getElementById("title");
       const subEl = document.getElementById("sub");
       const sendBtn = document.getElementById("send");
+      const stopBtn = document.getElementById("stop");
+      const refBtn = document.getElementById("refresh");
+      const ta = document.getElementById("input");
+      const priv = document.getElementById("privateBranch");
       const busyEl = document.getElementById("busy");
       if (state.lastError && errEl) {
         errEl.style.display = "block";
@@ -263,6 +285,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           " event(s) — reply attaches under the selected tree node.";
       }
       if (sendBtn) sendBtn.disabled = state.busy;
+      if (stopBtn) stopBtn.disabled = !state.busy;
+      if (refBtn) refBtn.disabled = state.busy;
+      if (ta) ta.disabled = state.busy;
+      if (priv) priv.disabled = state.busy;
       if (busyEl) busyEl.style.display = state.busy ? "inline" : "none";
       renderTree();
       renderThread();
@@ -280,8 +306,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const ta = document.getElementById("input");
       const text = ta && ta.value ? ta.value.trim() : "";
       if (!text) return;
-      vscode.postMessage({ type: "send", text: ta.value.trimEnd() });
+      const priv = document.getElementById("privateBranch");
+      const privateBranch = priv && priv.checked;
+      vscode.postMessage({ type: "send", text: ta.value.trimEnd(), privateBranch });
       ta.value = "";
+    });
+
+    document.getElementById("stop").addEventListener("click", () => {
+      vscode.postMessage({ type: "cancel" });
     });
 
     document.getElementById("refresh").addEventListener("click", () => {
