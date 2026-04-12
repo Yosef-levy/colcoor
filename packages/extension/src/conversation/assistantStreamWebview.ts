@@ -2,20 +2,20 @@ import * as vscode from "vscode";
 import { markdownToSafeHtml } from "./threadMarkdown";
 
 /**
- * Forwards growing agent stdout to the conversation webview as throttled, sanitized HTML
- * so the assistant reply appears incrementally instead of in one burst after the CLI exits.
+ * Forwards growing agent stdout to the conversation webview as sanitized HTML on every chunk
+ * (no debounce — granularity follows the CLI / OS stream).
+ *
+ * `dispose` does not post a final frame: the next full `state` snapshot carries persisted events.
+ * Posting again after `postState` duplicated the assistant in the thread.
  */
-export function createThrottledAssistantStreamPusher(
+export function createAssistantStreamPusher(
   getPanel: () => vscode.WebviewPanel | undefined,
   isWebviewReady: () => boolean,
-  options?: { intervalMs?: number },
 ): {
   pushDelta: (rawText: string) => void;
   dispose: () => void;
 } {
-  let timer: ReturnType<typeof setTimeout> | undefined;
   let lastRaw = "";
-  const intervalMs = options?.intervalMs ?? 50;
 
   function flushNow(): void {
     const p = getPanel();
@@ -28,20 +28,9 @@ export function createThrottledAssistantStreamPusher(
   return {
     pushDelta(raw: string) {
       lastRaw = raw;
-      if (timer) {
-        clearTimeout(timer);
-      }
-      timer = setTimeout(() => {
-        timer = undefined;
-        flushNow();
-      }, intervalMs);
+      flushNow();
     },
     dispose() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-      flushNow();
       lastRaw = "";
     },
   };

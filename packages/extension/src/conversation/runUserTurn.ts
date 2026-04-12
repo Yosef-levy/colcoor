@@ -20,6 +20,8 @@ export type RunUserTurnOptions = {
   signal?: AbortSignal;
   /** Incremental assistant body while the Cursor CLI prints stdout (same string grows over time). */
   onAssistantTextDelta?: (textSoFar: string) => void;
+  /** Invoked after `user_input` is stored and before the agent runs (e.g. refresh UI so the new row appears while streaming). */
+  onUserMessagePersisted?: (args: { userEventId: string }) => void | Promise<void>;
 };
 
 export type UserTurnResult = {
@@ -81,6 +83,8 @@ export async function runColcoorUserTurn(
     author: "end_user",
     private_branch: options?.privateBranch ?? false,
   });
+
+  await options?.onUserMessagePersisted?.({ userEventId: userRes.id });
 
   try {
     const runResult = await agent.run({
