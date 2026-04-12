@@ -122,16 +122,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .msg.assistant.streaming { box-shadow: inset 0 0 0 1px var(--vscode-focusBorder, var(--vscode-panel-border)); }
     .agent-trace {
       margin-top: 10px;
-      border: 1px solid var(--vscode-panel-border);
+      border: 1px solid var(--vscode-focusBorder, var(--vscode-panel-border));
       border-radius: 4px;
       padding: 6px 8px;
       background: var(--vscode-editor-background);
     }
     .agent-trace > summary.trace-summary {
       cursor: pointer;
-      font-size: 0.88em;
-      color: var(--vscode-descriptionForeground);
+      font-size: 0.9em;
+      font-weight: 600;
+      color: var(--vscode-foreground);
       user-select: none;
+      list-style: none;
+    }
+    .agent-trace > summary.trace-summary::-webkit-details-marker { display: none; }
+    .agent-trace-missing {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 4px;
+      border: 1px dashed var(--vscode-panel-border);
+      font-size: 0.9em;
+      line-height: 1.45;
     }
     .trace-entry { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid var(--vscode-panel-border); }
     .trace-entry:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
@@ -502,15 +513,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           '</div><div class="body md">' +
           s.html +
           "</div>";
-        if (s.traceEntries && s.traceEntries.length) {
-          html +=
-            '<details class="agent-trace"><summary class="trace-summary">Agent activity (' +
-            s.traceEntries.length +
-            " events)</summary>";
-          for (let i = 0; i < s.traceEntries.length; i++) {
-            html += formatTraceEntryHtml(s.traceEntries[i], i);
+        if (s.role === "assistant") {
+          if (s.traceEntries && s.traceEntries.length) {
+            html +=
+              '<details open class="agent-trace"><summary class="trace-summary">CLI event log — ' +
+              s.traceEntries.length +
+              " NDJSON line(s) (collapse)</summary>";
+            for (let i = 0; i < s.traceEntries.length; i++) {
+              html += formatTraceEntryHtml(s.traceEntries[i], i);
+            }
+            html += "</details>";
+          } else {
+            html +=
+              '<p class="agent-trace-missing hint">' +
+              esc(
+                "No CLI tool/run log for this reply. It is saved only for new assistant messages when the Cursor agent uses NDJSON: set Colcoor → Agent: CLI output format to stream-json-partial or stream-json (not text), then send again. Stub mode never includes a log.",
+              ) +
+              "</p>";
           }
-          html += "</details>";
         }
         html += "</div>";
       }
