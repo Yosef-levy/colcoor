@@ -107,6 +107,29 @@ export function createConversationPanelController(
     webviewReady = false;
   }
 
+  /** Push a minimal state when the webview is up but no conversation is bound (avoids infinite “Loading…”). */
+  function postBootstrapNoConversationState(lastError: string): void {
+    if (!panel || !webviewReady) {
+      return;
+    }
+    const msg: WebviewStateMessage = {
+      type: "state",
+      conversationId: "",
+      title: null,
+      conversationPinned: false,
+      events: [],
+      selectedEventId: "",
+      threadSegments: [],
+      busy: false,
+      lastError,
+    };
+    try {
+      void panel.webview.postMessage(msg);
+    } catch {
+      /* panel gone */
+    }
+  }
+
   function postState(
     events: GraphEventNode[],
     busy: boolean,
@@ -352,6 +375,7 @@ export function createConversationPanelController(
     );
     p.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] };
     p.webview.html = getConversationWebviewHtml(p.webview.cspSource, nonce);
+    webviewReady = false;
 
     p.webview.onDidReceiveMessage(async (raw: unknown) => {
       const msg = raw as FromWebview;
@@ -360,6 +384,12 @@ export function createConversationPanelController(
       }
       if (msg.type === "ready") {
         webviewReady = true;
+        if (!conversationId) {
+          postBootstrapNoConversationState(
+            "No conversation is linked to this panel. Open one from the Colcoor sidebar or run “Colcoor: Open conversation”.",
+          );
+          return;
+        }
         await loadTreeAndPush(false, null);
         return;
       }
@@ -420,10 +450,13 @@ export function createConversationPanelController(
       await refreshConversationMeta();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
+      p.reveal(vscode.ViewColumn.One, false);
       if (webviewReady) {
+        await new Promise<void>((r) => {
+          setTimeout(r, 0);
+        });
         await loadTreeAndPush(false, null);
       }
-      p.reveal(vscode.ViewColumn.One, false);
     },
     dispose: () => {
       subscription.dispose();
