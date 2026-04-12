@@ -117,7 +117,7 @@
         "colcoor.agentExecutable": {
           "type": "string",
           "default": "agent",
-          "description": "Executable for Cursor headless agent (see https://cursor.com/docs/cli/headless). Must be on PATH or an absolute path."
+          "description": "Executable name or absolute path for Cursor headless `agent` (see https://cursor.com/docs/cli/headless). Colcoor prepends ~/.local/bin (and a few common dirs) to PATH because the editor often does not load ~/.bashrc; use an absolute path if yours is elsewhere."
         },
         "colcoor.agentTimeoutMs": {
           "type": "number",

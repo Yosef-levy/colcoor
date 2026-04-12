@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 
+import { processEnvForCursorCli } from "./agentPathEnv";
+
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
 
 export type CursorCliSpawnResult = { stdout: string; stderr: string; exitCode: number | null };
@@ -28,7 +30,7 @@ export function spawnCursorAgentPrint(params: {
   return new Promise((resolve, reject) => {
     const child = spawn(params.executable, args, {
       cwd,
-      env: process.env,
+      env: processEnvForCursorCli(),
       shell: false,
       windowsHide: true,
     });
