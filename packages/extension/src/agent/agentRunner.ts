@@ -5,10 +5,8 @@
  */
 
 import * as vscode from "vscode";
+import { SECRET_CURSOR_AGENT_API_KEY } from "./cursorAgentApiKey";
 import { spawnCursorAgentPrint } from "./cursorCliSpawn";
-
-/** VS Code secret for `CURSOR_API_KEY` when spawning `agent -p` (headless auth). */
-export const SECRET_CURSOR_AGENT_API_KEY = "colcoor.cursorAgentApiKey";
 
 export type AgentMode = "auto" | "headless" | "stub";
 
