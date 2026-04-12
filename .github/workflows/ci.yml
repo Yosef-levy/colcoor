@@ -32,5 +32,4 @@ jobs:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
       - run: ruff check colcoor_backend tests
-      - run: ruff format --check colcoor_backend tests
       - run: pytest

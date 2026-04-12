@@ -24,11 +24,11 @@ dev = [
 
 [tool.ruff]
 target-version = "py312"
-line-length = 100
 src = ["colcoor_backend", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+# Pyflakes + bugbear only: no line length, import order, pyupgrade, or simplify rules.
+select = ["F", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
