@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -181,6 +182,8 @@ async def append_graph_event(
         updated_at=now,
     )
     session.add(ev)
+    # Server-generated Event.id; flush before FK on conversation_user_state.active_event_id.
+    await session.flush()
     conv_r = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
     conv = conv_r.scalar_one()
     conv.updated_at = now

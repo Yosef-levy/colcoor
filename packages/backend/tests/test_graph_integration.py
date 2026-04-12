@@ -1,0 +1,225 @@
+"""Graph persistence and append-event HTTP flow.
+
+Requires Postgres and ``COLCOOR_TEST_DATABASE_URL`` (e.g. ``postgresql+asyncpg://user:pass@host:5432/db``).
+When unset, tests in this module are skipped so ``pytest`` stays green in CI without a database.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import uuid
+from collections.abc import Iterator
+from datetime import UTC, datetime
+
+import pytest
+from colcoor_backend.app import create_app
+from colcoor_backend.core.config import get_settings
+from colcoor_backend.db import models  # noqa: F401 — register mappers
+from colcoor_backend.db.base import Base
+from colcoor_backend.db.models import ConversationUserState, User
+from colcoor_backend.services.graph import (
+    append_graph_event,
+    create_conversation_with_owner,
+    list_events_for_tree,
+)
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("COLCOOR_TEST_DATABASE_URL"),
+    reason="COLCOOR_TEST_DATABASE_URL not set (postgresql+asyncpg://…)",
+)
+
+
+@pytest.fixture(scope="module")
+def postgres_url() -> str:
+    url = os.environ["COLCOOR_TEST_DATABASE_URL"].strip()
+    assert url.startswith("postgresql"), "use postgresql+asyncpg:// for async SQLAlchemy"
+    return url
+
+
+@pytest.fixture(scope="module")
+def async_engine(postgres_url: str) -> Iterator[AsyncEngine]:
+    eng = create_async_engine(postgres_url)
+
+    async def reset() -> None:
+        async with eng.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(reset())
+    yield eng
+    asyncio.run(eng.dispose())
+
+
+@pytest.fixture(autouse=True)
+def _clean_tables(async_engine: AsyncEngine) -> None:
+    async def reset() -> None:
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(reset())
+
+
+@pytest.fixture
+def session_factory(async_engine: AsyncEngine):
+    return async_sessionmaker(async_engine, expire_on_commit=False, autoflush=False)
+
+
+def test_append_graph_event_sets_active_event_id(session_factory) -> None:
+    """Regression: Event.id is server-generated; active_event_id must not be set before flush."""
+
+    async def run() -> None:
+        async with session_factory() as s:
+            u = User(
+                cursor_sub=f"sub-{uuid.uuid4()}",
+                email="a@b.c",
+                display_name="t",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            s.add(u)
+            await s.flush()
+            await s.refresh(u)
+            uid = u.id
+            conv, _ = await create_conversation_with_owner(s, user_id=uid, title="x")
+            await s.commit()
+
+        async with session_factory() as s:
+            evs = await list_events_for_tree(s, conv.id, uid)
+            tip = evs[-1]
+            u_ev = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="user_input",
+                parent_event_id=tip.id,
+                content="hello",
+                private_branch=False,
+            )
+            a_ev = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="assistant_output",
+                parent_event_id=u_ev.id,
+                content="world",
+                private_branch=False,
+            )
+            await s.commit()
+            st = await s.get(ConversationUserState, (conv.id, uid))
+            assert st is not None
+            assert st.active_event_id == a_ev.id
+            assert u_ev.id is not None and a_ev.id is not None
+
+    asyncio.run(run())
+
+
+def test_append_assistant_rejects_non_user_parent(session_factory) -> None:
+    async def run() -> None:
+        async with session_factory() as s:
+            u = User(
+                cursor_sub=f"sub-{uuid.uuid4()}",
+                email="b@b.c",
+                display_name="t",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            s.add(u)
+            await s.flush()
+            await s.refresh(u)
+            uid = u.id
+            conv, _ = await create_conversation_with_owner(s, user_id=uid, title="y")
+            await s.commit()
+
+        async with session_factory() as s:
+            evs = await list_events_for_tree(s, conv.id, uid)
+            tip = evs[-1]
+            u_ev = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="user_input",
+                parent_event_id=tip.id,
+                content="hi",
+                private_branch=False,
+            )
+            a_ev = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="assistant_output",
+                parent_event_id=u_ev.id,
+                content="first reply",
+                private_branch=False,
+            )
+            await s.commit()
+
+        async with session_factory() as s:
+            with pytest.raises(ValueError, match="assistant_output must attach"):
+                await append_graph_event(
+                    s,
+                    conversation_id=conv.id,
+                    user_id=uid,
+                    kind="assistant_output",
+                    parent_event_id=a_ev.id,
+                    content="bad parent",
+                    private_branch=False,
+                )
+
+    asyncio.run(run())
+
+
+def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    sub = f"http-{uuid.uuid4()}"
+
+    with TestClient(create_app()) as client:
+        r = client.post(
+            "/api/v1/auth/dev-login",
+            json={"cursor_sub": sub, "email": "http@example.com", "display_name": ""},
+        )
+        assert r.status_code == 200, r.text
+        token = r.json()["access_token"]
+        auth = {"Authorization": f"Bearer {token}"}
+
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "api"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        root = next(e for e in r.json()["events"] if e["parent_event_id"] is None)
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/append-event",
+            headers=auth,
+            json={
+                "kind": "user_input",
+                "parent_event_id": root["id"],
+                "content": "from test",
+                "author": "end_user",
+                "private_branch": False,
+            },
+        )
+        assert r.status_code == 200, r.text
+        user_ev_id = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/append-event",
+            headers=auth,
+            json={
+                "kind": "assistant_output",
+                "parent_event_id": user_ev_id,
+                "content": "from assistant",
+                "author": "cursor_agent",
+                "private_branch": False,
+            },
+        )
+        assert r.status_code == 200, r.text
+
+    get_settings.cache_clear()
