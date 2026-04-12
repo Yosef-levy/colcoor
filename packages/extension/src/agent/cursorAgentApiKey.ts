@@ -2,23 +2,30 @@ import * as vscode from "vscode";
 
 export const SECRET_CURSOR_AGENT_API_KEY = "colcoor.cursorAgentApiKey";
 
-const URL_API_KEYS = "https://cursor.com/docs/settings/api-keys";
+/** Where users create keys for headless `agent` / CURSOR_API_KEY (Cursor dashboard). */
+const URL_CLOUD_AGENTS_DASHBOARD = "https://cursor.com/dashboard/cloud-agents";
+const URL_API_KEYS_DOCS = "https://cursor.com/docs/settings/api-keys";
 const URL_CLI_AUTH = "https://cursor.com/docs/cli/reference/authentication";
 
-type ApiKeyStep = "docs" | "cli_auth" | "paste" | "clear";
+type ApiKeyStep = "dashboard" | "api_docs" | "cli_auth" | "paste" | "clear";
 
 /** Command / palette entry: help user find a key, then store or clear (same as `CURSOR_API_KEY` for `agent -p`). */
 export async function promptStoreCursorAgentApiKey(secrets: vscode.SecretStorage): Promise<void> {
   const hasStored = Boolean(await secrets.get(SECRET_CURSOR_AGENT_API_KEY));
   const items: (vscode.QuickPickItem & { action: ApiKeyStep })[] = [
     {
-      label: "$(link-external) Get a Cursor API key (opens docs)",
-      description: "Create or copy a key — same value as environment variable CURSOR_API_KEY",
-      action: "docs",
+      label: "$(link-external) Get a Cursor API key (Cloud Agents dashboard)",
+      description: URL_CLOUD_AGENTS_DASHBOARD,
+      action: "dashboard",
+    },
+    {
+      label: "$(book) API keys — documentation",
+      description: URL_API_KEYS_DOCS,
+      action: "api_docs",
     },
     {
       label: "$(key) I have my key — paste it now",
-      description: "Saved for Colcoor only; replaces a stale CURSOR_API_KEY from the editor process",
+      description: "Opens a secure field to save it for Colcoor’s agent runs",
       action: "paste",
     },
     {
@@ -43,12 +50,16 @@ export async function promptStoreCursorAgentApiKey(secrets: vscode.SecretStorage
     return;
   }
 
-  if (step.action === "docs") {
-    await vscode.env.openExternal(vscode.Uri.parse(URL_API_KEYS));
+  if (step.action === "dashboard") {
+    await vscode.env.openExternal(vscode.Uri.parse(URL_CLOUD_AGENTS_DASHBOARD));
     await vscode.window.showInformationMessage(
-      "Colcoor: after you copy your API key from Cursor, run “Colcoor: Set Cursor API key for agent” again " +
-        "and choose “I have my key — paste it now”.",
+      "Colcoor: after you copy your API key from the Cloud Agents dashboard, run " +
+        "“Colcoor: Set Cursor API key for agent” again and choose “I have my key — paste it now”.",
     );
+    return;
+  }
+  if (step.action === "api_docs") {
+    await vscode.env.openExternal(vscode.Uri.parse(URL_API_KEYS_DOCS));
     return;
   }
   if (step.action === "cli_auth") {
