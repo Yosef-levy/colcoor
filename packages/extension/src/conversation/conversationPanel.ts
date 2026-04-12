@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient, GraphEventNode } from "../api/client";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
+import { runResendAssistant } from "./resendAssistant";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { findBranchTip } from "./treeEvents";
@@ -10,6 +11,7 @@ type WebviewStateMessage = {
   type: "state";
   conversationId: string;
   title: string | null;
+  conversationPinned: boolean;
   events: GraphEventNode[];
   selectedEventId: string;
   threadSegments: ThreadSegment[];
@@ -22,7 +24,11 @@ type FromWebview =
   | { type: "send"; text: string; privateBranch?: boolean }
   | { type: "select"; id: string }
   | { type: "refresh" }
-  | { type: "cancel" };
+  | { type: "cancel" }
+  | { type: "resend" }
+  | { type: "copy"; text: string }
+  | { type: "rename" }
+  | { type: "togglePin" };
 
 function randomNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -56,8 +62,25 @@ export function createConversationPanelController(
   let webviewReady = false;
   let conversationId: string | undefined;
   let conversationTitle: string | null | undefined;
+  let conversationPinned = false;
   let selectedEventId: string | undefined;
   let sendAbort: AbortController | undefined;
+
+  async function refreshConversationMeta(): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    try {
+      const rows = await api.listConversations();
+      const row = rows.find((r) => r.id === conversationId);
+      if (row) {
+        conversationPinned = row.pinned;
+        conversationTitle = row.title;
+      }
+    } catch {
+      /* keep previous meta */
+    }
+  }
 
   function disposePanel(): void {
     sendAbort?.abort();
@@ -89,6 +112,7 @@ export function createConversationPanelController(
       type: "state",
       conversationId,
       title: conversationTitle ?? null,
+      conversationPinned,
       events,
       selectedEventId: sel ?? "",
       threadSegments: buildThreadSegments(events, sel ?? ""),
@@ -153,6 +177,91 @@ export function createConversationPanelController(
     }
   }
 
+  async function handleResend(): Promise<void> {
+    if (!conversationId || !selectedEventId) {
+      return;
+    }
+    const ws = getWorkspaceRoot();
+    sendAbort?.abort();
+    sendAbort = new AbortController();
+    const signal = sendAbort.signal;
+    await loadTreeAndPush(true, null);
+    try {
+      const result = await runResendAssistant(
+        api,
+        agent,
+        conversationId,
+        conversationTitle,
+        selectedEventId,
+        ws,
+        { signal },
+      );
+      const { events } = await api.getTree(conversationId);
+      try {
+        selectedEventId = findBranchTip(events).id;
+      } catch {
+        selectedEventId = events.at(-1)?.id;
+      }
+      postState(events, false, null);
+      if (result.cancelled) {
+        void vscode.window.showInformationMessage(
+          result.assistantText?.trim()
+            ? "Colcoor: stopped — partial assistant reply was saved."
+            : "Colcoor: stopped — no assistant text was saved.",
+        );
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await loadTreeAndPush(false, msg);
+    } finally {
+      sendAbort = undefined;
+    }
+  }
+
+  async function handleRename(): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    const current = conversationTitle ?? "";
+    const next = await vscode.window.showInputBox({
+      title: "Colcoor — rename conversation",
+      value: current,
+      prompt: "Leave blank for untitled",
+      ignoreFocusOut: true,
+    });
+    if (next === undefined) {
+      return;
+    }
+    try {
+      const out = await api.patchConversation(conversationId, {
+        title: next.trim() ? next.trim() : null,
+      });
+      conversationTitle = out.title;
+      if (panel) {
+        panel.title = `Colcoor — ${out.title?.trim() ? out.title : "(untitled)"}`;
+      }
+      await refreshConversationMeta();
+      await loadTreeAndPush(false, null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+    }
+  }
+
+  async function handleTogglePin(): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    try {
+      await api.patchConversation(conversationId, { pinned: !conversationPinned });
+      await refreshConversationMeta();
+      await loadTreeAndPush(false, null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+    }
+  }
+
   const subscription = vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration("colcoor") && panel) {
       void vscode.window.showInformationMessage(
@@ -202,6 +311,22 @@ export function createConversationPanelController(
         sendAbort?.abort();
         return;
       }
+      if (msg.type === "copy" && typeof msg.text === "string") {
+        await vscode.env.clipboard.writeText(msg.text);
+        return;
+      }
+      if (msg.type === "resend") {
+        await handleResend();
+        return;
+      }
+      if (msg.type === "rename") {
+        await handleRename();
+        return;
+      }
+      if (msg.type === "togglePin") {
+        await handleTogglePin();
+        return;
+      }
       if (msg.type === "send" && typeof msg.text === "string") {
         await handleSend(msg.text, Boolean(msg.privateBranch));
       }
@@ -214,6 +339,7 @@ export function createConversationPanelController(
       webviewReady = false;
       conversationId = undefined;
       selectedEventId = undefined;
+      conversationPinned = false;
     });
 
     panel = p;
@@ -224,7 +350,9 @@ export function createConversationPanelController(
     async reveal(convId: string, title: string | null): Promise<void> {
       conversationId = convId;
       conversationTitle = title;
+      conversationPinned = false;
       selectedEventId = undefined;
+      await refreshConversationMeta();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
       if (webviewReady) {

@@ -136,6 +136,23 @@ export class ColcoorApiClient {
     return JSON.parse(text) as ConversationSummary;
   }
 
+  /** Update title (owner/editor) and/or caller pin state (PATCH /conversations/{id}). */
+  async patchConversation(
+    conversationId: string,
+    body: { title?: string | null; pinned?: boolean },
+  ): Promise<ConversationSummary> {
+    const res = await this.fetchApi(`/conversations/${conversationId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`update conversation failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as ConversationSummary;
+  }
+
   async getTree(conversationId: string): Promise<TreeResponseBody> {
     const res = await this.fetchApi(`/conversations/${conversationId}/tree`, { method: "GET" });
     const text = await res.text();

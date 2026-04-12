@@ -37,6 +37,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow: auto;
     }
     .col-main { flex: 1; display: flex; flex-direction: column; min-width: 0; gap: 10px; }
+    .detail-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-sideBar-background);
+    }
+    .detail-bar .crumb {
+      flex: 1;
+      min-width: 140px;
+      line-height: 1.45;
+      font-size: 0.92em;
+    }
+    .detail-bar .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .crumb-step strong { font-weight: 600; color: var(--vscode-foreground); }
+    .crumb-sep { color: var(--vscode-descriptionForeground); margin: 0 4px; }
     .thread {
       flex: 1;
       border: 1px solid var(--vscode-panel-border);
@@ -219,6 +239,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <div id="tree" class="tree"></div>
     </div>
     <div class="col-main">
+      <div class="detail-bar">
+        <div id="breadcrumb" class="crumb hint"></div>
+        <div class="detail-actions">
+          <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
+          <button type="button" id="btnPin" class="btn-secondary">Pin</button>
+          <button type="button" id="btnCopy" class="btn-secondary">Copy message</button>
+          <button type="button" id="btnResend" class="btn-secondary">Resend assistant</button>
+        </div>
+      </div>
       <div class="thread">
         <div class="hint" style="margin-bottom:6px">Thread (root → selected)</div>
         <div id="thread"></div>
@@ -243,6 +272,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     let state = {
       conversationId: "",
       title: null,
+      conversationPinned: false,
       events: [],
       selectedEventId: "",
       threadSegments: [],
@@ -262,6 +292,70 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const t = (ev.content_text || "").trim().replace(/\\s+/g, " ");
       if (!t) return "(empty)";
       return t.length > 96 ? t.slice(0, 96) + "…" : t;
+    }
+
+    function pathChain(events, selectedId) {
+      const byId = Object.fromEntries(events.map((e) => [e.id, e]));
+      const chain = [];
+      let id = selectedId;
+      const seen = new Set();
+      while (id && !seen.has(id)) {
+        seen.add(id);
+        const ev = byId[id];
+        if (!ev) break;
+        chain.push(ev);
+        id = ev.parent_event_id;
+      }
+      return chain.reverse();
+    }
+
+    function renderDetailBar() {
+      const crumb = document.getElementById("breadcrumb");
+      const copyBtn = document.getElementById("btnCopy");
+      const resendBtn = document.getElementById("btnResend");
+      if (!crumb || !copyBtn || !resendBtn) return;
+      const sel = state.selectedEventId;
+      const evs = state.events || [];
+      const path = pathChain(evs, sel);
+      if (!path.length) {
+        crumb.innerHTML = '<span class="empty">No selection</span>';
+        copyBtn.disabled = true;
+        resendBtn.disabled = true;
+        const renameBtn = document.getElementById("btnRename");
+        const pinBtn = document.getElementById("btnPin");
+        if (renameBtn) renameBtn.disabled = state.busy;
+        if (pinBtn) {
+          pinBtn.disabled = state.busy;
+          pinBtn.textContent = state.conversationPinned ? "Unpin" : "Pin";
+        }
+        return;
+      }
+      const parts = path.map((ev) => {
+        const lab = ev.kind === "user_input" ? "User" : "Assistant";
+        return (
+          '<span class="crumb-step"><strong>' +
+          esc(lab) +
+          "</strong> · " +
+          esc(snippet(ev)) +
+          "</span>"
+        );
+      });
+      crumb.innerHTML = parts.join(' <span class="crumb-sep">→</span> ');
+      const last = path[path.length - 1];
+      copyBtn.disabled = state.busy;
+      const canResend =
+        last.kind === "user_input" && String(last.content_text || "").trim().length > 0;
+      resendBtn.disabled = state.busy || !canResend;
+      resendBtn.title = canResend
+        ? "New assistant reply for this user message (same user row; transcript per docs)."
+        : "Pick a user message with text (not the empty root placeholder).";
+      const renameBtn = document.getElementById("btnRename");
+      const pinBtn = document.getElementById("btnPin");
+      if (renameBtn) renameBtn.disabled = state.busy;
+      if (pinBtn) {
+        pinBtn.disabled = state.busy;
+        pinBtn.textContent = state.conversationPinned ? "Unpin" : "Pin";
+      }
     }
 
     function renderTree() {
@@ -369,6 +463,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (busyEl) busyEl.style.display = state.busy ? "inline" : "none";
       renderTree();
       renderThread();
+      renderDetailBar();
     }
 
     window.addEventListener("message", (event) => {
@@ -395,6 +490,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("refresh").addEventListener("click", () => {
       vscode.postMessage({ type: "refresh" });
+    });
+
+    document.getElementById("btnCopy").addEventListener("click", () => {
+      const ev = (state.events || []).find((e) => e.id === state.selectedEventId);
+      if (!ev) return;
+      vscode.postMessage({ type: "copy", text: ev.content_text || "" });
+    });
+
+    document.getElementById("btnResend").addEventListener("click", () => {
+      vscode.postMessage({ type: "resend" });
+    });
+
+    document.getElementById("btnRename").addEventListener("click", () => {
+      vscode.postMessage({ type: "rename" });
+    });
+
+    document.getElementById("btnPin").addEventListener("click", () => {
+      vscode.postMessage({ type: "togglePin" });
     });
 
     document.getElementById("input").addEventListener("keydown", (e) => {
