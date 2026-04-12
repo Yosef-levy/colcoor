@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 import pytest
 from colcoor_backend.app import create_app
 from colcoor_backend.core.config import get_settings
+from colcoor_backend.core.jwt_tokens import create_access_token
 from colcoor_backend.db import models  # noqa: F401 — register mappers
 from colcoor_backend.db.base import Base
 from colcoor_backend.db.models import ConversationUserState, User
@@ -30,6 +31,25 @@ pytestmark = pytest.mark.skipif(
     not os.environ.get("COLCOOR_TEST_DATABASE_URL"),
     reason="COLCOOR_TEST_DATABASE_URL not set (postgresql+asyncpg://…)",
 )
+
+
+async def _seed_user_and_mint_jwt(postgres_url: str) -> str:
+    """Insert a user and return a JWT for HTTP tests (no dev-login route)."""
+    eng = create_async_engine(postgres_url)
+    factory = async_sessionmaker(eng, expire_on_commit=False)
+    async with factory() as s:
+        u = User(
+            cursor_sub=f"int-{uuid.uuid4()}",
+            email="i@i.c",
+            display_name="",
+            last_login_at=datetime.now(tz=UTC),
+        )
+        s.add(u)
+        await s.commit()
+        await s.refresh(u)
+        token = create_access_token(u.id, get_settings())
+    await eng.dispose()
+    return token
 
 
 @pytest.fixture(scope="module")
@@ -176,16 +196,10 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
     monkeypatch.setenv("JWT_SECRET", secret)
     monkeypatch.setenv("COLCOOR_ENV", "development")
     get_settings.cache_clear()
-    sub = f"http-{uuid.uuid4()}"
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
 
     with TestClient(create_app()) as client:
-        r = client.post(
-            "/api/v1/auth/dev-login",
-            json={"cursor_sub": sub, "email": "http@example.com", "display_name": ""},
-        )
-        assert r.status_code == 200, r.text
-        token = r.json()["access_token"]
-        auth = {"Authorization": f"Bearer {token}"}
 
         r = client.post("/api/v1/conversations", headers=auth, json={"title": "api"})
         assert r.status_code == 200, r.text

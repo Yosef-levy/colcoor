@@ -34,12 +34,6 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
 
 
-class DevLoginRequest(BaseModel):
-    cursor_sub: str = Field(..., min_length=1)
-    email: str = Field(..., min_length=3)
-    display_name: str = ""
-
-
 class ConversationCreate(BaseModel):
     title: str | None = None
 

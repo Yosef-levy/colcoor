@@ -22,6 +22,8 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 ## 2. Session (auth)
 
+**Only** **`POST /api/v1/auth/cursor`** is defined for obtaining a Colcoor JWT. No other auth login paths are part of this contract.
+
 ### 2.1 `POST /api/v1/auth/cursor`
 
 **Purpose:** Exchange a Cursor / VS Code identity-provider access token for a Colcoor API JWT. Provisions or updates **`users`** keyed by **`cursor_sub`** (see [authentication.md](authentication.md)).

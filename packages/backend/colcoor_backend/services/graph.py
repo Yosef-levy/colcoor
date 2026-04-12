@@ -18,33 +18,6 @@ from colcoor_backend.db.models import (
 from colcoor_backend.services.cursor_identity import VerifiedCursorIdentity
 
 
-async def upsert_user_by_cursor_sub(
-    session: AsyncSession,
-    *,
-    cursor_sub: str,
-    email: str,
-    display_name: str,
-) -> uuid.UUID:
-    now = datetime.now(tz=UTC)
-    res = await session.execute(select(User).where(User.cursor_sub == cursor_sub))
-    user = res.scalar_one_or_none()
-    if user:
-        user.email = email
-        user.display_name = display_name or user.display_name
-        user.last_login_at = now
-    else:
-        user = User(
-            cursor_sub=cursor_sub,
-            email=email,
-            display_name=display_name or "",
-            last_login_at=now,
-        )
-        session.add(user)
-    await session.flush()
-    await session.refresh(user)
-    return user.id
-
-
 async def upsert_user_from_verified_identity(
     session: AsyncSession,
     identity: VerifiedCursorIdentity,

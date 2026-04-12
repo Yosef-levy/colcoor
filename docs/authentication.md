@@ -2,6 +2,8 @@
 
 The extension obtains a **Colcoor API JWT** by calling **`POST /api/v1/auth/cursor`** with a **Cursor / VS Code identity-provider access token**. All other Colcoor APIs use **`Authorization: Bearer <access_token>`**.
 
+There is **no** alternate development-only login HTTP route; the same **`POST /api/v1/auth/cursor`** contract applies in every environment.
+
 **Normative API:** [api-contracts.md](api-contracts.md) §2.1.
 
 **Billing and quotas:** [monetization.md](monetization.md), [billing-usage.md](billing-usage.md).
