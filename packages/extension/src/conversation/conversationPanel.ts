@@ -301,11 +301,17 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
-      const [{ events }, notes] = await Promise.all([
+      const [{ events }, notes, caller] = await Promise.all([
         api.getTree(conversationId),
         api.listNotes(conversationId),
+        api.getConversationCallerState(conversationId).catch((): null => null),
       ]);
       lastNotes = notes;
+      if (caller) {
+        lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
+      } else {
+        lastNeedsContextRebuild = false;
+      }
       try {
         selectedEventId = findBranchTip(events).id;
       } catch {
@@ -349,11 +355,17 @@ export function createConversationPanelController(
         { signal, onAssistantTextDelta: (t) => stream.pushDelta(t) },
       );
       stream.dispose();
-      const [{ events }, notes] = await Promise.all([
+      const [{ events }, notes, caller] = await Promise.all([
         api.getTree(conversationId),
         api.listNotes(conversationId),
+        api.getConversationCallerState(conversationId).catch((): null => null),
       ]);
       lastNotes = notes;
+      if (caller) {
+        lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
+      } else {
+        lastNeedsContextRebuild = false;
+      }
       try {
         selectedEventId = findBranchTip(events).id;
       } catch {

@@ -210,6 +210,11 @@
           "default": "stream-json-partial",
           "description": "How Cursor `agent -p` prints stdout (see https://cursor.com/docs/cli/reference/output-format). stream-json-partial: NDJSON + --stream-partial-output (fine-grained UI streaming). stream-json: NDJSON without partial deltas. text: final answer only (works on older CLI; minimal streaming)."
         },
+        "colcoor.includeWorkspaceHintsInAgentPrompt": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, append optional workspace context (active file path, non-empty selection, git diff) after the authoritative transcript for each `agent -p` run only (see docs/principles.md). Does not change persisted events."
+        },
         "colcoor.promptForCursorCliOnActivate": {
           "type": "boolean",
           "default": true,

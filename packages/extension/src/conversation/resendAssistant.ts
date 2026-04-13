@@ -1,4 +1,5 @@
 import type { AgentRunner } from "../agent/agentRunner";
+import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
@@ -57,11 +58,14 @@ export async function runResendAssistant(
     finalUserMessage: undefined,
   });
 
+  const workspaceContextAppendix = await collectWorkspaceHintsForAgent(workspaceRoot);
+
   try {
     const runResult = await agent.run({
       transcriptText,
       userMessage: userBody,
       workspaceRoot,
+      workspaceContextAppendix: workspaceContextAppendix || undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
     });

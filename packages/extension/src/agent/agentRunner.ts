@@ -39,6 +39,8 @@ export class AgentRunner {
     transcriptText: string;
     userMessage: string;
     workspaceRoot: string;
+    /** Appended after the transcript for the CLI only (editor path, selection, git diff). */
+    workspaceContextAppendix?: string;
     signal?: AbortSignal;
     /** Full assistant text so far (CLI stdout grows incrementally). Stub mode invokes once with the full body. */
     onTextDelta?: (textSoFar: string) => void;
@@ -53,6 +55,9 @@ export class AgentRunner {
       config.get<string>("agentOutputFormat"),
     );
     const cwd = input.workspaceRoot.trim() || process.cwd();
+    const appendix = input.workspaceContextAppendix?.trim() ?? "";
+    const promptForCli =
+      appendix.length > 0 ? `${input.transcriptText}${appendix}` : input.transcriptText;
 
     if (mode === "stub") {
       if (input.signal?.aborted) {
@@ -69,7 +74,7 @@ export class AgentRunner {
       const { stdout, stderr, exitCode, cancelled, ndjsonTimeline } = await spawnCursorAgentPrint({
         executable,
         workspaceRoot: cwd,
-        prompt: input.transcriptText,
+        prompt: promptForCli,
         timeoutMs: Math.max(10_000, timeoutMs),
         storedCursorApiKey: storedKey?.trim() || undefined,
         signal: input.signal,
