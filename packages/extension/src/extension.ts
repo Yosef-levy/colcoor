@@ -12,6 +12,7 @@ import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./age
 import { showAboutPanel } from "./conversation/aboutPanel";
 import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
+import { openSideChatPanel } from "./sidechat/sideChatPanel";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
@@ -402,6 +403,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("colcoor.openAbout", () => {
       showAboutPanel();
+    }),
+    vscode.commands.registerCommand("colcoor.openSideChat", async (item?: ConversationTreeItem) => {
+      if (!(await session.getBackendAccessToken())) {
+        await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
+        return;
+      }
+      let convId = item?.conv.id;
+      let convTitle: string | null | undefined = item?.conv.title ?? null;
+      if (!convId) {
+        const row = await pickConversationInteractively();
+        if (!row) {
+          return;
+        }
+        convId = row.id;
+        convTitle = row.title;
+      }
+      try {
+        await openSideChatPanel(context, api, convId, convTitle ?? null);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      }
     }),
     vscode.commands.registerCommand("colcoor.editProfile", async () => {
       if (!(await session.getBackendAccessToken())) {

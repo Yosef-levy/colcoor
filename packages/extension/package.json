@@ -83,6 +83,10 @@
         "title": "Colcoor: About"
       },
       {
+        "command": "colcoor.openSideChat",
+        "title": "Colcoor: Open side chat"
+      },
+      {
         "command": "colcoor.toggleStarSelectedMessage",
         "title": "Colcoor: Toggle star on selected message"
       },
@@ -115,7 +119,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Edit profile](command:colcoor.editProfile)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Edit profile](command:colcoor.editProfile)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Open side chat](command:colcoor.openSideChat)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
       }
     ],
     "menus": {
@@ -136,6 +140,11 @@
           "command": "colcoor.openConversation",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@0"
+        },
+        {
+          "command": "colcoor.openSideChat",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@0b"
         },
         {
           "command": "colcoor.sendMessage",
