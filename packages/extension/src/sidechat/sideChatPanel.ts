@@ -2,8 +2,26 @@ import * as vscode from "vscode";
 
 import type { ColcoorApiClient, SideChatMessageOut } from "../api/client";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
+import { maxSideChatSeq } from "./sideChatReadCursor";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { trimmedSideChatSendBody } from "./trimSendBody";
+
+const SIDE_CHAT_SSE_RECONNECT_MS = 2000;
+
+function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const t = setTimeout(resolve, ms);
+    const onAbort = (): void => {
+      clearTimeout(t);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 function randomNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -47,6 +65,32 @@ export async function openSideChatPanel(
   let cached: SideChatMessageOut[] = [];
   let lastStreamSeq = 0;
   let sseStarted = false;
+  let disposed = false;
+  /** Last `last_read_seq` successfully PATCHed (avoids spamming the API). */
+  let lastPatchedReadSeq = -1;
+  let readPatchChain = Promise.resolve();
+
+  function scheduleMarkRead(): void {
+    readPatchChain = readPatchChain
+      .then(async () => {
+        if (disposed) {
+          return;
+        }
+        const m = maxSideChatSeq(cached);
+        if (m <= lastPatchedReadSeq) {
+          return;
+        }
+        try {
+          await api.patchSideChatRead(conversationId, m);
+          lastPatchedReadSeq = m;
+        } catch {
+          /* ignore — badge / unread can catch up on next open */
+        }
+      })
+      .catch(() => {
+        /* never break the chain on unexpected rejection */
+      });
+  }
 
   async function postState(): Promise<void> {
     try {
@@ -59,8 +103,9 @@ export async function openSideChatPanel(
   async function pushState(): Promise<void> {
     try {
       cached = await api.listSideChatMessages(conversationId, 0);
-      lastStreamSeq = cached.reduce((acc, m) => Math.max(acc, m.seq), 0);
+      lastStreamSeq = maxSideChatSeq(cached);
       await postState();
+      scheduleMarkRead();
     } catch (e) {
       const t = e instanceof Error ? e.message : String(e);
       try {
@@ -73,22 +118,33 @@ export async function openSideChatPanel(
 
   function startSseLoop(): void {
     const run = async () => {
-      const startAfter = lastStreamSeq;
-      try {
-        for await (const ev of api.streamSideChatSseEvents(conversationId, {
-          afterSeq: startAfter,
-          signal: ac.signal,
-        })) {
-          const o = ev as { type?: string; message?: SideChatMessageOut };
-          if (o?.type !== "side_chat" || !o.message) {
-            continue;
+      while (!disposed) {
+        const startAfter = lastStreamSeq;
+        try {
+          for await (const ev of api.streamSideChatSseEvents(conversationId, {
+            afterSeq: startAfter,
+            signal: ac.signal,
+          })) {
+            const o = ev as { type?: string; message?: SideChatMessageOut };
+            if (o?.type !== "side_chat" || !o.message) {
+              continue;
+            }
+            cached = mergeSideChatMessage(cached, o.message);
+            lastStreamSeq = Math.max(lastStreamSeq, o.message.seq);
+            await postState();
+            scheduleMarkRead();
           }
-          cached = mergeSideChatMessage(cached, o.message);
-          lastStreamSeq = Math.max(lastStreamSeq, o.message.seq);
-          await postState();
+        } catch {
+          /* aborted, fetch error, or stream read failure */
         }
-      } catch {
-        /* aborted or network */
+        if (disposed || ac.signal.aborted) {
+          break;
+        }
+        try {
+          await sleepAbortable(SIDE_CHAT_SSE_RECONNECT_MS, ac.signal);
+        } catch {
+          break;
+        }
       }
     };
     void run();
@@ -131,6 +187,7 @@ export async function openSideChatPanel(
   });
 
   panel.onDidDispose(() => {
+    disposed = true;
     ac.abort();
   });
 }

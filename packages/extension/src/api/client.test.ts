@@ -187,6 +187,25 @@ describe("ColcoorApiClient note mutations", () => {
     ).rejects.toThrow(/update note failed \(HTTP 403\).*forbidden/);
   });
 
+  it("patchSideChatRead sends PATCH with last_read_seq and accepts 204", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: async () => "",
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.patchSideChatRead("cccccccc-cccc-4ccc-8ccc-cccccccccccc", 7);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/side-chat/read");
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ last_read_seq: 7 }));
+  });
+
   it("listSideChatMessages uses after_seq query when > 0", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
