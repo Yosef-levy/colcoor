@@ -224,6 +224,21 @@
           "type": "boolean",
           "default": true,
           "description": "When true, the Cursor CLI trace block under each assistant message starts expanded; when false, it starts collapsed."
+        },
+        "colcoor.legalTermsUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional URL to your Terms of Service (https recommended). When set, a link appears on Colcoor: About."
+        },
+        "colcoor.legalPrivacyUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional URL to your Privacy policy. When set, a link appears on Colcoor: About."
+        },
+        "colcoor.legalRefundUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional URL to your Refund policy. When set, a link appears on Colcoor: About."
         }
       }
     }

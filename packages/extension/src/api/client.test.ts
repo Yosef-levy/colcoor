@@ -184,6 +184,23 @@ describe("ColcoorApiClient note mutations", () => {
       api.patchNote("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", {
         content: "x",
       }),
-    ).rejects.toThrow(/update note failed \(403\)/);
+    ).rejects.toThrow(/update note failed \(HTTP 403\).*forbidden/);
+  });
+
+  it("createConversation surfaces HTTP 402 as plan / usage wording", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 402,
+      statusText: "Payment Required",
+      text: async () => JSON.stringify({ detail: "event quota exceeded" }),
+    }) as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await expect(api.createConversation({ title: "x" })).rejects.toThrow(
+      /Plan or usage limit.*create conversation.*event quota exceeded/s,
+    );
   });
 });

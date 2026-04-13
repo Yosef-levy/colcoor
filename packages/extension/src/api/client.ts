@@ -1,3 +1,5 @@
+import { formatColcoorApiError } from "./apiErrorFormatting";
+
 export type ColcoorApiClientOptions = {
   baseUrl: string;
   getAccessToken: () => Promise<string | undefined>;
@@ -115,6 +117,13 @@ export class ColcoorApiClient {
     return `${this.baseUrl}/api/v1${p}`;
   }
 
+  private assertOkResponse(res: Response, bodyText: string, operation: string): void {
+    if (res.ok) {
+      return;
+    }
+    throw new Error(formatColcoorApiError(operation, res.status, bodyText));
+  }
+
   private async fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
     try {
       return await fetch(url, init);
@@ -169,18 +178,14 @@ export class ColcoorApiClient {
       }),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`sign-in failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "Cursor sign-in");
     return JSON.parse(text) as AuthResponseBody;
   }
 
   async listConversations(): Promise<ConversationSummary[]> {
     const res = await this.fetchApi("/conversations", { method: "GET" });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`list conversations failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "list conversations");
     return JSON.parse(text) as ConversationSummary[];
   }
 
@@ -192,9 +197,7 @@ export class ColcoorApiClient {
       body: JSON.stringify({ title: body.title ?? null }),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`create conversation failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "create conversation");
     return JSON.parse(text) as ConversationSummary;
   }
 
@@ -209,18 +212,14 @@ export class ColcoorApiClient {
       body: JSON.stringify(body),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`update conversation failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "update conversation");
     return JSON.parse(text) as ConversationSummary;
   }
 
   async getTree(conversationId: string): Promise<TreeResponseBody> {
     const res = await this.fetchApi(`/conversations/${conversationId}/tree`, { method: "GET" });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`get tree failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "load tree");
     return JSON.parse(text) as TreeResponseBody;
   }
 
@@ -228,9 +227,7 @@ export class ColcoorApiClient {
   async listConversationMembers(conversationId: string): Promise<ConversationMember[]> {
     const res = await this.fetchApi(`/conversations/${conversationId}/members`, { method: "GET" });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`list members failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "list members");
     return JSON.parse(text) as ConversationMember[];
   }
 
@@ -245,9 +242,7 @@ export class ColcoorApiClient {
       body: JSON.stringify(body),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`add member failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "add member");
     return JSON.parse(text) as ConversationMember;
   }
 
@@ -263,9 +258,7 @@ export class ColcoorApiClient {
       body: JSON.stringify({ role: body.role }),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`update member role failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "update member role");
     return JSON.parse(text) as ConversationMember;
   }
 
@@ -274,10 +267,8 @@ export class ColcoorApiClient {
     const res = await this.fetchApi(`/conversations/${conversationId}/members/${memberUserId}`, {
       method: "DELETE",
     });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(`remove member failed (${res.status}): ${t || res.statusText}`);
-    }
+    const t = await res.text();
+    this.assertOkResponse(res, t, "remove member");
   }
 
   /** Read the caller’s active node and rebuild flag (GET …/caller-state). */
@@ -286,9 +277,7 @@ export class ColcoorApiClient {
       method: "GET",
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`get caller state failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "get caller state");
     return JSON.parse(text) as ConversationUserStateOut;
   }
 
@@ -306,9 +295,7 @@ export class ColcoorApiClient {
       }),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`set active failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "set active node");
     return JSON.parse(text) as ConversationUserStateOut;
   }
 
@@ -317,10 +304,8 @@ export class ColcoorApiClient {
     const res = await this.fetchApi(`/conversations/${conversationId}/events/${eventId}/star`, {
       method: "PUT",
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`star failed (${res.status}): ${text || res.statusText}`);
-    }
+    const text = await res.text();
+    this.assertOkResponse(res, text, "star message");
   }
 
   /** Remove star (DELETE …/events/{id}/star). */
@@ -328,18 +313,14 @@ export class ColcoorApiClient {
     const res = await this.fetchApi(`/conversations/${conversationId}/events/${eventId}/star`, {
       method: "DELETE",
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`unstar failed (${res.status}): ${text || res.statusText}`);
-    }
+    const text = await res.text();
+    this.assertOkResponse(res, text, "unstar message");
   }
 
   async listNotes(conversationId: string): Promise<NoteOut[]> {
     const res = await this.fetchApi(`/conversations/${conversationId}/notes`, { method: "GET" });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`list notes failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "list notes");
     return JSON.parse(text) as NoteOut[];
   }
 
@@ -350,9 +331,7 @@ export class ColcoorApiClient {
       body: JSON.stringify(body),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`create note failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "create note");
     return JSON.parse(text) as NoteOut;
   }
 
@@ -367,9 +346,7 @@ export class ColcoorApiClient {
       body: JSON.stringify({ content: body.content }),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`update note failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "update note");
     return JSON.parse(text) as NoteOut;
   }
 
@@ -377,19 +354,15 @@ export class ColcoorApiClient {
     const res = await this.fetchApi(`/conversations/${conversationId}/notes/${noteId}`, {
       method: "DELETE",
     });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(`delete note failed (${res.status}): ${t || res.statusText}`);
-    }
+    const t = await res.text();
+    this.assertOkResponse(res, t, "delete note");
   }
 
   /** Owner-only: delete conversation and cascaded data (DELETE /conversations/{id}). */
   async deleteConversation(conversationId: string): Promise<void> {
     const res = await this.fetchApi(`/conversations/${conversationId}`, { method: "DELETE" });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`delete conversation failed (${res.status}): ${text || res.statusText}`);
-    }
+    const text = await res.text();
+    this.assertOkResponse(res, text, "delete conversation");
   }
 
   async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {
@@ -409,9 +382,7 @@ export class ColcoorApiClient {
       body: JSON.stringify(payload),
     });
     const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`append-event failed (${res.status}): ${text || res.statusText}`);
-    }
+    this.assertOkResponse(res, text, "append event");
     return JSON.parse(text) as AppendEventResponse;
   }
 }
