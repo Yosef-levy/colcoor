@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class EventKind(str, Enum):
@@ -195,3 +195,65 @@ class MeOut(BaseModel):
         default=None,
         description="Omitted unless the server refreshes JWT claims (not used on simple profile patch).",
     )
+
+
+class SideChatMessageOut(BaseModel):
+    """Side-chat row (api-contracts §10)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    conversation_id: UUID
+    seq: int
+    kind: Literal["user", "system_join", "system_leave"]
+    author_user_id: UUID | None
+    body: str | None
+    referenced_event_id: UUID | None
+    referenced_note_id: UUID | None
+    referenced_side_chat_message_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+    edited_at: datetime | None
+    deleted_at: datetime | None
+
+
+class SideChatMessagesResponse(BaseModel):
+    messages: list[SideChatMessageOut]
+
+
+class SideChatPostBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["user"] = "user"
+    body: str = Field(..., min_length=1)
+    referenced_event_id: UUID | None = None
+    referenced_note_id: UUID | None = None
+    referenced_side_chat_message_id: UUID | None = None
+
+    @field_validator("body")
+    @classmethod
+    def _strip_body(cls, v: str) -> str:
+        t = v.strip()
+        if not t:
+            raise ValueError("body must be non-empty after trim")
+        return t
+
+
+class SideChatPatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    body: str = Field(..., min_length=1)
+
+    @field_validator("body")
+    @classmethod
+    def _strip_body(cls, v: str) -> str:
+        t = v.strip()
+        if not t:
+            raise ValueError("body must be non-empty after trim")
+        return t
+
+
+class SideChatReadPatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    last_read_seq: int = Field(..., ge=0)

@@ -400,6 +400,73 @@ def test_conversation_membership_mutations_http(monkeypatch: pytest.MonkeyPatch,
     get_settings.cache_clear()
 
 
+def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """GET/POST/PATCH/DELETE side-chat + PATCH read (api-contracts §10.1–10.5)."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "side"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.get(f"/api/v1/conversations/{cid}/side-chat/messages", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json()["messages"] == []
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/side-chat/messages",
+            headers=auth,
+            json={"kind": "user", "body": "  hello  "},
+        )
+        assert r.status_code == 200, r.text
+        m0 = r.json()
+        assert m0["body"] == "hello"
+        assert m0["seq"] == 1
+        mid = m0["id"]
+
+        r = client.get(f"/api/v1/conversations/{cid}/side-chat/messages", headers=auth)
+        assert r.status_code == 200, r.text
+        assert len(r.json()["messages"]) == 1
+
+        r = client.get(
+            f"/api/v1/conversations/{cid}/side-chat/messages?after_seq=1",
+            headers=auth,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["messages"] == []
+
+        r = client.patch(
+            f"/api/v1/conversations/{cid}/side-chat/messages/{mid}",
+            headers=auth,
+            json={"body": "edited"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["body"] == "edited"
+        assert r.json()["edited_at"] is not None
+
+        r = client.patch(
+            f"/api/v1/conversations/{cid}/side-chat/read",
+            headers=auth,
+            json={"last_read_seq": 1},
+        )
+        assert r.status_code == 204, r.text
+
+        r = client.delete(
+            f"/api/v1/conversations/{cid}/side-chat/messages/{mid}",
+            headers=auth,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["deleted_at"] is not None
+
+    get_settings.cache_clear()
+
+
 def test_transfer_ownership_via_patch_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
     """PATCH member to owner demotes prior owner to editor; new owner can delete conversation."""
     from colcoor_backend.core.jwt_tokens import decode_access_token

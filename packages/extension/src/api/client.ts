@@ -101,6 +101,31 @@ export type MePatchBody = {
   avatar_url?: string | null;
 };
 
+/** Side-chat row (api-contracts §10). */
+export type SideChatMessageOut = {
+  id: string;
+  conversation_id: string;
+  seq: number;
+  kind: "user" | "system_join" | "system_leave";
+  author_user_id: string | null;
+  body: string | null;
+  referenced_event_id: string | null;
+  referenced_note_id: string | null;
+  referenced_side_chat_message_id: string | null;
+  created_at: string;
+  updated_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+};
+
+export type SideChatPostBody = {
+  kind: "user";
+  body: string;
+  referenced_event_id?: string | null;
+  referenced_note_id?: string | null;
+  referenced_side_chat_message_id?: string | null;
+};
+
 /**
  * HTTP client for the extension-dedicated backend.
  * Authenticated requests send Authorization (docs/monetization.md).
@@ -389,6 +414,77 @@ export class ColcoorApiClient {
     const res = await this.fetchApi(`/conversations/${conversationId}`, { method: "DELETE" });
     const text = await res.text();
     this.assertOkResponse(res, text, "delete conversation");
+  }
+
+  /** GET …/side-chat/messages (`after_seq` defaults to 0). */
+  async listSideChatMessages(
+    conversationId: string,
+    afterSeq: number = 0,
+  ): Promise<SideChatMessageOut[]> {
+    const q = afterSeq > 0 ? `?after_seq=${encodeURIComponent(String(afterSeq))}` : "";
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/side-chat/messages${q}`,
+      { method: "GET" },
+    );
+    const text = await res.text();
+    this.assertOkResponse(res, text, "list side-chat messages");
+    const j = JSON.parse(text) as { messages: SideChatMessageOut[] };
+    return j.messages;
+  }
+
+  async postSideChatMessage(
+    conversationId: string,
+    body: SideChatPostBody,
+  ): Promise<SideChatMessageOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/side-chat/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "post side-chat message");
+    return JSON.parse(text) as SideChatMessageOut;
+  }
+
+  async patchSideChatMessage(
+    conversationId: string,
+    messageId: string,
+    body: { body: string },
+  ): Promise<SideChatMessageOut> {
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/side-chat/messages/${messageId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    const text = await res.text();
+    this.assertOkResponse(res, text, "patch side-chat message");
+    return JSON.parse(text) as SideChatMessageOut;
+  }
+
+  async deleteSideChatMessage(
+    conversationId: string,
+    messageId: string,
+  ): Promise<SideChatMessageOut> {
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/side-chat/messages/${messageId}`,
+      { method: "DELETE" },
+    );
+    const text = await res.text();
+    this.assertOkResponse(res, text, "delete side-chat message");
+    return JSON.parse(text) as SideChatMessageOut;
+  }
+
+  async patchSideChatRead(conversationId: string, lastReadSeq: number): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/side-chat/read`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ last_read_seq: lastReadSeq }),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "patch side-chat read cursor");
   }
 
   async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {
