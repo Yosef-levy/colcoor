@@ -9,19 +9,6 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
-/** Common Cursor tool `args` shapes for filesystem paths. */
-export function pathFromToolArgs(args: Record<string, unknown>): string | undefined {
-  const p =
-    str(args.path) ??
-    str(args.file) ??
-    str(args.filePath) ??
-    str(args.targetPath) ??
-    str(args.relPath) ??
-    str(args.uri);
-  const t = p?.trim();
-  return t || undefined;
-}
-
 function num(v: unknown): string | undefined {
   if (typeof v === "number" && Number.isFinite(v)) {
     return String(v);
@@ -95,49 +82,7 @@ function extractEditDiffString(edit: Record<string, unknown>): string | undefine
   return walk(result);
 }
 
-/** Best-effort file path from unified diff headers (`+++ b/src/foo.py`, `+++ /abs/path.py`). */
-export function pathFromUnifiedDiff(diff: string): string | undefined {
-  const head = diff.split("\n").slice(0, 24);
-  for (const line of head) {
-    const m = line.match(/^\+\+\+ ([^\t\n\s]+)/);
-    if (!m) {
-      continue;
-    }
-    let raw = m[1].trim();
-    if (raw === "/dev/null") {
-      continue;
-    }
-    if (raw.startsWith("b/")) {
-      raw = raw.slice(2);
-    } else if (raw === "b") {
-      continue;
-    }
-    if (raw.length > 0) {
-      return raw;
-    }
-  }
-  for (const line of head) {
-    const m = line.match(/^--- ([^\t\n\s]+)/);
-    if (!m) {
-      continue;
-    }
-    let raw = m[1].trim();
-    if (raw === "/dev/null") {
-      continue;
-    }
-    if (raw.startsWith("a/")) {
-      raw = raw.slice(2);
-    } else if (raw === "a") {
-      continue;
-    }
-    if (raw.length > 0) {
-      return raw;
-    }
-  }
-  return undefined;
-}
-
-/** `editToolCall` completed: diff + optional target path from args / diff headers. */
+/** `editToolCall` completed: diff + optional target path from args. */
 function formatEditCompleted(toolCall: Record<string, unknown>): Record<string, unknown> | null {
   const edit = toolCall.editToolCall;
   if (!edit || typeof edit !== "object") {
@@ -150,65 +95,13 @@ function formatEditCompleted(toolCall: Record<string, unknown>): Record<string, 
   }
   const trimmed = diff.length > MAX_DIFF_CHARS ? `${diff.slice(0, MAX_DIFF_CHARS)}\n… [truncated]` : diff;
   const args = editObj.args;
-  let path =
-    str(editObj.path) ??
-    str(editObj.filePath) ??
-    str(editObj.targetPath) ??
-    (args && typeof args === "object" ? pathFromToolArgs(args as Record<string, unknown>) : undefined);
-  if (!path) {
-    path = pathFromUnifiedDiff(trimmed);
-  }
+  const path =
+    args && typeof args === "object" ? str((args as Record<string, unknown>).path) : undefined;
   const row: Record<string, unknown> = { colcoor_row: "edit_diff", diff: trimmed };
   if (path) {
     row.path = path;
   }
   return row;
-}
-
-/**
- * `writeToolCall` completed (Cursor docs: file writes use this, not always `editToolCall`).
- * With a diff in the payload → same `edit_diff` row as edits; otherwise a short `write_file` row.
- */
-function formatWriteCompleted(toolCall: Record<string, unknown>): Record<string, unknown> | null {
-  const write = toolCall.writeToolCall;
-  if (!write || typeof write !== "object") {
-    return null;
-  }
-  const w = write as Record<string, unknown>;
-  const args = w.args && typeof w.args === "object" ? (w.args as Record<string, unknown>) : undefined;
-  let path = args ? pathFromToolArgs(args) : undefined;
-  const diff = extractEditDiffString(w);
-  if (diff) {
-    const trimmed = diff.length > MAX_DIFF_CHARS ? `${diff.slice(0, MAX_DIFF_CHARS)}\n… [truncated]` : diff;
-    const result = w.result;
-    const succ =
-      result && typeof result === "object" && "success" in (result as object)
-        ? ((result as { success?: unknown }).success as Record<string, unknown> | undefined)
-        : undefined;
-    if (!path && succ && typeof succ === "object") {
-      path = str(succ.path) ?? pathFromUnifiedDiff(trimmed);
-    }
-    if (!path) {
-      path = pathFromUnifiedDiff(trimmed);
-    }
-    const row: Record<string, unknown> = { colcoor_row: "edit_diff", diff: trimmed };
-    if (path) {
-      row.path = path;
-    }
-    return row;
-  }
-  const result = w.result;
-  const succ =
-    result && typeof result === "object" && "success" in (result as object)
-      ? ((result as { success?: unknown }).success as Record<string, unknown> | undefined)
-      : undefined;
-  if (!path && succ && typeof succ === "object") {
-    path = str(succ.path);
-  }
-  if (path) {
-    return { colcoor_row: "write_file", path, text: `Wrote ${path}` };
-  }
-  return null;
 }
 
 function formatShellResult(result: unknown): string {
@@ -300,9 +193,6 @@ export function formatToolCallTraceRow(
 
   if (subtype === "started" && tc.readToolCall) {
     return formatReadStarted(tc);
-  }
-  if (subtype === "completed" && tc.writeToolCall) {
-    return formatWriteCompleted(tc);
   }
   if (subtype === "completed" && tc.editToolCall) {
     return formatEditCompleted(tc);

@@ -475,19 +475,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           "</pre></div>"
         );
       }
-      if (ev && ev.colcoor_row === "write_file" && typeof ev.path === "string" && ev.path.trim() !== "") {
-        return (
-          '<div class="trace-entry trace-row-edit"><div class="trace-meta">' +
-          n +
-          ". Write · " +
-          esc(ev.path.trim()) +
-          "</div>" +
-          (typeof ev.text === "string" && ev.text.trim() !== ""
-            ? '<pre class="trace-pre">' + esc(ev.text) + "</pre>"
-            : "") +
-          "</div>"
-        );
-      }
       if (ev && ev.colcoor_row === "shell_start" && typeof ev.text === "string") {
         return (
           '<div class="trace-entry trace-row-shell"><div class="trace-meta">' +
@@ -690,9 +677,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             html +=
               "<details" +
               (traceOpen ? " open" : "") +
-              ' class="agent-trace"><summary class="trace-summary">CLI trace (NDJSON) — ' +
+              ' class="agent-trace"><summary class="trace-summary">CLI trace — ' +
               s.traceEntries.length +
-              " line(s) (collapse)</summary>";
+              " step(s) · reads, edits, shell (collapse)</summary>";
             for (let i = 0; i < s.traceEntries.length; i++) {
               html += formatTraceEntryHtml(s.traceEntries[i], i);
             }
@@ -701,7 +688,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             html +=
               '<p class="agent-trace-missing hint">' +
               esc(
-                "No CLI trace for this reply. Use stream-json or stream-json-partial (not text/stub) and send again. When present, the trace lists every sanitized NDJSON event from the agent run.",
+                "No CLI trace for this reply. Use stream-json or stream-json-partial (not text/stub) and send again. Saved steps are short summaries: read ranges, edit diffs, shell commands — not the full transcript.",
               ) +
               "</p>";
           }
@@ -768,17 +755,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const m = event.data;
       if (m && m.type === "state") {
         hasReceivedState = true;
-        var prevConv = state.conversationId || "";
-        var prevStream = state.streamingHtml;
-        var nextConv = m.conversationId != null ? String(m.conversationId) : "";
-        var convChanged = nextConv !== prevConv;
-        var busy = !!m.busy;
-        var keepStream =
-          !convChanged &&
-          busy &&
-          typeof prevStream === "string" &&
-          prevStream.length > 0;
-        state = { ...m, streamingHtml: keepStream ? prevStream : null };
+        state = { ...m, streamingHtml: null };
         render();
         return;
       }

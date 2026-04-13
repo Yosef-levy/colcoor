@@ -7,10 +7,9 @@ function assistantContentJson(runResult: AgentRunResult): Record<string, unknown
   if (!entries?.length) {
     return undefined;
   }
-  // `version` 3: full sanitized NDJSON objects per stdout line. Legacy events may use version 2 (slim rows).
   return {
     colcoor_agent_trace: {
-      version: 3,
+      version: 2,
       entries,
     },
   };

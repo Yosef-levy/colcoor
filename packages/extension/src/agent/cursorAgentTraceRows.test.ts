@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatToolCallTraceRow, pathFromUnifiedDiff } from "./cursorAgentTraceRows";
+import { formatToolCallTraceRow } from "./cursorAgentTraceRows";
 
 describe("formatToolCallTraceRow", () => {
   it("formats readToolCall started with header and line range", () => {
@@ -25,53 +25,6 @@ describe("formatToolCallTraceRow", () => {
       },
     });
     expect(row).toEqual({ colcoor_row: "edit_diff", diff: "--- a\n+++ b\n+line" });
-  });
-
-  it("pathFromUnifiedDiff reads +++ b/ path", () => {
-    expect(pathFromUnifiedDiff("--- a/foo\n+++ b/foo\n@@ -1,1 +1,2 @@\n x")).toBe("foo");
-    expect(pathFromUnifiedDiff("--- a/src/x.py\n+++ b/src/x.py\n")).toBe("src/x.py");
-    expect(pathFromUnifiedDiff("--- a\n+++ b\n")).toBeUndefined();
-  });
-
-  it("infers path from unified diff when args omit path", () => {
-    const row = formatToolCallTraceRow("completed", {
-      editToolCall: {
-        result: { success: { diffString: "--- a/old\n+++ b/packages/hi.ts\n+1\n" } },
-      },
-    });
-    expect(row).toEqual({
-      colcoor_row: "edit_diff",
-      diff: "--- a/old\n+++ b/packages/hi.ts\n+1\n",
-      path: "packages/hi.ts",
-    });
-  });
-
-  it("formats writeToolCall completed with diff as edit_diff", () => {
-    const row = formatToolCallTraceRow("completed", {
-      writeToolCall: {
-        args: { path: "out.txt", fileText: "z" },
-        result: { success: { diffString: "--- a\n+++ b/out.txt\n+ok\n", path: "/proj/out.txt" } },
-      },
-    });
-    expect(row).toEqual({
-      colcoor_row: "edit_diff",
-      diff: "--- a\n+++ b/out.txt\n+ok\n",
-      path: "out.txt",
-    });
-  });
-
-  it("formats writeToolCall completed without diff as write_file", () => {
-    const row = formatToolCallTraceRow("completed", {
-      writeToolCall: {
-        args: { path: "notes.md", fileText: "hi" },
-        result: { success: { path: "/proj/notes.md", linesCreated: 1, fileSize: 2 } },
-      },
-    });
-    expect(row).toEqual({
-      colcoor_row: "write_file",
-      path: "notes.md",
-      text: "Wrote notes.md",
-    });
   });
 
   it("includes path on editToolCall completed when args.path is present", () => {
