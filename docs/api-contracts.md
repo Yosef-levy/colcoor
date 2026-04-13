@@ -358,6 +358,14 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 ## 9. Profile
 
+### 9.0 `GET /api/v1/me`
+
+**Purpose:** Read the caller’s profile (same response shape as `PATCH …/me`).
+
+| **200** | `MeOut` |
+| **401** | standard |
+| **404** | user row missing (should not occur for a valid JWT) |
+
 ### 9.1 `PATCH /api/v1/me`
 
 **Purpose:** Update caller profile.

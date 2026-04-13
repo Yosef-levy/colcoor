@@ -33,6 +33,10 @@
         "title": "Colcoor: Sign out"
       },
       {
+        "command": "colcoor.editProfile",
+        "title": "Colcoor: Edit profile…"
+      },
+      {
         "command": "colcoor.newConversation",
         "title": "Colcoor: New conversation",
         "icon": "$(add)"
@@ -111,7 +115,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Edit profile](command:colcoor.editProfile)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
       }
     ],
     "menus": {

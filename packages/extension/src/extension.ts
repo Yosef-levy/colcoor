@@ -10,6 +10,7 @@ import {
 } from "./agent/cursorAgentApiKey";
 import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./agent/cursorCliSetup";
 import { showAboutPanel } from "./conversation/aboutPanel";
+import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
@@ -401,6 +402,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand("colcoor.openAbout", () => {
       showAboutPanel();
+    }),
+    vscode.commands.registerCommand("colcoor.editProfile", async () => {
+      if (!(await session.getBackendAccessToken())) {
+        await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
+        return;
+      }
+      try {
+        const me = await api.getMe();
+        const dn = await vscode.window.showInputBox({
+          title: "Colcoor profile — display name",
+          prompt: "Shown in members list and future side chat.",
+          value: me.display_name,
+          ignoreFocusOut: true,
+        });
+        const av = await vscode.window.showInputBox({
+          title: "Colcoor profile — avatar URL",
+          prompt: "https… Leave empty and press Enter to clear. Esc to keep the current URL.",
+          value: me.avatar_url ?? "",
+          ignoreFocusOut: true,
+        });
+        const patch = profilePatchFromInputs(dn, av);
+        if (!patch) {
+          return;
+        }
+        const updated = await api.patchMe(patch);
+        await vscode.window.showInformationMessage(`Colcoor: profile saved (${updated.email}).`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      }
     }),
     vscode.commands.registerCommand("colcoor.toggleStarSelectedMessage", async () => {
       await conversationPanel.toggleStarSelectedMessage();
