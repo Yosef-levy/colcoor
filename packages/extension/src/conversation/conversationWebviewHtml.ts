@@ -183,6 +183,46 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-radius: 4px;
       padding: 8px;
     }
+    .trace-diff-colored .trace-diff-lines {
+      display: block;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .trace-diff-colored .diff-line {
+      display: block;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .trace-meta .diff-stats { font-weight: 600; white-space: nowrap; }
+    .trace-meta .diff-stat-add {
+      color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-terminal-ansiGreen, #73c991));
+    }
+    .trace-meta .diff-stat-del {
+      margin-left: 6px;
+      color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-terminal-ansiRed, #f88070));
+    }
+    .diff-line.diff-meta {
+      color: var(--vscode-descriptionForeground);
+      opacity: 0.95;
+    }
+    .diff-line.diff-hunk {
+      color: var(--vscode-editorInfo-foreground, var(--vscode-symbolIcon-interfaceForeground, #6796e6));
+      font-weight: 500;
+    }
+    .diff-line.diff-ctx { color: var(--vscode-editor-foreground); }
+    .diff-line.diff-noeol {
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+      font-size: 0.95em;
+    }
+    .diff-line.diff-add {
+      background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground, rgba(80, 200, 120, 0.14)));
+      color: var(--vscode-diffEditor-insertedTextColor, var(--vscode-editor-foreground));
+    }
+    .diff-line.diff-del {
+      background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground, rgba(240, 80, 80, 0.14)));
+      color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
+    }
     .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
     /* Thread bodies: GFM markdown from host (sanitized HTML). */
     .thread .msg .body.md {
@@ -465,14 +505,29 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (ev && ev.colcoor_row === "edit_diff" && typeof ev.diff === "string") {
         var editPath =
           ev.path != null && String(ev.path).trim() !== "" ? " · " + esc(String(ev.path).trim()) : "";
+        var da = typeof ev.diff_added === "number" ? ev.diff_added : 0;
+        var dr = typeof ev.diff_removed === "number" ? ev.diff_removed : 0;
+        var statsPart = "";
+        if (da > 0 || dr > 0) {
+          statsPart = ' <span class="diff-stats">';
+          if (da > 0) statsPart += '<span class="diff-stat-add">+' + String(da) + "</span>";
+          if (dr > 0)
+            statsPart += (da > 0 ? " " : "") + '<span class="diff-stat-del">-' + String(dr) + "</span>";
+          statsPart += "</span>";
+        }
+        var body =
+          typeof ev.diff_html === "string" && ev.diff_html.length
+            ? ev.diff_html
+            : '<pre class="trace-pre trace-diff">' + esc(ev.diff) + "</pre>";
         return (
           '<div class="trace-entry trace-row-edit"><div class="trace-meta">' +
           n +
           ". Edit (diff)" +
           editPath +
-          '</div><pre class="trace-pre trace-diff">' +
-          esc(ev.diff) +
-          "</pre></div>"
+          statsPart +
+          "</div>" +
+          body +
+          "</div>"
         );
       }
       if (ev && ev.colcoor_row === "shell_start" && typeof ev.text === "string") {

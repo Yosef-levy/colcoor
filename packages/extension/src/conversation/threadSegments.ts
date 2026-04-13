@@ -1,6 +1,7 @@
 import type { GraphEventNode } from "../api/client";
 import { pathFromRootToTip } from "./treeEvents";
 import { markdownToSafeHtml } from "./threadMarkdown";
+import { countUnifiedDiffLineChanges, formatUnifiedDiffColoredHtml } from "./unifiedDiffFormat";
 
 function escapeHtmlText(s: string): string {
   return s
@@ -42,6 +43,26 @@ export function extractAgentTraceEntries(
   return entries;
 }
 
+/** Add `diff_html` / counts for `edit_diff` rows (webview renders without re-parsing). */
+export function enrichTraceEntriesForWebview(entries: unknown[]): unknown[] {
+  return entries.map((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return entry;
+    }
+    const o = entry as Record<string, unknown>;
+    if (o.colcoor_row !== "edit_diff" || typeof o.diff !== "string") {
+      return entry;
+    }
+    const counts = countUnifiedDiffLineChanges(o.diff);
+    return {
+      ...o,
+      diff_added: counts.added,
+      diff_removed: counts.removed,
+      diff_html: formatUnifiedDiffColoredHtml(o.diff),
+    };
+  });
+}
+
 /** Root → selected path, with markdown rendered to sanitized HTML for the webview. */
 export function buildThreadSegments(
   events: GraphEventNode[],
@@ -57,10 +78,11 @@ export function buildThreadSegments(
     if (ev.kind === "user_input") {
       out.push({ role: "user", html: bodyHtmlFromMarkdown(ev.content_text ?? "") });
     } else if (ev.kind === "assistant_output") {
+      const rawTrace = extractAgentTraceEntries(ev.content_json ?? undefined);
       out.push({
         role: "assistant",
         html: bodyHtmlFromMarkdown(ev.content_text ?? ""),
-        traceEntries: extractAgentTraceEntries(ev.content_json ?? undefined),
+        traceEntries: rawTrace ? enrichTraceEntriesForWebview(rawTrace) : undefined,
       });
     }
   }
