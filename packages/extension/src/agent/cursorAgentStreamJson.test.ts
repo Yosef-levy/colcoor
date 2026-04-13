@@ -37,6 +37,24 @@ describe("parseCursorAgentNdjsonLine", () => {
     });
   });
 
+  it("drops only strictly consecutive duplicate text blocks in one assistant line", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Working.\n" },
+          { type: "text", text: "Working.\n" },
+          { type: "text", text: "Done.\n" },
+        ],
+      },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "append_assistant",
+      delta: "Working.\nDone.\n",
+    });
+  });
+
   it("parses terminal result", () => {
     const line = JSON.stringify({
       type: "result",
@@ -56,7 +74,7 @@ describe("parseCursorAgentNdjsonLine", () => {
   });
 });
 
-describe("slimNdjsonForTimeline", () => {
+describe("slimNdjsonForTimeline (legacy projection, not used for persisted trace)", () => {
   it("drops user, assistant, system, and result", () => {
     expect(slimNdjsonForTimeline({ type: "user", message: { role: "user", content: [] } })).toBeNull();
     expect(
@@ -132,7 +150,7 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(feed.getResolvedText()).toBe("z");
   });
 
-  it("records compact read and shell rows (no system line)", () => {
+  it("records system and tool_call NDJSON lines in stream order", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push('{"type":"system","subtype":"init","model":"TestModel"}\n');
     feed.push(
@@ -143,12 +161,13 @@ describe("createStreamJsonStdoutFeed", () => {
     );
     feed.flushTail();
     const t = feed.getTimeline();
-    expect(t).toHaveLength(2);
-    expect(t[0]).toEqual({ colcoor_row: "read", text: "Read README.md (lines 1:5)" });
-    expect(t[1]).toEqual({ colcoor_row: "shell_start", text: "Run tests\ncommand: pytest -q" });
+    expect(t).toHaveLength(3);
+    expect(t[0]).toMatchObject({ type: "system", subtype: "init", model: "TestModel" });
+    expect(t[1]).toMatchObject({ type: "tool_call", subtype: "started", call_id: "c1" });
+    expect(t[2]).toMatchObject({ type: "tool_call", subtype: "started", call_id: "c2" });
   });
 
-  it("does not put user, assistant, or system in the timeline", () => {
+  it("records user, assistant, and system lines in the timeline", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push(
       '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"' + "x".repeat(200) + '"}]}}\n',
@@ -161,7 +180,11 @@ describe("createStreamJsonStdoutFeed", () => {
     );
     feed.push('{"type":"system","subtype":"init","model":"M"}\n');
     feed.flushTail();
-    expect(feed.getTimeline()).toHaveLength(0);
+    expect(feed.getTimeline()).toHaveLength(4);
+    expect((feed.getTimeline()[0] as { type: string }).type).toBe("user");
+    expect((feed.getTimeline()[1] as { type: string }).type).toBe("assistant");
+    expect((feed.getTimeline()[2] as { type: string }).type).toBe("assistant");
+    expect((feed.getTimeline()[3] as { type: string }).type).toBe("system");
     expect(feed.getResolvedText()).toBe("ab");
   });
 });

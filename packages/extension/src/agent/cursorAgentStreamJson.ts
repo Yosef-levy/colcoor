@@ -19,15 +19,26 @@ function extractAssistantTextFromMessage(message: unknown): string {
   if (!Array.isArray(content)) {
     return "";
   }
-  let s = "";
+  const parts: string[] = [];
   for (const block of content) {
     if (!block || typeof block !== "object") {
       continue;
     }
     const b = block as { type?: unknown; text?: unknown };
     if (b.type === "text" && typeof b.text === "string") {
-      s += b.text;
+      parts.push(b.text);
     }
+  }
+  let s = "";
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p) {
+      continue;
+    }
+    if (i > 0 && p === parts[i - 1]) {
+      continue;
+    }
+    s += p;
   }
   return s;
 }
@@ -49,8 +60,9 @@ export function tryParseNdjsonObject(line: string): Record<string, unknown> | nu
 }
 
 /**
- * Shapes NDJSON for persistence/UI: drop transcript (`user`), token stream (`assistant`),
- * system, result, and any tool_call we do not summarize (see cursorAgentTraceRows).
+ * Legacy “slim row” projection for tests and any caller that wants compact tool rows only.
+ * The persisted CLI timeline uses {@link createStreamJsonStdoutFeed} and stores **full** NDJSON
+ * objects instead (see `colcoor_agent_trace` version 3).
  */
 export function slimNdjsonForTimeline(o: Record<string, unknown>): Record<string, unknown> | null {
   const typ = o.type;
@@ -89,7 +101,8 @@ export function parseCursorAgentNdjsonLine(line: string): StreamJsonLineEffect |
 
 /**
  * Buffers stdout chunks, splits NDJSON lines, accumulates assistant text, applies a terminal
- * `result` event when present, and records a sanitized timeline of parsed objects for persistence.
+ * `result` event when present, and records **every** parsed NDJSON object (sanitized) for
+ * `assistant_output.content_json.colcoor_agent_trace.entries`.
  */
 export function createStreamJsonStdoutFeed(): {
   push(chunk: string, onResolvedSoFar?: (textSoFar: string) => void): void;
@@ -97,7 +110,7 @@ export function createStreamJsonStdoutFeed(): {
   flushTail(onResolvedSoFar?: (textSoFar: string) => void): void;
   /** Plain assistant text for persistence (prefers terminal `result` over summed assistant deltas). */
   getResolvedText(): string;
-  /** Sanitized NDJSON-derived objects in stream order (for `events.content_json`). */
+  /** Parsed NDJSON objects in stream order (sanitized; for `events.content_json`). */
   getTimeline(): unknown[];
 } {
   let lineBuf = "";
@@ -119,9 +132,6 @@ export function createStreamJsonStdoutFeed(): {
       return;
     }
     const next = effect.delta;
-    // `--stream-partial-output` often sends each `assistant` line as a full snapshot of the message
-    // so far; concatenating those repeats every prior line. True deltas are still supported: if
-    // `next` is not an extension of what we already have, append.
     if (next.length >= fromAssistant.length && next.startsWith(fromAssistant)) {
       fromAssistant = next;
     } else {
@@ -133,10 +143,7 @@ export function createStreamJsonStdoutFeed(): {
   function processCompleteLine(line: string, onResolvedSoFar?: (textSoFar: string) => void): void {
     const o = tryParseNdjsonObject(line);
     if (o) {
-      const slim = slimNdjsonForTimeline(o);
-      if (slim) {
-        appendTimelineEntry(timeline, slim);
-      }
+      appendTimelineEntry(timeline, o);
     }
     const effect = o ? effectFromNdjsonObject(o) : null;
     if (effect) {
