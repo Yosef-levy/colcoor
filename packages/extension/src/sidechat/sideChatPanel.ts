@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import type { ColcoorApiClient, SideChatMessageOut } from "../api/client";
+import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { trimmedSideChatSendBody } from "./trimSendBody";
 
@@ -23,10 +24,10 @@ type StateMessage = {
 type ErrorMessage = { type: "error"; text: string };
 
 /**
- * Opens (or focuses) a webview panel listing side-chat messages with send + refresh.
+ * Opens a webview panel listing side-chat messages with send, refresh, and SSE updates.
  */
 export async function openSideChatPanel(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
   api: ColcoorApiClient,
   conversationId: string,
   title: string | null,
@@ -37,20 +38,60 @@ export async function openSideChatPanel(
     "colcoor.sideChat",
     label,
     vscode.ViewColumn.Beside,
-    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [context.extensionUri] },
+    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [_context.extensionUri] },
   );
-  panel.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] };
+  panel.webview.options = { enableScripts: true, localResourceRoots: [_context.extensionUri] };
   panel.webview.html = getSideChatWebviewHtml(panel.webview.cspSource, nonce);
+
+  const ac = new AbortController();
+  let cached: SideChatMessageOut[] = [];
+  let lastStreamSeq = 0;
+  let sseStarted = false;
+
+  async function postState(): Promise<void> {
+    try {
+      await panel.webview.postMessage({ type: "state", messages: cached } satisfies StateMessage);
+    } catch {
+      /* webview gone */
+    }
+  }
 
   async function pushState(): Promise<void> {
     try {
-      const messages = await api.listSideChatMessages(conversationId, 0);
-      const msg: StateMessage = { type: "state", messages };
-      await panel.webview.postMessage(msg);
+      cached = await api.listSideChatMessages(conversationId, 0);
+      lastStreamSeq = cached.reduce((acc, m) => Math.max(acc, m.seq), 0);
+      await postState();
     } catch (e) {
       const t = e instanceof Error ? e.message : String(e);
-      await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
+      try {
+        await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
+      } catch {
+        /* */
+      }
     }
+  }
+
+  function startSseLoop(): void {
+    const run = async () => {
+      const startAfter = lastStreamSeq;
+      try {
+        for await (const ev of api.streamSideChatSseEvents(conversationId, {
+          afterSeq: startAfter,
+          signal: ac.signal,
+        })) {
+          const o = ev as { type?: string; message?: SideChatMessageOut };
+          if (o?.type !== "side_chat" || !o.message) {
+            continue;
+          }
+          cached = mergeSideChatMessage(cached, o.message);
+          lastStreamSeq = Math.max(lastStreamSeq, o.message.seq);
+          await postState();
+        }
+      } catch {
+        /* aborted or network */
+      }
+    };
+    void run();
   }
 
   panel.webview.onDidReceiveMessage(async (raw: unknown) => {
@@ -60,6 +101,10 @@ export async function openSideChatPanel(
     }
     if (msg.type === "ready") {
       await pushState();
+      if (!sseStarted) {
+        sseStarted = true;
+        startSseLoop();
+      }
       return;
     }
     if (msg.type === "refresh") {
@@ -86,6 +131,6 @@ export async function openSideChatPanel(
   });
 
   panel.onDidDispose(() => {
-    /* panel closed */
+    ac.abort();
   });
 }
