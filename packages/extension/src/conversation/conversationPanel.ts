@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
-import type { ColcoorApiClient, GraphEventNode } from "../api/client";
+import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
@@ -47,7 +47,9 @@ type FromWebview =
   | { type: "layout"; treeWidthPx: number }
   | { type: "rename" }
   | { type: "togglePin" }
-  | { type: "treeCollapse"; collapsedEventIds: string[] };
+  | { type: "treeCollapse"; collapsedEventIds: string[] }
+  | { type: "editNote"; noteId: string }
+  | { type: "deleteNote"; noteId: string };
 
 function randomNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -94,15 +96,25 @@ export function createConversationPanelController(
   let sendAbort: AbortController | undefined;
   /** Last successful tree payload for lightweight UI refresh (e.g. settings). */
   let lastTreeEvents: GraphEventNode[] = [];
+  /** Notes list aligned with the last successful tree load (for thread rendering without extra round-trips). */
+  let lastNotes: NoteOut[] = [];
 
-  function syncActiveToBackend(activeEventId: string | undefined): void {
+  function syncActiveToBackend(
+    activeEventId: string | undefined,
+    opts?: { needsContextRebuild?: boolean },
+  ): void {
     if (!conversationId || !activeEventId) {
       return;
     }
-    void api.setConversationActive(conversationId, { active_event_id: activeEventId }).catch((e) => {
-      const m = e instanceof Error ? e.message : String(e);
-      void vscode.window.showWarningMessage(`Colcoor: could not persist active node — ${m}`);
-    });
+    void api
+      .setConversationActive(conversationId, {
+        active_event_id: activeEventId,
+        needs_context_rebuild: opts?.needsContextRebuild ?? false,
+      })
+      .catch((e) => {
+        const m = e instanceof Error ? e.message : String(e);
+        void vscode.window.showWarningMessage(`Colcoor: could not persist active node — ${m}`);
+      });
   }
 
   async function refreshConversationMeta(): Promise<void> {
@@ -128,6 +140,7 @@ export function createConversationPanelController(
     panel = undefined;
     webviewReady = false;
     lastTreeEvents = [];
+    lastNotes = [];
   }
 
   function readCollapsedByConversation(): Record<string, string[]> {
@@ -176,8 +189,8 @@ export function createConversationPanelController(
         conversationPinned,
         events,
         selectedEventId: sel ?? "",
-        threadSegments: buildThreadSegments(events, sel ?? ""),
-        threadPlainText: buildPlainThread(events, sel ?? ""),
+        threadSegments: buildThreadSegments(events, sel ?? "", lastNotes),
+        threadPlainText: buildPlainThread(events, sel ?? "", lastNotes),
         treeWidthPx,
         treeCollapsedEventIds: prunedCollapsedEventIds(events),
         agentTraceOpen,
@@ -226,10 +239,15 @@ export function createConversationPanelController(
       return;
     }
     try {
-      const { events } = await api.getTree(conversationId);
+      const [{ events }, notes] = await Promise.all([
+        api.getTree(conversationId),
+        api.listNotes(conversationId),
+      ]);
+      lastNotes = notes;
       postState(events, busy, lastError);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      lastNotes = [];
       postState([], busy, msg);
     }
   }
@@ -265,7 +283,11 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
-      const { events } = await api.getTree(conversationId);
+      const [{ events }, notes] = await Promise.all([
+        api.getTree(conversationId),
+        api.listNotes(conversationId),
+      ]);
+      lastNotes = notes;
       try {
         selectedEventId = findBranchTip(events).id;
       } catch {
@@ -309,7 +331,11 @@ export function createConversationPanelController(
         { signal, onAssistantTextDelta: (t) => stream.pushDelta(t) },
       );
       stream.dispose();
-      const { events } = await api.getTree(conversationId);
+      const [{ events }, notes] = await Promise.all([
+        api.getTree(conversationId),
+        api.listNotes(conversationId),
+      ]);
+      lastNotes = notes;
       try {
         selectedEventId = findBranchTip(events).id;
       } catch {
@@ -415,8 +441,11 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "select" && typeof msg.id === "string") {
+        const prevSel = selectedEventId;
         selectedEventId = msg.id;
-        syncActiveToBackend(msg.id);
+        syncActiveToBackend(msg.id, {
+          needsContextRebuild: prevSel !== undefined && prevSel !== msg.id,
+        });
         await loadTreeAndPush(false, null);
         return;
       }
@@ -425,13 +454,19 @@ export function createConversationPanelController(
           return;
         }
         try {
+          const prevSel = selectedEventId;
           const { events } = await api.getTree(conversationId);
           try {
             selectedEventId = findBranchTip(events).id;
           } catch {
             selectedEventId = events[0]?.id;
           }
-          syncActiveToBackend(selectedEventId);
+          syncActiveToBackend(selectedEventId, {
+            needsContextRebuild:
+              selectedEventId !== undefined &&
+              prevSel !== undefined &&
+              prevSel !== selectedEventId,
+          });
           await loadTreeAndPush(false, null);
         } catch (e) {
           const m = e instanceof Error ? e.message : String(e);
@@ -487,6 +522,56 @@ export function createConversationPanelController(
       }
       if (msg.type === "send" && typeof msg.text === "string") {
         await handleSend(msg.text, Boolean(msg.privateBranch));
+        return;
+      }
+      if (msg.type === "deleteNote" && typeof msg.noteId === "string" && conversationId) {
+        const choice = await vscode.window.showWarningMessage(
+          "Delete this note?",
+          { modal: true, detail: msg.noteId },
+          "Delete",
+        );
+        if (choice !== "Delete") {
+          return;
+        }
+        try {
+          await api.deleteNote(conversationId, msg.noteId);
+          void vscode.window.setStatusBarMessage("Colcoor: note deleted.", 2000);
+          await loadTreeAndPush(false, null);
+        } catch (e) {
+          const m = e instanceof Error ? e.message : String(e);
+          void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+        }
+        return;
+      }
+      if (msg.type === "editNote" && typeof msg.noteId === "string" && conversationId) {
+        try {
+          const all = await api.listNotes(conversationId);
+          const row = all.find((n) => n.id === msg.noteId);
+          if (!row) {
+            void vscode.window.showWarningMessage("Colcoor: note not found — try Refresh tree.");
+            return;
+          }
+          const next = await vscode.window.showInputBox({
+            title: "Colcoor — edit note",
+            value: row.content,
+            prompt: "Note text (viewers cannot edit notes).",
+            ignoreFocusOut: true,
+          });
+          if (next === undefined) {
+            return;
+          }
+          const trimmed = next.trim();
+          if (!trimmed) {
+            void vscode.window.showWarningMessage("Colcoor: note text cannot be empty.");
+            return;
+          }
+          await api.patchNote(conversationId, msg.noteId, { content: trimmed });
+          void vscode.window.setStatusBarMessage("Colcoor: note updated.", 2000);
+          await loadTreeAndPush(false, null);
+        } catch (e) {
+          const m = e instanceof Error ? e.message : String(e);
+          void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+        }
       }
     });
 
@@ -499,6 +584,7 @@ export function createConversationPanelController(
       selectedEventId = undefined;
       conversationPinned = false;
       lastTreeEvents = [];
+      lastNotes = [];
     });
 
     panel = p;
@@ -590,6 +676,8 @@ export function createConversationPanelController(
       conversationTitle = title;
       conversationPinned = false;
       selectedEventId = undefined;
+      lastNotes = [];
+      lastTreeEvents = [];
       await refreshConversationMeta();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;

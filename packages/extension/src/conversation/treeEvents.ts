@@ -1,5 +1,29 @@
-import type { GraphEventNode } from "../api/client";
-import type { TranscriptPathTurn } from "../transcript/buildTranscript";
+import type { GraphEventNode, NoteOut } from "../api/client";
+import type { TranscriptNoteInput, TranscriptPathTurn } from "../transcript/buildTranscript";
+
+/**
+ * Group API notes by host `event_id`, each list sorted by `created_at` then `id`
+ * (transcript-format.md §4).
+ */
+export function indexNotesByEventId(notes: readonly NoteOut[]): Map<string, TranscriptNoteInput[]> {
+  const map = new Map<string, TranscriptNoteInput[]>();
+  for (const n of notes) {
+    const input: TranscriptNoteInput = { id: n.id, createdAt: n.created_at, body: n.content };
+    const arr = map.get(n.event_id);
+    if (arr) {
+      arr.push(input);
+    } else {
+      map.set(n.event_id, [input]);
+    }
+  }
+  for (const arr of map.values()) {
+    arr.sort((a, b) => {
+      const byTime = a.createdAt.localeCompare(b.createdAt);
+      return byTime !== 0 ? byTime : a.id.localeCompare(b.id);
+    });
+  }
+  return map;
+}
 
 const ROOT_KEY = "__root__";
 
@@ -49,19 +73,30 @@ export function pathFromRootToTip(events: GraphEventNode[], tip: GraphEventNode)
   return chain.reverse();
 }
 
-/** Map graph path to transcript turns; skip empty bootstrap root `user_input`. */
-export function graphPathToTranscriptTurns(path: GraphEventNode[]): TranscriptPathTurn[] {
+/**
+ * Map graph path to transcript turns; skip empty bootstrap root `user_input` unless it has notes.
+ * When `notesByEventId` is set, each turn carries NOTE blocks for that path event.
+ */
+export function graphPathToTranscriptTurns(
+  path: GraphEventNode[],
+  notesByEventId?: ReadonlyMap<string, readonly TranscriptNoteInput[]>,
+): TranscriptPathTurn[] {
   const turns: TranscriptPathTurn[] = [];
+  const notesFor = (eventId: string): TranscriptNoteInput[] => {
+    const list = notesByEventId?.get(eventId);
+    return list ? [...list] : [];
+  };
   for (let i = 0; i < path.length; i++) {
     const ev = path[i];
     const text = ev.content_text ?? "";
+    const attached = notesFor(ev.id);
     if (ev.kind === "user_input") {
-      if (i === 0 && !text.trim()) {
+      if (i === 0 && !text.trim() && attached.length === 0) {
         continue;
       }
-      turns.push({ role: "user", content: text, notes: [] });
+      turns.push({ role: "user", content: text, notes: attached });
     } else if (ev.kind === "assistant_output") {
-      turns.push({ role: "assistant", content: text, notes: [] });
+      turns.push({ role: "assistant", content: text, notes: attached });
     }
   }
   return turns;

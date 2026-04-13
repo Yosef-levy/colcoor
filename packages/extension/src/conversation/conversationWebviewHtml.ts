@@ -18,16 +18,39 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   <title>Colcoor</title>
   <style nonce="${nonce}">
     * { box-sizing: border-box; }
+    html,
     body {
+      height: 100%;
       margin: 0;
+    }
+    body {
       padding: 12px;
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
       background: var(--vscode-editor-background);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
     }
-    h1 { font-size: 1.1em; font-weight: 600; margin: 0 0 8px; }
-    .layout { display: flex; gap: 12px; align-items: stretch; min-height: calc(100vh - 24px); }
+    h1 {
+      font-size: 1.1em;
+      font-weight: 600;
+      margin: 0 0 8px;
+      flex-shrink: 0;
+    }
+    #sub {
+      flex-shrink: 0;
+    }
+    .layout {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+      overflow: hidden;
+    }
     .col-tree {
       flex: 0 0 auto;
       width: 38%;
@@ -37,10 +60,29 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
       padding: 8px;
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
     }
-    .col-main { flex: 1; display: flex; flex-direction: column; min-width: 0; gap: 10px; }
+    .tree-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    .col-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      gap: 10px;
+      overflow: hidden;
+    }
     .detail-bar {
+      flex-shrink: 0;
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
@@ -62,12 +104,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .crumb-sep { color: var(--vscode-descriptionForeground); margin: 0 4px; }
     .thread {
       flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
       padding: 8px;
-      overflow: auto;
+      overflow: hidden;
+    }
+    .thread-hint {
+      flex-shrink: 0;
+      margin-bottom: 6px;
+    }
+    .thread-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
     .composer {
+      flex-shrink: 0;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
       padding: 8px;
@@ -97,6 +153,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .hint { color: var(--vscode-descriptionForeground); font-size: 0.92em; }
     .err {
+      flex-shrink: 0;
       background: var(--vscode-inputValidation-errorBackground);
       color: var(--vscode-inputValidation-errorForeground);
       border: 1px solid var(--vscode-inputValidation-errorBorder);
@@ -105,6 +162,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       margin-bottom: 8px;
     }
     .tree-panel-hint {
+      flex-shrink: 0;
       margin-bottom: 10px;
       padding: 8px 10px;
       border-radius: 6px;
@@ -367,6 +425,33 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
     }
     .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
+    .msg-notes {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--vscode-widget-border, var(--vscode-panel-border));
+    }
+    .note-block {
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--vscode-editor-inactiveSelectionBackground, rgba(127, 127, 127, 0.08));
+      border: 1px solid var(--vscode-panel-border);
+    }
+    .note-block:last-child { margin-bottom: 0; }
+    .note-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .note-toolbar button { font-size: 0.85em; padding: 2px 8px; }
+    .thread .msg .note-body.md {
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.5;
+      font-size: calc(var(--vscode-editor-font-size, var(--vscode-font-size)) * 0.95);
+      color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+    }
     /* Thread bodies: GFM markdown from host (sanitized HTML). */
     .thread .msg .body.md {
       white-space: normal;
@@ -498,7 +583,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   <div class="layout">
     <div class="col-tree">
       <div class="hint tree-panel-hint">Event tree — click a node to choose where the next reply attaches. Drag the right edge of this panel to resize.</div>
-      <div id="tree" class="tree"></div>
+      <div class="tree-scroll">
+        <div id="tree" class="tree"></div>
+      </div>
     </div>
     <div class="col-main">
       <div class="detail-bar">
@@ -513,8 +600,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </div>
       </div>
       <div class="thread">
-        <div class="hint" style="margin-bottom:6px">Thread (root → selected)</div>
-        <div id="thread"></div>
+        <div class="hint thread-hint">Thread (root → selected)</div>
+        <div class="thread-scroll">
+          <div id="thread"></div>
+        </div>
       </div>
       <div class="composer">
         <textarea id="input" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
@@ -930,6 +1019,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           '</div><div class="body md" dir="auto">' +
           s.html +
           "</div>";
+        if (s.notes && s.notes.length) {
+          html += '<div class="msg-notes">';
+          for (var ni = 0; ni < s.notes.length; ni++) {
+            var nb = s.notes[ni];
+            var nid = nb && nb.id ? String(nb.id) : "";
+            var nhtml = nb && nb.html ? String(nb.html) : "";
+            html +=
+              '<div class="note-block" data-note-id="' +
+              esc(nid) +
+              '"><div class="note-toolbar">' +
+              '<button type="button" class="btn-secondary note-edit" data-note-id="' +
+              esc(nid) +
+              '">Edit…</button>' +
+              '<button type="button" class="btn-secondary note-delete" data-note-id="' +
+              esc(nid) +
+              '">Delete</button></div><div class="note-body md" dir="auto">' +
+              nhtml +
+              "</div></div>";
+          }
+          html += "</div>";
+        }
         if (s.role === "assistant") {
           if (s.traceEntries && s.traceEntries.length) {
             var traceOpen = state.agentTraceOpen !== false;
@@ -1136,10 +1246,25 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     document.getElementById("thread").addEventListener("click", function (ev) {
+      var del = ev.target && ev.target.closest && ev.target.closest(".note-delete");
+      if (del) {
+        ev.preventDefault();
+        var did = del.getAttribute("data-note-id");
+        if (did) vscode.postMessage({ type: "deleteNote", noteId: did });
+        return;
+      }
+      var ed = ev.target && ev.target.closest && ev.target.closest(".note-edit");
+      if (ed) {
+        ev.preventDefault();
+        var eid = ed.getAttribute("data-note-id");
+        if (eid) vscode.postMessage({ type: "editNote", noteId: eid });
+        return;
+      }
       var t = ev.target;
-      if (!t || !t.classList || !t.classList.contains("code-copy")) return;
+      var copyBtn = t && t.closest && t.closest(".code-copy");
+      if (!copyBtn) return;
       ev.preventDefault();
-      var wrap = t.closest && t.closest(".code-block-wrap");
+      var wrap = copyBtn.closest && copyBtn.closest(".code-block-wrap");
       var pre = wrap && wrap.querySelector("pre");
       var text = pre ? pre.innerText || "" : "";
       vscode.postMessage({ type: "copy", text: text });

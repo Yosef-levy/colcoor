@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { GraphEventNode } from "../api/client";
-import { findBranchTip, graphPathToTranscriptTurns, pathFromRootToTip } from "./treeEvents";
+import {
+  findBranchTip,
+  graphPathToTranscriptTurns,
+  indexNotesByEventId,
+  pathFromRootToTip,
+} from "./treeEvents";
 
 const convId = "00000000-0000-4000-8000-000000000001";
 
@@ -105,6 +110,89 @@ describe("graphPathToTranscriptTurns", () => {
     const path = [root, user];
     expect(graphPathToTranscriptTurns(path)).toEqual([
       { role: "user", content: "hello", notes: [] },
+    ]);
+  });
+
+  it("includes notes on path events", () => {
+    const root = node({
+      id: "r",
+      parent_event_id: null,
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:00Z",
+      content_text: "",
+    });
+    const user = node({
+      id: "u",
+      parent_event_id: "r",
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:01Z",
+      content_text: "hello",
+    });
+    const asst = node({
+      id: "a",
+      parent_event_id: "u",
+      kind: "assistant_output",
+      created_at: "2026-01-01T00:00:02Z",
+      content_text: "hi",
+      actor_type: "assistant",
+    });
+    const notes = indexNotesByEventId([
+      {
+        id: "n1",
+        event_id: "u",
+        author_user_id: "00000000-0000-4000-8000-000000000099",
+        content: "decide X",
+        created_at: "2026-01-01T00:00:01Z",
+        updated_at: "2026-01-01T00:00:01Z",
+      },
+      {
+        id: "n2",
+        event_id: "a",
+        author_user_id: "00000000-0000-4000-8000-000000000099",
+        content: "verify Y",
+        created_at: "2026-01-01T00:00:03Z",
+        updated_at: "2026-01-01T00:00:03Z",
+      },
+    ]);
+    const path = [root, user, asst];
+    expect(graphPathToTranscriptTurns(path, notes)).toEqual([
+      {
+        role: "user",
+        content: "hello",
+        notes: [{ id: "n1", createdAt: "2026-01-01T00:00:01Z", body: "decide X" }],
+      },
+      {
+        role: "assistant",
+        content: "hi",
+        notes: [{ id: "n2", createdAt: "2026-01-01T00:00:03Z", body: "verify Y" }],
+      },
+    ]);
+  });
+
+  it("keeps empty bootstrap root when it only has notes", () => {
+    const root = node({
+      id: "r",
+      parent_event_id: null,
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:00Z",
+      content_text: "",
+    });
+    const notes = indexNotesByEventId([
+      {
+        id: "nr",
+        event_id: "r",
+        author_user_id: "00000000-0000-4000-8000-000000000099",
+        content: "root note",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    ]);
+    expect(graphPathToTranscriptTurns([root], notes)).toEqual([
+      {
+        role: "user",
+        content: "",
+        notes: [{ id: "nr", createdAt: "2026-01-01T00:00:00Z", body: "root note" }],
+      },
     ]);
   });
 });

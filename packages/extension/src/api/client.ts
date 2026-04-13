@@ -298,6 +298,33 @@ export class ColcoorApiClient {
     return JSON.parse(text) as NoteOut;
   }
 
+  async patchNote(
+    conversationId: string,
+    noteId: string,
+    body: { content: string },
+  ): Promise<NoteOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/notes/${noteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: body.content }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`update note failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as NoteOut;
+  }
+
+  async deleteNote(conversationId: string, noteId: string): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/notes/${noteId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`delete note failed (${res.status}): ${t || res.statusText}`);
+    }
+  }
+
   /** Owner-only: delete conversation and cascaded data (DELETE /conversations/{id}). */
   async deleteConversation(conversationId: string): Promise<void> {
     const res = await this.fetchApi(`/conversations/${conversationId}`, { method: "DELETE" });

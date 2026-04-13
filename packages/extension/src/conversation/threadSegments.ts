@@ -1,5 +1,5 @@
-import type { GraphEventNode } from "../api/client";
-import { pathFromRootToTip } from "./treeEvents";
+import type { GraphEventNode, NoteOut } from "../api/client";
+import { indexNotesByEventId, pathFromRootToTip } from "./treeEvents";
 import { markdownToSafeHtml } from "./threadMarkdown";
 import { countUnifiedDiffLineChanges, formatUnifiedDiffColoredHtml } from "./unifiedDiffFormat";
 
@@ -19,9 +19,19 @@ function bodyHtmlFromMarkdown(markdown: string): string {
   }
 }
 
+/** One rendered note under a thread message (markdown → safe HTML). */
+export type ThreadNoteBlock = {
+  id: string;
+  html: string;
+};
+
 export type ThreadSegment = {
   role: "user" | "assistant";
+  /** Host graph event id (for diagnostics; notes are keyed to this row). */
+  eventId: string;
   html: string;
+  /** Notes attached to this message on the active path. */
+  notes?: ThreadNoteBlock[];
   /** Entries from `content_json.colcoor_agent_trace` for assistant rows (webview renders collapsible). */
   traceEntries?: unknown[];
 };
@@ -67,21 +77,40 @@ export function enrichTraceEntriesForWebview(entries: unknown[]): unknown[] {
 export function buildThreadSegments(
   events: GraphEventNode[],
   selectedEventId: string,
+  notes: readonly NoteOut[] = [],
 ): ThreadSegment[] {
   const node = events.find((e) => e.id === selectedEventId);
   if (!node) {
     return [];
   }
   const path = pathFromRootToTip(events, node);
+  const notesByEvent = indexNotesByEventId(notes);
   const out: ThreadSegment[] = [];
-  for (const ev of path) {
+  for (let i = 0; i < path.length; i++) {
+    const ev = path[i];
+    const text = ev.content_text ?? "";
+    const rawNotes = notesByEvent.get(ev.id);
+    const noteBlocks: ThreadNoteBlock[] | undefined =
+      rawNotes && rawNotes.length > 0
+        ? rawNotes.map((n) => ({ id: n.id, html: bodyHtmlFromMarkdown(n.body) }))
+        : undefined;
     if (ev.kind === "user_input") {
-      out.push({ role: "user", html: bodyHtmlFromMarkdown(ev.content_text ?? "") });
+      if (i === 0 && !text.trim() && !noteBlocks?.length) {
+        continue;
+      }
+      out.push({
+        role: "user",
+        eventId: ev.id,
+        html: bodyHtmlFromMarkdown(text),
+        notes: noteBlocks,
+      });
     } else if (ev.kind === "assistant_output") {
       const rawTrace = extractAgentTraceEntries(ev.content_json ?? undefined);
       out.push({
         role: "assistant",
-        html: bodyHtmlFromMarkdown(ev.content_text ?? ""),
+        eventId: ev.id,
+        html: bodyHtmlFromMarkdown(text),
+        notes: noteBlocks,
         traceEntries: rawTrace ? enrichTraceEntriesForWebview(rawTrace) : undefined,
       });
     }

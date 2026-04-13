@@ -2,7 +2,11 @@ import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
-import { graphPathToTranscriptTurns, pathFromRootToTip } from "./treeEvents";
+import {
+  graphPathToTranscriptTurns,
+  indexNotesByEventId,
+  pathFromRootToTip,
+} from "./treeEvents";
 import type { UserTurnResult } from "./runUserTurn";
 
 export type RunResendAssistantOptions = {
@@ -24,10 +28,14 @@ export async function runResendAssistant(
   workspaceRoot: string,
   options?: RunResendAssistantOptions,
 ): Promise<UserTurnResult> {
-  const { events } = await api.getTree(conversationId);
+  const [{ events }, notes] = await Promise.all([
+    api.getTree(conversationId),
+    api.listNotes(conversationId),
+  ]);
   if (events.length === 0) {
     throw new Error("conversation has no events");
   }
+  const notesByEventId = indexNotesByEventId(notes);
   const byId = new Map(events.map((e) => [e.id, e]));
   const userNode = byId.get(userEventId);
   if (!userNode) {
@@ -42,7 +50,7 @@ export async function runResendAssistant(
   }
 
   const path = pathFromRootToTip(events, userNode);
-  const pathTurns = graphPathToTranscriptTurns(path);
+  const pathTurns = graphPathToTranscriptTurns(path, notesByEventId);
   const transcriptText = buildAuthoritativeTranscript({
     conversationTitle,
     pathFromRoot: pathTurns,
