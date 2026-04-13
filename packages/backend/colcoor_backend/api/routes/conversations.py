@@ -12,7 +12,9 @@ from colcoor_backend.api.schemas import (
     ConversationUserStateOut,
     EventKind,
     EventNodeOut,
+    MemberAddBody,
     MemberOut,
+    MemberRolePatchBody,
     NoteCreateBody,
     NoteOut,
     NotePatchBody,
@@ -20,6 +22,7 @@ from colcoor_backend.api.schemas import (
     TreeResponse,
 )
 from colcoor_backend.services.graph import (
+    add_conversation_member,
     append_graph_event,
     create_conversation_with_owner,
     create_note_on_event,
@@ -32,8 +35,10 @@ from colcoor_backend.services.graph import (
     list_notes_visible,
     patch_conversation_for_user,
     put_event_star,
+    remove_conversation_member,
     set_conversation_active_event,
     tree_event_annotations,
+    update_conversation_member_role,
     update_note_content,
 )
 
@@ -234,6 +239,113 @@ async def get_conversation_members(
             )
         )
     return out
+
+
+@router.post("/{conversation_id}/members", response_model=MemberOut)
+async def post_conversation_member(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    body: MemberAddBody,
+) -> MemberOut:
+    try:
+        uid, role, email, display_name = await add_conversation_member(
+            session,
+            conversation_id=conversation_id,
+            actor_user_id=user_id,
+            new_user_id=body.user_id,
+            role=body.role,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        if "already a member" in str(e).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(e),
+            ) from None
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from None
+    await session.commit()
+    return MemberOut.model_validate(
+        {
+            "user_id": uid,
+            "role": role,
+            "email": email or None,
+            "display_name": display_name or None,
+        }
+    )
+
+
+@router.patch("/{conversation_id}/members/{member_user_id}", response_model=MemberOut)
+async def patch_conversation_member(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    member_user_id: UUID,
+    body: MemberRolePatchBody,
+) -> MemberOut:
+    try:
+        uid, role, email, display_name = await update_conversation_member_role(
+            session,
+            conversation_id=conversation_id,
+            actor_user_id=user_id,
+            target_user_id=member_user_id,
+            new_role=body.role,
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e) or "forbidden",
+        ) from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from None
+    await session.commit()
+    return MemberOut.model_validate(
+        {
+            "user_id": uid,
+            "role": role,
+            "email": email or None,
+            "display_name": display_name or None,
+        }
+    )
+
+
+@router.delete(
+    "/{conversation_id}/members/{member_user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_conversation_member(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    member_user_id: UUID,
+) -> Response:
+    try:
+        await remove_conversation_member(
+            session,
+            conversation_id=conversation_id,
+            actor_user_id=user_id,
+            target_user_id=member_user_id,
+        )
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e) or "forbidden",
+        ) from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{conversation_id}/notes", response_model=list[NoteOut])

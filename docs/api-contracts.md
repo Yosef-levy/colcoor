@@ -150,7 +150,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 ### 4.2 `POST /api/v1/conversations/{conversation_id}/members`
 
-**Purpose:** Add a member. **Owner only.**
+**Purpose:** Add a member. **Owner or editor** ([permissions.md](permissions.md) add-member row).
 
 **Request body:**
 

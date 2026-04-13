@@ -219,6 +219,57 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     ),
     vscode.commands.registerCommand(
+      "colcoor.addConversationMember",
+      async (item?: ConversationTreeItem) => {
+        const id = item?.conv?.id;
+        if (!id) {
+          await vscode.window.showWarningMessage(
+            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
+          );
+          return;
+        }
+        const rawUserId = await vscode.window.showInputBox({
+          title: "Colcoor — add member",
+          prompt:
+            "Existing Colcoor user UUID to invite (they must have signed in once). Role: pick next.",
+          ignoreFocusOut: true,
+          validateInput: (v) => {
+            const t = v.trim();
+            if (!t) {
+              return "Enter a user id";
+            }
+            const uuidRe =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            return uuidRe.test(t) ? undefined : "Expected UUID format";
+          },
+        });
+        if (rawUserId === undefined) {
+          return;
+        }
+        const userId = rawUserId.trim();
+        const rolePick = await vscode.window.showQuickPick(
+          [
+            { label: "Editor", role: "editor" as const },
+            { label: "Viewer", role: "viewer" as const },
+          ],
+          { title: "Colcoor — member role", placeHolder: "Editor can post; viewer is read-only" },
+        );
+        if (!rolePick) {
+          return;
+        }
+        try {
+          await api.postConversationMember(id, { user_id: userId, role: rolePick.role });
+          refreshTree();
+          await vscode.window.showInformationMessage(
+            `Colcoor: added member (${rolePick.role}). They will see this conversation after refresh.`,
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
       "colcoor.deleteConversation",
       async (item?: ConversationTreeItem) => {
         const id = item?.conv?.id;

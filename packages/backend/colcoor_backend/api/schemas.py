@@ -103,6 +103,23 @@ class MemberOut(BaseModel):
     display_name: str | None = None
 
 
+class MemberAddBody(BaseModel):
+    """POST …/members (api-contracts §4.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    role: Literal["editor", "viewer"]
+
+
+class MemberRolePatchBody(BaseModel):
+    """PATCH …/members/{user_id} (api-contracts §4.3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["owner", "editor", "viewer"]
+
+
 class SetActiveBody(BaseModel):
     """POST …/active (api-contracts §5.2)."""
 

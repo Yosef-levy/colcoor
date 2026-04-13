@@ -62,6 +62,36 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.method).toBe("DELETE");
   });
 
+  it("postConversationMember sends POST with user_id and role", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          role: "viewer",
+          email: "v@v.v",
+          display_name: "V",
+        }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const out = await api.postConversationMember("cccccccc-cccc-4ccc-8ccc-cccccccccccc", {
+      user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      role: "viewer",
+    });
+    expect(out.role).toBe("viewer");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/members");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(
+      JSON.stringify({ user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", role: "viewer" }),
+    );
+  });
+
   it("patchNote throws with server detail on failure", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

@@ -234,6 +234,52 @@ export class ColcoorApiClient {
     return JSON.parse(text) as ConversationMember[];
   }
 
+  /** Add a member (owner or editor per server); 409 if already a member. */
+  async postConversationMember(
+    conversationId: string,
+    body: { user_id: string; role: "editor" | "viewer" },
+  ): Promise<ConversationMember> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`add member failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as ConversationMember;
+  }
+
+  /** Change a member’s role (owner only on server). */
+  async patchConversationMemberRole(
+    conversationId: string,
+    memberUserId: string,
+    body: { role: "owner" | "editor" | "viewer" },
+  ): Promise<ConversationMember> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/members/${memberUserId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: body.role }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`update member role failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as ConversationMember;
+  }
+
+  /** Remove a non-owner member (owner only on server). */
+  async deleteConversationMember(conversationId: string, memberUserId: string): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/members/${memberUserId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`remove member failed (${res.status}): ${t || res.statusText}`);
+    }
+  }
+
   /** Persist the caller’s active tree node (POST …/active). */
   async setConversationActive(
     conversationId: string,

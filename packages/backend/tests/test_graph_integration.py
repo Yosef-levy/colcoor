@@ -306,3 +306,79 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         assert cid not in {row["id"] for row in r.json()}
 
     get_settings.cache_clear()
+
+
+def test_conversation_membership_mutations_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """POST/PATCH/DELETE /conversations/{id}/members (api-contracts §4.2–4.4)."""
+    from colcoor_backend.core.jwt_tokens import decode_access_token
+
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token_owner = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    token_viewer = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    token_editor = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    settings = get_settings()
+    uid_viewer = decode_access_token(token_viewer, settings)
+    uid_editor = decode_access_token(token_editor, settings)
+    auth_owner = {"Authorization": f"Bearer {token_owner}"}
+    auth_viewer = {"Authorization": f"Bearer {token_viewer}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth_owner, json={"title": "members"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/members",
+            headers=auth_owner,
+            json={"user_id": str(uid_viewer), "role": "viewer"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["role"] == "viewer"
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/members",
+            headers=auth_owner,
+            json={"user_id": str(uid_viewer), "role": "editor"},
+        )
+        assert r.status_code == 409, r.text
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/members",
+            headers=auth_viewer,
+            json={"user_id": str(uid_editor), "role": "editor"},
+        )
+        assert r.status_code == 403, r.text
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/members",
+            headers=auth_owner,
+            json={"user_id": str(uid_editor), "role": "editor"},
+        )
+        assert r.status_code == 200, r.text
+
+        r = client.get(f"/api/v1/conversations/{cid}/members", headers=auth_owner)
+        assert r.status_code == 200, r.text
+        assert len(r.json()) == 3
+
+        r = client.delete(f"/api/v1/conversations/{cid}/members/{uid_editor}", headers=auth_owner)
+        assert r.status_code == 204, r.text
+
+        r = client.get(f"/api/v1/conversations/{cid}/members", headers=auth_owner)
+        assert len(r.json()) == 2
+
+        r = client.patch(
+            f"/api/v1/conversations/{cid}/members/{uid_viewer}",
+            headers=auth_owner,
+            json={"role": "editor"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["role"] == "editor"
+
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth_owner)
+        assert r.status_code == 204, r.text
+
+    get_settings.cache_clear()

@@ -59,6 +59,10 @@
         "title": "Colcoor: Show members"
       },
       {
+        "command": "colcoor.addConversationMember",
+        "title": "Colcoor: Add member…"
+      },
+      {
         "command": "colcoor.deleteConversation",
         "title": "Colcoor: Delete conversation…"
       },
@@ -135,6 +139,11 @@
           "command": "colcoor.listConversationMembers",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@3"
+        },
+        {
+          "command": "colcoor.addConversationMember",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@4"
         },
         {
           "command": "colcoor.deleteConversation",

@@ -554,3 +554,140 @@ async def delete_event_star(
         delete(EventStar).where(EventStar.user_id == user_id, EventStar.event_id == event_id)
     )
     await session.flush()
+
+
+async def _conversation_root_event_id(session: AsyncSession, conversation_id: uuid.UUID) -> uuid.UUID:
+    res = await session.execute(
+        select(Event.id).where(
+            Event.conversation_id == conversation_id,
+            Event.parent_event_id.is_(None),
+            Event.deleted_at.is_(None),
+        )
+    )
+    rid = res.scalar_one_or_none()
+    if rid is None:
+        raise LookupError("no root event for conversation")
+    return rid
+
+
+async def add_conversation_member(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    new_user_id: uuid.UUID,
+    role: str,
+) -> tuple[uuid.UUID, str, str, str]:
+    """Add ``new_user_id`` as ``editor`` or ``viewer``; **owner or editor** may invite ([permissions.md])."""
+    actor = await get_conversation_member(session, conversation_id, actor_user_id)
+    if actor is None:
+        raise LookupError("conversation not found")
+    if actor.role not in ("owner", "editor"):
+        raise PermissionError("forbidden")
+    if role not in ("editor", "viewer"):
+        raise ValueError("role must be editor or viewer")
+    res_u = await session.execute(select(User).where(User.id == new_user_id))
+    if res_u.scalar_one_or_none() is None:
+        raise LookupError("user not found")
+    if await get_conversation_member(session, conversation_id, new_user_id) is not None:
+        raise ValueError("already a member")
+    now = datetime.now(tz=UTC)
+    root_id = await _conversation_root_event_id(session, conversation_id)
+    session.add(
+        ConversationMember(
+            conversation_id=conversation_id,
+            user_id=new_user_id,
+            role=role,
+            pinned=False,
+        )
+    )
+    session.add(
+        ConversationUserState(
+            conversation_id=conversation_id,
+            user_id=new_user_id,
+            active_event_id=root_id,
+            last_seen_at=now,
+            needs_context_rebuild=False,
+        )
+    )
+    await session.flush()
+    res_row = await session.execute(select(User.email, User.display_name).where(User.id == new_user_id))
+    em, dn = res_row.one()
+    return (new_user_id, role, em, dn or "")
+
+
+async def update_conversation_member_role(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    target_user_id: uuid.UUID,
+    new_role: str,
+) -> tuple[uuid.UUID, str, str, str]:
+    """Change a member's role; **owner only**. Promoting to ``owner`` demotes the previous owner to ``editor``."""
+    actor = await get_conversation_member(session, conversation_id, actor_user_id)
+    if actor is None:
+        raise LookupError("conversation not found")
+    if actor.role != "owner":
+        raise PermissionError("forbidden")
+    if new_role not in ("owner", "editor", "viewer"):
+        raise ValueError("invalid role")
+    target = await get_conversation_member(session, conversation_id, target_user_id)
+    if target is None:
+        raise LookupError("member not found")
+    if target.role == "owner" and new_role != "owner":
+        raise PermissionError("cannot demote the sole conversation owner")
+    if new_role == "owner":
+        await session.execute(
+            update(ConversationMember)
+            .where(
+                ConversationMember.conversation_id == conversation_id,
+                ConversationMember.role == "owner",
+                ConversationMember.user_id != target_user_id,
+            )
+            .values(role="editor")
+        )
+    target.role = new_role
+    await session.flush()
+    res_row = await session.execute(select(User.email, User.display_name).where(User.id == target_user_id))
+    em, dn = res_row.one()
+    return (target_user_id, new_role, em, dn or "")
+
+
+async def remove_conversation_member(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    target_user_id: uuid.UUID,
+) -> None:
+    """Remove a non-owner member; **owner only**."""
+    actor = await get_conversation_member(session, conversation_id, actor_user_id)
+    if actor is None:
+        raise LookupError("conversation not found")
+    if actor.role != "owner":
+        raise PermissionError("forbidden")
+    target = await get_conversation_member(session, conversation_id, target_user_id)
+    if target is None:
+        raise LookupError("member not found")
+    if target.role == "owner":
+        raise PermissionError("cannot remove the conversation owner")
+    await session.execute(
+        delete(ConversationUserState).where(
+            ConversationUserState.conversation_id == conversation_id,
+            ConversationUserState.user_id == target_user_id,
+        )
+    )
+    await session.execute(
+        delete(EventStar).where(
+            EventStar.user_id == target_user_id,
+            EventStar.event_id.in_(
+                select(Event.id).where(
+                    Event.conversation_id == conversation_id,
+                    Event.deleted_at.is_(None),
+                )
+            ),
+        )
+    )
+    await session.delete(target)
+    await session.flush()
