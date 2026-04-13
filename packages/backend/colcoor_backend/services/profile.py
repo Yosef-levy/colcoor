@@ -10,6 +10,11 @@ from colcoor_backend.api.schemas import MePatchBody
 from colcoor_backend.db.models import User
 
 
+async def get_me_user(session: AsyncSession, user_id: UUID) -> User | None:
+    """Return the caller’s user row, if it exists."""
+    return await session.get(User, user_id)
+
+
 async def patch_me(session: AsyncSession, user_id: UUID, body: MePatchBody) -> User:
     """Apply PATCH fields; commits and returns refreshed user."""
     user = await session.get(User, user_id)

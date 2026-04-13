@@ -203,6 +203,60 @@ describe("ColcoorApiClient note mutations", () => {
     expect(url).toContain("/side-chat/messages?after_seq=42");
   });
 
+  it("getMe sends GET /api/v1/me", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          email: "e@e.e",
+          display_name: "X",
+          avatar_url: null,
+        }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const me = await api.getMe();
+    expect(me.email).toBe("e@e.e");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/me");
+    expect(init.method).toBe("GET");
+  });
+
+  it("streamSideChatSseEvents yields parsed data from streaming body", async () => {
+    const encoder = new TextEncoder();
+    const sse = 'data: {"type":"side_chat","message":{"seq":1}}\n\n';
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sse));
+        controller.close();
+      },
+    });
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    );
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const gen = api.streamSideChatSseEvents("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    const first = await gen.next();
+    expect(first.done).toBe(false);
+    expect(first.value).toEqual({ type: "side_chat", message: { seq: 1 } });
+    const end = await gen.next();
+    expect(end.done).toBe(true);
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/side-chat/stream");
+  });
+
   it("patchMe sends PATCH /api/v1/me with JSON body", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

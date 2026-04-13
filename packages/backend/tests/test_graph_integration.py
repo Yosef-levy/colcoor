@@ -570,6 +570,11 @@ def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> No
     auth = {"Authorization": f"Bearer {token}"}
 
     with TestClient(create_app()) as client:
+        r = client.get("/api/v1/me", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json()["email"] == "i@i.c"
+        assert r.json()["display_name"] == ""
+
         r = client.patch("/api/v1/me", headers=auth, json={})
         assert r.status_code == 422, r.text
 

@@ -1,4 +1,5 @@
 import { formatColcoorApiError } from "./apiErrorFormatting";
+import { parseCompleteSseDataJsonBlocks } from "./sideChatSseParse";
 
 export type ColcoorApiClientOptions = {
   baseUrl: string;
@@ -169,6 +170,31 @@ export class ColcoorApiClient {
     } catch (e) {
       throw new Error(networkErrorDetail(url, e));
     }
+  }
+
+  /**
+   * Authenticated GET without the default 30s abort (for SSE and other long streams).
+   * Pass `signal` to cancel.
+   */
+  private async fetchStreamingUnbuffered(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<Response> {
+    const token = await this.getAccessToken();
+    const headers = new Headers(init.headers);
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const url = this.apiUrl(path);
+    return await this.fetchOrThrow(url, { ...init, headers });
+  }
+
+  /** GET /me — caller profile (same shape as PATCH …/me). */
+  async getMe(): Promise<MeOut> {
+    const res = await this.fetchApi("/me", { method: "GET" });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "get profile");
+    return JSON.parse(text) as MeOut;
   }
 
   /** PATCH /me — update caller display name and/or avatar URL. */
@@ -485,6 +511,70 @@ export class ColcoorApiClient {
     });
     const text = await res.text();
     this.assertOkResponse(res, text, "patch side-chat read cursor");
+  }
+
+  /**
+   * Consume GET …/side-chat/stream (SSE). Yields one parsed JSON object per complete `data:` event.
+   * Uses streaming fetch (no 30s `fetchApi` timeout); cancel with `signal`.
+   */
+  async *streamSideChatSseEvents(
+    conversationId: string,
+    options?: { afterSeq?: number; signal?: AbortSignal },
+  ): AsyncGenerator<unknown, void, unknown> {
+    const q =
+      options?.afterSeq !== undefined && options.afterSeq > 0
+        ? `?after_seq=${encodeURIComponent(String(options.afterSeq))}`
+        : "";
+    const res = await this.fetchStreamingUnbuffered(
+      `/conversations/${conversationId}/side-chat/stream${q}`,
+      {
+        method: "GET",
+        headers: { Accept: "text/event-stream" },
+        signal: options?.signal,
+      },
+    );
+    if (!res.ok) {
+      const errBody = await res.text();
+      this.assertOkResponse(res, errBody, "side-chat stream");
+      return;
+    }
+    const reader = res.body?.getReader();
+    if (reader == null) {
+      throw new Error("side-chat stream: response has no body");
+    }
+    const dec = new TextDecoder();
+    let buf = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (value) {
+          buf += dec.decode(value, { stream: true });
+        }
+        const parsed = parseCompleteSseDataJsonBlocks(buf);
+        buf = parsed.rest;
+        for (const p of parsed.payloads) {
+          try {
+            yield JSON.parse(p) as unknown;
+          } catch {
+            /* ignore malformed JSON */
+          }
+        }
+        if (done) {
+          buf += dec.decode();
+          const tail = parseCompleteSseDataJsonBlocks(buf);
+          for (const p of tail.payloads) {
+            try {
+              yield JSON.parse(p) as unknown;
+            } catch {
+              /* ignore */
+            }
+          }
+          break;
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {

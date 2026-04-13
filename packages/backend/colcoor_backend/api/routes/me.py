@@ -2,9 +2,23 @@ from fastapi import APIRouter, HTTPException, status
 
 from colcoor_backend.api.deps import CurrentUserId, DbSession
 from colcoor_backend.api.schemas import MeOut, MePatchBody
-from colcoor_backend.services.profile import patch_me
+from colcoor_backend.services.profile import get_me_user, patch_me
 
 router = APIRouter()
+
+
+@router.get("", response_model=MeOut, response_model_exclude_none=True)
+async def get_me_route(session: DbSession, user_id: CurrentUserId) -> MeOut:
+    """Return the authenticated user’s profile (same shape as PATCH …/me)."""
+    user = await get_me_user(session, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    return MeOut(
+        id=user.id,
+        email=user.email,
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+    )
 
 
 @router.patch("", response_model=MeOut, response_model_exclude_none=True)
