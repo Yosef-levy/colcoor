@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { ColcoorApiClient } from "./api/client";
+import { ColcoorApiClient, type ConversationMember } from "./api/client";
 import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
@@ -16,6 +16,12 @@ import {
   ConversationTreeItem,
   ConversationsTreeProvider,
 } from "./conversations/conversationsTreeProvider";
+
+function formatMemberQuickPickLabel(m: ConversationMember): string {
+  const name = m.display_name?.trim() ? m.display_name : "—";
+  const em = m.email?.trim() ? m.email : "—";
+  return `${m.role} — ${name} <${em}>`;
+}
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
 
@@ -263,6 +269,100 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           await vscode.window.showInformationMessage(
             `Colcoor: added member (${rolePick.role}). They will see this conversation after refresh.`,
           );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.changeMemberRole",
+      async (item?: ConversationTreeItem) => {
+        const id = item?.conv?.id;
+        if (!id) {
+          await vscode.window.showWarningMessage(
+            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
+          );
+          return;
+        }
+        try {
+          const members = await api.listConversationMembers(id);
+          type PickRow = vscode.QuickPickItem & { member: ConversationMember };
+          const picked = await vscode.window.showQuickPick<PickRow>(
+            members.map((m) => ({
+              label: formatMemberQuickPickLabel(m),
+              description: m.user_id,
+              member: m,
+            })),
+            { title: "Colcoor — member to change role (owner only on server)" },
+          );
+          if (!picked) {
+            return;
+          }
+          const rolePick = await vscode.window.showQuickPick(
+            [
+              { label: "Owner (transfers ownership from the current owner)", role: "owner" as const },
+              { label: "Editor", role: "editor" as const },
+              { label: "Viewer", role: "viewer" as const },
+            ],
+            { title: "Colcoor — new role", placeHolder: "See permissions in repo docs" },
+          );
+          if (!rolePick) {
+            return;
+          }
+          await api.patchConversationMemberRole(id, picked.member.user_id, { role: rolePick.role });
+          refreshTree();
+          await vscode.window.showInformationMessage(
+            `Colcoor: updated role to ${rolePick.role} for ${picked.member.user_id}.`,
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.removeMemberFromConversation",
+      async (item?: ConversationTreeItem) => {
+        const id = item?.conv?.id;
+        if (!id) {
+          await vscode.window.showWarningMessage(
+            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
+          );
+          return;
+        }
+        try {
+          const members = await api.listConversationMembers(id);
+          const removable = members.filter((m) => m.role !== "owner");
+          if (removable.length === 0) {
+            await vscode.window.showInformationMessage(
+              "Colcoor: there are no members you can remove here (the conversation owner cannot be removed from this menu).",
+            );
+            return;
+          }
+          type PickRow = vscode.QuickPickItem & { member: ConversationMember };
+          const picked = await vscode.window.showQuickPick<PickRow>(
+            removable.map((m) => ({
+              label: formatMemberQuickPickLabel(m),
+              description: m.user_id,
+              member: m,
+            })),
+            { title: "Colcoor — member to remove (owner only on server)" },
+          );
+          if (!picked) {
+            return;
+          }
+          const choice = await vscode.window.showWarningMessage(
+            `Remove this member from the conversation? They will lose access.`,
+            { modal: true, detail: picked.member.user_id },
+            "Remove",
+          );
+          if (choice !== "Remove") {
+            return;
+          }
+          await api.deleteConversationMember(id, picked.member.user_id);
+          refreshTree();
+          await vscode.window.showInformationMessage("Colcoor: member removed.");
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           await vscode.window.showErrorMessage(`Colcoor: ${msg}`);

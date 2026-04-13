@@ -88,6 +88,56 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.method).toBe("GET");
   });
 
+  it("patchConversationMemberRole sends PATCH to members subresource", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          role: "editor",
+          email: "e@e.e",
+          display_name: "E",
+        }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const out = await api.patchConversationMemberRole(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      { role: "editor" },
+    );
+    expect(out.role).toBe("editor");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      "/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/members/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    );
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ role: "editor" }));
+  });
+
+  it("deleteConversationMember sends DELETE", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => "" });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.deleteConversationMember(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    );
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      "/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/members/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    );
+    expect(init.method).toBe("DELETE");
+  });
+
   it("postConversationMember sends POST with user_id and role", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
