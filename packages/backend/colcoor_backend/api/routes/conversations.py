@@ -35,6 +35,7 @@ from colcoor_backend.services.graph import (
     list_notes_visible,
     patch_conversation_for_user,
     put_event_star,
+    read_conversation_caller_state,
     remove_conversation_member,
     set_conversation_active_event,
     tree_event_annotations,
@@ -191,6 +192,20 @@ async def get_tree(
             )
         )
     return TreeResponse(events=out)
+
+
+@router.get("/{conversation_id}/caller-state", response_model=ConversationUserStateOut)
+async def get_caller_conversation_state(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+) -> ConversationUserStateOut:
+    """Read the caller’s active cursor and ``needs_context_rebuild`` (no body)."""
+    try:
+        st = await read_conversation_caller_state(session, conversation_id, user_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    return ConversationUserStateOut.model_validate(st)
 
 
 @router.post("/{conversation_id}/active", response_model=ConversationUserStateOut)

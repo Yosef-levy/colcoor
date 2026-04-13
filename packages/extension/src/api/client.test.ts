@@ -62,6 +62,32 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.method).toBe("DELETE");
   });
 
+  it("getConversationCallerState sends GET to caller-state", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          conversation_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          active_event_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          needs_context_rebuild: true,
+          last_seen_at: "2026-01-01T12:00:00Z",
+        }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const st = await api.getConversationCallerState("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    expect(st.needs_context_rebuild).toBe(true);
+    expect(st.active_event_id).toBe("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/caller-state");
+    expect(init.method).toBe("GET");
+  });
+
   it("postConversationMember sends POST with user_id and role", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

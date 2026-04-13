@@ -250,6 +250,16 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `needs_context_rebuild` | boolean | yes |
 | `last_seen_at` | string (ISO-8601) | yes |
 
+### 5.3 `GET /api/v1/conversations/{conversation_id}/caller-state`
+
+**Purpose:** Read the caller’s **`conversation_user_state`** (`active_event_id`, `needs_context_rebuild`, `last_seen_at`) without mutating it. If no row exists yet (legacy data), the response is computed as **active = graph root** and **`needs_context_rebuild`: false** (same shape as §5.2 response; not persisted until `POST …/active` or another write creates the row).
+
+| | |
+|--|--|
+| **Auth** | Bearer JWT |
+| **200** | `ConversationUserStateOut` |
+| **401** / **403** / **404** | as above |
+
 ---
 
 ## 6. Main-thread append

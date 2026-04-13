@@ -216,6 +216,12 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         assert r.status_code == 200, r.text
         root = next(e for e in r.json()["events"] if e["parent_event_id"] is None)
 
+        r = client.get(f"/api/v1/conversations/{cid}/caller-state", headers=auth)
+        assert r.status_code == 200, r.text
+        cstate = r.json()
+        assert cstate["active_event_id"] == root["id"]
+        assert cstate["needs_context_rebuild"] is False
+
         r = client.post(
             f"/api/v1/conversations/{cid}/active",
             headers=auth,

@@ -633,6 +633,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       threadPlainText: "",
       treeWidthPx: null,
       agentTraceOpen: true,
+      needsContextRebuild: false,
       busy: false,
       lastError: null,
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
@@ -1093,9 +1094,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         if (titleEl) titleEl.textContent = state.title && state.title.trim() ? state.title : "(untitled)";
         if (subEl) {
-          subEl.textContent =
+          var subBase =
             state.events.length +
             " event(s) — reply attaches under the selected tree node.";
+          if (state.needsContextRebuild) {
+            subBase += " Next send rebuilds assistant context from the full branch path (root → selected).";
+          }
+          subEl.textContent = subBase;
         }
         if (sendBtn) sendBtn.disabled = state.busy;
         if (stopBtn) stopBtn.disabled = !state.busy;

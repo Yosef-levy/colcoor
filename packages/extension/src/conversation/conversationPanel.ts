@@ -30,6 +30,8 @@ type WebviewStateMessage = {
   treeCollapsedEventIds: string[];
   /** Settings: expand CLI trace `<details>` by default. */
   agentTraceOpen: boolean;
+  /** Server flag: next send should rebuild transcript from full path (domain-model §4). */
+  needsContextRebuild: boolean;
   busy: boolean;
   lastError: string | null;
 };
@@ -98,6 +100,8 @@ export function createConversationPanelController(
   let lastTreeEvents: GraphEventNode[] = [];
   /** Notes list aligned with the last successful tree load (for thread rendering without extra round-trips). */
   let lastNotes: NoteOut[] = [];
+  /** From GET …/caller-state after each successful tree load (domain-model §4). */
+  let lastNeedsContextRebuild = false;
 
   function syncActiveToBackend(
     activeEventId: string | undefined,
@@ -141,6 +145,7 @@ export function createConversationPanelController(
     webviewReady = false;
     lastTreeEvents = [];
     lastNotes = [];
+    lastNeedsContextRebuild = false;
   }
 
   function readCollapsedByConversation(): Record<string, string[]> {
@@ -194,6 +199,7 @@ export function createConversationPanelController(
         treeWidthPx,
         treeCollapsedEventIds: prunedCollapsedEventIds(events),
         agentTraceOpen,
+        needsContextRebuild: lastNeedsContextRebuild,
         busy,
         lastError,
       };
@@ -222,6 +228,7 @@ export function createConversationPanelController(
           treeWidthPx,
           treeCollapsedEventIds: [],
           agentTraceOpen,
+          needsContextRebuild: false,
           busy,
           lastError:
             lastError ??
@@ -239,15 +246,26 @@ export function createConversationPanelController(
       return;
     }
     try {
-      const [{ events }, notes] = await Promise.all([
+      const [{ events }, notes, caller] = await Promise.all([
         api.getTree(conversationId),
         api.listNotes(conversationId),
+        api.getConversationCallerState(conversationId).catch((): null => null),
       ]);
       lastNotes = notes;
+      if (caller) {
+        lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
+        const aid = caller.active_event_id;
+        if (events.some((e) => e.id === aid)) {
+          selectedEventId = aid;
+        }
+      } else {
+        lastNeedsContextRebuild = false;
+      }
       postState(events, busy, lastError);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       lastNotes = [];
+      lastNeedsContextRebuild = false;
       postState([], busy, msg);
     }
   }
@@ -585,6 +603,7 @@ export function createConversationPanelController(
       conversationPinned = false;
       lastTreeEvents = [];
       lastNotes = [];
+      lastNeedsContextRebuild = false;
     });
 
     panel = p;
@@ -677,6 +696,7 @@ export function createConversationPanelController(
       conversationPinned = false;
       selectedEventId = undefined;
       lastNotes = [];
+      lastNeedsContextRebuild = false;
       lastTreeEvents = [];
       await refreshConversationMeta();
       const p = ensurePanel();

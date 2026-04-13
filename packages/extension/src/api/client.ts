@@ -280,6 +280,18 @@ export class ColcoorApiClient {
     }
   }
 
+  /** Read the caller’s active node and rebuild flag (GET …/caller-state). */
+  async getConversationCallerState(conversationId: string): Promise<ConversationUserStateOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/caller-state`, {
+      method: "GET",
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`get caller state failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as ConversationUserStateOut;
+  }
+
   /** Persist the caller’s active tree node (POST …/active). */
   async setConversationActive(
     conversationId: string,

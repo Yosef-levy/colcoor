@@ -119,6 +119,33 @@ async def load_event(
     return res.scalar_one_or_none()
 
 
+async def read_conversation_caller_state(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> ConversationUserState:
+    """Return the caller’s ``conversation_user_state`` row, or a **non-persisted** default rooted at the graph root."""
+    await ensure_conversation_member(session, conversation_id, user_id)
+    st_r = await session.execute(
+        select(ConversationUserState).where(
+            ConversationUserState.conversation_id == conversation_id,
+            ConversationUserState.user_id == user_id,
+        )
+    )
+    st = st_r.scalar_one_or_none()
+    if st is not None:
+        return st
+    root_id = await _conversation_root_event_id(session, conversation_id)
+    now = datetime.now(tz=UTC)
+    return ConversationUserState(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        active_event_id=root_id,
+        last_seen_at=now,
+        needs_context_rebuild=False,
+    )
+
+
 async def set_conversation_active_event(
     session: AsyncSession,
     *,
