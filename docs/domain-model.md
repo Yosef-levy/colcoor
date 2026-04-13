@@ -99,3 +99,4 @@ When another member mutates the shared graph and this client’s view may be sta
 - [database.md](database.md) — DDL and columns.
 - [data-flow-and-api.md](data-flow-and-api.md) — append order and agent handoff.
 - [principles.md](principles.md) — authoritative transcript vs Cursor-augmented context.
+- [tree-ui-contract.md](tree-ui-contract.md) — client tree **presentation** and **selection** vs **actions** (UI-agnostic node state; not a duplicate of graph semantics in this doc).

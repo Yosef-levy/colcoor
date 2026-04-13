@@ -104,39 +104,182 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-radius: 4px;
       margin-bottom: 8px;
     }
-    .tree ul { list-style: none; margin: 0; padding-left: 14px; }
-    .tree li { margin: 2px 0; }
-    .node {
-      cursor: pointer;
-      padding: 4px 6px;
-      border-radius: 3px;
-      border: 1px solid transparent;
-      font-size: 0.95em;
+    .tree-panel-hint {
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background));
+      line-height: 1.45;
     }
-    .node:hover { background: var(--vscode-list-hoverBackground); }
+    .tree > ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .tree-branch {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .tree-branch > ul {
+      list-style: none;
+      margin: 6px 0 0 0;
+      padding: 0 0 4px 14px;
+      border-left: 2px solid
+        var(
+          --vscode-tree-indentGuidesStroke,
+          var(--vscode-editorIndentGuide-background, var(--vscode-panel-border))
+        );
+    }
+    .tree-row {
+      display: flex;
+      align-items: stretch;
+      gap: 2px;
+      min-width: 0;
+    }
+    .tree-expand {
+      flex: 0 0 22px;
+      width: 22px;
+      min-height: 100%;
+      align-self: stretch;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 10px 0 0;
+      margin: 0;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.65em;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .tree-expand:hover {
+      color: var(--vscode-foreground);
+      background: var(--vscode-toolbar-hoverBackground, rgba(127, 127, 127, 0.15));
+    }
+    .tree-expand-spacer {
+      flex: 0 0 22px;
+      width: 22px;
+    }
+    .node {
+      flex: 1;
+      min-width: 0;
+      cursor: pointer;
+      border-radius: 8px;
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      background: var(--vscode-editor-inactiveSelectionBackground, rgba(127, 127, 127, 0.07));
+      font-size: 0.95em;
+      transition: background 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+    }
+    .node:hover {
+      background: var(--vscode-list-hoverBackground);
+      border-color: var(--vscode-focusBorder, var(--vscode-panel-border));
+    }
     .node.selected {
       border-color: var(--vscode-focusBorder);
       background: var(--vscode-list-inactiveSelectionBackground);
+      box-shadow: 0 0 0 1px var(--vscode-focusBorder, transparent);
     }
-    .node .meta { color: var(--vscode-descriptionForeground); font-size: 0.85em; }
+    .node-inner {
+      padding: 8px 10px 9px;
+      min-width: 0;
+    }
+    .node-head {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 8px;
+      margin-bottom: 5px;
+    }
+    .node-role {
+      display: inline-block;
+      font-size: 0.68em;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+    }
+    .role-user .node-role {
+      color: var(--vscode-gitDecoration-untrackedResourceForeground, #569cd6);
+      background: rgba(86, 156, 214, 0.14);
+      border-color: rgba(86, 156, 214, 0.32);
+    }
+    .role-assistant .node-role {
+      color: var(--vscode-gitDecoration-submoduleResourceForeground, #c4a000);
+      background: rgba(200, 170, 40, 0.16);
+      border-color: rgba(200, 170, 40, 0.35);
+    }
+    .role-other .node-role {
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-badge-background);
+      border-color: var(--vscode-panel-border);
+    }
     .node .badge-pvt {
       display: inline-block;
-      margin-right: 4px;
-      padding: 1px 6px;
+      padding: 1px 7px;
       border-radius: 999px;
-      font-size: 0.72em;
+      font-size: 0.65em;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.03em;
+      letter-spacing: 0.04em;
       color: var(--vscode-inputValidation-infoForeground);
       background: var(--vscode-inputValidation-infoBackground);
       border: 1px solid var(--vscode-inputValidation-infoBorder);
-      vertical-align: middle;
     }
     .node .when {
-      font-size: 0.78em;
+      font-size: 0.76em;
       color: var(--vscode-descriptionForeground);
-      margin-left: 4px;
+    }
+    .node-snippet {
+      font-size: 0.86em;
+      line-height: 1.42;
+      color: var(--vscode-foreground);
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .node-snippet-empty {
+      color: var(--vscode-descriptionForeground);
+      font-style: italic;
+    }
+    .node-title {
+      font-size: 0.82em;
+      font-weight: 600;
+      color: var(--vscode-foreground);
+      line-height: 1.35;
+      margin-bottom: 3px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .node-icons {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+    .node-icon-star {
+      color: var(--vscode-editorWarning-foreground, #cca700);
+      font-size: 0.85em;
+      line-height: 1;
+    }
+    .node-icon-notes {
+      font-size: 0.68em;
+      font-weight: 600;
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-badge-background);
+      border-radius: 999px;
+      padding: 2px 6px;
     }
     .msg { margin: 8px 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--vscode-focusBorder); }
     .msg.user { background: var(--vscode-editor-inactiveSelectionBackground); }
@@ -354,7 +497,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   <p class="hint" id="sub">Loading…</p>
   <div class="layout">
     <div class="col-tree">
-      <div class="hint" style="margin-bottom:6px">Event tree — click a node to choose where the next message attaches. Drag the right edge of this panel to resize.</div>
+      <div class="hint tree-panel-hint">Event tree — click a node to choose where the next reply attaches. Drag the right edge of this panel to resize.</div>
       <div id="tree" class="tree"></div>
     </div>
     <div class="col-main">
@@ -405,6 +548,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       lastError: null,
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
+      /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
+      treeCollapsedIds: {},
     };
 
     function applyTreeWidth() {
@@ -436,26 +581,54 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         .replace(/"/g, "&quot;");
     }
 
-    function relTime(iso) {
+    /** Tree time label: &lt; 1h → minutes ago; else hh:mm DD/MM/YYYY ([tree-ui-contract.md] §7). */
+    function eventTimeLabel(iso) {
       if (!iso) return "";
       var t = Date.parse(String(iso));
       if (!Number.isFinite(t)) return "";
       var sec = Math.floor((Date.now() - t) / 1000);
-      if (sec < 45) return "just now";
-      if (sec < 3600) return Math.floor(sec / 60) + "m ago";
-      if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
-      if (sec < 604800) return Math.floor(sec / 86400) + "d ago";
-      try {
-        return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      } catch (e) {
-        return "";
+      if (sec < 60) return "just now";
+      if (sec < 3600) {
+        var mins = Math.floor(sec / 60);
+        return mins === 1 ? "1 minute ago" : mins + " minutes ago";
       }
+      var d = new Date(t);
+      var hh = String(d.getHours()).padStart(2, "0");
+      var mm = String(d.getMinutes()).padStart(2, "0");
+      var DD = String(d.getDate()).padStart(2, "0");
+      var MM = String(d.getMonth() + 1).padStart(2, "0");
+      var YYYY = d.getFullYear();
+      return hh + ":" + mm + " " + DD + "/" + MM + "/" + YYYY;
+    }
+
+    function eventDisplayTitle(ev) {
+      var j = ev.content_json;
+      if (!j || typeof j !== "object") return "";
+      var raw = j.title ?? j.message_title ?? j.display_title;
+      if (typeof raw !== "string") return "";
+      var s = raw.trim();
+      if (!s) return "";
+      return s.length > 160 ? s.slice(0, 160) + "…" : s;
     }
 
     function snippet(ev) {
       const t = (ev.content_text || "").trim().replace(/\\s+/g, " ");
       if (!t) return "(empty)";
       return t.length > 96 ? t.slice(0, 96) + "…" : t;
+    }
+
+    function treeKindLabel(kind) {
+      if (kind === "user_input") return "User";
+      if (kind === "assistant_output") return "Assistant";
+      const s = String(kind || "").trim();
+      if (!s) return "Event";
+      return s.replace(/_/g, " ");
+    }
+
+    function treeRoleClass(kind) {
+      if (kind === "user_input") return "role-user";
+      if (kind === "assistant_output") return "role-assistant";
+      return "role-other";
     }
 
     function pathChain(events, selectedId) {
@@ -672,38 +845,69 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         let html = "<ul>";
         for (const e of kids) {
           const sel = e.id === state.selectedEventId ? " selected" : "";
-          const kind = esc(e.kind);
+          const roleC = treeRoleClass(e.kind);
           const isPriv = e.visible_to != null && String(e.visible_to).trim() !== "";
           const badge = isPriv ? '<span class="badge-pvt">Private</span>' : "";
-          const when = relTime(e.created_at);
+          const when = eventTimeLabel(e.created_at);
           const whenSpan = when ? '<span class="when">' + esc(when) + "</span>" : "";
+          const snip = snippet(e);
+          const snipCls = snip === "(empty)" ? " node-snippet-empty" : "";
+          const title = eventDisplayTitle(e);
+          const titleBlock = title ? '<div class="node-title">' + esc(title) + "</div>" : "";
+          const childList = byParent.get(e.id);
+          const hasKids = !!(childList && childList.length);
+          const collapsed = !!(hasKids && state.treeCollapsedIds && state.treeCollapsedIds[e.id]);
+          const expander = hasKids
+            ? '<button type="button" class="tree-expand tree-expand-hit" data-expand-for="' +
+              esc(e.id) +
+              '" aria-expanded="' +
+              (collapsed ? "false" : "true") +
+              '" title="Show or hide replies">' +
+              (collapsed ? "▶" : "▼") +
+              "</button>"
+            : '<span class="tree-expand-spacer" aria-hidden="true"></span>';
+          var nc = typeof e.note_count === "number" ? e.note_count : 0;
+          var icons = "";
+          if (e.starred === true) {
+            icons += '<span class="node-icon-star" title="Starred">★</span>';
+          }
+          if (nc > 0) {
+            icons += '<span class="node-icon-notes" title="Notes on this message">' + String(nc) + "</span>";
+          }
+          var iconsWrap = icons ? '<span class="node-icons">' + icons + "</span>" : "";
           html +=
-            '<li><div class="node' +
+            '<li class="tree-branch"><div class="tree-row">' +
+            expander +
+            '<div class="node ' +
+            roleC +
             sel +
             '" data-id="' +
             esc(e.id) +
             '">' +
+            '<div class="node-inner">' +
+            '<div class="node-head">' +
             badge +
-            '<span class="meta">' +
-            kind +
+            '<span class="node-role">' +
+            esc(treeKindLabel(e.kind)) +
             "</span>" +
             whenSpan +
-            " · " +
-            esc(snippet(e)) +
-            "</div>";
-          html += walk(e.id);
+            iconsWrap +
+            "</div>" +
+            titleBlock +
+            '<div class="node-snippet' +
+            snipCls +
+            '">' +
+            esc(snip) +
+            "</div></div></div></div>";
+          if (hasKids && !collapsed) {
+            html += walk(e.id);
+          }
           html += "</li>";
         }
         html += "</ul>";
         return html;
       }
       root.innerHTML = walk("__root__");
-      root.querySelectorAll(".node").forEach((el) => {
-        el.addEventListener("click", () => {
-          const id = el.getAttribute("data-id");
-          if (id) vscode.postMessage({ type: "select", id });
-        });
-      });
     }
 
     function renderThread() {
@@ -806,11 +1010,56 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
     }
 
+    (function wireTreeRootDelegation() {
+      var root = document.getElementById("tree");
+      if (!root) return;
+      root.addEventListener("click", function (ev) {
+        var btn = ev.target.closest && ev.target.closest("button.tree-expand-hit");
+        if (btn) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var eid = btn.getAttribute("data-expand-for");
+          if (!eid) return;
+          var cur = state.treeCollapsedIds || {};
+          var next = {};
+          for (var k in cur) {
+            if (Object.prototype.hasOwnProperty.call(cur, k) && cur[k]) {
+              next[k] = true;
+            }
+          }
+          if (next[eid]) {
+            delete next[eid];
+          } else {
+            next[eid] = true;
+          }
+          state.treeCollapsedIds = next;
+          renderTree();
+          var collapsedList = [];
+          for (var cid in state.treeCollapsedIds) {
+            if (Object.prototype.hasOwnProperty.call(state.treeCollapsedIds, cid) && state.treeCollapsedIds[cid]) {
+              collapsedList.push(cid);
+            }
+          }
+          vscode.postMessage({ type: "treeCollapse", collapsedEventIds: collapsedList });
+          return;
+        }
+        var node = ev.target.closest && ev.target.closest(".node");
+        if (node) {
+          var nid = node.getAttribute("data-id");
+          if (nid) vscode.postMessage({ type: "select", id: nid });
+        }
+      });
+    })();
+
     window.addEventListener("message", (event) => {
       const m = event.data;
       if (m && m.type === "state") {
         hasReceivedState = true;
-        state = { ...m, streamingHtml: null };
+        var collapsedFromHost = {};
+        (m.treeCollapsedEventIds || []).forEach(function (id) {
+          collapsedFromHost[id] = true;
+        });
+        state = { ...m, streamingHtml: null, treeCollapsedIds: collapsedFromHost };
         render();
         return;
       }

@@ -251,6 +251,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.openAbout", () => {
       showAboutPanel();
     }),
+    vscode.commands.registerCommand("colcoor.toggleStarSelectedMessage", async () => {
+      await conversationPanel.toggleStarSelectedMessage();
+    }),
+    vscode.commands.registerCommand("colcoor.addNoteToSelectedMessage", async () => {
+      await conversationPanel.addNoteToSelectedMessage();
+    }),
+    vscode.commands.registerCommand("colcoor.showNotesOnSelectedMessage", async () => {
+      await conversationPanel.showNotesOnSelectedMessage();
+    }),
     vscode.commands.registerCommand(
       "colcoor.openConversation",
       async (arg0?: ConversationTreeItem | string, arg1?: string | null) => {

@@ -2,6 +2,8 @@
 
 Normative **role matrix** for conversation-scoped actions. Roles are stored per `(conversation_id, user_id)` in `**conversation_members.role`**: exactly one `**owner`** per conversation (see [database.md](database.md) and [domain-model.md](domain-model.md)).
 
+The extension SHOULD enforce these rules in **central command handlers**, not in tree **layout** code ([tree-ui-contract.md](tree-ui-contract.md) §2, §6).
+
 **Legend**
 
 

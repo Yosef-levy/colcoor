@@ -55,7 +55,7 @@ The list panel MUST be **minimizable** (collapse to strip or icon).
 ## 5. Resizable layout
 
 - Conversation **list** width.
-- **Tree** vs **message details** split.
+- **Conversation tree** pane vs **thread / composer** (and optional detail) pane widths — layout is independent of tree **semantics**; see [tree-ui-contract.md](tree-ui-contract.md) §8–§9.
 - **Composer** height (or equivalent).
 - **Side chat** panel width.
 
@@ -65,10 +65,16 @@ Persist sizes where reasonable (workspace or user storage).
 
 ## 6. Tree view
 
-- **Branching graph** of **user** and **assistant** nodes.
-- **Active**, **selected**, **private**, **note count**, snippet or **message title** on nodes.
-- **Click** to select; syncs **thread** and **details**.
-- **Star** on nodes (hover-reveal acceptable on desktop).
+Normative **state model, interactions, metadata, and layout independence:** **[tree-ui-contract.md](tree-ui-contract.md)**.
+
+**User expectations (summary):**
+
+- **Indented outline** (vertical list, parent/child via indentation) is the **reference** visualization; **expand/collapse** per node that has children.
+- **Select** a node as the primary on-tree action; selection drives **thread** and **detail bar** path.
+- Nodes show **role** (user vs assistant), **private** when applicable, **star** and **notes** when applicable, compact **snippet** (and **title** when the product exposes one), and **time** per [tree-ui-contract.md](tree-ui-contract.md) §7.
+- **Star, notes, private commit/delete, resend**, etc. are **not** required as heavy inline controls on each row; they surface via **detail bar**, **context menu**, **command palette**, or shortcuts ([tree-ui-contract.md](tree-ui-contract.md) §5–§6).
+
+**Future:** other layouts (e.g. graph) MUST reuse the same contract ([tree-ui-contract.md](tree-ui-contract.md) §10).
 
 ---
 
@@ -87,7 +93,9 @@ Persist sizes where reasonable (workspace or user storage).
 
 ---
 
-## 8. Message detail pane
+## 8. Message detail pane (detail bar + body)
+
+**Selection vs actions:** the **detail bar** (breadcrumb + actions) is the primary place for actions tied to the **selected** node; the **tree** remains selection-first only ([tree-ui-contract.md](tree-ui-contract.md) §2, §5).
 
 - **Breadcrumb** root → **selected** (include **checkpoint** label in UI if the backend exposes it on the node — display-only).
 - Full **message body**.
@@ -145,12 +153,12 @@ Persist sizes where reasonable (workspace or user storage).
 | §3 | Account + paywall |
 | §4 | Conversation list + minimize |
 | §5 | Resizers |
-| §6 | Tree |
+| §6 | Tree ([tree-ui-contract.md](tree-ui-contract.md) normative) |
 | §7 | Thread (no tool rows) |
-| §8 | Details pane |
+| §8 | Detail bar + details pane |
 | §9 | Composer |
 | §10 | Side chat |
 | §11 | Drawers + presence + stale prompt |
 | §12 | Members + rename |
 
-**Avatar:** §1.1. **Tool rows:** excluded in §7.
+**Avatar:** §1.1. **Tool rows:** excluded in §7. **Tree behavior/state:** [tree-ui-contract.md](tree-ui-contract.md).

@@ -266,9 +266,32 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         )
         assert r.status_code == 200, r.text
 
+        r = client.post(
+            f"/api/v1/conversations/{cid}/notes",
+            headers=auth,
+            json={"event_id": user_ev_id, "content": "integration note"},
+        )
+        assert r.status_code == 200, r.text
+        note_row = r.json()
+        assert note_row["content"] == "integration note"
+
+        r = client.get(f"/api/v1/conversations/{cid}/notes", headers=auth)
+        assert r.status_code == 200, r.text
+        assert len(r.json()) == 1
+
+        r = client.put(
+            f"/api/v1/conversations/{cid}/events/{user_ev_id}/star",
+            headers=auth,
+        )
+        assert r.status_code == 204, r.text
+
         r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
         assert r.status_code == 200, r.text
-        asst = next(e for e in r.json()["events"] if e.get("content_text") == "from assistant")
+        body = r.json()
+        user_ev = next(e for e in body["events"] if e["id"] == user_ev_id)
+        assert user_ev["note_count"] == 1
+        assert user_ev["starred"] is True
+        asst = next(e for e in body["events"] if e.get("content_text") == "from assistant")
         assert asst["content_json"]["colcoor_agent_trace"]["version"] == 1
         assert asst["content_json"]["colcoor_agent_trace"]["entries"][0]["type"] == "tool_call"
 

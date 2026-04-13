@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, exists, literal, select
+from sqlalchemy import delete, exists, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -14,6 +14,8 @@ from colcoor_backend.db.models import (
     ConversationMember,
     ConversationUserState,
     Event,
+    EventStar,
+    Note,
     User,
 )
 from colcoor_backend.services.cursor_identity import VerifiedCursorIdentity
@@ -357,3 +359,198 @@ async def list_events_for_tree(
     )
     events = list(res.scalars().all())
     return [e for e in events if e.visible_to is None or e.visible_to == user_id]
+
+
+async def tree_event_annotations(
+    session: AsyncSession,
+    event_ids: list[uuid.UUID],
+    user_id: uuid.UUID,
+) -> tuple[set[uuid.UUID], dict[uuid.UUID, int]]:
+    """Starred event ids for this user, and note counts per event, for tree UI ([tree-ui-contract.md])."""
+    if not event_ids:
+        return set(), {}
+    res_star = await session.execute(
+        select(EventStar.event_id).where(
+            EventStar.user_id == user_id,
+            EventStar.event_id.in_(event_ids),
+        )
+    )
+    starred = {row[0] for row in res_star.all()}
+    res_notes = await session.execute(
+        select(Note.event_id, func.count(Note.id))
+        .where(Note.event_id.in_(event_ids))
+        .group_by(Note.event_id)
+    )
+    note_counts = {row[0]: int(row[1]) for row in res_notes.all()}
+    return starred, note_counts
+
+
+async def _set_needs_context_rebuild_all_members(
+    session: AsyncSession, conversation_id: uuid.UUID
+) -> None:
+    """After note add/edit/delete on a shared-visible graph ([domain-model.md] §4)."""
+    await session.execute(
+        update(ConversationUserState)
+        .where(ConversationUserState.conversation_id == conversation_id)
+        .values(needs_context_rebuild=True)
+    )
+
+
+async def list_notes_visible(
+    session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
+) -> list[Note]:
+    await ensure_conversation_member(session, conversation_id, user_id)
+    stmt = (
+        select(Note)
+        .join(Event, Event.id == Note.event_id)
+        .where(
+            Event.conversation_id == conversation_id,
+            Event.deleted_at.is_(None),
+            or_(Event.visible_to.is_(None), Event.visible_to == user_id),
+        )
+        .order_by(Note.created_at.asc(), Note.id.asc())
+    )
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+
+async def load_note_in_conversation(
+    session: AsyncSession, conversation_id: uuid.UUID, note_id: uuid.UUID
+) -> tuple[Note, Event] | None:
+    res = await session.execute(
+        select(Note, Event)
+        .join(Event, Event.id == Note.event_id)
+        .where(
+            Note.id == note_id,
+            Event.conversation_id == conversation_id,
+            Event.deleted_at.is_(None),
+        )
+    )
+    row = res.one_or_none()
+    if row is None:
+        return None
+    return row[0], row[1]
+
+
+async def create_note_on_event(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    event_id: uuid.UUID,
+    content: str,
+) -> Note:
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot add notes")
+    ev = await load_event(session, conversation_id, event_id)
+    if ev is None:
+        raise LookupError("event not found")
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise PermissionError("event not visible")
+    text = content.strip()
+    if not text:
+        raise ValueError("content required")
+    now = datetime.now(tz=UTC)
+    note = Note(
+        event_id=event_id,
+        author_user_id=user_id,
+        content=text,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(note)
+    await session.flush()
+    await _set_needs_context_rebuild_all_members(session, conversation_id)
+    await session.refresh(note)
+    return note
+
+
+async def update_note_content(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    note_id: uuid.UUID,
+    content: str,
+) -> Note:
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot edit notes")
+    loaded = await load_note_in_conversation(session, conversation_id, note_id)
+    if loaded is None:
+        raise LookupError("note not found")
+    note, ev = loaded
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise PermissionError("event not visible")
+    text = content.strip()
+    if not text:
+        raise ValueError("content required")
+    note.content = text
+    note.updated_at = datetime.now(tz=UTC)
+    await session.flush()
+    await _set_needs_context_rebuild_all_members(session, conversation_id)
+    await session.refresh(note)
+    return note
+
+
+async def delete_note_row(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    note_id: uuid.UUID,
+) -> None:
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot delete notes")
+    loaded = await load_note_in_conversation(session, conversation_id, note_id)
+    if loaded is None:
+        raise LookupError("note not found")
+    note, ev = loaded
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise PermissionError("event not visible")
+    await session.delete(note)
+    await session.flush()
+    await _set_needs_context_rebuild_all_members(session, conversation_id)
+
+
+async def put_event_star(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    event_id: uuid.UUID,
+) -> None:
+    await ensure_conversation_member(session, conversation_id, user_id)
+    ev = await load_event(session, conversation_id, event_id)
+    if ev is None:
+        raise LookupError("event not found")
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise PermissionError("event not visible")
+    res = await session.execute(
+        select(EventStar).where(EventStar.user_id == user_id, EventStar.event_id == event_id)
+    )
+    if res.scalar_one_or_none() is None:
+        session.add(EventStar(user_id=user_id, event_id=event_id))
+        await session.flush()
+
+
+async def delete_event_star(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    event_id: uuid.UUID,
+) -> None:
+    await ensure_conversation_member(session, conversation_id, user_id)
+    ev = await load_event(session, conversation_id, event_id)
+    if ev is None:
+        raise LookupError("event not found")
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise PermissionError("event not visible")
+    await session.execute(
+        delete(EventStar).where(EventStar.user_id == user_id, EventStar.event_id == event_id)
+    )
+    await session.flush()

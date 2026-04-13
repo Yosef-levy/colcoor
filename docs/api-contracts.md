@@ -219,6 +219,8 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `visible_to` | uuid \| null | yes |
 | `created_at` | string (ISO-8601) | yes |
 | `updated_at` | string (ISO-8601) | yes |
+| `starred` | boolean | yes | `true` if the caller has starred this event ([domain-model.md](domain-model.md) §7) |
+| `note_count` | integer | yes | Number of notes on this event (≥ 0); [tree-ui-contract.md](tree-ui-contract.md) §7 |
 
 ### 5.2 `POST /api/v1/conversations/{conversation_id}/active`
 

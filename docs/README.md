@@ -29,5 +29,6 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 | [production.md](production.md) | Docker, nginx, Postgres, env, health |
 | [git-integration.md](git-integration.md) | Optional Git metadata |
 | [ui-features.md](ui-features.md) | User-visible UI checklist |
+| [tree-ui-contract.md](tree-ui-contract.md) | **Normative** conversation tree: node state, selection vs actions, future layouts |
 
 Cross-references are **within this folder** unless the link is a public standard (e.g. VS Code SecretStorage).

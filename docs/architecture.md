@@ -41,7 +41,7 @@ flowchart LR
   CLI -->|response stream or final| Ext
 ```
 
-- **Extension** — Builds the **authoritative** transcript; calls **`append-event`**; runs the agent via **CLI / ACP** when available ([data-flow-and-api.md](data-flow-and-api.md)); updates UI from API responses.
+- **Extension** — Builds the **authoritative** transcript; calls **`append-event`**; runs the agent via **CLI / ACP** when available ([data-flow-and-api.md](data-flow-and-api.md)); updates UI from API responses. **Conversation tree** UI contract (selection vs actions, multi-layout readiness): [tree-ui-contract.md](tree-ui-contract.md).
 - **Cursor agent runtime** — Subprocess or supported API; may add files/symbols internally; Colcoor does not duplicate that layer.
 - **Colcoor backend** — HTTP API and database ([database.md](database.md), [api-contracts.md](api-contracts.md)); **append-event** and related routes; no server-side main-thread streaming completion.
 

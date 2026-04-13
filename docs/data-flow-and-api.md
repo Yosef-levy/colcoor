@@ -4,6 +4,7 @@ This document defines **execution order** and **behavioral invariants** for the 
 
 **Normative HTTP (paths, bodies, status codes):** **[api-contracts.md](api-contracts.md)**  
 **Tree, `visible_to`, active state, notes, side chat:** **[domain-model.md](domain-model.md)**  
+**Tree UI (selection vs actions, node state):** **[tree-ui-contract.md](tree-ui-contract.md)**  
 **Transcript text format:** **[transcript-format.md](transcript-format.md)**  
 **Transcript authority vs Cursor context:** **[principles.md](principles.md)**  
 **Roles and 403 rules:** **[permissions.md](permissions.md)**  

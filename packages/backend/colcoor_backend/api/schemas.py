@@ -84,6 +84,8 @@ class EventNodeOut(BaseModel):
     visible_to: UUID | None
     created_at: datetime
     updated_at: datetime
+    starred: bool = False
+    note_count: int = 0
 
 
 class TreeResponse(BaseModel):
@@ -120,3 +122,29 @@ class ConversationUserStateOut(BaseModel):
     active_event_id: UUID
     needs_context_rebuild: bool
     last_seen_at: datetime
+
+
+class NoteOut(BaseModel):
+    """GET/POST/PATCH notes (api-contracts §7)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    event_id: UUID
+    author_user_id: UUID
+    content: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class NoteCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: UUID
+    content: str = Field(..., min_length=1)
+
+
+class NotePatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(..., min_length=1)

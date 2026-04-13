@@ -10,6 +10,9 @@ import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { findBranchTip } from "./treeEvents";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
+/** `conversation_id` → event ids whose branches are collapsed in the webview tree ([tree-ui-contract.md]). */
+const TREE_COLLAPSED_BY_CONV_KEY = "colcoor.treeCollapsedByConversation";
+const colcoorNotesChannel = vscode.window.createOutputChannel("Colcoor notes");
 
 type WebviewStateMessage = {
   type: "state";
@@ -23,6 +26,8 @@ type WebviewStateMessage = {
   threadPlainText: string;
   /** Workspace-persisted tree column width (px), when set. */
   treeWidthPx: number | null;
+  /** Collapsed branch roots for this conversation (pruned to current `events`). */
+  treeCollapsedEventIds: string[];
   /** Settings: expand CLI trace `<details>` by default. */
   agentTraceOpen: boolean;
   busy: boolean;
@@ -41,7 +46,8 @@ type FromWebview =
   | { type: "copyThread"; text: string }
   | { type: "layout"; treeWidthPx: number }
   | { type: "rename" }
-  | { type: "togglePin" };
+  | { type: "togglePin" }
+  | { type: "treeCollapse"; collapsedEventIds: string[] };
 
 function randomNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -69,6 +75,12 @@ export function createConversationPanelController(
   reveal: (conversationId: string, title: string | null) => Promise<void>;
   /** Close the webview panel if it is showing this conversation (e.g. after delete). */
   closeIfShowingConversation: (conversationId: string) => void;
+  /** Star or unstar the selected tree node via API (command palette). */
+  toggleStarSelectedMessage: () => Promise<void>;
+  /** Attach a note to the selected event (owner/editor); refreshes tree. */
+  addNoteToSelectedMessage: () => Promise<void>;
+  /** List notes for the selected event in the “Colcoor notes” output channel. */
+  showNotesOnSelectedMessage: () => Promise<void>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -118,6 +130,19 @@ export function createConversationPanelController(
     lastTreeEvents = [];
   }
 
+  function readCollapsedByConversation(): Record<string, string[]> {
+    return context.workspaceState.get<Record<string, string[]>>(TREE_COLLAPSED_BY_CONV_KEY) ?? {};
+  }
+
+  function prunedCollapsedEventIds(events: GraphEventNode[]): string[] {
+    if (!conversationId) {
+      return [];
+    }
+    const raw = readCollapsedByConversation()[conversationId] ?? [];
+    const valid = new Set(events.map((e) => e.id));
+    return raw.filter((id) => valid.has(id));
+  }
+
   function postState(
     events: GraphEventNode[],
     busy: boolean,
@@ -154,6 +179,7 @@ export function createConversationPanelController(
         threadSegments: buildThreadSegments(events, sel ?? ""),
         threadPlainText: buildPlainThread(events, sel ?? ""),
         treeWidthPx,
+        treeCollapsedEventIds: prunedCollapsedEventIds(events),
         agentTraceOpen,
         busy,
         lastError,
@@ -181,6 +207,7 @@ export function createConversationPanelController(
           threadSegments: [],
           threadPlainText: "",
           treeWidthPx,
+          treeCollapsedEventIds: [],
           agentTraceOpen,
           busy,
           lastError:
@@ -439,6 +466,13 @@ export function createConversationPanelController(
         }
         return;
       }
+      if (msg.type === "treeCollapse" && Array.isArray(msg.collapsedEventIds) && conversationId) {
+        const valid = new Set(lastTreeEvents.map((e) => e.id));
+        const pruned = msg.collapsedEventIds.map(String).filter((id) => valid.has(id));
+        const all = { ...readCollapsedByConversation(), [conversationId]: pruned };
+        void context.workspaceState.update(TREE_COLLAPSED_BY_CONV_KEY, all);
+        return;
+      }
       if (msg.type === "resend") {
         await handleResend();
         return;
@@ -471,6 +505,85 @@ export function createConversationPanelController(
     return p;
   }
 
+  async function toggleStarSelectedMessage(): Promise<void> {
+    if (!conversationId || !selectedEventId) {
+      void vscode.window.showWarningMessage("Colcoor: open a conversation and select a message in the tree.");
+      return;
+    }
+    const ev = lastTreeEvents.find((e) => e.id === selectedEventId);
+    if (!ev) {
+      void vscode.window.showWarningMessage("Colcoor: selection not in the loaded tree — try Refresh tree.");
+      return;
+    }
+    try {
+      if (ev.starred === true) {
+        await api.deleteStar(conversationId, selectedEventId);
+        void vscode.window.setStatusBarMessage("Colcoor: star removed.", 2000);
+      } else {
+        await api.putStar(conversationId, selectedEventId);
+        void vscode.window.setStatusBarMessage("Colcoor: message starred.", 2000);
+      }
+      await loadTreeAndPush(false, null);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+    }
+  }
+
+  async function addNoteToSelectedMessage(): Promise<void> {
+    if (!conversationId || !selectedEventId) {
+      void vscode.window.showWarningMessage("Colcoor: open a conversation and select a message in the tree.");
+      return;
+    }
+    if (!lastTreeEvents.some((e) => e.id === selectedEventId)) {
+      void vscode.window.showWarningMessage("Colcoor: selection not in the loaded tree — try Refresh tree.");
+      return;
+    }
+    const text = await vscode.window.showInputBox({
+      title: "Colcoor — add note",
+      prompt: "Note text (attached to the selected message; viewers cannot add notes).",
+      ignoreFocusOut: true,
+    });
+    if (text === undefined || !text.trim()) {
+      return;
+    }
+    try {
+      await api.createNote(conversationId, { event_id: selectedEventId, content: text.trim() });
+      void vscode.window.setStatusBarMessage("Colcoor: note added.", 2500);
+      await loadTreeAndPush(false, null);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+    }
+  }
+
+  async function showNotesOnSelectedMessage(): Promise<void> {
+    if (!conversationId || !selectedEventId) {
+      void vscode.window.showWarningMessage("Colcoor: open a conversation and select a message in the tree.");
+      return;
+    }
+    try {
+      const all = await api.listNotes(conversationId);
+      const forEv = all.filter((n) => n.event_id === selectedEventId);
+      colcoorNotesChannel.clear();
+      colcoorNotesChannel.appendLine(`Notes on event ${selectedEventId} (${forEv.length})`);
+      colcoorNotesChannel.appendLine("");
+      if (forEv.length === 0) {
+        colcoorNotesChannel.appendLine("(none)");
+      } else {
+        for (const n of forEv) {
+          colcoorNotesChannel.appendLine(`— ${n.id}`);
+          colcoorNotesChannel.appendLine(n.content.split("\n").map((line) => `  ${line}`).join("\n"));
+          colcoorNotesChannel.appendLine("");
+        }
+      }
+      colcoorNotesChannel.show(true);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+    }
+  }
+
   return {
     async reveal(convId: string, title: string | null): Promise<void> {
       conversationId = convId;
@@ -490,8 +603,12 @@ export function createConversationPanelController(
         disposePanel();
       }
     },
+    toggleStarSelectedMessage,
+    addNoteToSelectedMessage,
+    showNotesOnSelectedMessage,
     dispose: () => {
       subscription.dispose();
+      colcoorNotesChannel.dispose();
       disposePanel();
     },
   };

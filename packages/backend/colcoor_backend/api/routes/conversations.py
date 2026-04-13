@@ -13,18 +13,28 @@ from colcoor_backend.api.schemas import (
     EventKind,
     EventNodeOut,
     MemberOut,
+    NoteCreateBody,
+    NoteOut,
+    NotePatchBody,
     SetActiveBody,
     TreeResponse,
 )
 from colcoor_backend.services.graph import (
     append_graph_event,
     create_conversation_with_owner,
+    create_note_on_event,
     delete_conversation_for_owner,
+    delete_event_star,
+    delete_note_row,
     list_conversation_members,
     list_conversations_for_user,
     list_events_for_tree,
+    list_notes_visible,
     patch_conversation_for_user,
+    put_event_star,
     set_conversation_active_event,
+    tree_event_annotations,
+    update_note_content,
 )
 
 router = APIRouter()
@@ -154,7 +164,28 @@ async def get_tree(
         events = await list_events_for_tree(session, conversation_id, user_id)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
-    return TreeResponse(events=[EventNodeOut.model_validate(e) for e in events])
+    ids = [e.id for e in events]
+    starred_ids, note_counts = await tree_event_annotations(session, ids, user_id)
+    out: list[EventNodeOut] = []
+    for e in events:
+        out.append(
+            EventNodeOut(
+                id=e.id,
+                conversation_id=e.conversation_id,
+                parent_event_id=e.parent_event_id,
+                kind=e.kind,
+                actor_type=e.actor_type,
+                actor_user_id=e.actor_user_id,
+                content_text=e.content_text,
+                content_json=e.content_json,
+                visible_to=e.visible_to,
+                created_at=e.created_at,
+                updated_at=e.updated_at,
+                starred=e.id in starred_ids,
+                note_count=note_counts.get(e.id, 0),
+            )
+        )
+    return TreeResponse(events=out)
 
 
 @router.post("/{conversation_id}/active", response_model=ConversationUserStateOut)
@@ -203,3 +234,124 @@ async def get_conversation_members(
             )
         )
     return out
+
+
+@router.get("/{conversation_id}/notes", response_model=list[NoteOut])
+async def get_conversation_notes(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+) -> list[NoteOut]:
+    try:
+        notes = await list_notes_visible(session, conversation_id, user_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    return [NoteOut.model_validate(n) for n in notes]
+
+
+@router.post("/{conversation_id}/notes", response_model=NoteOut)
+async def post_conversation_note(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    body: NoteCreateBody,
+) -> NoteOut:
+    try:
+        note = await create_note_on_event(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            event_id=body.event_id,
+            content=body.content,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return NoteOut.model_validate(note)
+
+
+@router.patch("/{conversation_id}/notes/{note_id}", response_model=NoteOut)
+async def patch_conversation_note(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    note_id: UUID,
+    body: NotePatchBody,
+) -> NoteOut:
+    try:
+        note = await update_note_content(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            note_id=note_id,
+            content=body.content,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return NoteOut.model_validate(note)
+
+
+@router.delete("/{conversation_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation_note(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    note_id: UUID,
+) -> Response:
+    try:
+        await delete_note_row(session, conversation_id=conversation_id, user_id=user_id, note_id=note_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put(
+    "/{conversation_id}/events/{event_id}/star",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def put_star(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    event_id: UUID,
+) -> Response:
+    try:
+        await put_event_star(session, conversation_id=conversation_id, user_id=user_id, event_id=event_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/{conversation_id}/events/{event_id}/star",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_star(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    event_id: UUID,
+) -> Response:
+    try:
+        await delete_event_star(session, conversation_id=conversation_id, user_id=user_id, event_id=event_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

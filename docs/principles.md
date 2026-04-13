@@ -130,4 +130,4 @@ The user must **not** be exposed to:
 
 The experience should feel **native**: select node → run → see result. Implementation details belong in logs or developer mode only, not in default UI.
 
-For a **concrete checklist** of screens and controls, see [ui-features.md](ui-features.md).
+For a **concrete checklist** of screens and controls, see [ui-features.md](ui-features.md). **Conversation tree** state, selection, and separation from actions: [tree-ui-contract.md](tree-ui-contract.md).

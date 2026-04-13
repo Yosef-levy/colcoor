@@ -65,6 +65,18 @@
       {
         "command": "colcoor.openAbout",
         "title": "Colcoor: About"
+      },
+      {
+        "command": "colcoor.toggleStarSelectedMessage",
+        "title": "Colcoor: Toggle star on selected message"
+      },
+      {
+        "command": "colcoor.addNoteToSelectedMessage",
+        "title": "Colcoor: Add note to selected message"
+      },
+      {
+        "command": "colcoor.showNotesOnSelectedMessage",
+        "title": "Colcoor: Show notes on selected message"
       }
     ],
     "viewsContainers": {

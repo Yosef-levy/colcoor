@@ -33,6 +33,10 @@ export type GraphEventNode = {
   visible_to: string | null;
   created_at: string;
   updated_at: string;
+  /** Tree API: whether the current user starred this event. */
+  starred?: boolean;
+  /** Tree API: note count on this event. */
+  note_count?: number;
 };
 
 export type TreeResponseBody = {
@@ -70,6 +74,15 @@ export type AppendEventBody = {
 
 export type AppendEventResponse = {
   id: string;
+};
+
+export type NoteOut = {
+  id: string;
+  event_id: string;
+  author_user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 };
 
 /**
@@ -239,6 +252,50 @@ export class ColcoorApiClient {
       throw new Error(`set active failed (${res.status}): ${text || res.statusText}`);
     }
     return JSON.parse(text) as ConversationUserStateOut;
+  }
+
+  /** Star an event (idempotent PUT …/events/{id}/star). */
+  async putStar(conversationId: string, eventId: string): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/events/${eventId}/star`, {
+      method: "PUT",
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`star failed (${res.status}): ${text || res.statusText}`);
+    }
+  }
+
+  /** Remove star (DELETE …/events/{id}/star). */
+  async deleteStar(conversationId: string, eventId: string): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/events/${eventId}/star`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`unstar failed (${res.status}): ${text || res.statusText}`);
+    }
+  }
+
+  async listNotes(conversationId: string): Promise<NoteOut[]> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/notes`, { method: "GET" });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`list notes failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as NoteOut[];
+  }
+
+  async createNote(conversationId: string, body: { event_id: string; content: string }): Promise<NoteOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`create note failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as NoteOut;
   }
 
   /** Owner-only: delete conversation and cascaded data (DELETE /conversations/{id}). */
