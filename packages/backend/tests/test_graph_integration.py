@@ -447,3 +447,39 @@ def test_transfer_ownership_via_patch_http(monkeypatch: pytest.MonkeyPatch, post
         assert r.status_code == 204, r.text
 
     get_settings.cache_clear()
+
+
+def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """PATCH /me updates display_name and avatar_url (api-contracts §9.1)."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.patch("/api/v1/me", headers=auth, json={})
+        assert r.status_code == 422, r.text
+
+        r = client.patch("/api/v1/me", headers=auth, json={"display_name": "Pat"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["display_name"] == "Pat"
+        assert body["email"] == "i@i.c"
+        assert "access_token" not in body
+
+        r = client.patch(
+            "/api/v1/me",
+            headers=auth,
+            json={"avatar_url": "https://cdn.example/avatar.png"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["avatar_url"] == "https://cdn.example/avatar.png"
+
+        r = client.patch("/api/v1/me", headers=auth, json={"avatar_url": None})
+        assert r.status_code == 200, r.text
+        assert r.json()["avatar_url"] is None
+
+    get_settings.cache_clear()

@@ -187,6 +187,32 @@ describe("ColcoorApiClient note mutations", () => {
     ).rejects.toThrow(/update note failed \(HTTP 403\).*forbidden/);
   });
 
+  it("patchMe sends PATCH /api/v1/me with JSON body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          email: "u@u.u",
+          display_name: "Sam",
+          avatar_url: null,
+        }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const out = await api.patchMe({ display_name: "Sam" });
+    expect(out.display_name).toBe("Sam");
+    expect(out.email).toBe("u@u.u");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/me");
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ display_name: "Sam" }));
+  });
+
   it("createConversation surfaces HTTP 402 as plan / usage wording", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

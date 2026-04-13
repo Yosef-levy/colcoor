@@ -87,6 +87,20 @@ export type NoteOut = {
   updated_at: string;
 };
 
+/** GET/PATCH …/me response (api-contracts §9.1). */
+export type MeOut = {
+  id: string;
+  email: string;
+  display_name: string;
+  avatar_url: string | null;
+  access_token?: string;
+};
+
+export type MePatchBody = {
+  display_name?: string;
+  avatar_url?: string | null;
+};
+
 /**
  * HTTP client for the extension-dedicated backend.
  * Authenticated requests send Authorization (docs/monetization.md).
@@ -130,6 +144,18 @@ export class ColcoorApiClient {
     } catch (e) {
       throw new Error(networkErrorDetail(url, e));
     }
+  }
+
+  /** PATCH /me — update caller display name and/or avatar URL. */
+  async patchMe(body: MePatchBody): Promise<MeOut> {
+    const res = await this.fetchApi("/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "update profile");
+    return JSON.parse(text) as MeOut;
   }
 
   async fetchApi(path: string, init: RequestInit = {}): Promise<Response> {

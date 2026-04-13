@@ -165,3 +165,33 @@ class NotePatchBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(..., min_length=1)
+
+
+class MePatchBody(BaseModel):
+    """PATCH /me (api-contracts §9.1). At least one field must be present in the JSON object."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = None
+    avatar_url: str | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> MePatchBody:
+        if not self.model_fields_set:
+            raise ValueError("at least one of display_name, avatar_url is required")
+        return self
+
+
+class MeOut(BaseModel):
+    """Caller profile (api-contracts §9.1)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    display_name: str
+    avatar_url: str | None
+    access_token: str | None = Field(
+        default=None,
+        description="Omitted unless the server refreshes JWT claims (not used on simple profile patch).",
+    )
