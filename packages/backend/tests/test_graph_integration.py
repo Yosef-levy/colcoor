@@ -7,6 +7,7 @@ When unset, tests in this module are skipped so ``pytest`` stays green in CI wit
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import uuid
 from collections.abc import Iterator
@@ -463,6 +464,48 @@ def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> N
         )
         assert r.status_code == 200, r.text
         assert r.json()["deleted_at"] is not None
+
+    get_settings.cache_clear()
+
+
+def test_side_chat_stream_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """GET …/side-chat/stream returns SSE and at least one side_chat frame (api-contracts §10.6)."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    monkeypatch.setenv("COLCOOR_SIDE_CHAT_SSE_POLL_SEC", "0.05")
+    monkeypatch.setenv("COLCOOR_SIDE_CHAT_SSE_MAX_SECONDS", "0.2")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "sse"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/side-chat/messages",
+            headers=auth,
+            json={"kind": "user", "body": "stream-me"},
+        )
+        assert r.status_code == 200, r.text
+
+        with client.stream(
+            "GET",
+            f"/api/v1/conversations/{cid}/side-chat/stream?after_seq=0",
+            headers=auth,
+        ) as resp:
+            assert resp.status_code == 200, resp.text
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+            raw = resp.read()
+        text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        assert "data:" in text
+        line = text.split("data: ", 1)[1].split("\n", 1)[0]
+        obj = json.loads(line)
+        assert obj["type"] == "side_chat"
+        assert obj["message"]["body"] == "stream-me"
 
     get_settings.cache_clear()
 

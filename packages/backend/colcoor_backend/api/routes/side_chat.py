@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 
 from colcoor_backend.api.deps import CurrentUserId, DbSession
 from colcoor_backend.api.schemas import (
@@ -10,6 +11,7 @@ from colcoor_backend.api.schemas import (
     SideChatPostBody,
     SideChatReadPatchBody,
 )
+from colcoor_backend.services.graph import ensure_conversation_member
 from colcoor_backend.services.side_chat import (
     list_side_chat_messages,
     patch_side_chat_message_body,
@@ -17,8 +19,44 @@ from colcoor_backend.services.side_chat import (
     post_user_side_chat_message,
     soft_delete_side_chat_message,
 )
+from colcoor_backend.services.side_chat_sse import iter_side_chat_sse
 
 router = APIRouter()
+
+
+@router.get("/{conversation_id}/side-chat/stream")
+async def side_chat_event_stream(
+    request: Request,
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    after_seq: int = Query(default=0, ge=0),
+) -> StreamingResponse:
+    """Server-Sent Events: JSON per ``data:`` line (api-contracts §10.6)."""
+    try:
+        await ensure_conversation_member(session, conversation_id, user_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    factory = getattr(request.app.state, "session_factory", None)
+    if factory is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database not configured",
+        )
+    return StreamingResponse(
+        iter_side_chat_sse(
+            factory,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            after_seq=after_seq,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{conversation_id}/side-chat/messages", response_model=SideChatMessagesResponse)
