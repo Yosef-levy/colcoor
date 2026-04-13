@@ -87,6 +87,20 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(feed.getResolvedText()).toBe("Hi there");
   });
 
+  it("treats assistant lines as cumulative snapshots when each repeats the prior prefix (stream-partial)", () => {
+    const feed = createStreamJsonStdoutFeed();
+    const seen: string[] = [];
+    feed.push('{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi"}]}}\n', (t) =>
+      seen.push(t),
+    );
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi there"}]}}\n',
+      (t) => seen.push(t),
+    );
+    expect(seen).toEqual(["Hi", "Hi there"]);
+    expect(feed.getResolvedText()).toBe("Hi there");
+  });
+
   it("prefers terminal result over summed assistant text", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push(

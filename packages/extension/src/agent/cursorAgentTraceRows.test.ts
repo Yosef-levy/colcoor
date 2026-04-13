@@ -27,6 +27,20 @@ describe("formatToolCallTraceRow", () => {
     expect(row).toEqual({ colcoor_row: "edit_diff", diff: "--- a\n+++ b\n+line" });
   });
 
+  it("includes path on editToolCall completed when args.path is present", () => {
+    const row = formatToolCallTraceRow("completed", {
+      editToolCall: {
+        args: { path: "src/lib.py" },
+        result: { success: { diffString: "--- a\n+++ b" } },
+      },
+    });
+    expect(row).toEqual({
+      colcoor_row: "edit_diff",
+      diff: "--- a\n+++ b",
+      path: "src/lib.py",
+    });
+  });
+
   it("formats shellToolCall started", () => {
     const row = formatToolCallTraceRow("started", {
       shellToolCall: { args: { command: "python3 -m unittest x -v", description: "Run unittest from tmp directory" } },

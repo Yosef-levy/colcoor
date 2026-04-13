@@ -118,7 +118,15 @@ export function createStreamJsonStdoutFeed(): {
     if (terminal !== null) {
       return;
     }
-    fromAssistant += effect.delta;
+    const next = effect.delta;
+    // `--stream-partial-output` often sends each `assistant` line as a full snapshot of the message
+    // so far; concatenating those repeats every prior line. True deltas are still supported: if
+    // `next` is not an extension of what we already have, append.
+    if (next.length >= fromAssistant.length && next.startsWith(fromAssistant)) {
+      fromAssistant = next;
+    } else {
+      fromAssistant += next;
+    }
     on?.(resolvedSoFar());
   }
 

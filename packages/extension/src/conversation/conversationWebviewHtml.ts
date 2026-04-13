@@ -463,10 +463,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         );
       }
       if (ev && ev.colcoor_row === "edit_diff" && typeof ev.diff === "string") {
+        var editPath =
+          ev.path != null && String(ev.path).trim() !== "" ? " · " + esc(String(ev.path).trim()) : "";
         return (
           '<div class="trace-entry trace-row-edit"><div class="trace-meta">' +
           n +
-          '. Edit (diff)</div><pre class="trace-pre trace-diff">' +
+          ". Edit (diff)" +
+          editPath +
+          '</div><pre class="trace-pre trace-diff">' +
           esc(ev.diff) +
           "</pre></div>"
         );

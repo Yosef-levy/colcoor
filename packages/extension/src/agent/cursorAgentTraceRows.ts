@@ -82,18 +82,26 @@ function extractEditDiffString(edit: Record<string, unknown>): string | undefine
   return walk(result);
 }
 
-/** `editToolCall` completed: diff only. */
+/** `editToolCall` completed: diff + optional target path from args. */
 function formatEditCompleted(toolCall: Record<string, unknown>): Record<string, unknown> | null {
   const edit = toolCall.editToolCall;
   if (!edit || typeof edit !== "object") {
     return null;
   }
-  const diff = extractEditDiffString(edit as Record<string, unknown>);
+  const editObj = edit as Record<string, unknown>;
+  const diff = extractEditDiffString(editObj);
   if (!diff) {
     return null;
   }
   const trimmed = diff.length > MAX_DIFF_CHARS ? `${diff.slice(0, MAX_DIFF_CHARS)}\n… [truncated]` : diff;
-  return { colcoor_row: "edit_diff", diff: trimmed };
+  const args = editObj.args;
+  const path =
+    args && typeof args === "object" ? str((args as Record<string, unknown>).path) : undefined;
+  const row: Record<string, unknown> = { colcoor_row: "edit_diff", diff: trimmed };
+  if (path) {
+    row.path = path;
+  }
+  return row;
 }
 
 function formatShellResult(result: unknown): string {
