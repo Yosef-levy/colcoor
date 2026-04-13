@@ -9,7 +9,7 @@ function assistantContentJson(runResult: AgentRunResult): Record<string, unknown
   }
   return {
     colcoor_agent_trace: {
-      version: 1,
+      version: 2,
       entries,
     },
   };

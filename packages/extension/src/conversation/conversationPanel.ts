@@ -5,12 +5,11 @@ import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
 import { runColcoorUserTurn } from "./runUserTurn";
-import {
-  buildThreadSegments,
-  extractAgentTraceEntries,
-  type ThreadSegment,
-} from "./threadSegments";
+import { buildPlainThread } from "./threadPlainText";
+import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { findBranchTip } from "./treeEvents";
+
+const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
 
 type WebviewStateMessage = {
   type: "state";
@@ -20,30 +19,27 @@ type WebviewStateMessage = {
   events: GraphEventNode[];
   selectedEventId: string;
   threadSegments: ThreadSegment[];
+  /** Plain root → selected path for “copy thread”. */
+  threadPlainText: string;
+  /** Workspace-persisted tree column width (px), when set. */
+  treeWidthPx: number | null;
+  /** Settings: expand CLI trace `<details>` by default. */
+  agentTraceOpen: boolean;
   busy: boolean;
   lastError: string | null;
 };
-
-/** Drop bulky `content_json` except CLI trace (webview only needs snippets + trace). */
-function slimEventsForWebviewPostMessage(events: GraphEventNode[]): GraphEventNode[] {
-  return events.map((e) => {
-    const entries = extractAgentTraceEntries(e.content_json ?? undefined);
-    const slimJson =
-      entries && entries.length > 0
-        ? { colcoor_agent_trace: { version: 1 as const, entries } }
-        : null;
-    return { ...e, content_json: slimJson };
-  });
-}
 
 type FromWebview =
   | { type: "ready" }
   | { type: "send"; text: string; privateBranch?: boolean }
   | { type: "select"; id: string }
+  | { type: "selectTip" }
   | { type: "refresh" }
   | { type: "cancel" }
   | { type: "resend" }
   | { type: "copy"; text: string }
+  | { type: "copyThread"; text: string }
+  | { type: "layout"; treeWidthPx: number }
   | { type: "rename" }
   | { type: "togglePin" };
 
@@ -71,6 +67,8 @@ export function createConversationPanelController(
   options: ConversationPanelControllerOptions,
 ): {
   reveal: (conversationId: string, title: string | null) => Promise<void>;
+  /** Close the webview panel if it is showing this conversation (e.g. after delete). */
+  closeIfShowingConversation: (conversationId: string) => void;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -82,6 +80,18 @@ export function createConversationPanelController(
   let conversationPinned = false;
   let selectedEventId: string | undefined;
   let sendAbort: AbortController | undefined;
+  /** Last successful tree payload for lightweight UI refresh (e.g. settings). */
+  let lastTreeEvents: GraphEventNode[] = [];
+
+  function syncActiveToBackend(activeEventId: string | undefined): void {
+    if (!conversationId || !activeEventId) {
+      return;
+    }
+    void api.setConversationActive(conversationId, { active_event_id: activeEventId }).catch((e) => {
+      const m = e instanceof Error ? e.message : String(e);
+      void vscode.window.showWarningMessage(`Colcoor: could not persist active node — ${m}`);
+    });
+  }
 
   async function refreshConversationMeta(): Promise<void> {
     if (!conversationId) {
@@ -105,29 +115,7 @@ export function createConversationPanelController(
     panel?.dispose();
     panel = undefined;
     webviewReady = false;
-  }
-
-  /** Push a minimal state when the webview is up but no conversation is bound (avoids infinite “Loading…”). */
-  function postBootstrapNoConversationState(lastError: string): void {
-    if (!panel || !webviewReady) {
-      return;
-    }
-    const msg: WebviewStateMessage = {
-      type: "state",
-      conversationId: "",
-      title: null,
-      conversationPinned: false,
-      events: [],
-      selectedEventId: "",
-      threadSegments: [],
-      busy: false,
-      lastError,
-    };
-    try {
-      void panel.webview.postMessage(msg);
-    } catch {
-      /* panel gone */
-    }
+    lastTreeEvents = [];
   }
 
   function postState(
@@ -138,18 +126,6 @@ export function createConversationPanelController(
     if (!panel || !conversationId || !webviewReady) {
       return;
     }
-    const cid = conversationId;
-    const fallbackMsg = (err: string): WebviewStateMessage => ({
-      type: "state",
-      conversationId: cid,
-      title: conversationTitle ?? null,
-      conversationPinned,
-      events: [],
-      selectedEventId: "",
-      threadSegments: [],
-      busy: false,
-      lastError: err,
-    });
     try {
       const ids = new Set(events.map((e) => e.id));
       let sel = selectedEventId;
@@ -161,34 +137,57 @@ export function createConversationPanelController(
         }
         selectedEventId = sel;
       }
-      const threadSegments = buildThreadSegments(events, sel ?? "");
+      const treeW = context.workspaceState.get<number>(TREE_WIDTH_STATE_KEY);
+      const treeWidthPx =
+        typeof treeW === "number" && Number.isFinite(treeW) && treeW >= 140 && treeW < 8000
+          ? Math.floor(treeW)
+          : null;
+      const agentTraceOpen =
+        vscode.workspace.getConfiguration("colcoor").get<boolean>("conversationAgentTraceOpen") ?? true;
       const msg: WebviewStateMessage = {
         type: "state",
-        conversationId: cid,
+        conversationId,
         title: conversationTitle ?? null,
         conversationPinned,
-        events: slimEventsForWebviewPostMessage(events),
+        events,
         selectedEventId: sel ?? "",
-        threadSegments,
+        threadSegments: buildThreadSegments(events, sel ?? ""),
+        threadPlainText: buildPlainThread(events, sel ?? ""),
+        treeWidthPx,
+        agentTraceOpen,
         busy,
         lastError,
       };
-      try {
-        void panel.webview.postMessage(msg);
-      } catch (postErr) {
-        const detail = postErr instanceof Error ? postErr.message : String(postErr);
-        void panel.webview.postMessage(
-          fallbackMsg(
-            `Could not send conversation state to the panel (payload may be too large). ${detail}`,
-          ),
-        );
-      }
+      lastTreeEvents = events;
+      void panel.webview.postMessage(msg);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
+      void vscode.window.showErrorMessage(`Colcoor: failed to render conversation — ${detail}`);
       try {
-        void panel.webview.postMessage(
-          fallbackMsg(`Colcoor: failed to build thread view — ${detail}`),
-        );
+        const treeW = context.workspaceState.get<number>(TREE_WIDTH_STATE_KEY);
+        const treeWidthPx =
+          typeof treeW === "number" && Number.isFinite(treeW) && treeW >= 140 && treeW < 8000
+            ? Math.floor(treeW)
+            : null;
+        const agentTraceOpen =
+          vscode.workspace.getConfiguration("colcoor").get<boolean>("conversationAgentTraceOpen") ?? true;
+        const fallback: WebviewStateMessage = {
+          type: "state",
+          conversationId,
+          title: conversationTitle ?? null,
+          conversationPinned,
+          events: [],
+          selectedEventId: "",
+          threadSegments: [],
+          threadPlainText: "",
+          treeWidthPx,
+          agentTraceOpen,
+          busy,
+          lastError:
+            lastError ??
+            `Render failed: ${detail}. If the conversation is very large, try the API or a fresh thread.`,
+        };
+        void panel.webview.postMessage(fallback);
       } catch {
         /* webview may be gone */
       }
@@ -351,7 +350,9 @@ export function createConversationPanelController(
   }
 
   const subscription = vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration("colcoor") && panel) {
+    if (e.affectsConfiguration("colcoor.conversationAgentTraceOpen") && panel && webviewReady && conversationId) {
+      postState(lastTreeEvents, false, null);
+    } else if (e.affectsConfiguration("colcoor") && panel) {
       void vscode.window.showInformationMessage(
         "Colcoor settings changed — close and reopen the conversation panel if the backend URL or agent mode should apply.",
       );
@@ -375,7 +376,6 @@ export function createConversationPanelController(
     );
     p.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] };
     p.webview.html = getConversationWebviewHtml(p.webview.cspSource, nonce);
-    webviewReady = false;
 
     p.webview.onDidReceiveMessage(async (raw: unknown) => {
       const msg = raw as FromWebview;
@@ -384,18 +384,32 @@ export function createConversationPanelController(
       }
       if (msg.type === "ready") {
         webviewReady = true;
-        if (!conversationId) {
-          postBootstrapNoConversationState(
-            "No conversation is linked to this panel. Open one from the Colcoor sidebar or run “Colcoor: Open conversation”.",
-          );
-          return;
-        }
         await loadTreeAndPush(false, null);
         return;
       }
       if (msg.type === "select" && typeof msg.id === "string") {
         selectedEventId = msg.id;
+        syncActiveToBackend(msg.id);
         await loadTreeAndPush(false, null);
+        return;
+      }
+      if (msg.type === "selectTip") {
+        if (!conversationId) {
+          return;
+        }
+        try {
+          const { events } = await api.getTree(conversationId);
+          try {
+            selectedEventId = findBranchTip(events).id;
+          } catch {
+            selectedEventId = events[0]?.id;
+          }
+          syncActiveToBackend(selectedEventId);
+          await loadTreeAndPush(false, null);
+        } catch (e) {
+          const m = e instanceof Error ? e.message : String(e);
+          void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+        }
         return;
       }
       if (msg.type === "refresh") {
@@ -408,6 +422,21 @@ export function createConversationPanelController(
       }
       if (msg.type === "copy" && typeof msg.text === "string") {
         await vscode.env.clipboard.writeText(msg.text);
+        return;
+      }
+      if (msg.type === "copyThread" && typeof msg.text === "string") {
+        const t = msg.text.trim();
+        if (t.length > 0) {
+          await vscode.env.clipboard.writeText(t);
+          void vscode.window.setStatusBarMessage("Colcoor: thread copied to clipboard.", 2500);
+        }
+        return;
+      }
+      if (msg.type === "layout" && typeof msg.treeWidthPx === "number") {
+        const w = Math.floor(msg.treeWidthPx);
+        if (w >= 140 && w < 8000) {
+          void context.workspaceState.update(TREE_WIDTH_STATE_KEY, w);
+        }
         return;
       }
       if (msg.type === "resend") {
@@ -435,6 +464,7 @@ export function createConversationPanelController(
       conversationId = undefined;
       selectedEventId = undefined;
       conversationPinned = false;
+      lastTreeEvents = [];
     });
 
     panel = p;
@@ -450,12 +480,14 @@ export function createConversationPanelController(
       await refreshConversationMeta();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
-      p.reveal(vscode.ViewColumn.One, false);
       if (webviewReady) {
-        await new Promise<void>((r) => {
-          setTimeout(r, 0);
-        });
         await loadTreeAndPush(false, null);
+      }
+      p.reveal(vscode.ViewColumn.One, false);
+    },
+    closeIfShowingConversation(convId: string): void {
+      if (conversationId === convId) {
+        disposePanel();
       }
     },
     dispose: () => {

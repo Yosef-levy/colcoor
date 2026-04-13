@@ -55,6 +55,14 @@
         "title": "Colcoor: Copy conversation ID"
       },
       {
+        "command": "colcoor.listConversationMembers",
+        "title": "Colcoor: Show members"
+      },
+      {
+        "command": "colcoor.deleteConversation",
+        "title": "Colcoor: Delete conversation…"
+      },
+      {
         "command": "colcoor.openAbout",
         "title": "Colcoor: About"
       }
@@ -110,6 +118,16 @@
           "command": "colcoor.copyConversationId",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@2"
+        },
+        {
+          "command": "colcoor.listConversationMembers",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@3"
+        },
+        {
+          "command": "colcoor.deleteConversation",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "2_colcoor_delete@0"
         }
       ]
     },
@@ -157,6 +175,11 @@
           "type": "boolean",
           "default": true,
           "description": "If the Cursor CLI (`agent`) is not on PATH, show a setup hint a few seconds after load (only when agent mode is not stub). Colcoor cannot bundle the CLI; use Colcoor: Set up Cursor CLI or the official installer."
+        },
+        "colcoor.conversationAgentTraceOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, the Cursor CLI trace block under each assistant message starts expanded; when false, it starts collapsed."
         }
       }
     }

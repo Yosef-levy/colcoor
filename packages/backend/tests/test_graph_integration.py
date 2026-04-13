@@ -205,9 +205,33 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         assert r.status_code == 200, r.text
         cid = r.json()["id"]
 
+        r = client.get(f"/api/v1/conversations/{cid}/members", headers=auth)
+        assert r.status_code == 200, r.text
+        mems = r.json()
+        assert len(mems) == 1
+        assert mems[0]["role"] == "owner"
+        assert mems[0]["user_id"]
+
         r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
         assert r.status_code == 200, r.text
         root = next(e for e in r.json()["events"] if e["parent_event_id"] is None)
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/active",
+            headers=auth,
+            json={"active_event_id": root["id"], "needs_context_rebuild": False},
+        )
+        assert r.status_code == 200, r.text
+        act = r.json()
+        assert act["active_event_id"] == root["id"]
+        assert act["needs_context_rebuild"] is False
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/active",
+            headers=auth,
+            json={"active_event_id": str(uuid.uuid4()), "needs_context_rebuild": True},
+        )
+        assert r.status_code == 422, r.text
 
         r = client.post(
             f"/api/v1/conversations/{cid}/append-event",
@@ -247,5 +271,15 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         asst = next(e for e in r.json()["events"] if e.get("content_text") == "from assistant")
         assert asst["content_json"]["colcoor_agent_trace"]["version"] == 1
         assert asst["content_json"]["colcoor_agent_trace"]["entries"][0]["type"] == "tool_call"
+
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
+        assert r.status_code == 204, r.text
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 404, r.text
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid not in {row["id"] for row in r.json()}
 
     get_settings.cache_clear()

@@ -9,6 +9,7 @@ import {
   promptStoreCursorAgentApiKey,
 } from "./agent/cursorAgentApiKey";
 import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./agent/cursorCliSetup";
+import { showAboutPanel } from "./conversation/aboutPanel";
 import { createConversationPanelController } from "./conversation/conversationPanel";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
@@ -38,6 +39,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
   });
   context.subscriptions.push(new vscode.Disposable(() => conversationPanel.dispose()));
+
+  const colcoorLog = vscode.window.createOutputChannel("Colcoor");
+  context.subscriptions.push(colcoorLog);
 
   const treeProvider = new ConversationsTreeProvider(api, async () =>
     Boolean(await session.getBackendAccessToken()),
@@ -187,11 +191,65 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.window.showInformationMessage("Colcoor: conversation ID copied.");
       },
     ),
-    vscode.commands.registerCommand("colcoor.openAbout", async () => {
-      await vscode.window.showInformationMessage(
-        "Colcoor: branching conversations with you in control of where the dialogue continues. " +
-          "Details stay in product docs — not raw transcripts or agent plumbing.",
-      );
+    vscode.commands.registerCommand(
+      "colcoor.listConversationMembers",
+      async (item?: ConversationTreeItem) => {
+        const id = item?.conv?.id;
+        if (!id) {
+          await vscode.window.showWarningMessage(
+            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
+          );
+          return;
+        }
+        try {
+          const members = await api.listConversationMembers(id);
+          colcoorLog.clear();
+          colcoorLog.appendLine(`Conversation ${id}`);
+          colcoorLog.appendLine("");
+          for (const m of members) {
+            const name = m.display_name?.trim() ? m.display_name : "—";
+            const em = m.email?.trim() ? m.email : "—";
+            colcoorLog.appendLine(`  ${m.role.padEnd(8)} ${name}  <${em}>  ${m.user_id}`);
+          }
+          colcoorLog.show(true);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.deleteConversation",
+      async (item?: ConversationTreeItem) => {
+        const id = item?.conv?.id;
+        const title = item?.conv?.title?.trim() ? item.conv.title : "(untitled)";
+        if (!id) {
+          await vscode.window.showWarningMessage(
+            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
+          );
+          return;
+        }
+        const choice = await vscode.window.showWarningMessage(
+          `Delete conversation “${title}”? This removes the tree and messages from Colcoor and cannot be undone.`,
+          { modal: true, detail: id },
+          "Delete",
+        );
+        if (choice !== "Delete") {
+          return;
+        }
+        try {
+          await api.deleteConversation(id);
+          conversationPanel.closeIfShowingConversation(id);
+          refreshTree();
+          await vscode.window.showInformationMessage("Colcoor: conversation deleted.");
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        }
+      },
+    ),
+    vscode.commands.registerCommand("colcoor.openAbout", () => {
+      showAboutPanel();
     }),
     vscode.commands.registerCommand(
       "colcoor.openConversation",

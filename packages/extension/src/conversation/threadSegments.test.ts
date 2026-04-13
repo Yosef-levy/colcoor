@@ -4,9 +4,9 @@ import { extractAgentTraceEntries } from "./threadSegments";
 describe("extractAgentTraceEntries", () => {
   it("returns entries from colcoor_agent_trace", () => {
     const entries = extractAgentTraceEntries({
-      colcoor_agent_trace: { version: 1, entries: [{ type: "system" }] },
+      colcoor_agent_trace: { version: 2, entries: [{ colcoor_row: "read", text: "Read x" }] },
     });
-    expect(entries).toEqual([{ type: "system" }]);
+    expect(entries).toEqual([{ colcoor_row: "read", text: "Read x" }]);
   });
 
   it("returns undefined when missing or empty", () => {

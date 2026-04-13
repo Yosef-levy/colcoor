@@ -4,8 +4,8 @@
  * @see https://cursor.com/docs/cli/reference/output-format
  */
 
-import { compactToolCallForTimeline } from "./cursorAgentTimelineCompact";
 import { appendTimelineEntry } from "./cursorAgentTimelineSanitize";
+import { formatToolCallTraceRow } from "./cursorAgentTraceRows";
 
 export type StreamJsonLineEffect =
   | { kind: "append_assistant"; delta: string }
@@ -49,8 +49,8 @@ export function tryParseNdjsonObject(line: string): Record<string, unknown> | nu
 }
 
 /**
- * Shapes NDJSON for persistence/UI: drop everything except compact read/edit/shell tool lines
- * (see cursorAgentTimelineCompact). User/transcript and assistant token stream are omitted.
+ * Shapes NDJSON for persistence/UI: drop transcript (`user`), token stream (`assistant`),
+ * system, result, and any tool_call we do not summarize (see cursorAgentTraceRows).
  */
 export function slimNdjsonForTimeline(o: Record<string, unknown>): Record<string, unknown> | null {
   const typ = o.type;
@@ -58,7 +58,7 @@ export function slimNdjsonForTimeline(o: Record<string, unknown>): Record<string
     return null;
   }
   if (typ === "tool_call") {
-    return compactToolCallForTimeline(o);
+    return formatToolCallTraceRow(String(o.subtype ?? ""), o.tool_call);
   }
   return null;
 }

@@ -16,4 +16,11 @@ describe("markdownToSafeHtml", () => {
     expect(html).toContain("https://a.test");
     expect(html).toContain("<code");
   });
+
+  it("adds copy control on fenced code blocks", () => {
+    const html = markdownToSafeHtml("```ts\nconst x = 1\n```");
+    expect(html).toContain("code-block-wrap");
+    expect(html).toContain("code-copy");
+    expect(html).toContain("<pre");
+  });
 });

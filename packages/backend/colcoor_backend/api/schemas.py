@@ -88,3 +88,35 @@ class EventNodeOut(BaseModel):
 
 class TreeResponse(BaseModel):
     events: list[EventNodeOut]
+
+
+class MemberOut(BaseModel):
+    """One row in GET /conversations/{id}/members (api-contracts §4.1)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: UUID
+    role: Literal["owner", "editor", "viewer"]
+    email: str | None = None
+    display_name: str | None = None
+
+
+class SetActiveBody(BaseModel):
+    """POST …/active (api-contracts §5.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    active_event_id: UUID
+    needs_context_rebuild: bool = False
+
+
+class ConversationUserStateOut(BaseModel):
+    """Caller’s active cursor row (api-contracts §5.2)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    conversation_id: UUID
+    user_id: UUID
+    active_event_id: UUID
+    needs_context_rebuild: bool
+    last_seen_at: datetime

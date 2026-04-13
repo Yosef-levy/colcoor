@@ -57,7 +57,7 @@ describe("parseCursorAgentNdjsonLine", () => {
 });
 
 describe("slimNdjsonForTimeline", () => {
-  it("drops user assistant system and result rows", () => {
+  it("drops user, assistant, system, and result", () => {
     expect(slimNdjsonForTimeline({ type: "user", message: { role: "user", content: [] } })).toBeNull();
     expect(
       slimNdjsonForTimeline({
@@ -66,28 +66,7 @@ describe("slimNdjsonForTimeline", () => {
       }),
     ).toBeNull();
     expect(slimNdjsonForTimeline({ type: "system", subtype: "init", model: "M" })).toBeNull();
-    expect(
-      slimNdjsonForTimeline({
-        type: "result",
-        subtype: "success",
-        result: "body",
-        duration_ms: 1,
-      }),
-    ).toBeNull();
-  });
-
-  it("keeps compact read on completed readToolCall", () => {
-    const s = slimNdjsonForTimeline({
-      type: "tool_call",
-      subtype: "completed",
-      tool_call: {
-        readToolCall: {
-          args: { path: "f.py", startLine: 1, endLine: 2 },
-          result: { success: {} },
-        },
-      },
-    });
-    expect(s).toMatchObject({ colcoor_compact: true, kind: "read" });
+    expect(slimNdjsonForTimeline({ type: "result", subtype: "success", result: "x" })).toBeNull();
   });
 });
 
@@ -139,28 +118,23 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(feed.getResolvedText()).toBe("z");
   });
 
-  it("records only compact tool lines in timeline", () => {
+  it("records compact read and shell rows (no system line)", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push('{"type":"system","subtype":"init","model":"TestModel"}\n');
     feed.push(
-      JSON.stringify({
-        type: "tool_call",
-        subtype: "completed",
-        tool_call: {
-          readToolCall: {
-            args: { path: "README.md", startLine: 1, endLine: 3 },
-            result: { success: {} },
-          },
-        },
-      }) + "\n",
+      '{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md","startLine":1,"endLine":5}}}}\n',
+    );
+    feed.push(
+      '{"type":"tool_call","subtype":"started","call_id":"c2","tool_call":{"shellToolCall":{"args":{"command":"pytest -q","description":"Run tests"}}}}\n',
     );
     feed.flushTail();
     const t = feed.getTimeline();
-    expect(t).toHaveLength(1);
-    expect((t[0] as { colcoor_compact?: boolean; kind?: string }).kind).toBe("read");
+    expect(t).toHaveLength(2);
+    expect(t[0]).toEqual({ colcoor_row: "read", text: "Read README.md (lines 1:5)" });
+    expect(t[1]).toEqual({ colcoor_row: "shell_start", text: "Run tests\ncommand: pytest -q" });
   });
 
-  it("does not put user assistant or system in the timeline", () => {
+  it("does not put user, assistant, or system in the timeline", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push(
       '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"' + "x".repeat(200) + '"}]}}\n',
@@ -172,18 +146,8 @@ describe("createStreamJsonStdoutFeed", () => {
       '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"b"}]}}\n',
     );
     feed.push('{"type":"system","subtype":"init","model":"M"}\n');
-    feed.push(
-      JSON.stringify({
-        type: "tool_call",
-        subtype: "started",
-        tool_call: {
-          shellToolCall: { args: { command: "ls", description: "List files" } },
-        },
-      }) + "\n",
-    );
     feed.flushTail();
-    expect(feed.getTimeline()).toHaveLength(1);
-    expect((feed.getTimeline()[0] as { kind?: string }).kind).toBe("shell_start");
+    expect(feed.getTimeline()).toHaveLength(0);
     expect(feed.getResolvedText()).toBe("ab");
   });
 });

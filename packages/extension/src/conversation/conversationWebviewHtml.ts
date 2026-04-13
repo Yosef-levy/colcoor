@@ -29,8 +29,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     h1 { font-size: 1.1em; font-weight: 600; margin: 0 0 8px; }
     .layout { display: flex; gap: 12px; align-items: stretch; min-height: calc(100vh - 24px); }
     .col-tree {
-      flex: 0 0 38%;
-      min-width: 160px;
+      flex: 0 0 auto;
+      width: 38%;
+      min-width: 140px;
+      max-width: 80%;
+      resize: horizontal;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
       padding: 8px;
@@ -116,6 +119,25 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-list-inactiveSelectionBackground);
     }
     .node .meta { color: var(--vscode-descriptionForeground); font-size: 0.85em; }
+    .node .badge-pvt {
+      display: inline-block;
+      margin-right: 4px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 0.72em;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--vscode-inputValidation-infoForeground);
+      background: var(--vscode-inputValidation-infoBackground);
+      border: 1px solid var(--vscode-inputValidation-infoBorder);
+      vertical-align: middle;
+    }
+    .node .when {
+      font-size: 0.78em;
+      color: var(--vscode-descriptionForeground);
+      margin-left: 4px;
+    }
     .msg { margin: 8px 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--vscode-focusBorder); }
     .msg.user { background: var(--vscode-editor-inactiveSelectionBackground); }
     .msg.assistant { background: var(--vscode-textBlockQuote-background); }
@@ -191,10 +213,25 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       text-underline-offset: 2px;
     }
     .thread .msg .body.md a:hover { color: var(--vscode-textLink-activeForeground); }
+    .thread .msg .body.md .code-block-wrap {
+      position: relative;
+      margin: 0.55em 0;
+    }
+    .thread .msg .body.md .code-block-wrap::after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+    .thread .msg .body.md .code-block-wrap .code-copy {
+      float: right;
+      margin: 0 0 6px 8px;
+      padding: 2px 10px;
+      font-size: 0.85em;
+    }
     .thread .msg .body.md pre {
       white-space: pre-wrap;
       word-break: break-word;
-      margin: 0.55em 0;
+      margin: 0;
       padding: 10px 12px;
       border-radius: 6px;
       background: var(--vscode-textCodeBlock-background);
@@ -277,7 +314,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   <p class="hint" id="sub">Loading…</p>
   <div class="layout">
     <div class="col-tree">
-      <div class="hint" style="margin-bottom:6px">Event tree — click a node to choose where the next message attaches.</div>
+      <div class="hint" style="margin-bottom:6px">Event tree — click a node to choose where the next message attaches. Drag the right edge of this panel to resize.</div>
       <div id="tree" class="tree"></div>
     </div>
     <div class="col-main">
@@ -287,7 +324,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
           <button type="button" id="btnCopy" class="btn-secondary">Copy message</button>
+          <button type="button" id="btnCopyThread" class="btn-secondary" title="Copy root → selected path as plain text">Copy thread</button>
           <button type="button" id="btnResend" class="btn-secondary">Resend assistant</button>
+          <button type="button" id="btnJumpTip" class="btn-secondary" title="Select the newest leaf on the default branch">Jump to latest</button>
         </div>
       </div>
       <div class="thread">
@@ -311,6 +350,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    let hasReceivedState = false;
     let state = {
       conversationId: "",
       title: null,
@@ -318,11 +358,35 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       events: [],
       selectedEventId: "",
       threadSegments: [],
+      threadPlainText: "",
+      treeWidthPx: null,
+      agentTraceOpen: true,
       busy: false,
       lastError: null,
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
     };
+
+    function applyTreeWidth() {
+      var el = document.querySelector(".col-tree");
+      if (!el) return;
+      var w = null;
+      if (typeof state.treeWidthPx === "number" && state.treeWidthPx >= 140) w = state.treeWidthPx;
+      if (w == null) {
+        try {
+          w = parseInt(localStorage.getItem("colcoor.treeWidthPx"), 10);
+        } catch (e) {}
+      }
+      if (w != null && w >= 140) el.style.width = w + "px";
+    }
+
+    (function applySavedTreeWidthColdStart() {
+      try {
+        var w = parseInt(localStorage.getItem("colcoor.treeWidthPx"), 10);
+        var el = document.querySelector(".col-tree");
+        if (el && w >= 140) el.style.width = w + "px";
+      } catch (e) {}
+    })();
 
     function esc(s) {
       return String(s ?? "")
@@ -332,11 +396,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         .replace(/"/g, "&quot;");
     }
 
+    function relTime(iso) {
+      if (!iso) return "";
+      var t = Date.parse(String(iso));
+      if (!Number.isFinite(t)) return "";
+      var sec = Math.floor((Date.now() - t) / 1000);
+      if (sec < 45) return "just now";
+      if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+      if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
+      if (sec < 604800) return Math.floor(sec / 86400) + "d ago";
+      try {
+        return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      } catch (e) {
+        return "";
+      }
+    }
+
     function snippet(ev) {
-      const raw = ev.content_text;
-      const t = String(raw == null ? "" : raw)
-        .trim()
-        .replace(/\\s+/g, " ");
+      const t = (ev.content_text || "").trim().replace(/\\s+/g, " ");
       if (!t) return "(empty)";
       return t.length > 96 ? t.slice(0, 96) + "…" : t;
     }
@@ -356,13 +433,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return chain.reverse();
     }
 
-    function traceSummaryLine(ev) {
+    function traceSummaryLineLegacy(ev) {
       if (!ev || typeof ev !== "object") return "Event";
-      if (ev.colcoor_compact === true && typeof ev.summary === "string") {
-        const s = ev.summary;
-        const first = s.split("\n")[0];
-        return first.length > 120 ? first.slice(0, 120) + "…" : first;
-      }
       const t = ev.type;
       if (t === "tool_call") {
         const st = ev.subtype != null ? String(ev.subtype) : "";
@@ -384,27 +456,40 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     function formatTraceEntryHtml(ev, idx) {
-      const sum = esc(traceSummaryLine(ev));
-      if (ev && typeof ev === "object" && ev.colcoor_compact === true) {
-        const kind = ev.kind != null ? String(ev.kind) : "";
-        let body = "";
-        if (kind === "edit_diff" && typeof ev.diff === "string" && ev.diff.length) {
-          body = '<pre class="trace-pre trace-diff">' + esc(ev.diff) + "</pre>";
-        } else if (typeof ev.summary === "string") {
-          body = '<pre class="trace-pre">' + esc(ev.summary) + "</pre>";
-        } else {
-          body = '<pre class="trace-pre">(empty)</pre>';
-        }
+      const n = String(idx + 1);
+      if (ev && ev.colcoor_row === "read" && typeof ev.text === "string") {
         return (
-          '<div class="trace-entry"><div class="trace-meta">' +
-          String(idx + 1) +
-          ". " +
-          sum +
-          "</div>" +
-          body +
-          "</div>"
+          '<div class="trace-entry trace-row-read"><div class="trace-meta">' + n + ". " + esc(ev.text) + "</div></div>"
         );
       }
+      if (ev && ev.colcoor_row === "edit_diff" && typeof ev.diff === "string") {
+        return (
+          '<div class="trace-entry trace-row-edit"><div class="trace-meta">' +
+          n +
+          '. Edit (diff)</div><pre class="trace-pre trace-diff">' +
+          esc(ev.diff) +
+          "</pre></div>"
+        );
+      }
+      if (ev && ev.colcoor_row === "shell_start" && typeof ev.text === "string") {
+        return (
+          '<div class="trace-entry trace-row-shell"><div class="trace-meta">' +
+          n +
+          '. Shell</div><pre class="trace-pre">' +
+          esc(ev.text) +
+          "</pre></div>"
+        );
+      }
+      if (ev && ev.colcoor_row === "shell_done" && typeof ev.text === "string") {
+        return (
+          '<div class="trace-entry trace-row-shell"><div class="trace-meta">' +
+          n +
+          '. Shell result</div><pre class="trace-pre">' +
+          esc(ev.text) +
+          "</pre></div>"
+        );
+      }
+      const sum = esc(traceSummaryLineLegacy(ev));
       let raw;
       try {
         raw = esc(JSON.stringify(ev, null, 2));
@@ -412,8 +497,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         raw = esc(String(ev));
       }
       return (
-        '<div class="trace-entry"><div class="trace-meta">' +
-        String(idx + 1) +
+        '<div class="trace-entry trace-legacy"><div class="trace-meta">' +
+        n +
         ". " +
         sum +
         '</div><pre class="trace-pre">' +
@@ -425,6 +510,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function renderDetailBar() {
       const crumb = document.getElementById("breadcrumb");
       const copyBtn = document.getElementById("btnCopy");
+      const copyThreadBtn = document.getElementById("btnCopyThread");
       const resendBtn = document.getElementById("btnResend");
       if (!crumb || !copyBtn || !resendBtn) return;
       const sel = state.selectedEventId;
@@ -434,6 +520,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         crumb.innerHTML = '<span class="empty">No selection</span>';
         copyBtn.disabled = true;
         resendBtn.disabled = true;
+        if (copyThreadBtn) copyThreadBtn.disabled = true;
         const renameBtn = document.getElementById("btnRename");
         const pinBtn = document.getElementById("btnPin");
         if (renameBtn) renameBtn.disabled = state.busy;
@@ -441,6 +528,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           pinBtn.disabled = state.busy;
           pinBtn.textContent = state.conversationPinned ? "Unpin" : "Pin";
         }
+        const jumpBtnEmpty = document.getElementById("btnJumpTip");
+        if (jumpBtnEmpty) jumpBtnEmpty.disabled = state.busy;
         return;
       }
       const parts = path.map((ev) => {
@@ -456,9 +545,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       crumb.innerHTML = parts.join(' <span class="crumb-sep">→</span> ');
       const last = path[path.length - 1];
       copyBtn.disabled = state.busy;
+      const canCopyThread = String(state.threadPlainText || "").trim().length > 0;
+      if (copyThreadBtn) {
+        copyThreadBtn.disabled = state.busy || !canCopyThread;
+        copyThreadBtn.title = canCopyThread
+          ? "Copy the visible thread (root → selected) as plain text"
+          : "Nothing to copy on this path yet.";
+      }
       const canResend =
-        last.kind === "user_input" &&
-        String(last.content_text == null ? "" : last.content_text).trim().length > 0;
+        last.kind === "user_input" && String(last.content_text || "").trim().length > 0;
       resendBtn.disabled = state.busy || !canResend;
       resendBtn.title = canResend
         ? "New assistant reply for this user message (same user row; transcript per docs)."
@@ -470,6 +565,29 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         pinBtn.disabled = state.busy;
         pinBtn.textContent = state.conversationPinned ? "Unpin" : "Pin";
       }
+      const jumpBtn = document.getElementById("btnJumpTip");
+      if (jumpBtn) jumpBtn.disabled = state.busy;
+    }
+
+    var treeResizeObserver = null;
+    function wireTreeResize() {
+      var el = document.querySelector(".col-tree");
+      if (!el || typeof ResizeObserver === "undefined") return;
+      if (treeResizeObserver) treeResizeObserver.disconnect();
+      var tid = null;
+      treeResizeObserver = new ResizeObserver(function () {
+        if (tid) clearTimeout(tid);
+        tid = setTimeout(function () {
+          try {
+            var w = el.offsetWidth;
+            if (w >= 140) {
+              localStorage.setItem("colcoor.treeWidthPx", String(w));
+              vscode.postMessage({ type: "layout", treeWidthPx: w });
+            }
+          } catch (e) {}
+        }, 250);
+      });
+      treeResizeObserver.observe(el);
     }
 
     function renderTree() {
@@ -487,9 +605,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         byParent.get(k).push(e);
       }
       for (const arr of byParent.values()) {
-        arr.sort((a, b) =>
-          String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
-        );
+        arr.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
       }
       function walk(parentKey) {
         const kids = byParent.get(parentKey) || [];
@@ -498,15 +614,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         for (const e of kids) {
           const sel = e.id === state.selectedEventId ? " selected" : "";
           const kind = esc(e.kind);
+          const isPriv = e.visible_to != null && String(e.visible_to).trim() !== "";
+          const badge = isPriv ? '<span class="badge-pvt">Private</span>' : "";
+          const when = relTime(e.created_at);
+          const whenSpan = when ? '<span class="when">' + esc(when) + "</span>" : "";
           html +=
             '<li><div class="node' +
             sel +
             '" data-id="' +
             esc(e.id) +
             '">' +
+            badge +
             '<span class="meta">' +
             kind +
-            "</span> " +
+            "</span>" +
+            whenSpan +
+            " · " +
             esc(snippet(e)) +
             "</div>";
           html += walk(e.id);
@@ -541,15 +664,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           cls +
           '"><div class="role">' +
           role +
-          '</div><div class="body md">' +
+          '</div><div class="body md" dir="auto">' +
           s.html +
           "</div>";
         if (s.role === "assistant") {
           if (s.traceEntries && s.traceEntries.length) {
+            var traceOpen = state.agentTraceOpen !== false;
             html +=
-              '<details open class="agent-trace"><summary class="trace-summary">CLI trace — ' +
+              "<details" +
+              (traceOpen ? " open" : "") +
+              ' class="agent-trace"><summary class="trace-summary">CLI trace — ' +
               s.traceEntries.length +
-              " line(s) · reads, edits, shell (collapse)</summary>";
+              " step(s) · reads, edits, shell (collapse)</summary>";
             for (let i = 0; i < s.traceEntries.length; i++) {
               html += formatTraceEntryHtml(s.traceEntries[i], i);
             }
@@ -558,7 +684,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             html +=
               '<p class="agent-trace-missing hint">' +
               esc(
-                "No CLI trace for this reply. Traces are saved for new messages with stream-json or stream-json-partial (not text/stub). When present, the trace lists completed file reads, completed edits (diff), and shell commands — not the prompt or assistant token stream.",
+                "No CLI trace for this reply. Use stream-json or stream-json-partial (not text/stub) and send again. Saved steps are short summaries: read ranges, edit diffs, shell commands — not the full transcript.",
               ) +
               "</p>";
           }
@@ -567,7 +693,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       if (state.streamingHtml) {
         html +=
-          '<div class="msg assistant streaming"><div class="role">Assistant</div><div class="body md">' +
+          '<div class="msg assistant streaming"><div class="role">Assistant</div><div class="body md" dir="auto">' +
           state.streamingHtml +
           "</div></div>";
       }
@@ -575,49 +701,48 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     function render() {
-      const errEl = document.getElementById("err");
-      const titleEl = document.getElementById("title");
-      const subEl = document.getElementById("sub");
-      const sendBtn = document.getElementById("send");
-      const stopBtn = document.getElementById("stop");
-      const refBtn = document.getElementById("refresh");
-      const ta = document.getElementById("input");
-      const priv = document.getElementById("privateBranch");
-      const busyEl = document.getElementById("busy");
-      if (!Array.isArray(state.events)) {
-        state = { ...state, events: [] };
-      }
-      if (state.lastError && errEl) {
-        errEl.style.display = "block";
-        errEl.textContent = state.lastError;
-      } else if (errEl) {
-        errEl.style.display = "none";
-        errEl.textContent = "";
-      }
-      if (titleEl) titleEl.textContent = state.title && state.title.trim() ? state.title : "(untitled)";
-      const n = state.events.length;
-      if (subEl) {
-        subEl.textContent =
-          n + " event(s) — reply attaches under the selected tree node.";
-      }
-      if (sendBtn) sendBtn.disabled = state.busy;
-      if (stopBtn) stopBtn.disabled = !state.busy;
-      if (refBtn) refBtn.disabled = state.busy;
-      if (ta) ta.disabled = state.busy;
-      if (priv) priv.disabled = state.busy;
-      if (busyEl) busyEl.style.display = state.busy ? "inline" : "none";
       try {
+        const errEl = document.getElementById("err");
+        const titleEl = document.getElementById("title");
+        const subEl = document.getElementById("sub");
+        const sendBtn = document.getElementById("send");
+        const stopBtn = document.getElementById("stop");
+        const refBtn = document.getElementById("refresh");
+        const ta = document.getElementById("input");
+        const priv = document.getElementById("privateBranch");
+        const busyEl = document.getElementById("busy");
+        if (state.lastError && errEl) {
+          errEl.style.display = "block";
+          errEl.textContent = state.lastError;
+        } else if (errEl) {
+          errEl.style.display = "none";
+          errEl.textContent = "";
+        }
+        if (titleEl) titleEl.textContent = state.title && state.title.trim() ? state.title : "(untitled)";
+        if (subEl) {
+          subEl.textContent =
+            state.events.length +
+            " event(s) — reply attaches under the selected tree node.";
+        }
+        if (sendBtn) sendBtn.disabled = state.busy;
+        if (stopBtn) stopBtn.disabled = !state.busy;
+        if (refBtn) refBtn.disabled = state.busy;
+        if (ta) ta.disabled = state.busy;
+        if (priv) priv.disabled = state.busy;
+        if (busyEl) busyEl.style.display = state.busy ? "inline" : "none";
         renderTree();
         renderThread();
         renderDetailBar();
+        applyTreeWidth();
+        wireTreeResize();
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = e && e.message ? String(e.message) : String(e);
+        const subEl = document.getElementById("sub");
+        if (subEl) subEl.textContent = "Colcoor webview render error: " + msg;
+        const errEl = document.getElementById("err");
         if (errEl) {
           errEl.style.display = "block";
-          errEl.textContent =
-            (state.lastError ? state.lastError + "\\n\\n" : "") +
-            "Colcoor (webview): " +
-            msg;
+          errEl.textContent = msg;
         }
       }
     }
@@ -625,16 +750,33 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     window.addEventListener("message", (event) => {
       const m = event.data;
       if (m && m.type === "state") {
-        const evs = Array.isArray(m.events) ? m.events : [];
-        state = { ...m, events: evs, streamingHtml: null };
+        hasReceivedState = true;
+        state = { ...m, streamingHtml: null };
         render();
         return;
       }
       if (m && m.type === "assistantStream" && typeof m.html === "string") {
         state = { ...state, streamingHtml: m.html || null };
-        renderThread();
+        try {
+          renderThread();
+        } catch (e) {
+          const msg = e && e.message ? String(e.message) : String(e);
+          const errEl = document.getElementById("err");
+          if (errEl) {
+            errEl.style.display = "block";
+            errEl.textContent = msg;
+          }
+        }
       }
     });
+
+    setTimeout(function () {
+      if (hasReceivedState) return;
+      var subEl = document.getElementById("sub");
+      if (!subEl) return;
+      subEl.textContent =
+        "Still waiting for a conversation snapshot from the extension. API calls time out after 30s — check Settings → Colcoor → backend base URL, that the API is running, and sign-in — then click Refresh tree.";
+    }, 32000);
 
     document.getElementById("send").addEventListener("click", () => {
       const ta = document.getElementById("input");
@@ -660,6 +802,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vscode.postMessage({ type: "copy", text: ev.content_text || "" });
     });
 
+    document.getElementById("btnCopyThread").addEventListener("click", () => {
+      const t = String(state.threadPlainText || "").trim();
+      if (!t) return;
+      vscode.postMessage({ type: "copyThread", text: state.threadPlainText || "" });
+    });
+
     document.getElementById("btnResend").addEventListener("click", () => {
       vscode.postMessage({ type: "resend" });
     });
@@ -670,6 +818,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("btnPin").addEventListener("click", () => {
       vscode.postMessage({ type: "togglePin" });
+    });
+
+    var btnJump = document.getElementById("btnJumpTip");
+    if (btnJump) {
+      btnJump.addEventListener("click", function () {
+        vscode.postMessage({ type: "selectTip" });
+      });
+    }
+
+    document.getElementById("thread").addEventListener("click", function (ev) {
+      var t = ev.target;
+      if (!t || !t.classList || !t.classList.contains("code-copy")) return;
+      ev.preventDefault();
+      var wrap = t.closest && t.closest(".code-block-wrap");
+      var pre = wrap && wrap.querySelector("pre");
+      var text = pre ? pre.innerText || "" : "";
+      vscode.postMessage({ type: "copy", text: text });
     });
 
     document.getElementById("input").addEventListener("keydown", (e) => {

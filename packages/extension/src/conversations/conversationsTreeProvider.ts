@@ -1,13 +1,16 @@
 import * as vscode from "vscode";
 import type { ColcoorApiClient, ConversationSummary } from "../api/client";
+import { formatRelativeTime } from "../util/formatRelativeTime";
 
 export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly conv: ConversationSummary) {
     const label = conv.title?.trim() ? conv.title : "(untitled)";
     super(label, vscode.TreeItemCollapsibleState.None);
     this.id = conv.id;
-    this.tooltip = `${label}\n${conv.id}`;
-    this.description = conv.pinned ? "pinned" : undefined;
+    const rel = conv.updated_at ? formatRelativeTime(conv.updated_at) : "";
+    const pinPart = conv.pinned ? "Pinned · " : "";
+    this.tooltip = `${label}\n${conv.id}${conv.updated_at ? `\nUpdated ${conv.updated_at}` : ""}`;
+    this.description = [pinPart, rel].filter(Boolean).join("") || undefined;
     this.contextValue = "conversation";
     this.iconPath = new vscode.ThemeIcon("comment-discussion");
     this.command = {
@@ -42,7 +45,15 @@ export class ConversationsTreeProvider implements vscode.TreeDataProvider<Conver
     }
     try {
       const rows = await this.api.listConversations();
-      return rows.map((r) => new ConversationTreeItem(r));
+      const sorted = [...rows].sort((a, b) => {
+        if (a.pinned !== b.pinned) {
+          return a.pinned ? -1 : 1;
+        }
+        const ta = a.updated_at ? Date.parse(a.updated_at) : 0;
+        const tb = b.updated_at ? Date.parse(b.updated_at) : 0;
+        return tb - ta;
+      });
+      return sorted.map((r) => new ConversationTreeItem(r));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       void vscode.window.showErrorMessage(`Colcoor: ${msg}`);

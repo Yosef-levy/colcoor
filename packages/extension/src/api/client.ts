@@ -16,6 +16,8 @@ export type ConversationSummary = {
   id: string;
   title: string | null;
   pinned: boolean;
+  /** ISO 8601; used for sidebar ordering and “last updated”. */
+  updated_at?: string;
 };
 
 export type GraphEventNode = {
@@ -35,6 +37,26 @@ export type GraphEventNode = {
 
 export type TreeResponseBody = {
   events: GraphEventNode[];
+};
+
+export type ConversationMember = {
+  user_id: string;
+  role: "owner" | "editor" | "viewer";
+  email?: string | null;
+  display_name?: string | null;
+};
+
+export type SetConversationActiveBody = {
+  active_event_id: string;
+  needs_context_rebuild?: boolean;
+};
+
+export type ConversationUserStateOut = {
+  conversation_id: string;
+  user_id: string;
+  active_event_id: string;
+  needs_context_rebuild: boolean;
+  last_seen_at: string;
 };
 
 export type AppendEventBody = {
@@ -95,7 +117,31 @@ export class ColcoorApiClient {
       headers.set("Authorization", `Bearer ${token}`);
     }
     const url = this.apiUrl(path);
-    return this.fetchOrThrow(url, { ...init, headers });
+    const timeoutMs = 30_000;
+    const ctrl = new AbortController();
+    let timedOut = false;
+    const tid = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, timeoutMs);
+    const parent = init.signal;
+    if (parent) {
+      if (parent.aborted) {
+        ctrl.abort();
+      } else {
+        parent.addEventListener("abort", () => ctrl.abort(), { once: true });
+      }
+    }
+    try {
+      return await this.fetchOrThrow(url, { ...init, headers, signal: ctrl.signal });
+    } catch (e) {
+      if (timedOut) {
+        throw new Error(networkErrorDetail(url, new Error(`timed out after ${timeoutMs}ms`)));
+      }
+      throw e;
+    } finally {
+      clearTimeout(tid);
+    }
   }
 
   /** Production: exchange VS Code / Cursor IdP token for Colcoor API JWT. */
@@ -163,6 +209,45 @@ export class ColcoorApiClient {
       throw new Error(`get tree failed (${res.status}): ${text || res.statusText}`);
     }
     return JSON.parse(text) as TreeResponseBody;
+  }
+
+  /** List members (owner, editor, viewer); caller must be a member. */
+  async listConversationMembers(conversationId: string): Promise<ConversationMember[]> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/members`, { method: "GET" });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`list members failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as ConversationMember[];
+  }
+
+  /** Persist the caller’s active tree node (POST …/active). */
+  async setConversationActive(
+    conversationId: string,
+    body: SetConversationActiveBody,
+  ): Promise<ConversationUserStateOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/active`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        active_event_id: body.active_event_id,
+        needs_context_rebuild: body.needs_context_rebuild ?? false,
+      }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`set active failed (${res.status}): ${text || res.statusText}`);
+    }
+    return JSON.parse(text) as ConversationUserStateOut;
+  }
+
+  /** Owner-only: delete conversation and cascaded data (DELETE /conversations/{id}). */
+  async deleteConversation(conversationId: string): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`delete conversation failed (${res.status}): ${text || res.statusText}`);
+    }
   }
 
   async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {

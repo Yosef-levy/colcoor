@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from colcoor_backend.api.deps import CurrentUserId, DbSession
 from colcoor_backend.db.models import Conversation, ConversationMember
@@ -9,16 +9,22 @@ from colcoor_backend.api.schemas import (
     ConversationCreate,
     ConversationOut,
     ConversationPatch,
+    ConversationUserStateOut,
     EventKind,
     EventNodeOut,
+    MemberOut,
+    SetActiveBody,
     TreeResponse,
 )
 from colcoor_backend.services.graph import (
     append_graph_event,
     create_conversation_with_owner,
+    delete_conversation_for_owner,
+    list_conversation_members,
     list_conversations_for_user,
     list_events_for_tree,
     patch_conversation_for_user,
+    set_conversation_active_event,
 )
 
 router = APIRouter()
@@ -82,6 +88,26 @@ async def patch_conversation(
     return _conversation_out(conv, member)
 
 
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+) -> Response:
+    try:
+        await delete_conversation_for_owner(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/{conversation_id}/append-event")
 async def append_event(
     session: DbSession,
@@ -129,3 +155,51 @@ async def get_tree(
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     return TreeResponse(events=[EventNodeOut.model_validate(e) for e in events])
+
+
+@router.post("/{conversation_id}/active", response_model=ConversationUserStateOut)
+async def post_conversation_active(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    body: SetActiveBody,
+) -> ConversationUserStateOut:
+    try:
+        st = await set_conversation_active_event(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            active_event_id=body.active_event_id,
+            needs_context_rebuild=body.needs_context_rebuild,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return ConversationUserStateOut.model_validate(st)
+
+
+@router.get("/{conversation_id}/members", response_model=list[MemberOut])
+async def get_conversation_members(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+) -> list[MemberOut]:
+    try:
+        rows = await list_conversation_members(session, conversation_id, user_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    out: list[MemberOut] = []
+    for uid, role, email, display_name in rows:
+        out.append(
+            MemberOut.model_validate(
+                {
+                    "user_id": uid,
+                    "role": role,
+                    "email": email or None,
+                    "display_name": display_name or None,
+                }
+            )
+        )
+    return out

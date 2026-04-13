@@ -5,8 +5,9 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, exists, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from colcoor_backend.db.models import (
     Conversation,
@@ -114,6 +115,47 @@ async def load_event(
         )
     )
     return res.scalar_one_or_none()
+
+
+async def set_conversation_active_event(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    active_event_id: uuid.UUID,
+    needs_context_rebuild: bool = False,
+) -> ConversationUserState:
+    """Update ``conversation_user_state.active_event_id`` for the caller (permissions matrix)."""
+    await ensure_conversation_member(session, conversation_id, user_id)
+    ev = await load_event(session, conversation_id, active_event_id)
+    if ev is None:
+        raise ValueError("active_event_id not found in this conversation")
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise ValueError("active_event_id is not visible to the caller")
+    now = datetime.now(tz=UTC)
+    st_r = await session.execute(
+        select(ConversationUserState).where(
+            ConversationUserState.conversation_id == conversation_id,
+            ConversationUserState.user_id == user_id,
+        )
+    )
+    st = st_r.scalar_one_or_none()
+    if st is None:
+        st = ConversationUserState(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            active_event_id=active_event_id,
+            last_seen_at=now,
+            needs_context_rebuild=needs_context_rebuild,
+        )
+        session.add(st)
+    else:
+        st.active_event_id = active_event_id
+        st.needs_context_rebuild = needs_context_rebuild
+        st.last_seen_at = now
+    await session.flush()
+    await session.refresh(st)
+    return st
 
 
 async def append_graph_event(
@@ -239,6 +281,66 @@ async def patch_conversation_for_user(
     await session.refresh(conv)
     await session.refresh(member)
     return conv, member
+
+
+async def _delete_events_in_conversation(session: AsyncSession, conversation_id: uuid.UUID) -> None:
+    """Delete all events for a conversation (``parent_event_id`` uses ON DELETE RESTRICT)."""
+    child = aliased(Event)
+    while True:
+        has_child = exists(
+            select(literal(1)).select_from(child).where(
+                child.conversation_id == conversation_id,
+                child.parent_event_id == Event.id,
+            )
+        )
+        res = await session.execute(
+            select(Event.id).where(Event.conversation_id == conversation_id, ~has_child).limit(500)
+        )
+        batch = list(res.scalars().all())
+        if not batch:
+            return
+        await session.execute(delete(Event).where(Event.id.in_(batch)))
+        await session.flush()
+
+
+async def delete_conversation_for_owner(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    """Remove conversation and dependent rows. **Owner only**; raises ``LookupError`` / ``PermissionError``."""
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise LookupError("conversation not found")
+    if member.role != "owner":
+        raise PermissionError("only the conversation owner can delete it")
+    await session.execute(
+        delete(ConversationUserState).where(ConversationUserState.conversation_id == conversation_id)
+    )
+    await session.flush()
+    await _delete_events_in_conversation(session, conversation_id)
+    res = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = res.scalar_one_or_none()
+    if conv is None:
+        raise LookupError("conversation not found")
+    await session.delete(conv)
+    await session.flush()
+
+
+async def list_conversation_members(
+    session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
+) -> list[tuple[uuid.UUID, str, str, str]]:
+    """Return ``(user_id, role, email, display_name)`` for each member; caller must be a member."""
+    await ensure_conversation_member(session, conversation_id, user_id)
+    stmt = (
+        select(ConversationMember.user_id, ConversationMember.role, User.email, User.display_name)
+        .join(User, User.id == ConversationMember.user_id)
+        .where(ConversationMember.conversation_id == conversation_id)
+        .order_by(User.email.asc())
+    )
+    res = await session.execute(stmt)
+    return [(r[0], r[1], r[2], r[3]) for r in res.all()]
 
 
 async def list_events_for_tree(
