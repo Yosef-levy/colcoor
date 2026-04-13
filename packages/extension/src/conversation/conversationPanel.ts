@@ -7,6 +7,10 @@ import { runResendAssistant } from "./resendAssistant";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
+import {
+  COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
+  clampComposerTextareaHeightPx,
+} from "./composerLayoutPersistence";
 import { findBranchTip } from "./treeEvents";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
@@ -26,6 +30,8 @@ type WebviewStateMessage = {
   threadPlainText: string;
   /** Workspace-persisted tree column width (px), when set. */
   treeWidthPx: number | null;
+  /** Workspace-persisted composer textarea height (px), when set. */
+  composerTextareaHeightPx: number | null;
   /** Collapsed branch roots for this conversation (pruned to current `events`). */
   treeCollapsedEventIds: string[];
   /** Settings: expand CLI trace `<details>` by default. */
@@ -46,7 +52,7 @@ type FromWebview =
   | { type: "resend" }
   | { type: "copy"; text: string }
   | { type: "copyThread"; text: string }
-  | { type: "layout"; treeWidthPx: number }
+  | { type: "layout"; treeWidthPx?: number; composerTextareaHeightPx?: number }
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
@@ -185,6 +191,9 @@ export function createConversationPanelController(
         typeof treeW === "number" && Number.isFinite(treeW) && treeW >= 140 && treeW < 8000
           ? Math.floor(treeW)
           : null;
+      const composerTextareaHeightPx = clampComposerTextareaHeightPx(
+        context.workspaceState.get<number>(COMPOSER_TEXTAREA_HEIGHT_STATE_KEY),
+      );
       const agentTraceOpen =
         vscode.workspace.getConfiguration("colcoor").get<boolean>("conversationAgentTraceOpen") ?? true;
       const msg: WebviewStateMessage = {
@@ -197,6 +206,7 @@ export function createConversationPanelController(
         threadSegments: buildThreadSegments(events, sel ?? "", lastNotes),
         threadPlainText: buildPlainThread(events, sel ?? "", lastNotes),
         treeWidthPx,
+        composerTextareaHeightPx,
         treeCollapsedEventIds: prunedCollapsedEventIds(events),
         agentTraceOpen,
         needsContextRebuild: lastNeedsContextRebuild,
@@ -214,6 +224,9 @@ export function createConversationPanelController(
           typeof treeW === "number" && Number.isFinite(treeW) && treeW >= 140 && treeW < 8000
             ? Math.floor(treeW)
             : null;
+        const composerTextareaHeightPx = clampComposerTextareaHeightPx(
+          context.workspaceState.get<number>(COMPOSER_TEXTAREA_HEIGHT_STATE_KEY),
+        );
         const agentTraceOpen =
           vscode.workspace.getConfiguration("colcoor").get<boolean>("conversationAgentTraceOpen") ?? true;
         const fallback: WebviewStateMessage = {
@@ -226,6 +239,7 @@ export function createConversationPanelController(
           threadSegments: [],
           threadPlainText: "",
           treeWidthPx,
+          composerTextareaHeightPx,
           treeCollapsedEventIds: [],
           agentTraceOpen,
           needsContextRebuild: false,
@@ -524,10 +538,18 @@ export function createConversationPanelController(
         }
         return;
       }
-      if (msg.type === "layout" && typeof msg.treeWidthPx === "number") {
-        const w = Math.floor(msg.treeWidthPx);
-        if (w >= 140 && w < 8000) {
-          void context.workspaceState.update(TREE_WIDTH_STATE_KEY, w);
+      if (msg.type === "layout") {
+        if (typeof msg.treeWidthPx === "number") {
+          const w = Math.floor(msg.treeWidthPx);
+          if (w >= 140 && w < 8000) {
+            void context.workspaceState.update(TREE_WIDTH_STATE_KEY, w);
+          }
+        }
+        if (typeof msg.composerTextareaHeightPx === "number") {
+          const h = clampComposerTextareaHeightPx(msg.composerTextareaHeightPx);
+          if (h != null) {
+            void context.workspaceState.update(COMPOSER_TEXTAREA_HEIGHT_STATE_KEY, h);
+          }
         }
         return;
       }

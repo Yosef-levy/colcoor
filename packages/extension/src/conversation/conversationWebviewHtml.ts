@@ -632,6 +632,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       threadSegments: [],
       threadPlainText: "",
       treeWidthPx: null,
+      /** Host workspace persistence; bounds match composerLayoutPersistence.ts (72–800). */
+      composerTextareaHeightPx: null,
       agentTraceOpen: true,
       needsContextRebuild: false,
       busy: false,
@@ -660,6 +662,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var w = parseInt(localStorage.getItem("colcoor.treeWidthPx"), 10);
         var el = document.querySelector(".col-tree");
         if (el && w >= 140) el.style.width = w + "px";
+      } catch (e) {}
+    })();
+
+    (function applySavedComposerHeightColdStart() {
+      try {
+        var h = parseInt(localStorage.getItem("colcoor.composerTextareaHeightPx"), 10);
+        var ta = document.getElementById("input");
+        if (ta && h >= 72 && h <= 800) ta.style.height = h + "px";
       } catch (e) {}
     })();
 
@@ -912,6 +922,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       treeResizeObserver.observe(el);
     }
 
+    var composerResizeObserver = null;
+    function wireComposerResize() {
+      var ta = document.getElementById("input");
+      if (!ta || typeof ResizeObserver === "undefined") return;
+      if (composerResizeObserver) composerResizeObserver.disconnect();
+      var tid = null;
+      composerResizeObserver = new ResizeObserver(function () {
+        if (tid) clearTimeout(tid);
+        tid = setTimeout(function () {
+          try {
+            var h = ta.offsetHeight;
+            if (h >= 72 && h <= 800) {
+              localStorage.setItem("colcoor.composerTextareaHeightPx", String(h));
+              vscode.postMessage({ type: "layout", composerTextareaHeightPx: h });
+            }
+          } catch (e) {}
+        }, 250);
+      });
+      composerResizeObserver.observe(ta);
+    }
+
     function renderTree() {
       const root = document.getElementById("tree");
       if (!root) return;
@@ -1108,11 +1139,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (ta) ta.disabled = state.busy;
         if (priv) priv.disabled = state.busy;
         if (busyEl) busyEl.style.display = state.busy ? "inline" : "none";
+        if (ta) {
+          var compH = null;
+          if (typeof state.composerTextareaHeightPx === "number") {
+            var sh = state.composerTextareaHeightPx;
+            if (sh >= 72 && sh <= 800) compH = sh;
+          }
+          if (compH == null) {
+            try {
+              var lh = parseInt(localStorage.getItem("colcoor.composerTextareaHeightPx"), 10);
+              if (lh >= 72 && lh <= 800) compH = lh;
+            } catch (e2) {}
+          }
+          if (compH != null) ta.style.height = compH + "px";
+        }
         renderTree();
         renderThread();
         renderDetailBar();
         applyTreeWidth();
         wireTreeResize();
+        wireComposerResize();
       } catch (e) {
         const msg = e && e.message ? String(e.message) : String(e);
         const subEl = document.getElementById("sub");
