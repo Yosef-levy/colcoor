@@ -18,6 +18,10 @@ import {
   ConversationTreeItem,
   ConversationsTreeProvider,
 } from "./conversations/conversationsTreeProvider";
+import {
+  CONVERSATION_AUTO_REFRESH_MS,
+  shouldAutoRefreshConversations,
+} from "./conversations/conversationAutoRefreshPolicy";
 
 function formatMemberQuickPickLabel(m: ConversationMember): string {
   const name = m.display_name?.trim() ? m.display_name : "—";
@@ -63,6 +67,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     showCollapseAll: false,
   });
   context.subscriptions.push(treeView);
+  const autoRefreshTimer = setInterval(async () => {
+    const hasBackendToken = Boolean(await session.getBackendAccessToken());
+    if (
+      shouldAutoRefreshConversations({
+        hasBackendToken,
+        treeVisible: treeView.visible,
+      })
+    ) {
+      refreshTree();
+    }
+  }, CONVERSATION_AUTO_REFRESH_MS);
+  context.subscriptions.push(
+    new vscode.Disposable(() => {
+      clearInterval(autoRefreshTimer);
+    }),
+  );
 
   async function pickConversationInteractively(): Promise<
     { id: string; title: string | null } | undefined
