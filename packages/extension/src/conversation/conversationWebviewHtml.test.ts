@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import {
+  CONTEXT_REBUILD_COMPOSER_BANNER,
+  CONTEXT_REBUILD_SUBTITLE_SUFFIX,
+} from "./contextRebuildUserCopy";
+import {
   PRIVATE_BRANCH_DESCRIPTION,
   PRIVATE_BRANCH_LEAD,
 } from "./privateBranchComposerCopy";
@@ -140,5 +144,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
     expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
+  });
+
+  it("embeds context-rebuild copy, banner region, and render wiring", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="contextRebuildHint"');
+    expect(html).toContain("CONTEXT_REBUILD_SUBTITLE_SUFFIX");
+    expect(html).toContain("CONTEXT_REBUILD_COMPOSER_BANNER");
+    expect(html).toContain(JSON.stringify(CONTEXT_REBUILD_SUBTITLE_SUFFIX));
+    expect(html).toContain(JSON.stringify(CONTEXT_REBUILD_COMPOSER_BANNER));
+    expect(html).toContain("subBase += CONTEXT_REBUILD_SUBTITLE_SUFFIX");
+    expect(html).toContain('getElementById("contextRebuildHint")');
+    expect(html).toContain("state.needsContextRebuild && !state.busy");
   });
 });

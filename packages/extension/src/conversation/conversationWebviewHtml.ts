@@ -1,6 +1,10 @@
 /** HTML document for the Colcoor conversation webview (tree + thread + composer). */
 
 import {
+  CONTEXT_REBUILD_COMPOSER_BANNER,
+  CONTEXT_REBUILD_SUBTITLE_SUFFIX,
+} from "./contextRebuildUserCopy";
+import {
   PRIVATE_BRANCH_DESCRIPTION,
   PRIVATE_BRANCH_LABEL_TITLE,
   PRIVATE_BRANCH_LEAD,
@@ -607,6 +611,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
     }
+    .context-rebuild-hint {
+      flex-shrink: 0;
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-editorWarning-foreground));
+      border-radius: 4px;
+      background: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWarning-background));
+      color: var(--vscode-inputValidation-warningForeground, var(--vscode-editorWarning-foreground));
+      font-size: 0.92em;
+      line-height: 1.4;
+    }
     .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
   </style>
 </head>
@@ -656,6 +671,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <div id="thread"></div>
         </div>
       </div>
+      <div
+        id="contextRebuildHint"
+        class="context-rebuild-hint"
+        style="display:none"
+        role="status"
+        aria-live="polite"
+      ></div>
       <div class="composer">
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
         <label class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
@@ -676,6 +698,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const CONTEXT_REBUILD_SUBTITLE_SUFFIX = ${JSON.stringify(CONTEXT_REBUILD_SUBTITLE_SUFFIX)};
+    const CONTEXT_REBUILD_COMPOSER_BANNER = ${JSON.stringify(CONTEXT_REBUILD_COMPOSER_BANNER)};
     let hasReceivedState = false;
     let state = {
       conversationId: "",
@@ -1258,9 +1282,19 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             state.events.length +
             " event(s) — reply attaches under the selected tree node.";
           if (state.needsContextRebuild) {
-            subBase += " Next send rebuilds assistant context from the full branch path (root → selected).";
+            subBase += CONTEXT_REBUILD_SUBTITLE_SUFFIX;
           }
           subEl.textContent = subBase;
+        }
+        var crHint = document.getElementById("contextRebuildHint");
+        if (crHint) {
+          if (state.needsContextRebuild && !state.busy) {
+            crHint.style.display = "block";
+            crHint.textContent = CONTEXT_REBUILD_COMPOSER_BANNER;
+          } else {
+            crHint.style.display = "none";
+            crHint.textContent = "";
+          }
         }
         if (sendBtn) {
           sendBtn.textContent = state.busy ? "Sending…" : "Send";
