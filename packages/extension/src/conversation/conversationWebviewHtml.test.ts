@@ -72,4 +72,11 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('refSideChatBtn.disabled = state.busy;');
     expect(html).toContain('vscode.postMessage({ type: "referenceInSideChat" });');
   });
+
+  it("includes Reference note in side chat detail action wiring", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnReferenceNoteSideChat"');
+    expect(html).toContain('refNoteSideChatBtn.disabled = state.busy;');
+    expect(html).toContain('vscode.postMessage({ type: "referenceNoteInSideChat" });');
+  });
 });

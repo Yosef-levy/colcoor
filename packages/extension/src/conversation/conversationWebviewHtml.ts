@@ -629,6 +629,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
           <button type="button" id="btnContinueFromHere" class="btn-secondary" title="Set the selected message as the active continue point">Continue from here</button>
           <button type="button" id="btnReferenceSideChat" class="btn-secondary" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
+          <button type="button" id="btnReferenceNoteSideChat" class="btn-secondary" title="Open side chat and choose a note from the selected message to reference">Reference note in side chat</button>
           <button type="button" id="btnCopy" class="btn-secondary">Copy message</button>
           <button type="button" id="btnCopyThread" class="btn-secondary" title="Copy root → selected path as plain text">Copy thread</button>
           <button type="button" id="btnResend" class="btn-secondary">Resend assistant</button>
@@ -888,8 +889,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const copyThreadBtn = document.getElementById("btnCopyThread");
       const continueBtn = document.getElementById("btnContinueFromHere");
       const refSideChatBtn = document.getElementById("btnReferenceSideChat");
+      const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
       const resendBtn = document.getElementById("btnResend");
-      if (!crumb || !copyBtn || !resendBtn || !continueBtn || !refSideChatBtn) return;
+      if (!crumb || !copyBtn || !resendBtn || !continueBtn || !refSideChatBtn || !refNoteSideChatBtn)
+        return;
       const sel = state.selectedEventId;
       const evs = state.events || [];
       const path = pathChain(evs, sel);
@@ -898,6 +901,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         copyBtn.disabled = true;
         continueBtn.disabled = true;
         refSideChatBtn.disabled = true;
+        refNoteSideChatBtn.disabled = true;
         resendBtn.disabled = true;
         if (copyThreadBtn) copyThreadBtn.disabled = true;
         const renameBtn = document.getElementById("btnRename");
@@ -932,6 +936,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       refSideChatBtn.title = state.busy
         ? "Wait for the current operation to finish."
         : "Open side chat with a reference to the selected message.";
+      refNoteSideChatBtn.disabled = state.busy;
+      refNoteSideChatBtn.title = state.busy
+        ? "Wait for the current operation to finish."
+        : "Open side chat and pick a note from the selected message.";
       const canCopyThread = String(state.threadPlainText || "").trim().length > 0;
       if (copyThreadBtn) {
         copyThreadBtn.disabled = state.busy || !canCopyThread;
@@ -1381,6 +1389,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("btnReferenceSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "referenceInSideChat" });
+    });
+
+    document.getElementById("btnReferenceNoteSideChat").addEventListener("click", () => {
+      vscode.postMessage({ type: "referenceNoteInSideChat" });
     });
 
     document.getElementById("btnRename").addEventListener("click", () => {

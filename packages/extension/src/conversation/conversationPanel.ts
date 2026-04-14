@@ -58,6 +58,7 @@ type FromWebview =
   | { type: "layout"; treeWidthPx?: number; composerTextareaHeightPx?: number }
   | { type: "continueFromHere" }
   | { type: "referenceInSideChat" }
+  | { type: "referenceNoteInSideChat" }
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
@@ -631,6 +632,20 @@ export function createConversationPanelController(
           return;
         }
         await vscode.commands.executeCommand("colcoor.referenceSelectedMessageInSideChat");
+        return;
+      }
+      if (msg.type === "referenceNoteInSideChat") {
+        if (!conversationId || !selectedEventId) {
+          return;
+        }
+        const exists = lastTreeEvents.some((e) => e.id === selectedEventId);
+        if (!exists) {
+          void vscode.window.showWarningMessage(
+            "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+          );
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.referenceSelectedNoteInSideChat");
         return;
       }
       if (msg.type === "rename") {
