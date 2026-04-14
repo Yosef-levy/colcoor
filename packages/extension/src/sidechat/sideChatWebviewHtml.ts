@@ -45,6 +45,20 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     .msg:last-child { border-bottom: none; }
     .msg .meta { font-size: 0.88em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
     .msg .body { white-space: pre-wrap; word-break: break-word; }
+    .msg .msg-actions { margin-top: 6px; }
+    .msg .msg-actions button { padding: 4px 10px; font-size: 0.92em; }
+    .msg textarea.edit-ta {
+      width: 100%;
+      min-height: 56px;
+      margin-top: 4px;
+      font-family: var(--vscode-editor-font-family);
+      font-size: var(--vscode-editor-font-size);
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 3px;
+      padding: 6px;
+    }
     .composer { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
     .composer textarea {
       width: 100%;
@@ -86,6 +100,48 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    var viewerUserId = null;
+    function canMutateRow(m) {
+      return !!(viewerUserId && m && m.kind === "user" && m.author_user_id === viewerUserId && !m.deleted_at);
+    }
+    function endEdit(row, wrap, originalBodyText) {
+      row.dataset.editing = "0";
+      var body = document.createElement("div");
+      body.className = "body";
+      body.textContent = (originalBodyText != null ? String(originalBodyText) : "") || "(empty)";
+      if (wrap && wrap.parentNode) wrap.parentNode.replaceChild(body, wrap);
+    }
+    function startEdit(row, m) {
+      if (row.dataset.editing === "1") return;
+      row.dataset.editing = "1";
+      var bodyEl = row.querySelector(".body");
+      if (!bodyEl) return;
+      var orig = m.body != null ? String(m.body) : "";
+      var wrap = document.createElement("div");
+      var ta = document.createElement("textarea");
+      ta.className = "edit-ta";
+      ta.value = orig;
+      var rb = document.createElement("div");
+      rb.className = "row";
+      var save = document.createElement("button");
+      save.type = "button";
+      save.textContent = "Save";
+      var cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "secondary";
+      cancel.textContent = "Cancel";
+      save.addEventListener("click", function () {
+        vscode.postMessage({ type: "edit", messageId: m.id, text: ta.value });
+      });
+      cancel.addEventListener("click", function () {
+        endEdit(row, wrap, m.body);
+      });
+      rb.appendChild(save);
+      rb.appendChild(cancel);
+      wrap.appendChild(ta);
+      wrap.appendChild(rb);
+      bodyEl.replaceWith(wrap);
+    }
     function render(messages) {
       var list = document.getElementById("list");
       var err = document.getElementById("err");
@@ -95,6 +151,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       (messages || []).forEach(function (m) {
         var row = document.createElement("div");
         row.className = "msg";
+        row.dataset.editing = "0";
         var meta = document.createElement("div");
         meta.className = "meta";
         var del = m.deleted_at ? " · deleted" : "";
@@ -104,12 +161,37 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         body.textContent = (m.body != null ? String(m.body) : "") || "(empty)";
         row.appendChild(meta);
         row.appendChild(body);
+        if (canMutateRow(m)) {
+          var actions = document.createElement("div");
+          actions.className = "row msg-actions";
+          var btnEdit = document.createElement("button");
+          btnEdit.type = "button";
+          btnEdit.className = "secondary";
+          btnEdit.textContent = "Edit";
+          btnEdit.addEventListener("click", function () { startEdit(row, m); });
+          var btnDel = document.createElement("button");
+          btnDel.type = "button";
+          btnDel.className = "secondary";
+          btnDel.textContent = "Delete";
+          btnDel.addEventListener("click", function () {
+            if (!confirm("Delete this side-chat message?")) return;
+            vscode.postMessage({ type: "delete", messageId: m.id });
+          });
+          actions.appendChild(btnEdit);
+          actions.appendChild(btnDel);
+          row.appendChild(actions);
+        }
         list.appendChild(row);
       });
     }
     window.addEventListener("message", function (ev) {
       var d = ev.data;
       if (d && d.type === "state") {
+        if (typeof d.viewerUserId === "string") {
+          viewerUserId = d.viewerUserId;
+        } else if (d.viewerUserId === null) {
+          viewerUserId = null;
+        }
         var sub = document.getElementById("sub");
         if (sub) sub.textContent = (d.messages && d.messages.length) ? d.messages.length + " message(s)" : "No messages yet.";
         render(d.messages || []);

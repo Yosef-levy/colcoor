@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import type { ColcoorApiClient, SideChatMessageOut } from "../api/client";
+import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
@@ -32,11 +33,18 @@ function randomNonce(): string {
   return s;
 }
 
-type FromWebview = { type: "ready" } | { type: "send"; text: string } | { type: "refresh" };
+type FromWebview =
+  | { type: "ready" }
+  | { type: "send"; text: string }
+  | { type: "refresh" }
+  | { type: "edit"; messageId: string; text: string }
+  | { type: "delete"; messageId: string };
 
 type StateMessage = {
   type: "state";
   messages: SideChatMessageOut[];
+  /** Caller user id for author-only actions in the webview; null if profile could not be loaded. */
+  viewerUserId: string | null;
 };
 
 type ErrorMessage = { type: "error"; text: string };
@@ -69,6 +77,21 @@ export async function openSideChatPanel(
   /** Last `last_read_seq` successfully PATCHed (avoids spamming the API). */
   let lastPatchedReadSeq = -1;
   let readPatchChain = Promise.resolve();
+  /** `undefined` = not loaded yet, `null` = load failed, string = user id */
+  let myUserId: string | null | undefined = undefined;
+
+  async function ensureMyUserId(): Promise<string | null> {
+    if (myUserId !== undefined) {
+      return myUserId;
+    }
+    try {
+      const me = await api.getMe();
+      myUserId = me.id;
+    } catch {
+      myUserId = null;
+    }
+    return myUserId;
+  }
 
   function scheduleMarkRead(): void {
     readPatchChain = readPatchChain
@@ -93,8 +116,13 @@ export async function openSideChatPanel(
   }
 
   async function postState(): Promise<void> {
+    const viewerUserId = await ensureMyUserId();
     try {
-      await panel.webview.postMessage({ type: "state", messages: cached } satisfies StateMessage);
+      await panel.webview.postMessage({
+        type: "state",
+        messages: cached,
+        viewerUserId,
+      } satisfies StateMessage);
     } catch {
       /* webview gone */
     }
@@ -178,6 +206,60 @@ export async function openSideChatPanel(
       }
       try {
         await api.postSideChatMessage(conversationId, { kind: "user", body });
+        await pushState();
+      } catch (e) {
+        const t = e instanceof Error ? e.message : String(e);
+        await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
+      }
+      return;
+    }
+    if (msg.type === "edit") {
+      const body = trimmedSideChatSendBody(msg.text);
+      if (!body) {
+        await panel.webview.postMessage({
+          type: "error",
+          text: "Edited message is empty.",
+        } satisfies ErrorMessage);
+        return;
+      }
+      const mid = typeof msg.messageId === "string" ? msg.messageId.trim() : "";
+      if (!mid) {
+        return;
+      }
+      const row = cached.find((m) => m.id === mid);
+      const uid = await ensureMyUserId();
+      if (!row || !canMutateOwnSideChatUserMessage(row, uid)) {
+        await panel.webview.postMessage({
+          type: "error",
+          text: "You can only edit your own messages.",
+        } satisfies ErrorMessage);
+        return;
+      }
+      try {
+        await api.patchSideChatMessage(conversationId, mid, { body });
+        await pushState();
+      } catch (e) {
+        const t = e instanceof Error ? e.message : String(e);
+        await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
+      }
+      return;
+    }
+    if (msg.type === "delete") {
+      const mid = typeof msg.messageId === "string" ? msg.messageId.trim() : "";
+      if (!mid) {
+        return;
+      }
+      const row = cached.find((m) => m.id === mid);
+      const uid = await ensureMyUserId();
+      if (!row || !canMutateOwnSideChatUserMessage(row, uid)) {
+        await panel.webview.postMessage({
+          type: "error",
+          text: "You can only delete your own messages.",
+        } satisfies ErrorMessage);
+        return;
+      }
+      try {
+        await api.deleteSideChatMessage(conversationId, mid);
         await pushState();
       } catch (e) {
         const t = e instanceof Error ? e.message : String(e);

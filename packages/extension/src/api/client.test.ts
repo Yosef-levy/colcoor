@@ -187,6 +187,84 @@ describe("ColcoorApiClient note mutations", () => {
     ).rejects.toThrow(/update note failed \(HTTP 403\).*forbidden/);
   });
 
+  it("patchSideChatMessage sends PATCH to message id with body", async () => {
+    const out = {
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      conversation_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      seq: 2,
+      kind: "user",
+      author_user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      body: "hi",
+      referenced_event_id: null,
+      referenced_note_id: null,
+      referenced_side_chat_message_id: null,
+      created_at: "t",
+      updated_at: "t",
+      edited_at: null,
+      deleted_at: null,
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify(out),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const row = await api.patchSideChatMessage(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      { body: "hi" },
+    );
+    expect(row.body).toBe("hi");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      "/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/side-chat/messages/dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    );
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ body: "hi" }));
+  });
+
+  it("deleteSideChatMessage sends DELETE to message id", async () => {
+    const out = {
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      conversation_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      seq: 2,
+      kind: "user",
+      author_user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      body: "x",
+      referenced_event_id: null,
+      referenced_note_id: null,
+      referenced_side_chat_message_id: null,
+      created_at: "t",
+      updated_at: "t",
+      edited_at: null,
+      deleted_at: "2026-01-01T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify(out),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const row = await api.deleteSideChatMessage(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    );
+    expect(row.deleted_at).toBe("2026-01-01T00:00:00Z");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      "/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/side-chat/messages/dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    );
+    expect(init.method).toBe("DELETE");
+  });
+
   it("patchSideChatRead sends PATCH with last_read_seq and accepts 204", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
