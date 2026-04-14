@@ -91,6 +91,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
     <button type="button" id="btnRefreshConversations" title="Reload the Colcoor conversations list in the sidebar">Refresh conversations</button>
+    <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
     <button type="button" id="btnSetupCursorCli" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
     <button type="button" id="btnSetCursorAgentApiKey" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
   </div>
@@ -128,6 +129,9 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnRefreshConversations").addEventListener("click", function () {
       vscode.postMessage({ type: "refreshConversations" });
+    });
+    document.getElementById("btnToggleConversationsSidebar").addEventListener("click", function () {
+      vscode.postMessage({ type: "toggleConversationsSidebar" });
     });
     document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
       vscode.postMessage({ type: "setupCursorCli" });

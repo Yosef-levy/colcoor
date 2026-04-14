@@ -887,6 +887,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand("colcoor.refreshConversations");
                 return;
               }
+              if (msg.type === "toggleConversationsSidebar") {
+                await vscode.commands.executeCommand("colcoor.toggleConversationsSidebar");
+                return;
+              }
               if (msg.type === "setupCursorCli") {
                 await vscode.commands.executeCommand("colcoor.setupCursorCli");
                 return;
