@@ -332,4 +332,24 @@ describe("showColcoorApiFailure", () => {
       COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
     );
   });
+
+  it("shows insufficient storage messaging and refresh actions for HTTP 507", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("upload", 507, '{"detail":"disk full"}');
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("insufficient storage"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain(e.message);
+    expect(text).toContain("quota");
+  });
+
+  it("runs refresh conversation tree when user picks that action on HTTP 507", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 507, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
+  });
 });

@@ -6,6 +6,7 @@ import {
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
   isGoneColcoorApiError,
+  isInsufficientStorageColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
@@ -154,6 +155,12 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isGatewayTimeoutColcoorApiError(e)) {
     await offerListOrTreeRefresh(
       `Colcoor: gateway timeout — ${e.message} Try again after a short wait, or refresh.`,
+    );
+    return;
+  }
+  if (isInsufficientStorageColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: insufficient storage — ${e.message} The server may be low on space or enforcing a quota; retry later or refresh.`,
     );
     return;
   }

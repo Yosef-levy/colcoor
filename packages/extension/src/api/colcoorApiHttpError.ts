@@ -106,3 +106,8 @@ export function isServiceUnavailableColcoorApiError(e: unknown): e is ColcoorApi
 export function isGatewayTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 504;
 }
+
+/** HTTP 507 — insufficient storage (server disk/quota; WebDAV / some proxies). */
+export function isInsufficientStorageColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 507;
+}

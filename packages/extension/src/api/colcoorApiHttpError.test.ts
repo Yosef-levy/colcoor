@@ -7,6 +7,7 @@ import {
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
   isGoneColcoorApiError,
+  isInsufficientStorageColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
@@ -166,5 +167,13 @@ describe("isGatewayTimeoutColcoorApiError", () => {
     expect(isGatewayTimeoutColcoorApiError(new ColcoorApiHttpError("x", 504, ""))).toBe(true);
     expect(isGatewayTimeoutColcoorApiError(new ColcoorApiHttpError("x", 408, ""))).toBe(false);
     expect(isGatewayTimeoutColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isInsufficientStorageColcoorApiError", () => {
+  it("is true only for HTTP 507 ColcoorApiHttpError", () => {
+    expect(isInsufficientStorageColcoorApiError(new ColcoorApiHttpError("x", 507, ""))).toBe(true);
+    expect(isInsufficientStorageColcoorApiError(new ColcoorApiHttpError("x", 503, ""))).toBe(false);
+    expect(isInsufficientStorageColcoorApiError(new Error("x"))).toBe(false);
   });
 });

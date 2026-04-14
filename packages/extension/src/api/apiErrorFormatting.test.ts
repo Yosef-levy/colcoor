@@ -110,6 +110,12 @@ describe("formatColcoorApiError", () => {
     expect(msg).toContain("Server asked to wait 12 s (Retry-After)");
   });
 
+  it("formats HTTP 507 with generic wording", () => {
+    expect(formatColcoorApiError("upload", 507, '{"detail":"no space left on device"}')).toBe(
+      "upload failed (HTTP 507): no space left on device",
+    );
+  });
+
   it("does not append Retry-After for 429 when seconds are null", () => {
     const msg = formatColcoorApiError("send", 429, "", null);
     expect(msg).toBe('send failed (HTTP 429): (no response body)');
