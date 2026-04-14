@@ -5,6 +5,7 @@ import {
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
+  isNotImplementedColcoorApiError,
   isPlanLimitColcoorApiError,
   isRequestTimeoutColcoorApiError,
   isServiceUnavailableColcoorApiError,
@@ -81,6 +82,12 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isTooManyRequestsColcoorApiError(e)) {
     await offerListOrTreeRefresh(
       `Colcoor: rate limited — ${e.message} Wait a few seconds, then retry or refresh.`,
+    );
+    return;
+  }
+  if (isNotImplementedColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: not implemented — ${e.message} The server does not support this operation or API version; refresh or check deployment.`,
     );
     return;
   }

@@ -6,6 +6,7 @@ import {
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
+  isNotImplementedColcoorApiError,
   isPlanLimitColcoorApiError,
   isRequestTimeoutColcoorApiError,
   isServiceUnavailableColcoorApiError,
@@ -21,6 +22,13 @@ describe("ColcoorApiHttpError", () => {
     expect(e.bodyText).toBe('{"detail":"quota"}');
     expect(e.message).toContain("Plan or usage limit");
     expect(e.message).toContain("create conversation");
+    expect(e.retryAfterSeconds).toBeNull();
+  });
+
+  it("carries retryAfterSeconds for rate limits when provided", () => {
+    const e = new ColcoorApiHttpError("send", 429, "{}", { retryAfterSeconds: 60 });
+    expect(e.retryAfterSeconds).toBe(60);
+    expect(e.message).toContain("60 s (Retry-After)");
   });
 });
 
@@ -72,6 +80,14 @@ describe("isTooManyRequestsColcoorApiError", () => {
     expect(isTooManyRequestsColcoorApiError(new ColcoorApiHttpError("x", 429, ""))).toBe(true);
     expect(isTooManyRequestsColcoorApiError(new ColcoorApiHttpError("x", 408, ""))).toBe(false);
     expect(isTooManyRequestsColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isNotImplementedColcoorApiError", () => {
+  it("is true only for HTTP 501 ColcoorApiHttpError", () => {
+    expect(isNotImplementedColcoorApiError(new ColcoorApiHttpError("x", 501, ""))).toBe(true);
+    expect(isNotImplementedColcoorApiError(new ColcoorApiHttpError("x", 502, ""))).toBe(false);
+    expect(isNotImplementedColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 

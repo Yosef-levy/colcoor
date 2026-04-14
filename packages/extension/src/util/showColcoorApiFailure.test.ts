@@ -163,6 +163,22 @@ describe("showColcoorApiFailure", () => {
     expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
   });
 
+  it("shows not implemented messaging and refresh actions for HTTP 501", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    await showColcoorApiFailure(new ColcoorApiHttpError("post", 501, "{}"));
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("not implemented"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+  });
+
+  it("runs refresh conversations when user picks an action on HTTP 501", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 501, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversations");
+  });
+
   it("shows bad gateway messaging and refresh actions for HTTP 502", async () => {
     showErrorMessage.mockResolvedValue(undefined);
     const e = new ColcoorApiHttpError("get", 502, "{}");

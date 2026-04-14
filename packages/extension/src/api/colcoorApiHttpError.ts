@@ -57,6 +57,11 @@ export function isTooManyRequestsColcoorApiError(e: unknown): e is ColcoorApiHtt
   return e instanceof ColcoorApiHttpError && e.status === 429;
 }
 
+/** HTTP 501 — server does not implement the requested capability. */
+export function isNotImplementedColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 501;
+}
+
 /** HTTP 502 — bad gateway (proxy/upstream mismatch). */
 export function isBadGatewayColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 502;
