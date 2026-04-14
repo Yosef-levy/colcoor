@@ -203,6 +203,7 @@ export function getSideChatWebviewHtml(
     <div id="mentionSuggestRow" class="mention-suggest-row"></div>
     <div class="row">
       <button id="send" type="button" disabled title="Type a non-empty message. Shift+Enter for newline, Enter to send.">Send</button>
+      <button id="btnStopAssistantGeneration" type="button" class="secondary" title="Stop the in-flight assistant reply in the conversation panel, if any (Colcoor: Stop assistant generation). Safe no-op when idle.">Stop generation</button>
       <button id="refresh" type="button" class="secondary">Refresh</button>
       <button id="btnOpenConversation" type="button" class="secondary" title="Open the main conversation panel (tree, thread, composer) for this conversation">Open conversation</button>
       <button id="btnRefreshConversationTree" type="button" class="secondary" title="Reload tree and thread in the open conversation panel, if any (Colcoor: Refresh conversation tree)">Refresh tree</button>
@@ -672,6 +673,9 @@ export function getSideChatWebviewHtml(
       updateRefNoteHint();
       if (ta) ta.value = "";
       updateComposerSendEnabled();
+    });
+    document.getElementById("btnStopAssistantGeneration").addEventListener("click", function () {
+      vscode.postMessage({ type: "stopGeneration" });
     });
     document.getElementById("refresh").addEventListener("click", function () {
       vscode.postMessage({ type: "refresh" });

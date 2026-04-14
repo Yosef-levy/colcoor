@@ -87,6 +87,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("sub.textContent = countPart + presencePart;");
   });
 
+  it("wires Stop generation to postMessage for the shared stop command ([ui-features.md] §9)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnStopAssistantGeneration"');
+    expect(html).toContain('vscode.postMessage({ type: "stopGeneration" });');
+  });
+
   it("includes Open conversation, main-panel shortcuts (tree/copy/continue/resend/jump), Drawers, TODO/starred, Profile, Settings, Legal URLs, sounds, About", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenConversation"');

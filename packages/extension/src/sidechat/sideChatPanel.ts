@@ -68,6 +68,7 @@ type FromWebview =
       referencedNoteId?: string | null;
     }
   | { type: "refresh" }
+  | { type: "stopGeneration" }
   | { type: "openConversation" }
   | { type: "refreshConversationTree" }
   | { type: "copySelectedMessage" }
@@ -445,6 +446,10 @@ export async function openSideChatPanel(
     }
     if (msg.type === "refresh") {
       await pushState();
+      return;
+    }
+    if (msg.type === "stopGeneration") {
+      await vscode.commands.executeCommand("colcoor.stopGeneration");
       return;
     }
     if (msg.type === "openConversation") {
