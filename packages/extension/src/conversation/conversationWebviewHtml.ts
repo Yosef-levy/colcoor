@@ -1,5 +1,11 @@
 /** HTML document for the Colcoor conversation webview (tree + thread + composer). */
 
+import {
+  PRIVATE_BRANCH_DESCRIPTION,
+  PRIVATE_BRANCH_LABEL_TITLE,
+  PRIVATE_BRANCH_LEAD,
+} from "./privateBranchComposerCopy";
+
 export function getConversationWebviewHtml(cspSource: string, nonce: string): string {
   const csp = [
     "default-src 'none'",
@@ -572,8 +578,31 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-radius: 4px;
       margin: 0.35em 0;
     }
-    .composer label.priv { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
-    .composer label.priv input { cursor: pointer; }
+    .composer label.priv {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      margin-top: 8px;
+    }
+    .composer label.priv input { cursor: pointer; margin-top: 2px; flex-shrink: 0; }
+    .composer label.priv .priv-body {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      line-height: 1.35;
+      max-width: 52em;
+    }
+    .composer label.priv .priv-lead {
+      font-weight: 600;
+      color: var(--vscode-foreground);
+      font-size: 0.95em;
+    }
+    .composer label.priv .priv-desc {
+      font-size: 0.88em;
+      color: var(--vscode-descriptionForeground);
+    }
     .btn-secondary {
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
@@ -612,9 +641,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       </div>
       <div class="composer">
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
-        <label class="priv hint" style="margin-top:6px;display:flex;align-items:center;gap:6px">
-          <input type="checkbox" id="privateBranch" />
-          Private draft (only you see this user message until you continue on a shared branch)
+        <label class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
+          <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" aria-describedby="privateBranchHelp" />
+          <span class="priv-body">
+            <span class="priv-lead">${PRIVATE_BRANCH_LEAD}</span>
+            <span id="privateBranchHelp" class="priv-desc">${PRIVATE_BRANCH_DESCRIPTION}</span>
+          </span>
         </label>
         <div class="row">
           <button id="send" type="button" disabled>Send</button>

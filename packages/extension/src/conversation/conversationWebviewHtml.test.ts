@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
+import {
+  PRIVATE_BRANCH_DESCRIPTION,
+  PRIVATE_BRANCH_LEAD,
+} from "./privateBranchComposerCopy";
 
 describe("getConversationWebviewHtml", () => {
   it("uses dir=auto on the composer textarea for RTL-capable typing", () => {
@@ -8,6 +12,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain(
       '<textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>',
     );
+  });
+
+  it("renders expanded private-draft composer help", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain(`>${PRIVATE_BRANCH_LEAD}<`);
+    expect(html).toContain(PRIVATE_BRANCH_DESCRIPTION);
+    expect(html).toContain('id="privateBranchHelp"');
+    expect(html).toContain('aria-describedby="privateBranchHelp"');
   });
 
   it("marks tree snippets with dir=auto and unicode-bidi for mixed-direction labels", () => {
