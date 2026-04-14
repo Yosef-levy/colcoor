@@ -883,6 +883,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 });
                 return;
               }
+              if (msg.type === "refreshConversations") {
+                await vscode.commands.executeCommand("colcoor.refreshConversations");
+                return;
+              }
               if (msg.type === "setupCursorCli") {
                 await vscode.commands.executeCommand("colcoor.setupCursorCli");
                 return;
