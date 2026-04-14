@@ -9,6 +9,13 @@ describe("formatRelativeTime", () => {
     expect(formatRelativeTime("not-a-date")).toBe("");
   });
 
+  it("accepts ISO string with surrounding whitespace and CRLF", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-06-01T15:00:00.000Z"));
+    expect(formatRelativeTime("  2024-06-01T14:59:20.000Z\r\n")).toBe("just now");
+    vi.useRealTimers();
+  });
+
   it("returns empty for timestamps in the future", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-06-01T15:00:00.000Z"));

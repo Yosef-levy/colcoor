@@ -1,9 +1,15 @@
+import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
+
 /** Short relative label for ISO 8601 timestamps (sidebar / tooltips). */
 export function formatRelativeTime(iso: string | null | undefined): string {
-  if (iso == null || String(iso).trim() === "") {
+  if (iso == null) {
     return "";
   }
-  const t = Date.parse(String(iso));
+  const s = normalizePersistedUserInputText(String(iso));
+  if (!s) {
+    return "";
+  }
+  const t = Date.parse(s);
   if (!Number.isFinite(t)) {
     return "";
   }
