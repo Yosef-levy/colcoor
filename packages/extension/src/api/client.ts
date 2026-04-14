@@ -44,6 +44,8 @@ export type GraphEventNode = {
   starred?: boolean;
   /** Tree API: note count on this event. */
   note_count?: number;
+  /** When set, show as a display-only checkpoint label in the breadcrumb ([ui-features.md] §8). */
+  checkpoint_label?: string | null;
 };
 
 export type TreeResponseBody = {

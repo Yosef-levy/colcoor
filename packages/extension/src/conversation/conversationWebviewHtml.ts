@@ -111,6 +111,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
     .detail-bar .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .crumb-step strong { font-weight: 600; color: var(--vscode-foreground); }
+    .crumb-checkpoint { font-weight: 500; color: var(--vscode-descriptionForeground); font-size: 0.95em; }
     .crumb-sep { color: var(--vscode-descriptionForeground); margin: 0 4px; }
     .thread {
       flex: 1;
@@ -1002,11 +1003,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       const parts = path.map((ev) => {
         const lab = ev.kind === "user_input" ? "User" : "Assistant";
+        var cpRaw = ev && typeof ev.checkpoint_label === "string" ? ev.checkpoint_label.trim() : "";
+        var cpHtml = "";
+        if (cpRaw) {
+          cpHtml =
+            ' · <span class="crumb-checkpoint">' + esc("Checkpoint: " + cpRaw) + "</span>";
+        }
         return (
           '<span class="crumb-step"><strong>' +
           esc(lab) +
           "</strong> · " +
           esc(snippet(ev)) +
+          cpHtml +
           "</span>"
         );
       });

@@ -19,6 +19,12 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("legalPolicyLinks");
   });
 
+  it("detail bar breadcrumb supports optional checkpoint_label on tree nodes ([ui-features.md] §8)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("checkpoint_label");
+    expect(html).toContain("crumb-checkpoint");
+  });
+
   it("uses dir=auto on the composer textarea for RTL-capable typing", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(
