@@ -87,6 +87,18 @@ describe("parseCursorAgentNdjsonLine", () => {
     expect(parseCursorAgentNdjsonLine(line)).toBeNull();
   });
 
+  it("returns null when assistant row omits message or content is not an array", () => {
+    expect(parseCursorAgentNdjsonLine(JSON.stringify({ type: "assistant" }))).toBeNull();
+    expect(
+      parseCursorAgentNdjsonLine(
+        JSON.stringify({
+          type: "assistant",
+          message: { role: "assistant", content: { not: "an array" } },
+        }),
+      ),
+    ).toBeNull();
+  });
+
   it("returns null for non-success result subtypes", () => {
     const line = JSON.stringify({
       type: "result",

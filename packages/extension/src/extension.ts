@@ -211,9 +211,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (title === undefined) {
         return;
       }
-      const trimmed = title.trim();
       try {
-        const conv = await api.createConversation({ title: trimmed || null });
+        const conv = await api.createConversation({ title: normalizedConversationTitle(title) });
         refreshTree();
         await conversationPanel.reveal(conv.id, conv.title);
         await vscode.window.showInformationMessage(
