@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ColcoorApiHttpError,
   isBadGatewayColcoorApiError,
+  isConflictColcoorApiError,
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
@@ -64,6 +65,14 @@ describe("isNotFoundColcoorApiError", () => {
     expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(true);
     expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(false);
     expect(isNotFoundColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isConflictColcoorApiError", () => {
+  it("is true only for HTTP 409 ColcoorApiHttpError", () => {
+    expect(isConflictColcoorApiError(new ColcoorApiHttpError("x", 409, ""))).toBe(true);
+    expect(isConflictColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(false);
+    expect(isConflictColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 

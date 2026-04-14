@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import {
   isBadGatewayColcoorApiError,
+  isConflictColcoorApiError,
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
@@ -71,6 +72,12 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   }
   if (isNotFoundColcoorApiError(e)) {
     await offerListOrTreeRefresh(`Colcoor: not found — ${e.message} It may have been deleted.`);
+    return;
+  }
+  if (isConflictColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: conflict — ${e.message} Another change may have happened first (for example duplicate membership), or your view is stale. Try refresh or retry.`,
+    );
     return;
   }
   if (isRequestTimeoutColcoorApiError(e)) {

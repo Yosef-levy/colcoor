@@ -111,6 +111,24 @@ describe("showColcoorApiFailure", () => {
     expect(text).toContain(e.message);
   });
 
+  it("shows conflict messaging and refresh actions for HTTP 409", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    await showColcoorApiFailure(new ColcoorApiHttpError("add member", 409, "{}"));
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("conflict"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain("stale");
+  });
+
+  it("runs refresh conversation tree when user picks that action on HTTP 409", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 409, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
+  });
+
   it("runs refresh commands when user picks a 404 action", async () => {
     showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 404, ""));

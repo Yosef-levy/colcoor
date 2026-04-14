@@ -47,6 +47,11 @@ export function isNotFoundColcoorApiError(e: unknown): e is ColcoorApiHttpError 
   return e instanceof ColcoorApiHttpError && e.status === 404;
 }
 
+/** HTTP 409 — conflict (e.g. duplicate member per [api-contracts.md]). */
+export function isConflictColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 409;
+}
+
 /** HTTP 408 — request timeout (client or upstream). */
 export function isRequestTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 408;
