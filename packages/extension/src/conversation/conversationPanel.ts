@@ -17,7 +17,10 @@ import {
 import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
-import { staleTreeMissingSelectionPromptKey } from "./staleTreePromptPolicy";
+import {
+  staleTreeMissingSelectionPromptKey,
+  staleTreeRemoteCollaboratorGrowthFingerprint,
+} from "./staleTreePromptPolicy";
 import { TREE_NODE_CONTEXT_MENU_ENTRIES } from "./treeNodeContextMenu";
 import { pruneCollapsedEventIdsForStorage } from "./treeCollapseIds";
 import {
@@ -197,6 +200,10 @@ export function createConversationPanelController(
   let lastNeedsContextRebuild = false;
   /** One-time dedupe key for stale-tree prompt when selected node disappears after refresh. */
   let staleTreePromptedForEventId: string | null = null;
+  /** Dedupe for “remote collaborator posted” growth prompt ([ui-features.md] §11). */
+  let staleTreePromptedForGrowthFingerprint: string | null = null;
+  /** Cached GET /me id — avoids repeated calls when checking collaborative tree growth. */
+  let viewerUserIdMemo: string | undefined;
 
   function applySideChatUnreadFromListRow(row: ConversationSummary | undefined): void {
     if (!row) {
@@ -398,6 +405,29 @@ export function createConversationPanelController(
         nextEventIds,
         alreadyPromptedForEventId: staleTreePromptedForEventId,
       });
+      let growthFingerprint: string | null = null;
+      if (!busy && !stalePromptKey && previousEventIds.size > 0) {
+        const maybeNewUserInput = events.some(
+          (e) => !previousEventIds.has(e.id) && e.kind === "user_input",
+        );
+        if (maybeNewUserInput) {
+          if (viewerUserIdMemo === undefined) {
+            try {
+              viewerUserIdMemo = (await api.getMe()).id;
+            } catch {
+              viewerUserIdMemo = undefined;
+            }
+          }
+          if (viewerUserIdMemo !== undefined) {
+            growthFingerprint = staleTreeRemoteCollaboratorGrowthFingerprint({
+              previousEventIds,
+              nextEvents: events,
+              viewerUserId: viewerUserIdMemo,
+              alreadyPromptedFingerprint: staleTreePromptedForGrowthFingerprint,
+            });
+          }
+        }
+      }
       lastNotes = notes;
       if (caller) {
         lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
@@ -415,6 +445,16 @@ export function createConversationPanelController(
         staleTreePromptedForEventId = stalePromptKey;
         const choice = await vscode.window.showWarningMessage(
           "Colcoor: the shared tree changed and your previous selection is no longer available.",
+          COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+        );
+        if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
+          await loadTreeAndPush(false, null);
+          return;
+        }
+      } else if (!busy && growthFingerprint) {
+        staleTreePromptedForGrowthFingerprint = growthFingerprint;
+        const choice = await vscode.window.showWarningMessage(
+          "Colcoor: new collaborative messages were added to this conversation’s tree.",
           COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
         );
         if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
@@ -1138,6 +1178,8 @@ export function createConversationPanelController(
       conversationTitle = title;
       conversationPinned = false;
       staleTreePromptedForEventId = null;
+      staleTreePromptedForGrowthFingerprint = null;
+      viewerUserIdMemo = undefined;
       selectedEventId = undefined;
       lastNotes = [];
       lastNeedsContextRebuild = false;
@@ -1162,6 +1204,8 @@ export function createConversationPanelController(
       conversationTitle = title;
       conversationPinned = false;
       staleTreePromptedForEventId = null;
+      staleTreePromptedForGrowthFingerprint = null;
+      viewerUserIdMemo = undefined;
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
