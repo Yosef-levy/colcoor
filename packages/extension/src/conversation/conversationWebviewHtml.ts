@@ -633,6 +633,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnTodoDrawer" class="btn-secondary" title="List TODO notes in this conversation">TODO notes</button>
           <button type="button" id="btnOpenSideChat" class="btn-secondary" title="Open side chat for this conversation">Open side chat</button>
           <button type="button" id="btnDeleteConversation" class="btn-secondary" title="Delete this conversation">Delete conversation…</button>
+          <button type="button" id="btnProfile" class="btn-secondary" title="Edit your Colcoor profile">Profile…</button>
+          <button type="button" id="btnSettings" class="btn-secondary" title="Open Colcoor extension settings">Settings</button>
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
           <button type="button" id="btnContinueFromHere" class="btn-secondary" title="Set the selected message as the active continue point">Continue from here</button>
@@ -906,6 +908,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const todoDrawerBtn = document.getElementById("btnTodoDrawer");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
       const deleteConversationBtn = document.getElementById("btnDeleteConversation");
+      const profileBtn = document.getElementById("btnProfile");
+      const settingsBtn = document.getElementById("btnSettings");
       const resendBtn = document.getElementById("btnResend");
       if (!crumb || !copyBtn || !resendBtn || !continueBtn || !refSideChatBtn || !refNoteSideChatBtn)
         return;
@@ -917,6 +921,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
       if (openSideChatBtn) openSideChatBtn.disabled = state.busy;
       if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;
+      if (profileBtn) profileBtn.disabled = state.busy;
+      if (settingsBtn) settingsBtn.disabled = state.busy;
       const sel = state.selectedEventId;
       const evs = state.events || [];
       const path = pathChain(evs, sel);
@@ -1437,6 +1443,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnDeleteConversation").addEventListener("click", () => {
       vscode.postMessage({ type: "deleteConversation" });
+    });
+    document.getElementById("btnProfile").addEventListener("click", () => {
+      vscode.postMessage({ type: "openProfile" });
+    });
+    document.getElementById("btnSettings").addEventListener("click", () => {
+      vscode.postMessage({ type: "openSettings" });
     });
     document.getElementById("btnShowMembers").addEventListener("click", () => {
       vscode.postMessage({ type: "openMembers" });

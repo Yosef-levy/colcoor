@@ -119,4 +119,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
     expect(html).toContain('vscode.postMessage({ type: "deleteConversation" });');
   });
+
+  it("includes Profile and Settings quick actions", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnProfile"');
+    expect(html).toContain('id="btnSettings"');
+    expect(html).toContain("if (profileBtn) profileBtn.disabled = state.busy;");
+    expect(html).toContain("if (settingsBtn) settingsBtn.disabled = state.busy;");
+    expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
+    expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
+  });
 });

@@ -65,6 +65,8 @@ type FromWebview =
   | { type: "removeMember" }
   | { type: "openSideChat" }
   | { type: "deleteConversation" }
+  | { type: "openProfile" }
+  | { type: "openSettings" }
   | { type: "openStarredDrawer" }
   | { type: "openTodoDrawer" }
   | { type: "rename" }
@@ -728,6 +730,14 @@ export function createConversationPanelController(
         await vscode.commands.executeCommand("colcoor.deleteConversation", {
           conv: { id: conversationId, title: conversationTitle ?? null },
         });
+        return;
+      }
+      if (msg.type === "openProfile") {
+        await vscode.commands.executeCommand("colcoor.editProfile");
+        return;
+      }
+      if (msg.type === "openSettings") {
+        await vscode.commands.executeCommand("colcoor.openSettings");
         return;
       }
       if (msg.type === "rename") {
