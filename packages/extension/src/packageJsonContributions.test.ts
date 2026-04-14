@@ -202,4 +202,15 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Toggle sidebar](command:colcoor.toggleConversationsSidebar)");
     expect(contents).toContain("[Refresh conversation tree](command:colcoor.refreshConversationTree)");
   });
+
+  it("links send message and stop generation from conversations welcome ([ui-features.md] §9)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
+    };
+    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
+    const contents = welcome?.contents ?? "";
+    expect(contents).toContain("[Send message…](command:colcoor.sendMessage)");
+    expect(contents).toContain("[Stop assistant generation](command:colcoor.stopGeneration)");
+  });
 });
