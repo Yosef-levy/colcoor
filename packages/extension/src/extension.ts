@@ -27,6 +27,7 @@ import {
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
 import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConversation";
+import { openColcoorSettings } from "./util/openColcoorSettings";
 import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
 import { filterTodoNotes } from "./notes/todoNotesFilter";
 import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starredTreeEvents";
@@ -212,6 +213,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("colcoor.refreshConversations", () => {
       refreshTree();
+    }),
+    vscode.commands.registerCommand("colcoor.openSettings", async () => {
+      await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
     }),
     vscode.commands.registerCommand("colcoor.toggleConversationsSidebar", async () => {
       await toggleSidebarVisibility((cmd) => vscode.commands.executeCommand(cmd));
