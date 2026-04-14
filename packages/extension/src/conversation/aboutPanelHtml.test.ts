@@ -7,17 +7,18 @@ describe("getAboutPanelHtml", () => {
     const html = getAboutPanelHtml("");
     expect(html).toContain("<h1>About Colcoor</h1>");
     expect(html).toContain("branching conversations");
-    expect(html).toContain("not a raw backstage log");
+    expect(html).toContain("not a play-by-play technical log");
   });
 
-  it("mentions branch view, resend, side chat, drawers, setup, milestone label, settings, and command palette", () => {
+  it("mentions conversation outline, resend, side chat, drawers, setup, milestone label, settings, and command palette", () => {
     const html = getAboutPanelHtml("");
-    expect(html).toContain("<strong>branch view</strong>");
+    expect(html).toContain("<strong>conversation outline</strong>");
     expect(html).toContain("<strong>Resend assistant</strong>");
     expect(html).toContain("<strong>Side chat</strong>");
     expect(html).toContain("drawers");
     expect(html).toContain("<strong>setup buttons</strong>");
     expect(html).toContain("<strong>milestone label</strong>");
+    expect(html).toContain("<strong>assistant in this workspace</strong>");
     expect(html).toContain("Command Palette");
     expect(html).toContain("<strong>Settings → Colcoor</strong>");
   });
@@ -35,6 +36,13 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("Policy links may appear");
     expect(html).not.toContain("domain model");
     expect(html).not.toContain("API");
+  });
+
+  it("avoids older informal engineering phrases in the main copy ([ui-features.md] §2)", () => {
+    const html = getAboutPanelHtml("");
+    expect(html).not.toContain("branch view");
+    expect(html).not.toContain("backstage");
+    expect(html).not.toContain("local agent");
   });
 
   it("inlines the policy fragment from the host", () => {

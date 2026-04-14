@@ -36,9 +36,12 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
     <strong>you choose which earlier message each new reply continues from</strong>. Teammates can share the same
     thread, pin what matters, and keep drafts private until you are ready.
   </p>
-  <p>What you see is the conversation layout and saved messages — not a raw backstage log of the agent.</p>
+  <p>
+    What you read is the saved thread and layout — not a play-by-play technical log of every behind-the-scenes step
+    the assistant took.
+  </p>
   <ul>
-    <li>Use the <strong>branch view</strong> on the left to pick where your next message attaches.</li>
+    <li>Use the <strong>conversation outline</strong> on the left to pick where your next message attaches.</li>
     <li><strong>Resend assistant</strong> asks for another assistant reply under a message you already sent.</li>
     <li>
       <strong>Side chat</strong> is for quick messages next to the main thread; use drawers or starred items to jump
@@ -46,11 +49,11 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
     </li>
     <li>
       Use the <strong>setup buttons</strong> in the conversation panel, side chat, or drawers — or the
-      <strong>Command Palette</strong> — to connect Colcoor with Cursor’s local agent in this workspace when your
-      team enables it.
+      <strong>Command Palette</strong> — so Colcoor can run the <strong>assistant in this workspace</strong> on your
+      computer when your team has turned that on.
     </li>
     <li>
-      You can add an optional <strong>milestone label</strong> when sending so the heading above the thread stays easy
+      You can add an optional <strong>milestone label</strong> when you send so the heading above the thread stays easy
       to scan.
     </li>
     <li>Open <strong>Settings → Colcoor</strong> for the server address and how replies are produced.</li>
