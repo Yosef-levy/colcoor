@@ -132,7 +132,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!picked) {
         return undefined;
       }
-      return { id: picked.cid, title: picked.ctitle };
+      return { id: picked.cid, title: normalizedConversationTitle(picked.ctitle ?? "") };
     } catch (e) {
       await showColcoorApiFailure(e);
       return undefined;
