@@ -206,6 +206,8 @@ export function getSideChatWebviewHtml(
       <button id="refresh" type="button" class="secondary">Refresh</button>
       <button id="btnOpenConversation" type="button" class="secondary" title="Open the main conversation panel (tree, thread, composer) for this conversation">Open conversation</button>
       <button id="btnOpenDrawers" type="button" class="secondary" title="Open the Starred/TODO drawers panel for this conversation">Drawers</button>
+      <button id="btnListTodoNotes" type="button" class="secondary" title="Pick a TODO note and open its host message (Colcoor: List TODO notes in conversation…)">TODO notes…</button>
+      <button id="btnListStarredMessages" type="button" class="secondary" title="Pick a starred message to open in the conversation panel (Colcoor: List starred messages in conversation…)">Starred…</button>
       <button id="btnProfile" type="button" class="secondary" title="Edit your Colcoor profile">Profile…</button>
       <button id="btnSettings" type="button" class="secondary" title="Open Colcoor extension settings">Settings</button>
       <button id="btnLegalPolicySettings" type="button" class="secondary" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
@@ -674,6 +676,12 @@ export function getSideChatWebviewHtml(
     });
     document.getElementById("btnOpenDrawers").addEventListener("click", function () {
       vscode.postMessage({ type: "openDrawers" });
+    });
+    document.getElementById("btnListTodoNotes").addEventListener("click", function () {
+      vscode.postMessage({ type: "listTodoNotesInConversation" });
+    });
+    document.getElementById("btnListStarredMessages").addEventListener("click", function () {
+      vscode.postMessage({ type: "listStarredMessagesInConversation" });
     });
     document.getElementById("btnProfile").addEventListener("click", function () {
       vscode.postMessage({ type: "openProfile" });

@@ -87,12 +87,16 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("sub.textContent = countPart + presencePart;");
   });
 
-  it("includes Open conversation, Drawers, Profile, Settings, Legal URLs, side-chat sounds, and About next to Refresh", () => {
+  it("includes Open conversation, Drawers, TODO/starred lists, Profile, Settings, Legal URLs, side-chat sounds, and About next to Refresh", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenConversation"');
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
     expect(html).toContain('id="btnOpenDrawers"');
     expect(html).toContain('vscode.postMessage({ type: "openDrawers" });');
+    expect(html).toContain('id="btnListTodoNotes"');
+    expect(html).toContain('vscode.postMessage({ type: "listTodoNotesInConversation" });');
+    expect(html).toContain('id="btnListStarredMessages"');
+    expect(html).toContain('vscode.postMessage({ type: "listStarredMessagesInConversation" });');
     expect(html).toContain('id="btnProfile"');
     expect(html).toContain('id="btnSettings"');
     expect(html).toContain('id="btnLegalPolicySettings"');
