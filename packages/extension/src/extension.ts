@@ -564,12 +564,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.deleteConversation",
-      async (item?: ConversationCommandArg) => {
+      async (item?: ConversationCommandArg): Promise<boolean> => {
         const id = conversationIdFromCommandArg(item);
         const title = conversationTitleFromCommandArg(item);
         if (!id) {
           await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
-          return;
+          return false;
         }
         const choice = await vscode.window.showWarningMessage(
           `Delete conversation “${title}”? This removes the tree and messages from Colcoor and cannot be undone.`,
@@ -577,7 +577,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           "Delete",
         );
         if (choice !== "Delete") {
-          return;
+          return false;
         }
         try {
           await api.deleteConversation(id);
@@ -587,8 +587,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           }
           refreshTree();
           await vscode.window.showInformationMessage("Colcoor: conversation deleted.");
+          return true;
         } catch (e) {
           await showColcoorApiFailure(e);
+          return false;
         }
       },
     ),

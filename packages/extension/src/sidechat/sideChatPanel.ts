@@ -32,6 +32,7 @@ import {
   SIDECHAT_COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
   clampSideChatComposerTextareaHeightPx,
 } from "./sideChatComposerLayoutPersistence";
+import { shouldDisposeSideChatPanelAfterDelete } from "./sideChatDisposeAfterConversationDelete";
 
 function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -539,9 +540,15 @@ export async function openSideChatPanel(
       return;
     }
     if (msg.type === "deleteConversation") {
-      await vscode.commands.executeCommand("colcoor.deleteConversation", {
-        conv: { id: conversationId, title: title ?? null },
-      });
+      const deleted = await vscode.commands.executeCommand(
+        "colcoor.deleteConversation",
+        {
+          conv: { id: conversationId, title: title ?? null },
+        },
+      );
+      if (shouldDisposeSideChatPanelAfterDelete(deleted)) {
+        panel.dispose();
+      }
       return;
     }
     if (msg.type === "setupCursorCli") {
