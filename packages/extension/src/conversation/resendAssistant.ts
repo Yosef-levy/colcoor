@@ -3,7 +3,10 @@ import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
-import { normalizePersistedUserInputText } from "./normalizeUserInputText";
+import {
+  normalizeOptionalGraphEventId,
+  normalizePersistedUserInputText,
+} from "./normalizeUserInputText";
 import {
   graphPathToTranscriptTurns,
   indexNotesByEventId,
@@ -32,7 +35,7 @@ export async function runResendAssistant(
   workspaceRoot: string,
   options?: RunResendAssistantOptions,
 ): Promise<UserTurnResult> {
-  const resolvedUserEventId = normalizePersistedUserInputText(userEventId);
+  const resolvedUserEventId = normalizeOptionalGraphEventId(userEventId);
   if (!resolvedUserEventId) {
     throw new Error("event not found");
   }

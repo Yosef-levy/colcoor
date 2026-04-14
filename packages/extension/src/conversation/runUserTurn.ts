@@ -3,25 +3,16 @@ import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
-import { normalizePersistedUserInputText } from "./normalizeUserInputText";
+import {
+  normalizeOptionalGraphEventId,
+  normalizePersistedUserInputText,
+} from "./normalizeUserInputText";
 import {
   findBranchTip,
   graphPathToTranscriptTurns,
   indexNotesByEventId,
   pathFromRootToTip,
 } from "./treeEvents";
-
-/**
- * Optional reply parent from UI/commands: trim and CRLF-normalize like persisted text.
- * Empty after normalization → use default branch tip (`findBranchTip`).
- */
-function resolveReplyParentEventId(raw: string | undefined): string | undefined {
-  if (raw === undefined) {
-    return undefined;
-  }
-  const normalized = normalizePersistedUserInputText(raw);
-  return normalized === "" ? undefined : normalized;
-}
 
 export type RunUserTurnOptions = {
   /**
@@ -76,7 +67,7 @@ export async function runColcoorUserTurn(
   }
   const notesByEventId = indexNotesByEventId(notes);
   const byId = new Map(events.map((e) => [e.id, e]));
-  const replyParentId = resolveReplyParentEventId(options?.replyParentEventId);
+  const replyParentId = normalizeOptionalGraphEventId(options?.replyParentEventId);
   const attach =
     replyParentId !== undefined
       ? (() => {
