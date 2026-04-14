@@ -72,6 +72,11 @@ class ConversationOut(BaseModel):
         default=False,
         description="True when max non-deleted side-chat seq exceeds caller last_read_seq",
     )
+    side_chat_unread_count: int = Field(
+        default=0,
+        ge=0,
+        description="Count of non-deleted side-chat rows newer than caller last_read_seq",
+    )
 
 
 class EventNodeOut(BaseModel):

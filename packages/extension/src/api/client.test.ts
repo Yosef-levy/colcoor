@@ -300,7 +300,7 @@ describe("ColcoorApiClient note mutations", () => {
     expect(url).toContain("/side-chat/messages?after_seq=42");
   });
 
-  it("listConversations parses side_chat_has_unread", async () => {
+  it("listConversations parses side_chat unread fields", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       text: async () =>
@@ -311,6 +311,7 @@ describe("ColcoorApiClient note mutations", () => {
             pinned: false,
             updated_at: "2026-01-01T00:00:00Z",
             side_chat_has_unread: true,
+            side_chat_unread_count: 2,
           },
         ]),
     });
@@ -323,6 +324,7 @@ describe("ColcoorApiClient note mutations", () => {
     const rows = await api.listConversations();
     expect(rows).toHaveLength(1);
     expect(rows[0].side_chat_has_unread).toBe(true);
+    expect(rows[0].side_chat_unread_count).toBe(2);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("/api/v1/conversations");
     expect(init.method).toBe("GET");

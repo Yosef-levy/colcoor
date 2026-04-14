@@ -23,6 +23,8 @@ export type ConversationSummary = {
   updated_at?: string;
   /** True when side-chat max seq is ahead of this user’s read cursor (GET /conversations). */
   side_chat_has_unread?: boolean;
+  /** Count of unread, non-deleted side-chat rows for the caller (GET /conversations). */
+  side_chat_unread_count?: number;
 };
 
 export type GraphEventNode = {

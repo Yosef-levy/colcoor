@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { ColcoorApiClient, ConversationSummary } from "../api/client";
+import { conversationUnreadBadgeInfo } from "./conversationUnreadBadge";
 import { formatRelativeTime } from "../util/formatRelativeTime";
 
 export class ConversationTreeItem extends vscode.TreeItem {
@@ -9,10 +10,9 @@ export class ConversationTreeItem extends vscode.TreeItem {
     this.id = conv.id;
     const rel = conv.updated_at ? formatRelativeTime(conv.updated_at) : "";
     const pinPart = conv.pinned ? "Pinned · " : "";
-    const unreadPart = conv.side_chat_has_unread ? "● side chat · " : "";
-    this.tooltip = `${label}\n${conv.id}${conv.updated_at ? `\nUpdated ${conv.updated_at}` : ""}${
-      conv.side_chat_has_unread ? "\nUnread side chat" : ""
-    }`;
+    const unread = conversationUnreadBadgeInfo(conv);
+    const unreadPart = unread.descriptionPrefix;
+    this.tooltip = `${label}\n${conv.id}${conv.updated_at ? `\nUpdated ${conv.updated_at}` : ""}${unread.tooltipSuffix}`;
     this.description = [unreadPart, pinPart, rel].filter(Boolean).join("") || undefined;
     this.contextValue = "conversation";
     this.iconPath = new vscode.ThemeIcon("comment-discussion");
