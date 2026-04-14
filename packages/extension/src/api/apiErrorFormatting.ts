@@ -2,6 +2,18 @@
  * User-facing API error strings (HTTP 402 plan limits per docs/billing-usage.md).
  */
 
+function validationItemMessage(x: Record<string, unknown>): string | null {
+  const msg = x.msg;
+  if (typeof msg === "string" && msg.trim()) {
+    return msg.trim();
+  }
+  const message = x.message;
+  if (typeof message === "string" && message.trim()) {
+    return message.trim();
+  }
+  return null;
+}
+
 /** Extract a short message from JSON `{ "detail": ... }` or fall back to raw body. */
 export function parseApiErrorDetail(bodyText: string): string | undefined {
   const t = bodyText.trim();
@@ -18,7 +30,7 @@ export function parseApiErrorDetail(bodyText: string): string | undefined {
       if (Array.isArray(detail)) {
         const parts = detail
           .filter((x): x is Record<string, unknown> => typeof x === "object" && x != null)
-          .map((x) => (typeof x.msg === "string" ? x.msg : null))
+          .map((x) => validationItemMessage(x))
           .filter((x): x is string => Boolean(x));
         if (parts.length > 0) {
           return parts.join("; ");

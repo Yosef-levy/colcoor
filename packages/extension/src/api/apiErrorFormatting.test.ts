@@ -18,6 +18,27 @@ describe("parseApiErrorDetail", () => {
     expect(parseApiErrorDetail(body)).toBe("too short; bad format");
   });
 
+  it("prefers msg over message when both exist on a validation item", () => {
+    const body = JSON.stringify({
+      detail: [{ msg: "primary", message: "secondary" }],
+    });
+    expect(parseApiErrorDetail(body)).toBe("primary");
+  });
+
+  it("uses message when msg is absent", () => {
+    const body = JSON.stringify({
+      detail: [{ message: "from message field" }],
+    });
+    expect(parseApiErrorDetail(body)).toBe("from message field");
+  });
+
+  it("skips validation items with no string msg or message", () => {
+    const body = JSON.stringify({
+      detail: [{ loc: ["body", "x"], type: "missing" }, { msg: "only this" }],
+    });
+    expect(parseApiErrorDetail(body)).toBe("only this");
+  });
+
   it("returns truncated raw text when not JSON", () => {
     const long = "x".repeat(400);
     const out = parseApiErrorDetail(long);
