@@ -2,8 +2,8 @@ import { normalizePersistedUserInputText } from "../conversation/normalizeUserIn
 
 /**
  * Optional follow-up `showInputBox` step: Esc → `undefined` → skip (empty string).
- * Used for optional first message on create ([ui-features.md] §4), optional checkpoint
- * from the palette ([ui-features.md] §8–§9), etc.
+ * Used for palette checkpoint text ([ui-features.md] §8–§9) and for the single-line branch of
+ * “new conversation” first message ([ui-features.md] §4); multiline on create uses an editor tab.
  */
 export function normalizedOptionalFollowUpPrompt(raw: string | undefined): string {
   if (raw === undefined) {
