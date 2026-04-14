@@ -93,6 +93,7 @@ type FromWebview =
   | { type: "setupCursorCli" }
   | { type: "setCursorAgentApiKey" }
   | { type: "deleteConversation" }
+  | { type: "copyConversationId" }
   | { type: "openProfile" }
   | { type: "openSettings" }
   | { type: "openLegalPolicySettings" }
@@ -913,6 +914,15 @@ export function createConversationPanelController(
           return;
         }
         await vscode.commands.executeCommand("colcoor.deleteConversation", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
+        return;
+      }
+      if (msg.type === "copyConversationId") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.copyConversationId", {
           conv: { id: conversationId, title: conversationTitle ?? null },
         });
         return;
