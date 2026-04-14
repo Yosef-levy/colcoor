@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import type { ColcoorApiClient, GraphEventNode, MeOut, NoteOut, SideChatMessageOut } from "../api/client";
+import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { eventIdForReferencedNote } from "./sideChatNoteReference";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
@@ -16,6 +17,8 @@ import { buildSideChatSendPayload } from "./sideChatSendPayload";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
 import { trimmedSideChatSendBody } from "./trimSendBody";
+import { reportSideChatPanelApiError } from "./reportSideChatPanelApiError";
+import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 
 function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -122,6 +125,21 @@ export async function openSideChatPanel(
   const sideChatSoundEnabled = cfg.get<boolean>("sideChatSoundEnabled", true);
   const sideChatMentionSoundEnabled = cfg.get<boolean>("sideChatMentionSoundEnabled", true);
 
+  async function postWebviewErrorSafe(text: string): Promise<void> {
+    try {
+      await panel.webview.postMessage({ type: "error", text } satisfies ErrorMessage);
+    } catch {
+      /* webview gone */
+    }
+  }
+
+  async function reportApiErrorToSideChat(e: unknown): Promise<void> {
+    await reportSideChatPanelApiError(e, {
+      showHostFailure: showColcoorApiFailure,
+      postWebviewError: postWebviewErrorSafe,
+    });
+  }
+
   async function ensureMyProfile(): Promise<MeOut | null> {
     if (myProfile !== undefined) {
       return myProfile;
@@ -162,7 +180,10 @@ export async function openSideChatPanel(
               void vscode.commands.executeCommand("colcoor.refreshConversations");
             }
           }, 1500);
-        } catch {
+        } catch (e) {
+          if (isPlanLimitColcoorApiError(e)) {
+            void showColcoorApiFailure(e);
+          }
           /* ignore — badge / unread can catch up on next open */
         }
       })
@@ -198,12 +219,7 @@ export async function openSideChatPanel(
       await postState();
       scheduleMarkRead();
     } catch (e) {
-      const t = e instanceof Error ? e.message : String(e);
-      try {
-        await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
-      } catch {
-        /* */
-      }
+      await reportApiErrorToSideChat(e);
     }
   }
 
@@ -364,8 +380,7 @@ export async function openSideChatPanel(
         composerReferencedNoteId = null;
         await pushState();
       } catch (e) {
-        const t = e instanceof Error ? e.message : String(e);
-        await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
+        await reportApiErrorToSideChat(e);
       }
       return;
     }
@@ -395,8 +410,7 @@ export async function openSideChatPanel(
         await api.patchSideChatMessage(conversationId, mid, { body });
         await pushState();
       } catch (e) {
-        const t = e instanceof Error ? e.message : String(e);
-        await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
+        await reportApiErrorToSideChat(e);
       }
       return;
     }
@@ -418,8 +432,7 @@ export async function openSideChatPanel(
         await api.deleteSideChatMessage(conversationId, mid);
         await pushState();
       } catch (e) {
-        const t = e instanceof Error ? e.message : String(e);
-        await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
+        await reportApiErrorToSideChat(e);
       }
     }
     if (msg.type === "openReference") {
@@ -434,7 +447,11 @@ export async function openSideChatPanel(
             needs_context_rebuild: false,
           });
           await vscode.commands.executeCommand("colcoor.openConversation", conversationId, title);
-        } catch {
+        } catch (e) {
+          if (isPlanLimitColcoorApiError(e)) {
+            await showColcoorApiFailure(e);
+            return;
+          }
           await vscode.env.clipboard.writeText(refId);
           await vscode.window.showInformationMessage(
             "Colcoor: event reference copied (could not open event directly).",
@@ -454,7 +471,11 @@ export async function openSideChatPanel(
         });
         await vscode.commands.executeCommand("colcoor.openConversation", conversationId, title);
         await vscode.commands.executeCommand("colcoor.showNotesOnSelectedMessage");
-      } catch {
+      } catch (e) {
+        if (isPlanLimitColcoorApiError(e)) {
+          await showColcoorApiFailure(e);
+          return;
+        }
         await vscode.env.clipboard.writeText(refId);
         await vscode.window.showInformationMessage(
           "Colcoor: note reference copied (could not open note directly).",
