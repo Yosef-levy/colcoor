@@ -1,6 +1,7 @@
 import type { AgentRunResult, AssistantStubKind } from "../agent/agentRunner";
 import type { ColcoorApiClient } from "../api/client";
 import type { UserTurnResult } from "./runUserTurn";
+import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 
 function assistantContentJson(runResult: AgentRunResult): Record<string, unknown> | undefined {
   const entries = runResult.cursorCliTimeline;
@@ -30,7 +31,7 @@ export async function appendAssistantFromAgentResult(
   const assistantText = runResult.text;
 
   if (runResult.cancelled) {
-    const partial = assistantText.trim();
+    const partial = normalizePersistedUserInputText(assistantText);
     if (!partial) {
       return { userEventId: userMessageEventId, cancelled: true };
     }

@@ -51,7 +51,10 @@ export class AgentRunner {
       config.get<string>("agentOutputFormat"),
     );
     const cwd = input.workspaceRoot.trim() || process.cwd();
-    const appendix = input.workspaceContextAppendix?.trim() ?? "";
+    const appendix =
+      input.workspaceContextAppendix == null
+        ? ""
+        : normalizePersistedUserInputText(input.workspaceContextAppendix);
     const promptForCli =
       appendix.length > 0 ? `${input.transcriptText}${appendix}` : input.transcriptText;
 
@@ -79,7 +82,7 @@ export class AgentRunner {
       });
       if (cancelled) {
         return {
-          text: stdout.trim(),
+          text: normalizePersistedUserInputText(stdout),
           stub: "none",
           cancelled: true,
           cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,

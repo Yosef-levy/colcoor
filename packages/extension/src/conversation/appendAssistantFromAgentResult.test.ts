@@ -7,7 +7,7 @@ function mockApi(appendEvent: ReturnType<typeof vi.fn>): ColcoorApiClient {
 }
 
 describe("appendAssistantFromAgentResult", () => {
-  it("does not call append when cancelled and trimmed assistant text is empty", async () => {
+  it("does not call append when cancelled and normalized assistant text is empty", async () => {
     const appendEvent = vi.fn();
     const out = await appendAssistantFromAgentResult(mockApi(appendEvent), "conv", "userEv", {
       text: "  \n\t  ",
@@ -18,10 +18,10 @@ describe("appendAssistantFromAgentResult", () => {
     expect(out).toEqual({ userEventId: "userEv", cancelled: true });
   });
 
-  it("appends trimmed partial assistant when cancelled with non-empty text", async () => {
+  it("appends CRLF-normalized partial assistant when cancelled with non-empty text", async () => {
     const appendEvent = vi.fn().mockResolvedValue({ id: "asst-1" });
     const out = await appendAssistantFromAgentResult(mockApi(appendEvent), "conv", "userEv", {
-      text: "  partial\n",
+      text: "\r\npartial\r\n",
       stub: "explicit",
       cancelled: true,
       cursorCliTimeline: [{ t: "x" }],
