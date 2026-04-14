@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createStreamJsonStdoutFeed,
+  effectFromNdjsonObject,
   normalizeStdoutNewlinesForNdjson,
   parseCursorAgentNdjsonLine,
   slimNdjsonForTimeline,
@@ -191,13 +192,30 @@ describe("parseCursorAgentNdjsonLine", () => {
     expect(parseCursorAgentNdjsonLine(line)).toBeNull();
   });
 
-  it("returns null for success result when result is not a string", () => {
-    const line = JSON.stringify({
-      type: "result",
-      subtype: "success",
-      result: { text: "structured" },
+  it("returns null for success result when result is not coercible to text", () => {
+    expect(
+      parseCursorAgentNdjsonLine(
+        JSON.stringify({ type: "result", subtype: "success", result: { text: "structured" } }),
+      ),
+    ).toBeNull();
+    expect(
+      parseCursorAgentNdjsonLine(JSON.stringify({ type: "result", subtype: "success", result: null })),
+    ).toBeNull();
+    expect(
+      parseCursorAgentNdjsonLine(JSON.stringify({ type: "result", subtype: "success", result: NaN })),
+    ).toBeNull();
+  });
+
+  it("coerces finite numeric result to terminal text", () => {
+    const line = JSON.stringify({ type: "result", subtype: "success", result: 42 });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "terminal_success",
+      fullText: "42",
     });
-    expect(parseCursorAgentNdjsonLine(line)).toBeNull();
+    expect(parseCursorAgentNdjsonLine(JSON.stringify({ type: "result", subtype: "success", result: 0 }))).toEqual({
+      kind: "terminal_success",
+      fullText: "0",
+    });
   });
 
   it("parses success result with empty string body", () => {
@@ -209,6 +227,15 @@ describe("parseCursorAgentNdjsonLine", () => {
     expect(parseCursorAgentNdjsonLine(line)).toEqual({
       kind: "terminal_success",
       fullText: "",
+    });
+  });
+});
+
+describe("effectFromNdjsonObject", () => {
+  it("maps numeric success results the same as parseCursorAgentNdjsonLine", () => {
+    expect(effectFromNdjsonObject({ type: "result", subtype: "success", result: -1 })).toEqual({
+      kind: "terminal_success",
+      fullText: "-1",
     });
   });
 });
@@ -300,6 +327,16 @@ describe("createStreamJsonStdoutFeed", () => {
     );
     feed.flushTail();
     expect(feed.getResolvedText()).toBe("final only");
+  });
+
+  it("accepts numeric terminal success result", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"nope"}]}}\n',
+    );
+    feed.push('{"type":"result","subtype":"success","result":99}\n');
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("99");
   });
 
   it("handles NDJSON split across TCP-like chunks", () => {

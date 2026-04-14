@@ -89,6 +89,16 @@ export function slimNdjsonForTimeline(o: Record<string, unknown>): Record<string
   return null;
 }
 
+function terminalSuccessFullText(result: unknown): string | null {
+  if (typeof result === "string") {
+    return result;
+  }
+  if (typeof result === "number" && Number.isFinite(result)) {
+    return String(result);
+  }
+  return null;
+}
+
 export function effectFromNdjsonObject(o: Record<string, unknown>): StreamJsonLineEffect | null {
   const typ = o.type;
   if (typ === "assistant") {
@@ -98,8 +108,11 @@ export function effectFromNdjsonObject(o: Record<string, unknown>): StreamJsonLi
     }
     return { kind: "append_assistant", delta };
   }
-  if (typ === "result" && o.subtype === "success" && typeof o.result === "string") {
-    return { kind: "terminal_success", fullText: o.result };
+  if (typ === "result" && o.subtype === "success") {
+    const full = terminalSuccessFullText(o.result);
+    if (full !== null) {
+      return { kind: "terminal_success", fullText: full };
+    }
   }
   return null;
 }
