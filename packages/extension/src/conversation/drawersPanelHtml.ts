@@ -93,6 +93,9 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
     <button type="button" id="btnListMembers" title="Show members of this conversation in the Colcoor output channel">Show members</button>
+    <button type="button" id="btnAddMember" title="Invite an existing Colcoor user to this conversation (Colcoor: Add member)">Add member…</button>
+    <button type="button" id="btnRenameConversation" title="Rename this conversation (Colcoor: Rename conversation)">Rename…</button>
+    <button type="button" id="btnTogglePinnedConversation" title="Pin or unpin this conversation in the sidebar list (Colcoor: Pin / unpin conversation)">Pin / unpin</button>
     <button type="button" id="btnRefreshConversations" title="Reload the Colcoor conversations list in the sidebar">Refresh conversations</button>
     <button type="button" id="btnRefreshConversationTree" title="Reload the open conversation tree and thread from the server (Colcoor: Refresh conversation tree)">Refresh tree</button>
     <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
@@ -140,6 +143,15 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnListMembers").addEventListener("click", function () {
       vscode.postMessage({ type: "listConversationMembers" });
+    });
+    document.getElementById("btnAddMember").addEventListener("click", function () {
+      vscode.postMessage({ type: "addConversationMember" });
+    });
+    document.getElementById("btnRenameConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "renameConversation" });
+    });
+    document.getElementById("btnTogglePinnedConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "togglePinnedConversation" });
     });
     document.getElementById("btnRefreshConversations").addEventListener("click", function () {
       vscode.postMessage({ type: "refreshConversations" });

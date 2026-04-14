@@ -36,6 +36,12 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
     expect(html).toContain('id="btnListMembers"');
     expect(html).toContain('vscode.postMessage({ type: "listConversationMembers" });');
+    expect(html).toContain('id="btnAddMember"');
+    expect(html).toContain('vscode.postMessage({ type: "addConversationMember" });');
+    expect(html).toContain('id="btnRenameConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "renameConversation" });');
+    expect(html).toContain('id="btnTogglePinnedConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "togglePinnedConversation" });');
     expect(html).toContain('id="btnRefreshConversations"');
     expect(html).toContain('vscode.postMessage({ type: "refreshConversations" });');
     expect(html).toContain('id="btnRefreshConversationTree"');

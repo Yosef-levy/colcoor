@@ -903,6 +903,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 });
                 return;
               }
+              if (msg.type === "addConversationMember") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.addConversationMember", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                  },
+                });
+                return;
+              }
+              if (msg.type === "renameConversation") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.renameConversation", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                  },
+                });
+                return;
+              }
+              if (msg.type === "togglePinnedConversation") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.togglePinnedConversation", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                  },
+                });
+                return;
+              }
               if (msg.type === "refreshConversations") {
                 await vscode.commands.executeCommand("colcoor.refreshConversations");
                 return;
