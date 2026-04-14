@@ -159,6 +159,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "togglePinnedConversation" });');
   });
 
+  it("includes delete conversation action ([ui-features.md] §4)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnDeleteConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "deleteConversation" });');
+  });
+
   it("includes optional legal policies and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonceZ", [
       { label: "Terms", url: "https://example.com/t" },

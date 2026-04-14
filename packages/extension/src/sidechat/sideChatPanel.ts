@@ -87,6 +87,7 @@ type FromWebview =
   | { type: "removeMember" }
   | { type: "copyConversationId" }
   | { type: "togglePinnedConversation" }
+  | { type: "deleteConversation" }
   | { type: "setupCursorCli" }
   | { type: "setCursorAgentApiKey" }
   | { type: "edit"; messageId: string; text: string }
@@ -533,6 +534,12 @@ export async function openSideChatPanel(
     }
     if (msg.type === "togglePinnedConversation") {
       await vscode.commands.executeCommand("colcoor.togglePinnedConversation", {
+        conv: { id: conversationId, title: title ?? null },
+      });
+      return;
+    }
+    if (msg.type === "deleteConversation") {
+      await vscode.commands.executeCommand("colcoor.deleteConversation", {
         conv: { id: conversationId, title: title ?? null },
       });
       return;
