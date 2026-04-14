@@ -2,21 +2,29 @@
  * User-facing API error strings (HTTP 402 plan limits per docs/billing-usage.md).
  */
 
+import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
+
 function validationItemMessage(x: Record<string, unknown>): string | null {
   const msg = x.msg;
-  if (typeof msg === "string" && msg.trim()) {
-    return msg.trim();
+  if (typeof msg === "string") {
+    const n = normalizePersistedUserInputText(msg);
+    if (n) {
+      return n;
+    }
   }
   const message = x.message;
-  if (typeof message === "string" && message.trim()) {
-    return message.trim();
+  if (typeof message === "string") {
+    const n = normalizePersistedUserInputText(message);
+    if (n) {
+      return n;
+    }
   }
   return null;
 }
 
 /** Extract a short message from JSON `{ "detail": ... }` or fall back to raw body. */
 export function parseApiErrorDetail(bodyText: string): string | undefined {
-  const t = bodyText.trim();
+  const t = normalizePersistedUserInputText(bodyText);
   if (!t) {
     return undefined;
   }
@@ -24,8 +32,11 @@ export function parseApiErrorDetail(bodyText: string): string | undefined {
     const j = JSON.parse(t) as unknown;
     if (j && typeof j === "object") {
       const detail = (j as Record<string, unknown>).detail;
-      if (typeof detail === "string" && detail.trim()) {
-        return detail.trim();
+      if (typeof detail === "string") {
+        const d = normalizePersistedUserInputText(detail);
+        if (d) {
+          return d;
+        }
       }
       if (Array.isArray(detail)) {
         const parts = detail

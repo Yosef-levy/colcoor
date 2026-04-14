@@ -11,6 +11,14 @@ describe("parseApiErrorDetail", () => {
     expect(parseApiErrorDetail(JSON.stringify({ detail: "nope" }))).toBe("nope");
   });
 
+  it("normalizes CRLF in string detail and validation messages", () => {
+    expect(parseApiErrorDetail(JSON.stringify({ detail: "  err\r\n" }))).toBe("err");
+    const body = JSON.stringify({
+      detail: [{ msg: "  a\r\nb  " }],
+    });
+    expect(parseApiErrorDetail(body)).toBe("a\nb");
+  });
+
   it("joins validation array messages", () => {
     const body = JSON.stringify({
       detail: [{ msg: "too short" }, { msg: "bad format" }],
