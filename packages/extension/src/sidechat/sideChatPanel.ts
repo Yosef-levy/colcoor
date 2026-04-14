@@ -10,6 +10,7 @@ import { shouldNotifyForIncomingSideChatMessage } from "./sideChatNotifyDedup";
 import { shouldEmitSideChatNotificationNow } from "./sideChatNotificationRateLimit";
 import { decideSideChatNotification } from "./sideChatNotifications";
 import { sideChatPresenceSummary } from "./sideChatPresence";
+import { shouldStartSideChatPresenceMemberRefresh } from "./sideChatPresenceMemberRefreshPolicy";
 import { decideSideChatSoundKind } from "./sideChatSoundDecision";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
@@ -123,6 +124,9 @@ export async function openSideChatPanel(
   let noteLabelsById: Record<string, string> = {};
   /** From `listConversationMembers` — display name or email when present; drives richer presence subtitle. */
   let memberDisplayByUserId: Record<string, string> = {};
+  /** Throttle member-list refetch after join/leave SSE so presence labels can update without spamming the API. */
+  let presenceMemberRefreshLastStartMs: number | null = null;
+  let presenceMemberRefreshInFlight = false;
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
   const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
@@ -328,6 +332,24 @@ export async function openSideChatPanel(
             notifiedMessageIds.add(o.message.id);
             cached = mergeSideChatMessage(cached, o.message);
             lastStreamSeq = Math.max(lastStreamSeq, o.message.seq);
+            if (o.message.kind === "system_join" || o.message.kind === "system_leave") {
+              const nowMs = Date.now();
+              if (
+                shouldStartSideChatPresenceMemberRefresh({
+                  nowMs,
+                  lastStartMs: presenceMemberRefreshLastStartMs,
+                  inFlight: presenceMemberRefreshInFlight,
+                })
+              ) {
+                presenceMemberRefreshLastStartMs = nowMs;
+                presenceMemberRefreshInFlight = true;
+                try {
+                  await refreshMemberDisplayNames();
+                } finally {
+                  presenceMemberRefreshInFlight = false;
+                }
+              }
+            }
             await postState();
             scheduleMarkRead();
           }
