@@ -248,6 +248,16 @@
           "default": true,
           "description": "When enabled, side-chat messages containing @mentions use mention-priority notification wording."
         },
+        "colcoor.sideChatSoundEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play a short sound cue in the side-chat panel for new incoming user messages while the panel is visible."
+        },
+        "colcoor.sideChatMentionSoundEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use a distinct mention sound pattern when a visible side-chat message mentions your profile handle."
+        },
         "colcoor.legalTermsUrl": {
           "type": "string",
           "default": "",

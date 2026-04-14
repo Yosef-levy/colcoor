@@ -10,4 +10,11 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("navigator.clipboard.writeText");
     expect(html).toContain("Failed to copy code block.");
   });
+
+  it("includes playSound message handling and audio cue helpers", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function playSideChatSound(kind)");
+    expect(html).toContain("window.AudioContext || window.webkitAudioContext");
+    expect(html).toContain("d.type === \"playSound\"");
+  });
 });

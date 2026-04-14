@@ -124,6 +124,37 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     const vscode = acquireVsCodeApi();
     var viewerUserId = null;
     var replyTarget = null;
+    var audioCtx = null;
+    function playTone(freq, durationMs, gainValue) {
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        if (!audioCtx) audioCtx = new Ctx();
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.value = gainValue;
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        setTimeout(function () {
+          try { osc.stop(); } catch {}
+          try { osc.disconnect(); } catch {}
+          try { gain.disconnect(); } catch {}
+        }, durationMs);
+      } catch {
+        /* audio unsupported */
+      }
+    }
+    function playSideChatSound(kind) {
+      if (kind === "mention") {
+        playTone(880, 110, 0.06);
+        setTimeout(function () { playTone(988, 120, 0.06); }, 120);
+        return;
+      }
+      playTone(740, 120, 0.05);
+    }
     function shouldSendOnEnter(ev) {
       if (!ev || ev.key !== "Enter") return false;
       if (ev.isComposing) return false;
@@ -278,6 +309,9 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       if (d && d.type === "error" && typeof d.text === "string") {
         var err = document.getElementById("err");
         if (err) { err.style.display = "block"; err.textContent = d.text; }
+      }
+      if (d && d.type === "playSound" && (d.kind === "message" || d.kind === "mention")) {
+        playSideChatSound(d.kind);
       }
     });
     document.getElementById("send").addEventListener("click", function () {

@@ -7,6 +7,7 @@ import { mentionTargetsForMe } from "./sideChatMentionTargets";
 import { shouldNotifyForIncomingSideChatMessage } from "./sideChatNotifyDedup";
 import { shouldEmitSideChatNotificationNow } from "./sideChatNotificationRateLimit";
 import { decideSideChatNotification } from "./sideChatNotifications";
+import { decideSideChatSoundKind } from "./sideChatSoundDecision";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
@@ -54,6 +55,7 @@ type StateMessage = {
 };
 
 type ErrorMessage = { type: "error"; text: string };
+type PlaySoundMessage = { type: "playSound"; kind: "message" | "mention" };
 
 /**
  * Opens a webview panel listing side-chat messages with send, refresh, and SSE updates.
@@ -96,6 +98,8 @@ export async function openSideChatPanel(
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
   const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
+  const sideChatSoundEnabled = cfg.get<boolean>("sideChatSoundEnabled", true);
+  const sideChatMentionSoundEnabled = cfg.get<boolean>("sideChatMentionSoundEnabled", true);
 
   async function ensureMyProfile(): Promise<MeOut | null> {
     if (myProfile !== undefined) {
@@ -193,8 +197,22 @@ export async function openSideChatPanel(
             if (o?.type !== "side_chat" || !o.message) {
               continue;
             }
+            const me = await ensureMyProfile();
+            const soundKind = decideSideChatSoundKind({
+              panelVisible: panel.visible,
+              myUserId: me?.id ?? null,
+              myMentionTargets: mentionTargetsForMe(me),
+              incoming: o.message,
+              messageSoundEnabled: sideChatSoundEnabled,
+              mentionSoundEnabled: sideChatMentionSoundEnabled,
+            });
+            if (soundKind) {
+              await panel.webview.postMessage({
+                type: "playSound",
+                kind: soundKind,
+              } satisfies PlaySoundMessage);
+            }
             if (shouldNotifyForIncomingSideChatMessage(cached, o.message, notifiedMessageIds)) {
-              const me = await ensureMyProfile();
               const notif = decideSideChatNotification({
                 panelVisible: panel.visible,
                 myUserId: me?.id ?? null,
