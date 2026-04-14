@@ -139,12 +139,16 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "renameConversation" });');
   });
 
-  it("includes add member and list members actions ([ui-features.md] §12)", () => {
+  it("includes conversation membership actions ([ui-features.md] §12)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnAddConversationMember"');
     expect(html).toContain('id="btnListConversationMembers"');
+    expect(html).toContain('id="btnChangeMemberRole"');
+    expect(html).toContain('id="btnRemoveMember"');
     expect(html).toContain('vscode.postMessage({ type: "addConversationMember" });');
     expect(html).toContain('vscode.postMessage({ type: "listConversationMembers" });');
+    expect(html).toContain('vscode.postMessage({ type: "changeMemberRole" });');
+    expect(html).toContain('vscode.postMessage({ type: "removeMember" });');
   });
 
   it("includes optional legal policies and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {

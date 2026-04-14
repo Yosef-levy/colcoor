@@ -219,6 +219,8 @@ export function getSideChatWebviewHtml(
       <button id="btnRenameConversation" type="button" class="secondary" title="Rename this conversation (Colcoor: Rename conversation) when your role allows">Rename conversation…</button>
       <button id="btnAddConversationMember" type="button" class="secondary" title="Invite an existing Colcoor user by UUID (Colcoor: Add member…)">Add member…</button>
       <button id="btnListConversationMembers" type="button" class="secondary" title="List members in the output channel (Colcoor: Show members)">Show members</button>
+      <button id="btnChangeMemberRole" type="button" class="secondary" title="Pick a member and set a new role (Colcoor: Change member role…)">Change role…</button>
+      <button id="btnRemoveMember" type="button" class="secondary" title="Remove a member from this conversation (Colcoor: Remove member…)">Remove member…</button>
       <button id="btnSetupCursorCli" type="button" class="secondary" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
       <button id="btnSetCursorAgentApiKey" type="button" class="secondary" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
     </div>
@@ -708,6 +710,12 @@ export function getSideChatWebviewHtml(
     });
     document.getElementById("btnListConversationMembers").addEventListener("click", function () {
       vscode.postMessage({ type: "listConversationMembers" });
+    });
+    document.getElementById("btnChangeMemberRole").addEventListener("click", function () {
+      vscode.postMessage({ type: "changeMemberRole" });
+    });
+    document.getElementById("btnRemoveMember").addEventListener("click", function () {
+      vscode.postMessage({ type: "removeMember" });
     });
     document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
       vscode.postMessage({ type: "setupCursorCli" });
