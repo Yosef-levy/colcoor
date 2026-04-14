@@ -23,6 +23,7 @@ import {
   shouldAutoRefreshConversations,
 } from "./conversations/conversationAutoRefreshPolicy";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
+import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConversation";
 import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
 import { filterTodoNotes } from "./notes/todoNotesFilter";
 import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starredTreeEvents";
@@ -446,6 +447,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           refreshTree();
           await vscode.window.showInformationMessage(
             `Colcoor: renamed conversation to ${out.title?.trim() ? `"${out.title}"` : "(untitled)"}.`,
+          );
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.togglePinnedConversation",
+      async (item?: ConversationTreeItem) => {
+        let convId = item?.conv?.id;
+        let convTitle: string | null | undefined = item?.conv?.title ?? null;
+        let currentPinned = item?.conv?.pinned;
+        if (!convId) {
+          const row = await pickConversationInteractively();
+          if (!row) {
+            return;
+          }
+          convId = row.id;
+          convTitle = row.title;
+          try {
+            const rows = await api.listConversations();
+            currentPinned = rows.find((r) => r.id === convId)?.pinned;
+          } catch {
+            currentPinned = false;
+          }
+        }
+        const nextPinned = toggledPinnedState(currentPinned);
+        try {
+          await api.patchConversation(convId, { pinned: nextPinned });
+          refreshTree();
+          await vscode.window.showInformationMessage(
+            `Colcoor: ${pinnedVerb(nextPinned)} ${convTitle?.trim() ? `"${convTitle}"` : "(untitled)"}.`,
           );
         } catch (e) {
           await showColcoorApiFailure(e);

@@ -83,6 +83,10 @@
         "title": "Colcoor: Rename conversation…"
       },
       {
+        "command": "colcoor.togglePinnedConversation",
+        "title": "Colcoor: Pin / unpin conversation"
+      },
+      {
         "command": "colcoor.openAbout",
         "title": "Colcoor: About"
       },
@@ -200,6 +204,11 @@
           "command": "colcoor.renameConversation",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@7"
+        },
+        {
+          "command": "colcoor.togglePinnedConversation",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@8"
         },
         {
           "command": "colcoor.deleteConversation",
