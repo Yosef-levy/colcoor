@@ -625,6 +625,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <div class="detail-bar">
         <div id="breadcrumb" class="crumb hint"></div>
         <div class="detail-actions">
+          <button type="button" id="btnShowMembers" class="btn-secondary" title="Show conversation members">Members</button>
+          <button type="button" id="btnAddMember" class="btn-secondary" title="Invite an editor/viewer to this conversation">Add member…</button>
           <button type="button" id="btnStarredDrawer" class="btn-secondary" title="List starred messages in this conversation">Starred</button>
           <button type="button" id="btnTodoDrawer" class="btn-secondary" title="List TODO notes in this conversation">TODO notes</button>
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
@@ -892,11 +894,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const continueBtn = document.getElementById("btnContinueFromHere");
       const refSideChatBtn = document.getElementById("btnReferenceSideChat");
       const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
+      const showMembersBtn = document.getElementById("btnShowMembers");
+      const addMemberBtn = document.getElementById("btnAddMember");
       const starredDrawerBtn = document.getElementById("btnStarredDrawer");
       const todoDrawerBtn = document.getElementById("btnTodoDrawer");
       const resendBtn = document.getElementById("btnResend");
       if (!crumb || !copyBtn || !resendBtn || !continueBtn || !refSideChatBtn || !refNoteSideChatBtn)
         return;
+      if (showMembersBtn) showMembersBtn.disabled = state.busy;
+      if (addMemberBtn) addMemberBtn.disabled = state.busy;
       if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
       const sel = state.selectedEventId;
@@ -1413,6 +1419,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnTodoDrawer").addEventListener("click", () => {
       vscode.postMessage({ type: "openTodoDrawer" });
+    });
+    document.getElementById("btnShowMembers").addEventListener("click", () => {
+      vscode.postMessage({ type: "openMembers" });
+    });
+    document.getElementById("btnAddMember").addEventListener("click", () => {
+      vscode.postMessage({ type: "addMember" });
     });
 
     var btnJump = document.getElementById("btnJumpTip");

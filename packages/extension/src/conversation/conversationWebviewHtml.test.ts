@@ -89,4 +89,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openStarredDrawer" });');
     expect(html).toContain('vscode.postMessage({ type: "openTodoDrawer" });');
   });
+
+  it("includes Members and Add member quick actions", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnShowMembers"');
+    expect(html).toContain('id="btnAddMember"');
+    expect(html).toContain("if (showMembersBtn) showMembersBtn.disabled = state.busy;");
+    expect(html).toContain("if (addMemberBtn) addMemberBtn.disabled = state.busy;");
+    expect(html).toContain('vscode.postMessage({ type: "openMembers" });');
+    expect(html).toContain('vscode.postMessage({ type: "addMember" });');
+  });
 });

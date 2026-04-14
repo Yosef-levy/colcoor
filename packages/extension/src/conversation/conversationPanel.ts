@@ -59,6 +59,8 @@ type FromWebview =
   | { type: "continueFromHere" }
   | { type: "referenceInSideChat" }
   | { type: "referenceNoteInSideChat" }
+  | { type: "openMembers" }
+  | { type: "addMember" }
   | { type: "openStarredDrawer" }
   | { type: "openTodoDrawer" }
   | { type: "rename" }
@@ -667,6 +669,24 @@ export function createConversationPanelController(
         await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
           conv: { id: conversationId, title: conversationTitle ?? null },
           preferredTab: "todo",
+        });
+        return;
+      }
+      if (msg.type === "openMembers") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.listConversationMembers", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
+        return;
+      }
+      if (msg.type === "addMember") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.addConversationMember", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
         });
         return;
       }
