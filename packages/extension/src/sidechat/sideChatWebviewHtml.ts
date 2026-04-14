@@ -160,6 +160,8 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       <button id="btnNewConversation" type="button" class="secondary" title="Create a new conversation">New conversation</button>
       <button id="btnSignOut" type="button" class="secondary" title="Sign out from Colcoor">Sign out</button>
       <button id="btnRefreshConversations" type="button" class="secondary" title="Refresh the Colcoor conversations list in the sidebar">Sidebar</button>
+      <button id="btnSetupCursorCli" type="button" class="secondary" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
+      <button id="btnSetCursorAgentApiKey" type="button" class="secondary" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
     </div>
     <p id="err" class="err" style="display:none"></p>
   </div>
@@ -604,6 +606,12 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     });
     document.getElementById("btnRefreshConversations").addEventListener("click", function () {
       vscode.postMessage({ type: "refreshConversations" });
+    });
+    document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
+      vscode.postMessage({ type: "setupCursorCli" });
+    });
+    document.getElementById("btnSetCursorAgentApiKey").addEventListener("click", function () {
+      vscode.postMessage({ type: "setCursorAgentApiKey" });
     });
     document.addEventListener("click", function (ev) {
       var tgt = ev.target;

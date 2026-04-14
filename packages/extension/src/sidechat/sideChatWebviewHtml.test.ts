@@ -109,4 +109,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "signOut" });');
     expect(html).toContain('vscode.postMessage({ type: "refreshConversations" });');
   });
+
+  it("includes Cursor CLI setup and agent API key actions", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnSetupCursorCli"');
+    expect(html).toContain('id="btnSetCursorAgentApiKey"');
+    expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
+    expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
+  });
 });
