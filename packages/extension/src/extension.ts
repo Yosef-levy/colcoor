@@ -874,6 +874,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("colcoor.stopGeneration", () => {
+      conversationPanel.cancelInFlightGeneration();
+    }),
     vscode.commands.registerCommand(
       "colcoor.sendMessage",
       async (item?: ConversationCommandArg) => {

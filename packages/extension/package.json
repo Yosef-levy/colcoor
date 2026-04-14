@@ -64,6 +64,11 @@
         "title": "Colcoor: Send message"
       },
       {
+        "command": "colcoor.stopGeneration",
+        "title": "Colcoor: Stop assistant generation",
+        "enablement": "colcoor.conversationReplyInProgress"
+      },
+      {
         "command": "colcoor.copyConversationId",
         "title": "Colcoor: Copy conversation ID"
       },

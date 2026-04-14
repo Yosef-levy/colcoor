@@ -3,6 +3,7 @@ import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
+import { COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT } from "./colcoorContextKeys";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
 import {
@@ -121,6 +122,8 @@ export function createConversationPanelController(
   showNotesOnSelectedMessage: () => Promise<void>;
   /** Current conversation + selected event (for cross-panel actions like side-chat references). */
   getSelectedMessageContext: () => { conversationId: string; selectedEventId: string; title: string | null } | null;
+  /** Abort in-flight send/resend in this panel (same as the webview Stop button). No-op if idle. */
+  cancelInFlightGeneration: () => void;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -132,6 +135,16 @@ export function createConversationPanelController(
   let conversationPinned = false;
   let selectedEventId: string | undefined;
   let sendAbort: AbortController | undefined;
+
+  /** When `true`, a main-thread send or resend is using `sendAbort` (palette keybindings can use this). */
+  function syncConversationReplyInProgressContext(): void {
+    void vscode.commands.executeCommand(
+      "setContext",
+      COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT,
+      sendAbort != null,
+    );
+  }
+
   /** Last successful tree payload for lightweight UI refresh (e.g. settings). */
   let lastTreeEvents: GraphEventNode[] = [];
   /** Notes list aligned with the last successful tree load (for thread rendering without extra round-trips). */
@@ -178,6 +191,7 @@ export function createConversationPanelController(
   function disposePanel(): void {
     sendAbort?.abort();
     sendAbort = undefined;
+    syncConversationReplyInProgressContext();
     panel?.dispose();
     panel = undefined;
     webviewReady = false;
@@ -350,6 +364,7 @@ export function createConversationPanelController(
     const ws = getWorkspaceRoot();
     sendAbort?.abort();
     sendAbort = new AbortController();
+    syncConversationReplyInProgressContext();
     const signal = sendAbort.signal;
     await loadTreeAndPush(true, null);
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
@@ -406,6 +421,7 @@ export function createConversationPanelController(
       await loadTreeAndPush(false, msg);
     } finally {
       sendAbort = undefined;
+      syncConversationReplyInProgressContext();
     }
   }
 
@@ -416,6 +432,7 @@ export function createConversationPanelController(
     const ws = getWorkspaceRoot();
     sendAbort?.abort();
     sendAbort = new AbortController();
+    syncConversationReplyInProgressContext();
     const signal = sendAbort.signal;
     await loadTreeAndPush(true, null);
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
@@ -463,6 +480,7 @@ export function createConversationPanelController(
       await loadTreeAndPush(false, msg);
     } finally {
       sendAbort = undefined;
+      syncConversationReplyInProgressContext();
     }
   }
 
@@ -835,6 +853,7 @@ export function createConversationPanelController(
     p.onDidDispose(() => {
       sendAbort?.abort();
       sendAbort = undefined;
+      syncConversationReplyInProgressContext();
       panel = undefined;
       webviewReady = false;
       conversationId = undefined;
@@ -996,6 +1015,9 @@ export function createConversationPanelController(
         return null;
       }
       return { conversationId, selectedEventId, title: conversationTitle ?? null };
+    },
+    cancelInFlightGeneration: () => {
+      sendAbort?.abort();
     },
     dispose: () => {
       subscription.dispose();

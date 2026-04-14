@@ -11,6 +11,17 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.sendMessage");
   });
 
+  it("registers stopGeneration for conversation panel abort (enablement uses reply-in-progress context)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: {
+        commands?: Array<{ command?: string; enablement?: string }>;
+      };
+    };
+    const stop = pkg.contributes?.commands?.find((c) => c.command === "colcoor.stopGeneration");
+    expect(stop?.enablement).toBe("colcoor.conversationReplyInProgress");
+  });
+
   it("registers newConversation and openSideChat for palette and menus", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };

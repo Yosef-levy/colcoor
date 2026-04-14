@@ -46,6 +46,11 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('busyEl.textContent = state.busy ? "Sending… Press Stop to cancel." : "Working…"');
   });
 
+  it("Stop posts cancel to the extension host (same signal as Colcoor: Stop assistant generation)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('vscode.postMessage({ type: "cancel" })');
+  });
+
   it("disables Send until the composer has non-whitespace text", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('<button id="send" type="button" disabled>Send</button>');
