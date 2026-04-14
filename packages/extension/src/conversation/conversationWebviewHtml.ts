@@ -608,6 +608,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       font-size: 0.88em;
       color: var(--vscode-descriptionForeground);
     }
+    .composer .checkpoint-label-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin: 8px 0 0;
+      max-width: 52em;
+    }
+    .composer #checkpointLabel {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 0.95em;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+    }
     .btn-secondary {
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
@@ -699,6 +716,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       ></div>
       <div class="composer">
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
+        <div class="checkpoint-label-wrap">
+          <label for="checkpointLabel" class="hint">Checkpoint label (optional)</label>
+          <input
+            type="text"
+            id="checkpointLabel"
+            maxlength="256"
+            dir="auto"
+            placeholder="Shown in the detail breadcrumb when set"
+            aria-label="Optional checkpoint label for this message"
+          />
+        </div>
         <label class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
           <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" aria-describedby="privateBranchHelp" />
           <span class="priv-body">
@@ -1379,6 +1407,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (refBtn) refBtn.disabled = state.busy;
         if (ta) ta.disabled = state.busy;
         if (priv) priv.disabled = state.busy;
+        var cpEl = document.getElementById("checkpointLabel");
+        if (cpEl) cpEl.disabled = state.busy;
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
           busyEl.textContent = state.busy ? "Sending… Press Stop to cancel." : "Working…";
@@ -1502,8 +1532,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!text) return;
       const priv = document.getElementById("privateBranch");
       const privateBranch = priv && priv.checked;
-      vscode.postMessage({ type: "send", text: ta.value.trimEnd(), privateBranch });
+      const cpEl = document.getElementById("checkpointLabel");
+      var cpRaw = cpEl && cpEl.value ? String(cpEl.value) : "";
+      var cpTrim = cpRaw.trimEnd();
+      var payload = { type: "send", text: ta.value.trimEnd(), privateBranch };
+      if (cpTrim.length) payload.checkpointLabel = cpTrim;
+      vscode.postMessage(payload);
       ta.value = "";
+      if (cpEl) cpEl.value = "";
       updateComposerSendEnabled();
     });
 

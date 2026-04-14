@@ -57,7 +57,7 @@ type WebviewStateMessage = {
 
 type FromWebview =
   | { type: "ready" }
-  | { type: "send"; text: string; privateBranch?: boolean }
+  | { type: "send"; text: string; privateBranch?: boolean; checkpointLabel?: string }
   | { type: "select"; id: string }
   | { type: "selectTip" }
   | { type: "refresh" }
@@ -366,7 +366,7 @@ export function createConversationPanelController(
     }
   }
 
-  async function handleSend(text: string, privateBranch: boolean): Promise<void> {
+  async function handleSend(text: string, privateBranch: boolean, checkpointLabel?: string): Promise<void> {
     const trimmed = normalizePersistedUserInputText(text);
     if (!trimmed || !conversationId || !selectedEventId) {
       return;
@@ -389,6 +389,7 @@ export function createConversationPanelController(
         {
           replyParentEventId: selectedEventId,
           privateBranch,
+          checkpointLabel,
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onUserMessagePersisted: async ({ userEventId }) => {
@@ -815,7 +816,9 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {
-        await handleSend(msg.text, Boolean(msg.privateBranch));
+        const checkpointLabel =
+          typeof msg.checkpointLabel === "string" ? msg.checkpointLabel : undefined;
+        await handleSend(msg.text, Boolean(msg.privateBranch), checkpointLabel);
         return;
       }
       if (msg.type === "deleteNote" && typeof msg.noteId === "string" && conversationId) {

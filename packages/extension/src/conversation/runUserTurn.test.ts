@@ -177,6 +177,60 @@ describe("runColcoorUserTurn", () => {
     expect(appendEvent.mock.calls[0][1].private_branch).toBe(true);
   });
 
+  it("passes normalized checkpoint_label on user_input when checkpointLabel is set", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValueOnce({ id: "u1" }).mockResolvedValueOnce({ id: "a1" });
+    const api = {
+      getTree: vi.fn().mockResolvedValue({ events: linearTree() }),
+      listNotes: vi.fn().mockResolvedValue([]),
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runColcoorUserTurn(api, agent, "conv1", null, "x", "", {
+      checkpointLabel: "  my label\r\n",
+    });
+
+    expect(appendEvent.mock.calls[0][1]).toMatchObject({
+      kind: "user_input",
+      checkpoint_label: "my label",
+    });
+  });
+
+  it("truncates checkpoint_label to 256 chars after normalization", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValueOnce({ id: "u1" }).mockResolvedValueOnce({ id: "a1" });
+    const api = {
+      getTree: vi.fn().mockResolvedValue({ events: linearTree() }),
+      listNotes: vi.fn().mockResolvedValue([]),
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    const long = "a".repeat(300);
+    await runColcoorUserTurn(api, agent, "conv1", null, "x", "", { checkpointLabel: long });
+
+    const body = appendEvent.mock.calls[0][1] as { checkpoint_label?: string };
+    expect(body.checkpoint_label).toHaveLength(256);
+    expect(body.checkpoint_label).toBe("a".repeat(256));
+  });
+
+  it("omits checkpoint_label when checkpointLabel is empty or whitespace-only", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValueOnce({ id: "u1" }).mockResolvedValueOnce({ id: "a1" });
+    const api = {
+      getTree: vi.fn().mockResolvedValue({ events: linearTree() }),
+      listNotes: vi.fn().mockResolvedValue([]),
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runColcoorUserTurn(api, agent, "conv1", null, "x", "", { checkpointLabel: "  \r\n\t  " });
+
+    const body = appendEvent.mock.calls[0][1] as { checkpoint_label?: string };
+    expect(body.checkpoint_label).toBeUndefined();
+  });
+
   it("calls onUserMessagePersisted after user append and before agent.run", async () => {
     const seq: string[] = [];
     const run = vi.fn().mockImplementation(async () => {

@@ -14,6 +14,19 @@ import {
   pathFromRootToTip,
 } from "./treeEvents";
 
+const CHECKPOINT_LABEL_MAX_LEN = 256;
+
+function normalizeOptionalCheckpointLabel(raw: string | undefined): string | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const t = normalizePersistedUserInputText(raw);
+  if (!t) {
+    return undefined;
+  }
+  return t.length > CHECKPOINT_LABEL_MAX_LEN ? t.slice(0, CHECKPOINT_LABEL_MAX_LEN) : t;
+}
+
 export type RunUserTurnOptions = {
   /**
    * Event id to attach the new `user_input` under (and build transcript root → this node).
@@ -28,6 +41,8 @@ export type RunUserTurnOptions = {
   onAssistantTextDelta?: (textSoFar: string) => void;
   /** Invoked after `user_input` is stored and before the agent runs (e.g. refresh UI so the new row appears while streaming). */
   onUserMessagePersisted?: (args: { userEventId: string }) => void | Promise<void>;
+  /** Optional display-only label on the new `user_input` (`events.checkpoint_label`; [ui-features.md] §8). */
+  checkpointLabel?: string;
 };
 
 export type UserTurnResult = {
@@ -87,12 +102,14 @@ export async function runColcoorUserTurn(
     finalUserMessage: trimmed,
   });
 
+  const cp = normalizeOptionalCheckpointLabel(options?.checkpointLabel);
   const userRes = await api.appendEvent(conversationId, {
     kind: "user_input",
     parent_event_id: attach.id,
     content: trimmed,
     author: "end_user",
     private_branch: options?.privateBranch ?? false,
+    ...(cp !== undefined ? { checkpoint_label: cp } : {}),
   });
 
   await options?.onUserMessagePersisted?.({ userEventId: userRes.id });

@@ -32,6 +32,14 @@ describe("getConversationWebviewHtml", () => {
     );
   });
 
+  it("includes optional composer checkpoint label field and send wiring ([ui-features.md] §8)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="checkpointLabel"');
+    expect(html).toContain('maxlength="256"');
+    expect(html).toContain("if (cpTrim.length) payload.checkpointLabel = cpTrim;");
+    expect(html).toContain('cpEl.disabled = state.busy');
+  });
+
   it("renders expanded private-draft composer help", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(`>${PRIVATE_BRANCH_LEAD}<`);
