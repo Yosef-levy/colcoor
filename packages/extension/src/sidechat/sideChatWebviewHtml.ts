@@ -156,6 +156,8 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       <button id="btnProfile" type="button" class="secondary" title="Edit your Colcoor profile">Profile…</button>
       <button id="btnSettings" type="button" class="secondary" title="Open Colcoor extension settings">Settings</button>
       <button id="btnAbout" type="button" class="secondary" title="About Colcoor">About</button>
+      <button id="btnSignIn" type="button" class="secondary" title="Sign in to Colcoor with your Cursor account">Sign in</button>
+      <button id="btnNewConversation" type="button" class="secondary" title="Create a new conversation">New conversation</button>
     </div>
     <p id="err" class="err" style="display:none"></p>
   </div>
@@ -588,6 +590,12 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     });
     document.getElementById("btnAbout").addEventListener("click", function () {
       vscode.postMessage({ type: "openAbout" });
+    });
+    document.getElementById("btnSignIn").addEventListener("click", function () {
+      vscode.postMessage({ type: "signIn" });
+    });
+    document.getElementById("btnNewConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "newConversation" });
     });
     document.addEventListener("click", function (ev) {
       var tgt = ev.target;

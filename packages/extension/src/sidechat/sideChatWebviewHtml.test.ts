@@ -93,4 +93,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
   });
+
+  it("includes Sign in and New conversation actions", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnSignIn"');
+    expect(html).toContain('id="btnNewConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "signIn" });');
+    expect(html).toContain('vscode.postMessage({ type: "newConversation" });');
+  });
 });
