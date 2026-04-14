@@ -121,4 +121,37 @@ describe("showColcoorApiFailure", () => {
     await showColcoorApiFailure(new ColcoorApiHttpError("y", 404, ""));
     expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
   });
+
+  it("shows timeout messaging and refresh actions for HTTP 408", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("get tree", 408, "{}");
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("timed out"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+  });
+
+  it("runs refresh when user picks an action on HTTP 408", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 408, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversations");
+  });
+
+  it("shows rate limit messaging and refresh actions for HTTP 429", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    await showColcoorApiFailure(new ColcoorApiHttpError("send", 429, "{}"));
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("rate limited"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+  });
+
+  it("runs refresh conversation tree when user picks that action on HTTP 429", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 429, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
+  });
 });

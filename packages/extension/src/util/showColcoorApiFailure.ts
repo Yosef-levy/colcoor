@@ -4,6 +4,8 @@ import {
   isForbiddenColcoorApiError,
   isNotFoundColcoorApiError,
   isPlanLimitColcoorApiError,
+  isRequestTimeoutColcoorApiError,
+  isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
 } from "../api/colcoorApiHttpError";
 import {
@@ -14,8 +16,21 @@ import {
   COLOOR_API_FAILURE_SIGN_IN_ACTION,
 } from "./colcoorApiFailureActions";
 
+async function offerListOrTreeRefresh(message: string): Promise<void> {
+  const choice = await vscode.window.showErrorMessage(
+    message,
+    COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+    COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+  );
+  if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION) {
+    await vscode.commands.executeCommand("colcoor.refreshConversations");
+  } else if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
+    await vscode.commands.executeCommand("colcoor.refreshConversationTree");
+  }
+}
+
 /**
- * User-facing API failure: special handling for HTTP 401, 402, 403, 404; otherwise a single error toast.
+ * User-facing API failure: special handling for common HTTP statuses; otherwise a single error toast.
  */
 export async function showColcoorApiFailure(e: unknown): Promise<void> {
   const msg = e instanceof Error ? e.message : String(e);
@@ -51,16 +66,19 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
     return;
   }
   if (isNotFoundColcoorApiError(e)) {
-    const choice = await vscode.window.showErrorMessage(
-      `Colcoor: not found — ${e.message} It may have been deleted.`,
-      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
-      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    await offerListOrTreeRefresh(`Colcoor: not found — ${e.message} It may have been deleted.`);
+    return;
+  }
+  if (isRequestTimeoutColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: request timed out — ${e.message} Try again after a short wait, or refresh.`,
     );
-    if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION) {
-      await vscode.commands.executeCommand("colcoor.refreshConversations");
-    } else if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
-      await vscode.commands.executeCommand("colcoor.refreshConversationTree");
-    }
+    return;
+  }
+  if (isTooManyRequestsColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: rate limited — ${e.message} Wait a few seconds, then retry or refresh.`,
+    );
     return;
   }
   await vscode.window.showErrorMessage(`Colcoor: ${msg}`);

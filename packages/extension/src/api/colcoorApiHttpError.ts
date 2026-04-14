@@ -37,3 +37,13 @@ export function isForbiddenColcoorApiError(e: unknown): e is ColcoorApiHttpError
 export function isNotFoundColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 404;
 }
+
+/** HTTP 408 — request timeout (client or upstream). */
+export function isRequestTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 408;
+}
+
+/** HTTP 429 — rate limited; retry after a short wait ([ui-features.md] §12). */
+export function isTooManyRequestsColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 429;
+}

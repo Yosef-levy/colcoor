@@ -5,6 +5,8 @@ import {
   isForbiddenColcoorApiError,
   isNotFoundColcoorApiError,
   isPlanLimitColcoorApiError,
+  isRequestTimeoutColcoorApiError,
+  isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
 } from "./colcoorApiHttpError";
 
@@ -51,5 +53,21 @@ describe("isNotFoundColcoorApiError", () => {
     expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(true);
     expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(false);
     expect(isNotFoundColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isRequestTimeoutColcoorApiError", () => {
+  it("is true only for HTTP 408 ColcoorApiHttpError", () => {
+    expect(isRequestTimeoutColcoorApiError(new ColcoorApiHttpError("x", 408, ""))).toBe(true);
+    expect(isRequestTimeoutColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(false);
+    expect(isRequestTimeoutColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isTooManyRequestsColcoorApiError", () => {
+  it("is true only for HTTP 429 ColcoorApiHttpError", () => {
+    expect(isTooManyRequestsColcoorApiError(new ColcoorApiHttpError("x", 429, ""))).toBe(true);
+    expect(isTooManyRequestsColcoorApiError(new ColcoorApiHttpError("x", 408, ""))).toBe(false);
+    expect(isTooManyRequestsColcoorApiError(new Error("x"))).toBe(false);
   });
 });
