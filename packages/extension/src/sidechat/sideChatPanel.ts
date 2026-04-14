@@ -5,6 +5,7 @@ import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
+import { buildSideChatSendPayload } from "./sideChatSendPayload";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
 import { trimmedSideChatSendBody } from "./trimSendBody";
@@ -212,8 +213,8 @@ export async function openSideChatPanel(
       return;
     }
     if (msg.type === "send") {
-      const body = trimmedSideChatSendBody(msg.text);
-      if (!body) {
+      const payload = buildSideChatSendPayload(msg.text, msg.referencedSideChatMessageId, cached);
+      if (!payload) {
         await panel.webview.postMessage({
           type: "error",
           text: "Message is empty.",
@@ -221,17 +222,7 @@ export async function openSideChatPanel(
         return;
       }
       try {
-        const refIdRaw =
-          typeof msg.referencedSideChatMessageId === "string"
-            ? msg.referencedSideChatMessageId.trim()
-            : "";
-        const refId = refIdRaw || null;
-        const refOk = refId == null || cached.some((m) => m.id === refId);
-        await api.postSideChatMessage(conversationId, {
-          kind: "user",
-          body,
-          referenced_side_chat_message_id: refOk ? refId : null,
-        });
+        await api.postSideChatMessage(conversationId, payload);
         await pushState();
       } catch (e) {
         const t = e instanceof Error ? e.message : String(e);
