@@ -27,6 +27,7 @@ import {
 } from "./conversations/conversationAutoRefreshPolicy";
 import {
   type ConversationCommandArg,
+  conversationDisplayTitleFromCommandArg,
   conversationIdFromCommandArg,
   conversationTitleFromCommandArg,
   NO_CONVERSATION_FOR_COMMAND_MESSAGE,
@@ -565,13 +566,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand(
       "colcoor.listTodoNotesInConversation",
-      async (item?: ConversationTreeItem) => {
+      async (item?: ConversationCommandArg) => {
         if (!(await session.getBackendAccessToken())) {
           await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
           return;
         }
-        let convId = item?.conv.id;
-        let convTitle: string | null | undefined = item?.conv.title ?? null;
+        let convId = conversationIdFromCommandArg(item);
+        let convTitle: string | null | undefined = conversationDisplayTitleFromCommandArg(item);
         if (!convId) {
           const row = await pickConversationInteractively();
           if (!row) {
@@ -617,13 +618,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.listStarredMessagesInConversation",
-      async (item?: ConversationTreeItem) => {
+      async (item?: ConversationCommandArg) => {
         if (!(await session.getBackendAccessToken())) {
           await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
           return;
         }
-        let convId = item?.conv.id;
-        let convTitle: string | null | undefined = item?.conv.title ?? null;
+        let convId = conversationIdFromCommandArg(item);
+        let convTitle: string | null | undefined = conversationDisplayTitleFromCommandArg(item);
         if (!convId) {
           const row = await pickConversationInteractively();
           if (!row) {
@@ -671,13 +672,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.openConversationDrawers",
-      async (arg?: ConversationTreeItem | { conv?: { id?: string; title?: string | null }; preferredTab?: "starred" | "todo" }) => {
+      async (arg?: ConversationCommandArg) => {
         if (!(await session.getBackendAccessToken())) {
           await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
           return;
         }
-        let convId = arg?.conv?.id;
-        let convTitle: string | null | undefined = arg?.conv?.title ?? null;
+        let convId = conversationIdFromCommandArg(arg);
+        let convTitle: string | null | undefined = conversationDisplayTitleFromCommandArg(arg);
         const preferredTab =
           arg && typeof arg === "object" && "preferredTab" in arg && arg.preferredTab === "todo"
             ? "todo"

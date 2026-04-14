@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  conversationDisplayTitleFromCommandArg,
   conversationIdFromCommandArg,
   conversationTitleFromCommandArg,
   NO_CONVERSATION_FOR_COMMAND_MESSAGE,
@@ -22,6 +23,15 @@ describe("conversationIdFromCommandArg", () => {
       }),
     ).toBe("abc-123");
   });
+
+  it("ignores unrelated keys such as preferredTab (drawers command)", () => {
+    expect(
+      conversationIdFromCommandArg({
+        preferredTab: "todo",
+        conv: { id: "drawer-conv", title: "D" },
+      }),
+    ).toBe("drawer-conv");
+  });
 });
 
 describe("conversationTitleFromCommandArg", () => {
@@ -38,6 +48,21 @@ describe("conversationTitleFromCommandArg", () => {
         conv: { id: "x", title: "  My chat  " },
       }),
     ).toBe("My chat");
+  });
+});
+
+describe("conversationDisplayTitleFromCommandArg", () => {
+  it("returns null when absent or blank", () => {
+    expect(conversationDisplayTitleFromCommandArg(undefined)).toBeNull();
+    expect(conversationDisplayTitleFromCommandArg({ conv: {} })).toBeNull();
+    expect(conversationDisplayTitleFromCommandArg({ conv: { title: "" } })).toBeNull();
+    expect(conversationDisplayTitleFromCommandArg({ conv: { title: null } })).toBeNull();
+  });
+
+  it("returns trimmed non-empty title", () => {
+    expect(
+      conversationDisplayTitleFromCommandArg({ conv: { id: "i", title: "  T  " } }),
+    ).toBe("T");
   });
 });
 
