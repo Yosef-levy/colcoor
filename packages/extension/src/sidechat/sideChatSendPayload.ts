@@ -1,4 +1,5 @@
 import type { SideChatMessageOut, SideChatPostBody } from "../api/client";
+import { normalizeSideChatReferenceId } from "./normalizeSideChatReferenceId";
 import { trimmedSideChatSendBody } from "./trimSendBody";
 
 /**
@@ -16,15 +17,15 @@ export function buildSideChatSendPayload(
   if (!body) {
     return null;
   }
-  const refRaw =
-    typeof referencedSideChatMessageId === "string" ? referencedSideChatMessageId.trim() : "";
-  const ref = refRaw || null;
+  const ref = normalizeSideChatReferenceId(
+    typeof referencedSideChatMessageId === "string" ? referencedSideChatMessageId : undefined,
+  );
   const refOk = ref == null || knownMessages.some((m) => m.id === ref);
   return {
     kind: "user",
     body,
-    referenced_event_id: typeof referencedEventId === "string" && referencedEventId.trim() ? referencedEventId.trim() : null,
-    referenced_note_id: typeof referencedNoteId === "string" && referencedNoteId.trim() ? referencedNoteId.trim() : null,
+    referenced_event_id: normalizeSideChatReferenceId(referencedEventId),
+    referenced_note_id: normalizeSideChatReferenceId(referencedNoteId),
     referenced_side_chat_message_id: refOk ? ref : null,
   };
 }

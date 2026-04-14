@@ -19,6 +19,7 @@ import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChat
 import { buildSideChatSendPayload } from "./sideChatSendPayload";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
+import { normalizeSideChatReferenceId } from "./normalizeSideChatReferenceId";
 import { trimmedSideChatSendBody } from "./trimSendBody";
 import { reportSideChatPanelApiError } from "./reportSideChatPanelApiError";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
@@ -91,10 +92,16 @@ type PlaySoundMessage = { type: "playSound"; kind: "message" | "mention" };
 export async function openSideChatPanel(
   _context: vscode.ExtensionContext,
   api: ColcoorApiClient,
-  conversationId: string,
+  rawConversationId: string,
   title: string | null,
   options?: { referencedEventId?: string | null; referencedNoteId?: string | null },
 ): Promise<void> {
+  const cid = normalizeSideChatReferenceId(rawConversationId);
+  if (!cid) {
+    void vscode.window.showWarningMessage("Colcoor: missing or invalid conversation id.");
+    return;
+  }
+  const conversationId: string = cid;
   const label = title?.trim() ? title.trim() : `Side chat · ${conversationId.slice(0, 8)}…`;
   const nonce = randomNonce();
   const panel = vscode.window.createWebviewPanel(
@@ -124,14 +131,8 @@ export async function openSideChatPanel(
   let listRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** `undefined` = not loaded yet, `null` = load failed profile */
   let myProfile: MeOut | null | undefined = undefined;
-  let composerReferencedEventId =
-    typeof options?.referencedEventId === "string" && options.referencedEventId.trim()
-      ? options.referencedEventId.trim()
-      : null;
-  let composerReferencedNoteId =
-    typeof options?.referencedNoteId === "string" && options.referencedNoteId.trim()
-      ? options.referencedNoteId.trim()
-      : null;
+  let composerReferencedEventId = normalizeSideChatReferenceId(options?.referencedEventId);
+  let composerReferencedNoteId = normalizeSideChatReferenceId(options?.referencedNoteId);
   let eventLabelsById: Record<string, string> = {};
   let noteLabelsById: Record<string, string> = {};
   /** From `listConversationMembers` — display name or email when present; drives richer presence subtitle. */
@@ -448,15 +449,15 @@ export async function openSideChatPanel(
     if (msg.type === "send") {
       const explicitRefProvided = Object.prototype.hasOwnProperty.call(msg, "referencedEventId");
       const referencedEventId = explicitRefProvided
-        ? typeof msg.referencedEventId === "string" && msg.referencedEventId.trim()
-          ? msg.referencedEventId.trim()
-          : null
+        ? normalizeSideChatReferenceId(
+            typeof msg.referencedEventId === "string" ? msg.referencedEventId : undefined,
+          )
         : composerReferencedEventId;
       const explicitNoteRefProvided = Object.prototype.hasOwnProperty.call(msg, "referencedNoteId");
       const referencedNoteId = explicitNoteRefProvided
-        ? typeof msg.referencedNoteId === "string" && msg.referencedNoteId.trim()
-          ? msg.referencedNoteId.trim()
-          : null
+        ? normalizeSideChatReferenceId(
+            typeof msg.referencedNoteId === "string" ? msg.referencedNoteId : undefined,
+          )
         : composerReferencedNoteId;
       const payload = buildSideChatSendPayload(
         msg.text,
@@ -491,7 +492,7 @@ export async function openSideChatPanel(
         } satisfies ErrorMessage);
         return;
       }
-      const mid = typeof msg.messageId === "string" ? msg.messageId.trim() : "";
+      const mid = normalizeSideChatReferenceId(typeof msg.messageId === "string" ? msg.messageId : undefined);
       if (!mid) {
         return;
       }
@@ -513,7 +514,7 @@ export async function openSideChatPanel(
       return;
     }
     if (msg.type === "delete") {
-      const mid = typeof msg.messageId === "string" ? msg.messageId.trim() : "";
+      const mid = normalizeSideChatReferenceId(typeof msg.messageId === "string" ? msg.messageId : undefined);
       if (!mid) {
         return;
       }
@@ -535,7 +536,7 @@ export async function openSideChatPanel(
       return;
     }
     if (msg.type === "openReference") {
-      const refId = typeof msg.refId === "string" ? msg.refId.trim() : "";
+      const refId = normalizeSideChatReferenceId(typeof msg.refId === "string" ? msg.refId : undefined);
       if (!refId) {
         return;
       }

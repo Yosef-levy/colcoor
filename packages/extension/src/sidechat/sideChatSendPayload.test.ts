@@ -37,7 +37,7 @@ describe("buildSideChatSendPayload", () => {
   });
 
   it("keeps referenced id only when known", () => {
-    expect(buildSideChatSendPayload("hi", " a ", null, null, [msg("a")])).toEqual({
+    expect(buildSideChatSendPayload("hi", "  a\r\n", null, null, [msg("a")])).toEqual({
       kind: "user",
       body: "hi",
       referenced_event_id: null,
@@ -85,6 +85,20 @@ describe("buildSideChatSendPayload", () => {
       body: "hi",
       referenced_event_id: null,
       referenced_note_id: "nnnnnnnn-nnnn-4nnn-8nnn-nnnnnnnnnnnn",
+      referenced_side_chat_message_id: null,
+    });
+  });
+
+  it("normalizes CRLF on referenced event and note ids", () => {
+    const ev = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const nt = "nnnnnnnn-nnnn-4nnn-8nnn-nnnnnnnnnnnn";
+    expect(
+      buildSideChatSendPayload("hi", null, `  ${ev}\r\n`, `  ${nt}\n`, [msg("a")]),
+    ).toEqual({
+      kind: "user",
+      body: "hi",
+      referenced_event_id: ev,
+      referenced_note_id: nt,
       referenced_side_chat_message_id: null,
     });
   });
