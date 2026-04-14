@@ -38,6 +38,15 @@ describe("conversationIdAndTitleFromOpenSideChatArg", () => {
     });
   });
 
+  it("trims conversation id (shared with conversation-scoped commands)", () => {
+    expect(
+      conversationIdAndTitleFromOpenSideChatArg({ conv: { id: "  trim-me  ", title: "T" } }),
+    ).toEqual({
+      convId: "trim-me",
+      convTitle: "T",
+    });
+  });
+
   it("reads conv from a tree-shaped object (structural)", () => {
     expect(
       conversationIdAndTitleFromOpenSideChatArg({ conv: { id: "c-tree", title: null, pinned: false } }),

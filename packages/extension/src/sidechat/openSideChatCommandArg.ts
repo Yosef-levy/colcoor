@@ -1,3 +1,6 @@
+import type { ConversationCommandArg } from "../conversations/conversationCommandArg";
+import { conversationIdFromCommandArg } from "../conversations/conversationCommandArg";
+
 /**
  * Resolves conversation id and title from a {@link import("../conversations/conversationsTreeProvider").ConversationTreeItem}
  * or a minimal `{ conv: { id, title? } }` payload (webviews, drawers).
@@ -8,9 +11,13 @@ export function conversationIdAndTitleFromOpenSideChatArg(
   if (!item || typeof item !== "object") {
     return { convId: undefined, convTitle: undefined };
   }
-  const c = (item as { conv?: { id?: unknown; title?: string | null } }).conv;
-  if (c && typeof c.id === "string" && c.id.length > 0) {
-    return { convId: c.id, convTitle: c.title ?? null };
+  const convId = conversationIdFromCommandArg(item as ConversationCommandArg);
+  if (!convId) {
+    return { convId: undefined, convTitle: undefined };
   }
-  return { convId: undefined, convTitle: undefined };
+  const c = (item as { conv?: { title?: string | null } }).conv;
+  if (!c || typeof c !== "object") {
+    return { convId, convTitle: null };
+  }
+  return { convId, convTitle: "title" in c ? (c.title ?? null) : null };
 }
