@@ -213,4 +213,17 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Send message…](command:colcoor.sendMessage)");
     expect(contents).toContain("[Stop assistant generation](command:colcoor.stopGeneration)");
   });
+
+  it("links jump, continue, resend, and copy selection from conversations welcome ([ui-features.md] §6–§9)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
+    };
+    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
+    const contents = welcome?.contents ?? "";
+    expect(contents).toContain("[Jump to latest…](command:colcoor.jumpToLatestInConversation)");
+    expect(contents).toContain("[Continue from here…](command:colcoor.continueFromHere)");
+    expect(contents).toContain("[Resend assistant…](command:colcoor.resendAssistant)");
+    expect(contents).toContain("[Copy selected message…](command:colcoor.copySelectedMessage)");
+  });
 });
