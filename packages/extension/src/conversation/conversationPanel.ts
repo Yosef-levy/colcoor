@@ -4,6 +4,11 @@ import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT } from "./colcoorContextKeys";
+import {
+  coerceLegalPolicyUrls,
+  isSafeHttpUrlForWebview,
+  listLegalPolicyLinksForWebview,
+} from "./legalPolicySection";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
 import {
@@ -50,6 +55,8 @@ type WebviewStateMessage = {
   needsContextRebuild: boolean;
   busy: boolean;
   lastError: string | null;
+  /** Terms / Privacy / Refund from workspace settings ([ui-features.md] §1.3). */
+  legalPolicyLinks: { label: string; url: string }[];
 };
 
 type FromWebview =
@@ -77,6 +84,7 @@ type FromWebview =
   | { type: "openProfile" }
   | { type: "openSettings" }
   | { type: "openAbout" }
+  | { type: "openLegalPolicyUrl"; url: string }
   | { type: "openStarredDrawer" }
   | { type: "openTodoDrawer" }
   | { type: "openDrawers" }
@@ -93,6 +101,15 @@ function randomNonce(): string {
     s += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return s;
+}
+
+function readLegalPolicyUrlsFromWorkspaceConfig() {
+  const c = vscode.workspace.getConfiguration("colcoor");
+  return coerceLegalPolicyUrls({
+    termsUrl: c.get<string>("legalTermsUrl"),
+    privacyUrl: c.get<string>("legalPrivacyUrl"),
+    refundUrl: c.get<string>("legalRefundUrl"),
+  });
 }
 
 export type ConversationPanelControllerOptions = {
@@ -258,6 +275,7 @@ export function createConversationPanelController(
         needsContextRebuild: lastNeedsContextRebuild,
         busy,
         lastError,
+        legalPolicyLinks: listLegalPolicyLinksForWebview(readLegalPolicyUrlsFromWorkspaceConfig()),
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -293,6 +311,7 @@ export function createConversationPanelController(
           lastError:
             lastError ??
             `Render failed: ${detail}. If the conversation is very large, try the API or a fresh thread.`,
+          legalPolicyLinks: listLegalPolicyLinksForWebview(readLegalPolicyUrlsFromWorkspaceConfig()),
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -599,6 +618,13 @@ export function createConversationPanelController(
       }
       if (msg.type === "refresh") {
         await loadTreeAndPush(false, null);
+        return;
+      }
+      if (msg.type === "openLegalPolicyUrl" && typeof msg.url === "string") {
+        const u = msg.url.trim();
+        if (isSafeHttpUrlForWebview(u)) {
+          void vscode.env.openExternal(vscode.Uri.parse(u));
+        }
         return;
       }
       if (msg.type === "cancel") {

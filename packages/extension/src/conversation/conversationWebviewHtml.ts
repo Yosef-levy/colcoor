@@ -623,12 +623,30 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       line-height: 1.4;
     }
     .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
+    .legal-policy-strip {
+      display: none;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin: 6px 0 0;
+      max-width: 100%;
+    }
+    .legal-policy-strip .policy-lead {
+      margin-right: 2px;
+    }
   </style>
 </head>
 <body>
   <div id="err" class="err" style="display:none"></div>
   <h1 id="title">Colcoor</h1>
   <p class="hint" id="sub">Loading…</p>
+  <div
+    id="legalPolicyStrip"
+    class="legal-policy-strip hint"
+    style="display:none"
+    role="region"
+    aria-label="Product policies"
+  ></div>
   <div class="layout">
     <div class="col-tree">
       <div class="hint tree-panel-hint">Event tree — click a node to choose where the next reply attaches. Drag the right edge of this panel to resize.</div>
@@ -716,6 +734,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       needsContextRebuild: false,
       busy: false,
       lastError: null,
+      legalPolicyLinks: [],
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
       /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
@@ -1258,6 +1277,45 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return true;
     }
 
+    function updateLegalPolicyStrip() {
+      var strip = document.getElementById("legalPolicyStrip");
+      if (!strip) return;
+      var links = state.legalPolicyLinks;
+      if (!links || !links.length) {
+        strip.style.display = "none";
+        strip.replaceChildren();
+        return;
+      }
+      strip.style.display = "flex";
+      strip.replaceChildren();
+      var lead = document.createElement("span");
+      lead.className = "policy-lead";
+      lead.textContent = "Policies:";
+      strip.appendChild(lead);
+      for (var i = 0; i < links.length; i++) {
+        var row = links[i];
+        if (!row || !row.url || !row.label) continue;
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn-secondary";
+        b.textContent = row.label;
+        b.setAttribute("data-url", row.url);
+        b.title = "Open in browser — " + row.url;
+        strip.appendChild(b);
+      }
+    }
+
+    (function wireLegalPolicyStripClicks() {
+      var strip = document.getElementById("legalPolicyStrip");
+      if (!strip) return;
+      strip.addEventListener("click", function (ev) {
+        var t = ev.target;
+        if (!t || t.tagName !== "BUTTON") return;
+        var u = t.getAttribute("data-url");
+        if (u) vscode.postMessage({ type: "openLegalPolicyUrl", url: u });
+      });
+    })();
+
     function render() {
       try {
         const errEl = document.getElementById("err");
@@ -1286,6 +1344,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
           subEl.textContent = subBase;
         }
+        updateLegalPolicyStrip();
         var crHint = document.getElementById("contextRebuildHint");
         if (crHint) {
           if (state.needsContextRebuild && !state.busy) {
@@ -1397,7 +1456,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         (m.treeCollapsedEventIds || []).forEach(function (id) {
           collapsedFromHost[id] = true;
         });
-        state = { ...m, streamingHtml: null, treeCollapsedIds: collapsedFromHost };
+        state = {
+          ...m,
+          streamingHtml: null,
+          treeCollapsedIds: collapsedFromHost,
+          legalPolicyLinks: Array.isArray(m.legalPolicyLinks) ? m.legalPolicyLinks : [],
+        };
         render();
         return;
       }

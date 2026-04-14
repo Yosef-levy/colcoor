@@ -1,22 +1,15 @@
 import * as vscode from "vscode";
 
 import { getAboutPanelHtml } from "./aboutPanelHtml";
-import { buildLegalPolicySectionHtml } from "./legalPolicySection";
+import { buildLegalPolicySectionHtml, coerceLegalPolicyUrls } from "./legalPolicySection";
 
-function readLegalUrlsFromConfig(): {
-  termsUrl?: string;
-  privacyUrl?: string;
-  refundUrl?: string;
-} {
+function readLegalUrlsFromConfig() {
   const c = vscode.workspace.getConfiguration("colcoor");
-  const termsUrl = c.get<string>("legalTermsUrl")?.trim();
-  const privacyUrl = c.get<string>("legalPrivacyUrl")?.trim();
-  const refundUrl = c.get<string>("legalRefundUrl")?.trim();
-  return {
-    ...(termsUrl ? { termsUrl } : {}),
-    ...(privacyUrl ? { privacyUrl } : {}),
-    ...(refundUrl ? { refundUrl } : {}),
-  };
+  return coerceLegalPolicyUrls({
+    termsUrl: c.get<string>("legalTermsUrl"),
+    privacyUrl: c.get<string>("legalPrivacyUrl"),
+    refundUrl: c.get<string>("legalRefundUrl"),
+  });
 }
 
 export function showAboutPanel(): void {

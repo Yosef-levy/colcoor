@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLegalPolicySectionHtml,
+  coerceLegalPolicyUrls,
   isSafeHttpUrlForWebview,
+  listLegalPolicyLinksForWebview,
 } from "./legalPolicySection";
 
 describe("isSafeHttpUrlForWebview", () => {
@@ -15,6 +17,31 @@ describe("isSafeHttpUrlForWebview", () => {
     expect(isSafeHttpUrlForWebview("data:text/html,hi")).toBe(false);
     expect(isSafeHttpUrlForWebview("")).toBe(false);
     expect(isSafeHttpUrlForWebview("not a url")).toBe(false);
+  });
+});
+
+describe("coerceLegalPolicyUrls", () => {
+  it("trims and drops empty strings", () => {
+    expect(
+      coerceLegalPolicyUrls({
+        termsUrl: "  https://a/t  ",
+        privacyUrl: "   ",
+        refundUrl: null,
+      }),
+    ).toEqual({ termsUrl: "https://a/t" });
+  });
+});
+
+describe("listLegalPolicyLinksForWebview", () => {
+  it("matches buildLegalPolicySectionHtml ordering and filters unsafe URLs", () => {
+    const urls = coerceLegalPolicyUrls({
+      termsUrl: "javascript:evil()",
+      privacyUrl: "https://x/p",
+      refundUrl: "https://x/r",
+    });
+    const rows = listLegalPolicyLinksForWebview(urls);
+    expect(rows.map((r) => r.label)).toEqual(["Privacy", "Refund policy"]);
+    expect(rows[0].url).toBe("https://x/p");
   });
 });
 

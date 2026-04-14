@@ -8,6 +8,28 @@ export type LegalPolicyUrls = {
   refundUrl?: string;
 };
 
+/** Normalize workspace setting strings into {@link LegalPolicyUrls} (trimmed non-empty only). */
+export function coerceLegalPolicyUrls(input: {
+  termsUrl?: string | null | undefined;
+  privacyUrl?: string | null | undefined;
+  refundUrl?: string | null | undefined;
+}): LegalPolicyUrls {
+  const out: LegalPolicyUrls = {};
+  const t = typeof input.termsUrl === "string" ? input.termsUrl.trim() : "";
+  if (t) {
+    out.termsUrl = t;
+  }
+  const p = typeof input.privacyUrl === "string" ? input.privacyUrl.trim() : "";
+  if (p) {
+    out.privacyUrl = p;
+  }
+  const r = typeof input.refundUrl === "string" ? input.refundUrl.trim() : "";
+  if (r) {
+    out.refundUrl = r;
+  }
+  return out;
+}
+
 function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -30,8 +52,8 @@ export function isSafeHttpUrlForWebview(raw: string): boolean {
   }
 }
 
-/** Returns HTML fragment (no outer wrapper) or empty string. */
-export function buildLegalPolicySectionHtml(urls: LegalPolicyUrls): string {
+/** Ordered link rows for webviews / state payloads (only http(s) URLs). */
+export function listLegalPolicyLinksForWebview(urls: LegalPolicyUrls): { label: string; url: string }[] {
   const rows: { label: string; url: string }[] = [];
   const t = urls.termsUrl?.trim();
   if (t && isSafeHttpUrlForWebview(t)) {
@@ -45,6 +67,12 @@ export function buildLegalPolicySectionHtml(urls: LegalPolicyUrls): string {
   if (r && isSafeHttpUrlForWebview(r)) {
     rows.push({ label: "Refund policy", url: r });
   }
+  return rows;
+}
+
+/** Returns HTML fragment (no outer wrapper) or empty string. */
+export function buildLegalPolicySectionHtml(urls: LegalPolicyUrls): string {
+  const rows = listLegalPolicyLinksForWebview(urls);
   if (rows.length === 0) {
     return "";
   }

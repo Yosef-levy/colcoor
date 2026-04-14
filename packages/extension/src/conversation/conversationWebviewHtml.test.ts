@@ -11,6 +11,14 @@ import {
 } from "./privateBranchComposerCopy";
 
 describe("getConversationWebviewHtml", () => {
+  it("includes legal policy strip and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="legalPolicyStrip"');
+    expect(html).toContain("updateLegalPolicyStrip");
+    expect(html).toContain("openLegalPolicyUrl");
+    expect(html).toContain("legalPolicyLinks");
+  });
+
   it("uses dir=auto on the composer textarea for RTL-capable typing", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(
