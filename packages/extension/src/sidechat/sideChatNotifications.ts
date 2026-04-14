@@ -9,6 +9,7 @@ export type SideChatNotificationDecision = {
 type Args = {
   panelVisible: boolean;
   myUserId: string | null;
+  myMentionTargets: string[];
   incoming: SideChatMessageOut;
   notificationsEnabled: boolean;
   mentionNotificationsEnabled: boolean;
@@ -36,7 +37,11 @@ export function decideSideChatNotification(args: Args): SideChatNotificationDeci
   }
   const body = (m.body ?? "").trim();
   const mentions = extractSideChatMentions(body);
-  if (args.mentionNotificationsEnabled && mentions.length > 0) {
+  const mentionTargets = new Set(args.myMentionTargets.map((s) => s.toLowerCase()));
+  const isMentioned =
+    args.mentionNotificationsEnabled &&
+    mentions.some((h) => mentionTargets.has(h.toLowerCase()));
+  if (isMentioned) {
     return {
       title: `Colcoor side chat mention (#${m.seq})`,
       detail: body || "(empty)",

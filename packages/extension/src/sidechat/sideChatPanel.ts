@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 
-import type { ColcoorApiClient, SideChatMessageOut } from "../api/client";
+import type { ColcoorApiClient, MeOut, SideChatMessageOut } from "../api/client";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
+import { mentionTargetsForMe } from "./sideChatMentionTargets";
 import { decideSideChatNotification } from "./sideChatNotifications";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
@@ -86,23 +87,23 @@ export async function openSideChatPanel(
   let hasPendingReadPatch = false;
   /** Debounce refreshing the conversation list after read cursor updates (SSE can be chatty). */
   let listRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-  /** `undefined` = not loaded yet, `null` = load failed, string = user id */
-  let myUserId: string | null | undefined = undefined;
+  /** `undefined` = not loaded yet, `null` = load failed profile */
+  let myProfile: MeOut | null | undefined = undefined;
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
   const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
 
-  async function ensureMyUserId(): Promise<string | null> {
-    if (myUserId !== undefined) {
-      return myUserId;
+  async function ensureMyProfile(): Promise<MeOut | null> {
+    if (myProfile !== undefined) {
+      return myProfile;
     }
     try {
       const me = await api.getMe();
-      myUserId = me.id;
+      myProfile = me;
     } catch {
-      myUserId = null;
+      myProfile = null;
     }
-    return myUserId;
+    return myProfile;
   }
 
   function scheduleMarkRead(): void {
@@ -142,7 +143,8 @@ export async function openSideChatPanel(
   }
 
   async function postState(): Promise<void> {
-    const viewerUserId = await ensureMyUserId();
+    const me = await ensureMyProfile();
+    const viewerUserId = me?.id ?? null;
     try {
       await panel.webview.postMessage({
         type: "state",
@@ -184,9 +186,11 @@ export async function openSideChatPanel(
             if (o?.type !== "side_chat" || !o.message) {
               continue;
             }
+            const me = await ensureMyProfile();
             const notif = decideSideChatNotification({
               panelVisible: panel.visible,
-              myUserId: await ensureMyUserId(),
+              myUserId: me?.id ?? null,
+              myMentionTargets: mentionTargetsForMe(me),
               incoming: o.message,
               notificationsEnabled,
               mentionNotificationsEnabled,
@@ -266,7 +270,7 @@ export async function openSideChatPanel(
         return;
       }
       const row = cached.find((m) => m.id === mid);
-      const uid = await ensureMyUserId();
+      const uid = (await ensureMyProfile())?.id ?? null;
       if (!row || !canMutateOwnSideChatUserMessage(row, uid)) {
         await panel.webview.postMessage({
           type: "error",
@@ -289,7 +293,7 @@ export async function openSideChatPanel(
         return;
       }
       const row = cached.find((m) => m.id === mid);
-      const uid = await ensureMyUserId();
+      const uid = (await ensureMyProfile())?.id ?? null;
       if (!row || !canMutateOwnSideChatUserMessage(row, uid)) {
         await panel.webview.postMessage({
           type: "error",

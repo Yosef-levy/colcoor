@@ -27,6 +27,7 @@ describe("decideSideChatNotification", () => {
       decideSideChatNotification({
         panelVisible: false,
         myUserId: null,
+        myMentionTargets: [],
         incoming: msg({ id: "m", seq: 1 }),
         notificationsEnabled: false,
         mentionNotificationsEnabled: true,
@@ -36,6 +37,7 @@ describe("decideSideChatNotification", () => {
       decideSideChatNotification({
         panelVisible: true,
         myUserId: null,
+        myMentionTargets: [],
         incoming: msg({ id: "m", seq: 1 }),
         notificationsEnabled: true,
         mentionNotificationsEnabled: true,
@@ -48,6 +50,7 @@ describe("decideSideChatNotification", () => {
       decideSideChatNotification({
         panelVisible: false,
         myUserId: null,
+        myMentionTargets: [],
         incoming: msg({ id: "m", seq: 1, kind: "system_join" }),
         notificationsEnabled: true,
         mentionNotificationsEnabled: true,
@@ -57,6 +60,7 @@ describe("decideSideChatNotification", () => {
       decideSideChatNotification({
         panelVisible: false,
         myUserId: null,
+        myMentionTargets: [],
         incoming: msg({ id: "m", seq: 1, deleted_at: "x" }),
         notificationsEnabled: true,
         mentionNotificationsEnabled: true,
@@ -66,6 +70,7 @@ describe("decideSideChatNotification", () => {
       decideSideChatNotification({
         panelVisible: false,
         myUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        myMentionTargets: [],
         incoming: msg({ id: "m", seq: 1, author_user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
         notificationsEnabled: true,
         mentionNotificationsEnabled: true,
@@ -73,10 +78,11 @@ describe("decideSideChatNotification", () => {
     ).toBeNull();
   });
 
-  it("prioritizes mention notification title when enabled", () => {
+  it("prioritizes mention notification title when message mentions me", () => {
     const out = decideSideChatNotification({
       panelVisible: false,
       myUserId: null,
+      myMentionTargets: ["alice"],
       incoming: msg({ id: "m", seq: 3, body: "hi @alice" }),
       notificationsEnabled: true,
       mentionNotificationsEnabled: true,
@@ -88,9 +94,22 @@ describe("decideSideChatNotification", () => {
     const out = decideSideChatNotification({
       panelVisible: false,
       myUserId: null,
+      myMentionTargets: ["bob"],
       incoming: msg({ id: "m", seq: 2, body: "hi @alice" }),
       notificationsEnabled: true,
       mentionNotificationsEnabled: false,
+    });
+    expect(out?.title).toContain("message");
+  });
+
+  it("falls back to generic notification when mentions do not match me", () => {
+    const out = decideSideChatNotification({
+      panelVisible: false,
+      myUserId: null,
+      myMentionTargets: ["charlie"],
+      incoming: msg({ id: "m", seq: 4, body: "hi @alice" }),
+      notificationsEnabled: true,
+      mentionNotificationsEnabled: true,
     });
     expect(out?.title).toContain("message");
   });
