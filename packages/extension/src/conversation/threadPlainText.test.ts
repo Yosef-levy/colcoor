@@ -88,4 +88,69 @@ describe("buildPlainThread", () => {
     expect(out).toContain("User: Q");
     expect(out).toContain("NOTE: decision: use B");
   });
+
+  it("returns empty string when selected id is not in the tree", () => {
+    expect(buildPlainThread([], "missing")).toBe("");
+  });
+
+  it("returns empty string when selection is only the empty root placeholder", () => {
+    const events: GraphEventNode[] = [
+      {
+        id: "u0",
+        conversation_id: "c",
+        parent_event_id: null,
+        kind: "user_input",
+        actor_type: "user",
+        actor_user_id: null,
+        content_text: "",
+        visible_to: null,
+        created_at: "2020-01-01T00:00:00Z",
+        updated_at: "2020-01-01T00:00:00Z",
+      },
+    ];
+    expect(buildPlainThread(events, "u0")).toBe("");
+  });
+
+  it("includes NOTE lines on assistant messages", () => {
+    const events: GraphEventNode[] = [
+      {
+        id: "u0",
+        conversation_id: "c",
+        parent_event_id: null,
+        kind: "user_input",
+        actor_type: "user",
+        actor_user_id: null,
+        content_text: "Hi",
+        visible_to: null,
+        created_at: "2020-01-01T00:00:00Z",
+        updated_at: "2020-01-01T00:00:00Z",
+      },
+      {
+        id: "a1",
+        conversation_id: "c",
+        parent_event_id: "u0",
+        kind: "assistant_output",
+        actor_type: "agent",
+        actor_user_id: null,
+        content_text: "Hello.",
+        visible_to: null,
+        created_at: "2020-01-01T00:01:00Z",
+        updated_at: "2020-01-01T00:01:00Z",
+      },
+    ];
+    const notes: NoteOut[] = [
+      {
+        id: "n1",
+        event_id: "a1",
+        author_user_id: "11111111-1111-4111-8111-111111111111",
+        content: "TODO: follow up",
+        created_at: "2020-01-01T00:01:05Z",
+        updated_at: "2020-01-01T00:01:05Z",
+      },
+    ];
+    const out = buildPlainThread(events, "a1", notes);
+    expect(out).toContain("User: Hi");
+    expect(out).toContain("Assistant: Hello.");
+    expect(out).toContain("NOTE: TODO: follow up");
+  });
 });
