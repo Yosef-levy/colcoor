@@ -48,6 +48,12 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
       back to highlights.
     </li>
     <li>
+      Tune <strong>side chat sounds and notifications</strong> with the <strong>Side chat sounds…</strong> button in the
+      conversation or side chat panel, the Command Palette entry
+      <strong>Colcoor: Open side chat sound &amp; notification settings…</strong>, or the matching link in the
+      Conversations welcome list — Settings opens filtered to those Colcoor options.
+    </li>
+    <li>
       Use the <strong>setup buttons</strong> in the conversation panel, side chat, or drawers — or the
       <strong>Command Palette</strong> — so Colcoor can run the <strong>assistant in this workspace</strong> on your
       computer when your team has turned that on.

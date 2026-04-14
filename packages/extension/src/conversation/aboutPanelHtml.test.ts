@@ -15,6 +15,8 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("<strong>conversation outline</strong>");
     expect(html).toContain("<strong>Resend assistant</strong>");
     expect(html).toContain("<strong>Side chat</strong>");
+    expect(html).toContain("<strong>Side chat sounds…</strong>");
+    expect(html).toContain("Colcoor: Open side chat sound &amp; notification settings…");
     expect(html).toContain("drawers");
     expect(html).toContain("<strong>setup buttons</strong>");
     expect(html).toContain("<strong>milestone label</strong>");
@@ -29,6 +31,12 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("<strong>Terms</strong>");
     expect(html).toContain("<strong>Privacy</strong>");
     expect(html).toContain("<strong>Refund</strong>");
+  });
+
+  it("points to side chat sound and notification settings ([ui-features.md] §1.1)", () => {
+    const html = getAboutPanelHtml("");
+    expect(html).toContain("side chat sounds and notifications");
+    expect(html).toContain("Conversations welcome list");
   });
 
   it("avoids repository or API jargon in the footer line ([ui-features.md] §2)", () => {
