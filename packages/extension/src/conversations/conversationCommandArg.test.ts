@@ -34,6 +34,12 @@ describe("conversationIdFromCommandArg", () => {
       }),
     ).toBe("drawer-conv");
   });
+
+  it("supports openConversation-style conv payloads (trimmed id and title)", () => {
+    const arg: ConversationCommandArg = { conv: { id: "  cid  ", title: "  My thread  " } };
+    expect(conversationIdFromCommandArg(arg)).toBe("cid");
+    expect(conversationDisplayTitleFromCommandArg(arg)).toBe("My thread");
+  });
 });
 
 describe("conversationTitleFromCommandArg", () => {

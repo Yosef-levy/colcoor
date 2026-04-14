@@ -845,10 +845,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand(
       "colcoor.openConversation",
-      async (arg0?: ConversationTreeItem | string, arg1?: string | null) => {
+      async (arg0?: ConversationCommandArg | string, arg1?: string | null) => {
         if (arg0 && typeof arg0 === "object" && "conv" in arg0) {
-          const it = arg0 as ConversationTreeItem;
-          await conversationPanel.reveal(it.conv.id, it.conv.title);
+          const convId = conversationIdFromCommandArg(arg0);
+          if (convId) {
+            await conversationPanel.reveal(convId, conversationDisplayTitleFromCommandArg(arg0));
+            return;
+          }
+          const row = await pickConversationInteractively();
+          if (row) {
+            await conversationPanel.reveal(row.id, row.title);
+          }
           return;
         }
         if (typeof arg0 === "string" && arg0.length > 0) {
