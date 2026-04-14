@@ -12,7 +12,7 @@ describe("buildWorkspaceContextBlock", () => {
 
   it("includes active file, selection, and diff sections", () => {
     const s = buildWorkspaceContextBlock({
-      activeFileRelative: "src/a.ts",
+      activeFileRelative: "  src/a.ts\r\n",
       selectionSnippet: "hello",
       gitDiffUnified: "diff --git a/x b/x",
     });

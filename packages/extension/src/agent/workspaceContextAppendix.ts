@@ -3,6 +3,8 @@
  * (see workspaceHintsForAgent.ts and docs/principles.md).
  */
 
+import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
+
 const BLOCK_START = "--- Colcoor workspace context (editor; optional) ---";
 /** Cap total appendix so CLI argv stays reasonable. */
 export const MAX_WORKSPACE_CONTEXT_CHARS = 8000;
@@ -13,6 +15,13 @@ export type WorkspaceContextParts = {
   gitDiffUnified?: string | null;
 };
 
+function sectionText(raw: string | null | undefined): string {
+  if (raw == null) {
+    return "";
+  }
+  return normalizePersistedUserInputText(raw);
+}
+
 /**
  * Build the text block appended after the authoritative transcript for the agent CLI.
  * Returns empty string when there is nothing to add (only the header would appear).
@@ -22,16 +31,19 @@ export function buildWorkspaceContextBlock(
   maxChars: number = MAX_WORKSPACE_CONTEXT_CHARS,
 ): string {
   const lines: string[] = [BLOCK_START];
-  if (parts.activeFileRelative?.trim()) {
-    lines.push(`Active file: ${parts.activeFileRelative.trim()}`);
+  const active = sectionText(parts.activeFileRelative);
+  if (active) {
+    lines.push(`Active file: ${active}`);
   }
-  if (parts.selectionSnippet?.trim()) {
+  const sel = sectionText(parts.selectionSnippet);
+  if (sel) {
     lines.push("Selection:");
-    lines.push(parts.selectionSnippet.trim());
+    lines.push(sel);
   }
-  if (parts.gitDiffUnified?.trim()) {
+  const diff = sectionText(parts.gitDiffUnified);
+  if (diff) {
     lines.push("Working tree (git diff --no-color --unified=0, truncated):");
-    lines.push(parts.gitDiffUnified.trim());
+    lines.push(diff);
   }
   if (lines.length === 1) {
     return "";
