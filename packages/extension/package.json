@@ -101,6 +101,10 @@
       {
         "command": "colcoor.referenceSelectedMessageInSideChat",
         "title": "Colcoor: Reference selected message in side chat"
+      },
+      {
+        "command": "colcoor.referenceSelectedNoteInSideChat",
+        "title": "Colcoor: Reference selected note in side chat"
       }
     ],
     "viewsContainers": {

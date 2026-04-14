@@ -502,6 +502,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
       }
     }),
+    vscode.commands.registerCommand("colcoor.referenceSelectedNoteInSideChat", async () => {
+      const ctx = conversationPanel.getSelectedMessageContext();
+      if (!ctx) {
+        await vscode.window.showWarningMessage(
+          "Colcoor: open a conversation and select a message first.",
+        );
+        return;
+      }
+      try {
+        const notes = await api.listNotes(ctx.conversationId);
+        const forSelected = notes.filter((n) => n.event_id === ctx.selectedEventId);
+        if (forSelected.length === 0) {
+          await vscode.window.showWarningMessage(
+            "Colcoor: selected message has no notes to reference.",
+          );
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          forSelected.map((n) => ({
+            label: n.content.split("\n")[0]?.trim() || "(empty note)",
+            description: n.id,
+            nid: n.id,
+          })),
+          { title: "Colcoor — reference note in side chat", placeHolder: "Choose a note" },
+        );
+        if (!pick) {
+          return;
+        }
+        await openSideChatPanel(context, api, ctx.conversationId, ctx.title ?? null, {
+          referencedEventId: ctx.selectedEventId,
+          referencedNoteId: pick.nid,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      }
+    }),
     vscode.commands.registerCommand(
       "colcoor.openConversation",
       async (arg0?: ConversationTreeItem | string, arg1?: string | null) => {

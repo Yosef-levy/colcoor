@@ -29,5 +29,8 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("id=\"refEventRow\"");
     expect(html).toContain("clearRefEvent");
     expect(html).toContain("referencedEventId");
+    expect(html).toContain("id=\"refNoteRow\"");
+    expect(html).toContain("clearRefNote");
+    expect(html).toContain("referencedNoteId");
   });
 });

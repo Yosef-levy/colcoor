@@ -47,6 +47,7 @@ type FromWebview =
       text: string;
       referencedSideChatMessageId?: string | null;
       referencedEventId?: string | null;
+      referencedNoteId?: string | null;
     }
   | { type: "refresh" }
   | { type: "edit"; messageId: string; text: string }
@@ -58,6 +59,7 @@ type StateMessage = {
   /** Caller user id for author-only actions in the webview; null if profile could not be loaded. */
   viewerUserId: string | null;
   referencedEventId: string | null;
+  referencedNoteId: string | null;
 };
 
 type ErrorMessage = { type: "error"; text: string };
@@ -71,7 +73,7 @@ export async function openSideChatPanel(
   api: ColcoorApiClient,
   conversationId: string,
   title: string | null,
-  options?: { referencedEventId?: string | null },
+  options?: { referencedEventId?: string | null; referencedNoteId?: string | null },
 ): Promise<void> {
   const label = title?.trim() ? title.trim() : `Side chat · ${conversationId.slice(0, 8)}…`;
   const nonce = randomNonce();
@@ -105,6 +107,10 @@ export async function openSideChatPanel(
   let composerReferencedEventId =
     typeof options?.referencedEventId === "string" && options.referencedEventId.trim()
       ? options.referencedEventId.trim()
+      : null;
+  let composerReferencedNoteId =
+    typeof options?.referencedNoteId === "string" && options.referencedNoteId.trim()
+      ? options.referencedNoteId.trim()
       : null;
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
@@ -170,6 +176,7 @@ export async function openSideChatPanel(
         messages: toSideChatRenderMessages(cached),
         viewerUserId,
         referencedEventId: composerReferencedEventId,
+        referencedNoteId: composerReferencedNoteId,
       } satisfies StateMessage);
     } catch {
       /* webview gone */
@@ -298,10 +305,17 @@ export async function openSideChatPanel(
           ? msg.referencedEventId.trim()
           : null
         : composerReferencedEventId;
+      const explicitNoteRefProvided = Object.prototype.hasOwnProperty.call(msg, "referencedNoteId");
+      const referencedNoteId = explicitNoteRefProvided
+        ? typeof msg.referencedNoteId === "string" && msg.referencedNoteId.trim()
+          ? msg.referencedNoteId.trim()
+          : null
+        : composerReferencedNoteId;
       const payload = buildSideChatSendPayload(
         msg.text,
         msg.referencedSideChatMessageId,
         referencedEventId,
+        referencedNoteId,
         cached,
       );
       if (!payload) {
@@ -314,6 +328,7 @@ export async function openSideChatPanel(
       try {
         await api.postSideChatMessage(conversationId, payload);
         composerReferencedEventId = null;
+        composerReferencedNoteId = null;
         await pushState();
       } catch (e) {
         const t = e instanceof Error ? e.message : String(e);
