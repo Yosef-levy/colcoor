@@ -83,6 +83,16 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
   });
 });
 
+describe("conversations welcome delete discoverability", () => {
+  it("mentions delete without a deleteConversation command link", () => {
+    const raw = readFileSync(resolve(__dirname, "../../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as Parameters<typeof conversationsWelcomeContents>[0];
+    const contents = conversationsWelcomeContents(pkg);
+    expect(contents.toLowerCase()).toMatch(/delete/);
+    expect(contents).not.toContain("command:colcoor.deleteConversation");
+  });
+});
+
 describe("extractMarkdownCommandLinks", () => {
   it("parses multiple links", () => {
     const md = "[A](command:colcoor.a)\n[B](command:colcoor.b)";
