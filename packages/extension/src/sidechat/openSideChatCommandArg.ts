@@ -1,5 +1,8 @@
 import type { ConversationCommandArg } from "../conversations/conversationCommandArg";
-import { conversationIdFromCommandArg } from "../conversations/conversationCommandArg";
+import {
+  conversationDisplayTitleFromCommandArg,
+  conversationIdFromCommandArg,
+} from "../conversations/conversationCommandArg";
 
 /**
  * Resolves conversation id and title from a {@link import("../conversations/conversationsTreeProvider").ConversationTreeItem}
@@ -11,13 +14,10 @@ export function conversationIdAndTitleFromOpenSideChatArg(
   if (!item || typeof item !== "object") {
     return { convId: undefined, convTitle: undefined };
   }
-  const convId = conversationIdFromCommandArg(item as ConversationCommandArg);
+  const arg = item as ConversationCommandArg;
+  const convId = conversationIdFromCommandArg(arg);
   if (!convId) {
     return { convId: undefined, convTitle: undefined };
   }
-  const c = (item as { conv?: { title?: string | null } }).conv;
-  if (!c || typeof c !== "object") {
-    return { convId, convTitle: null };
-  }
-  return { convId, convTitle: "title" in c ? (c.title ?? null) : null };
+  return { convId, convTitle: conversationDisplayTitleFromCommandArg(arg) };
 }

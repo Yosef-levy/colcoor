@@ -47,6 +47,19 @@ describe("conversationIdAndTitleFromOpenSideChatArg", () => {
     });
   });
 
+  it("trims conversation title (blank after trim becomes null)", () => {
+    expect(
+      conversationIdAndTitleFromOpenSideChatArg({ conv: { id: "c4", title: "  spaced title  " } }),
+    ).toEqual({
+      convId: "c4",
+      convTitle: "spaced title",
+    });
+    expect(conversationIdAndTitleFromOpenSideChatArg({ conv: { id: "c5", title: "   " } })).toEqual({
+      convId: "c5",
+      convTitle: null,
+    });
+  });
+
   it("reads conv from a tree-shaped object (structural)", () => {
     expect(
       conversationIdAndTitleFromOpenSideChatArg({ conv: { id: "c-tree", title: null, pinned: false } }),
