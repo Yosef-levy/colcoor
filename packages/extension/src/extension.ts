@@ -25,6 +25,12 @@ import {
   CONVERSATION_AUTO_REFRESH_MS,
   shouldAutoRefreshConversations,
 } from "./conversations/conversationAutoRefreshPolicy";
+import {
+  type ConversationCommandArg,
+  conversationIdFromCommandArg,
+  conversationTitleFromCommandArg,
+  NO_CONVERSATION_FOR_COMMAND_MESSAGE,
+} from "./conversations/conversationCommandArg";
 import { validateColcoorInviteUserIdInput } from "./conversations/conversationMemberInvite";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
@@ -226,12 +232,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand(
       "colcoor.copyConversationId",
-      async (item?: ConversationTreeItem) => {
-        const id = item?.conv?.id;
+      async (item?: ConversationCommandArg) => {
+        const id = conversationIdFromCommandArg(item);
         if (!id) {
-          await vscode.window.showWarningMessage(
-            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
-          );
+          await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
           return;
         }
         await vscode.env.clipboard.writeText(id);
@@ -240,12 +244,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.listConversationMembers",
-      async (item?: ConversationTreeItem) => {
-        const id = item?.conv?.id;
+      async (item?: ConversationCommandArg) => {
+        const id = conversationIdFromCommandArg(item);
         if (!id) {
-          await vscode.window.showWarningMessage(
-            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
-          );
+          await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
           return;
         }
         try {
@@ -270,12 +272,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.addConversationMember",
-      async (item?: ConversationTreeItem) => {
-        const id = item?.conv?.id;
+      async (item?: ConversationCommandArg) => {
+        const id = conversationIdFromCommandArg(item);
         if (!id) {
-          await vscode.window.showWarningMessage(
-            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
-          );
+          await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
           return;
         }
         const rawUserId = await vscode.window.showInputBox({
@@ -312,12 +312,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.changeMemberRole",
-      async (item?: ConversationTreeItem) => {
-        const id = item?.conv?.id;
+      async (item?: ConversationCommandArg) => {
+        const id = conversationIdFromCommandArg(item);
         if (!id) {
-          await vscode.window.showWarningMessage(
-            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
-          );
+          await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
           return;
         }
         try {
@@ -363,12 +361,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.removeMemberFromConversation",
-      async (item?: ConversationTreeItem) => {
-        const id = item?.conv?.id;
+      async (item?: ConversationCommandArg) => {
+        const id = conversationIdFromCommandArg(item);
         if (!id) {
-          await vscode.window.showWarningMessage(
-            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
-          );
+          await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
           return;
         }
         try {
@@ -410,13 +406,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.deleteConversation",
-      async (item?: ConversationTreeItem) => {
-        const id = item?.conv?.id;
-        const title = item?.conv?.title?.trim() ? item.conv.title : "(untitled)";
+      async (item?: ConversationCommandArg) => {
+        const id = conversationIdFromCommandArg(item);
+        const title = conversationTitleFromCommandArg(item);
         if (!id) {
-          await vscode.window.showWarningMessage(
-            "Colcoor: use the context menu on a conversation in the Colcoor sidebar.",
-          );
+          await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
           return;
         }
         const choice = await vscode.window.showWarningMessage(
