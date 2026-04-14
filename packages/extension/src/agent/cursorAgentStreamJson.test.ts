@@ -54,6 +54,23 @@ describe("parseCursorAgentNdjsonLine", () => {
     expect(parseCursorAgentNdjsonLine('{"type":"system"}')).toBeNull();
     expect(parseCursorAgentNdjsonLine("not json")).toBeNull();
   });
+
+  it("returns null for assistant rows with no text content blocks", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "thinking", text: "nope" }] },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toBeNull();
+  });
+
+  it("returns null for non-success result subtypes", () => {
+    const line = JSON.stringify({
+      type: "result",
+      subtype: "error",
+      result: "failed",
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toBeNull();
+  });
 });
 
 describe("slimNdjsonForTimeline", () => {
@@ -146,6 +163,21 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(t).toHaveLength(2);
     expect(t[0]).toEqual({ colcoor_row: "read", text: "Read README.md (lines 1:5)" });
     expect(t[1]).toEqual({ colcoor_row: "shell_start", text: "Run tests\ncommand: pytest -q" });
+  });
+
+  it("ignores further assistant snapshots after a terminal result", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"first"}]}}\n',
+    );
+    feed.push(
+      '{"type":"result","subtype":"success","is_error":false,"result":"final only"}\n',
+    );
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ignored"}]}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("final only");
   });
 
   it("does not put user, assistant, or system in the timeline", () => {
