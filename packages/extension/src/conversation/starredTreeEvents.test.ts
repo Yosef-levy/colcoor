@@ -47,4 +47,14 @@ describe("shortStarredEventLabel", () => {
     });
     expect(shortStarredEventLabel(x)).toBe("Assistant: (Assistant)");
   });
+
+  it("truncates long content with an ellipsis", () => {
+    const x = ev({
+      id: "u2",
+      kind: "user_input",
+      created_at: "t",
+      content_text: "z".repeat(80),
+    });
+    expect(shortStarredEventLabel(x)).toBe(`User: ${"z".repeat(64)}…`);
+  });
 });

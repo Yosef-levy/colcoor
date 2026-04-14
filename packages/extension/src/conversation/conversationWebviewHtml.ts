@@ -9,6 +9,7 @@ import {
   PRIVATE_BRANCH_LABEL_TITLE,
   PRIVATE_BRANCH_LEAD,
 } from "./privateBranchComposerCopy";
+import { TREE_EVENT_DISPLAY_TITLE_MAX, TREE_EVENT_SNIPPET_MAX } from "./treeNodeDisplay";
 
 export function getConversationWebviewHtml(cspSource: string, nonce: string): string {
   const csp = [
@@ -839,13 +840,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (typeof raw !== "string") return "";
       var s = raw.trim();
       if (!s) return "";
-      return s.length > 160 ? s.slice(0, 160) + "…" : s;
+      return s.length > ${TREE_EVENT_DISPLAY_TITLE_MAX}
+        ? s.slice(0, ${TREE_EVENT_DISPLAY_TITLE_MAX}) + "…"
+        : s;
     }
 
     function snippet(ev) {
       const t = (ev.content_text || "").trim().replace(/\\s+/g, " ");
       if (!t) return "(empty)";
-      return t.length > 96 ? t.slice(0, 96) + "…" : t;
+      return t.length > ${TREE_EVENT_SNIPPET_MAX}
+        ? t.slice(0, ${TREE_EVENT_SNIPPET_MAX}) + "…"
+        : t;
     }
 
     function treeKindLabel(kind) {

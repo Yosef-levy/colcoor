@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
+import { TREE_EVENT_DISPLAY_TITLE_MAX, TREE_EVENT_SNIPPET_MAX } from "./treeNodeDisplay";
 import {
   CONTEXT_REBUILD_COMPOSER_BANNER,
   CONTEXT_REBUILD_SUBTITLE_SUFFIX,
@@ -11,6 +12,12 @@ import {
 } from "./privateBranchComposerCopy";
 
 describe("getConversationWebviewHtml", () => {
+  it("embeds tree snippet and display-title limits from treeNodeDisplay ([tree-ui-contract.md] §7)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain(`slice(0, ${TREE_EVENT_SNIPPET_MAX})`);
+    expect(html).toContain(`slice(0, ${TREE_EVENT_DISPLAY_TITLE_MAX})`);
+  });
+
   it("includes legal policy strip and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="legalPolicyStrip"');
