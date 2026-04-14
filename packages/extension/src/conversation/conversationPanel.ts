@@ -15,7 +15,7 @@ import {
   normalizePersistedUserInputText,
 } from "./normalizeUserInputText";
 import { runColcoorUserTurn } from "./runUserTurn";
-import { buildPlainThread } from "./threadPlainText";
+import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { pendingUserHtmlForPanelState } from "./pendingUserHtmlForPanelState";
 import {
@@ -325,7 +325,11 @@ export function createConversationPanelController(
         events,
         selectedEventId: sel ?? "",
         threadSegments: buildThreadSegments(events, sel ?? "", lastNotes),
-        threadPlainText: buildPlainThread(events, sel ?? "", lastNotes),
+        threadPlainText: appendPendingPlainThreadFragment(
+          buildPlainThread(events, sel ?? "", lastNotes),
+          busy,
+          pendingSendUserMarkdown,
+        ),
         treeWidthPx,
         composerTextareaHeightPx,
         treeCollapsedEventIds: prunedCollapsedEventIds(events),
@@ -368,7 +372,7 @@ export function createConversationPanelController(
           events: [],
           selectedEventId: "",
           threadSegments: [],
-          threadPlainText: "",
+          threadPlainText: appendPendingPlainThreadFragment("", busy, pendingSendUserMarkdown),
           treeWidthPx,
           composerTextareaHeightPx,
           treeCollapsedEventIds: [],

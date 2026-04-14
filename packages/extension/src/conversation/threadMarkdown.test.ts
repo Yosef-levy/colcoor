@@ -44,4 +44,10 @@ describe("markdownToSafeHtml", () => {
     expect(html).toContain("<del");
     expect(html).toContain("gone");
   });
+
+  it("autolinks bare https URLs (GFM) with safe link attrs", () => {
+    const html = markdownToSafeHtml("See https://example.com/path?q=1 for details.");
+    expect(html).toContain('href="https://example.com/path?q=1"');
+    expect(html).toContain("noopener");
+  });
 });

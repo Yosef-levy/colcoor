@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GraphEventNode, NoteOut } from "../api/client";
-import { buildPlainThread } from "./threadPlainText";
+import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 
 describe("buildPlainThread", () => {
   it("builds User / Assistant lines along the path", () => {
@@ -197,5 +197,33 @@ describe("buildPlainThread", () => {
     const out = buildPlainThread(events, "a1");
     expect(out).toContain("User: Q\nCheckpoint: Gate A");
     expect(out).toContain("Assistant: A");
+  });
+});
+
+describe("appendPendingPlainThreadFragment", () => {
+  it("returns base unchanged when not busy", () => {
+    expect(appendPendingPlainThreadFragment("User: hi", false, "x")).toBe("User: hi");
+  });
+
+  it("returns base unchanged when busy but no pending markdown", () => {
+    expect(appendPendingPlainThreadFragment("User: hi", true, undefined)).toBe("User: hi");
+  });
+
+  it("appends pending block after existing plain thread", () => {
+    expect(appendPendingPlainThreadFragment("User: old", true, "new line")).toBe(
+      "User: old\n\n[Pending — not saved to tree yet]\nUser:\nnew line\n",
+    );
+  });
+
+  it("uses only pending block when base is empty", () => {
+    expect(appendPendingPlainThreadFragment("", true, "only")).toBe(
+      "[Pending — not saved to tree yet]\nUser:\nonly\n",
+    );
+  });
+
+  it("normalizes CRLF in pending text", () => {
+    expect(appendPendingPlainThreadFragment("", true, "a\r\nb")).toBe(
+      "[Pending — not saved to tree yet]\nUser:\na\nb\n",
+    );
   });
 });

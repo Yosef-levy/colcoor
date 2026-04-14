@@ -48,3 +48,20 @@ export function buildPlainThread(
   }
   return chunks.join("\n\n").trim();
 }
+
+/**
+ * When a send is in flight, append the not-yet-persisted user text so “Copy thread” matches the
+ * visible pending row ([ui-features.md] §7).
+ */
+export function appendPendingPlainThreadFragment(
+  basePlain: string,
+  busy: boolean,
+  pendingMarkdown: string | undefined,
+): string {
+  if (!busy || pendingMarkdown === undefined) {
+    return basePlain;
+  }
+  const block = `[Pending — not saved to tree yet]\nUser:\n${pendingMarkdown.replace(/\r\n/g, "\n").trimEnd()}`;
+  const t = basePlain.trimEnd();
+  return t.length > 0 ? `${t}\n\n${block}\n` : `${block}\n`;
+}
