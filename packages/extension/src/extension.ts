@@ -24,6 +24,7 @@ import {
 } from "./conversations/conversationAutoRefreshPolicy";
 import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
 import { filterTodoNotes } from "./notes/todoNotesFilter";
+import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starredTreeEvents";
 
 function formatMemberQuickPickLabel(m: ConversationMember): string {
   const name = m.display_name?.trim() ? m.display_name : "—";
@@ -518,6 +519,60 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             {
               title: "Colcoor — TODO notes",
               placeHolder: "Pick a note to open its host message in the conversation panel",
+            },
+          );
+          if (!picked) {
+            return;
+          }
+          await conversationPanel.revealAtEvent(convId, convTitle ?? null, picked.eventId);
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.listStarredMessagesInConversation",
+      async (item?: ConversationTreeItem) => {
+        if (!(await session.getBackendAccessToken())) {
+          await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
+          return;
+        }
+        let convId = item?.conv.id;
+        let convTitle: string | null | undefined = item?.conv.title ?? null;
+        if (!convId) {
+          const row = await pickConversationInteractively();
+          if (!row) {
+            return;
+          }
+          convId = row.id;
+          convTitle = row.title;
+        }
+        try {
+          const { events } = await api.getTree(convId);
+          const starred = [...starredTreeEvents(events)].sort(
+            (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+          );
+          if (starred.length === 0) {
+            await vscode.window.showInformationMessage(
+              "Colcoor: no starred messages in this conversation.",
+            );
+            return;
+          }
+          type StarPick = vscode.QuickPickItem & { eventId: string };
+          const picked = await vscode.window.showQuickPick<StarPick>(
+            starred.map((e) => {
+              const lab = shortStarredEventLabel(e);
+              const label = lab.length > 80 ? `${lab.slice(0, 80)}…` : lab;
+              return {
+                label,
+                description: e.id,
+                detail: e.kind,
+                eventId: e.id,
+              };
+            }),
+            {
+              title: "Colcoor — starred messages",
+              placeHolder: "Pick a message to open it in the conversation panel",
             },
           );
           if (!picked) {
