@@ -1,6 +1,7 @@
 import type { GraphEventNode, NoteOut } from "../api/client";
 import { isTodoNoteContent } from "../notes/todoNotesFilter";
 import { shortStarredEventLabel, starredTreeEvents } from "./starredTreeEvents";
+import { treeEventSnippet } from "./treeNodeDisplay";
 
 export type StarredDrawerRow = {
   eventId: string;
@@ -20,10 +21,12 @@ export type ConversationDrawersModel = {
   todos: TodoDrawerRow[];
 };
 
+const TODO_DRAWER_FIRST_LINE_MAX = 90;
+
 function shortTodoLabel(content: string): string {
   const first = content.replace(/\r\n/g, "\n").split("\n")[0]?.trim() ?? "";
   const text = first || "(TODO note)";
-  return text.length > 90 ? `${text.slice(0, 90)}…` : text;
+  return treeEventSnippet(text, TODO_DRAWER_FIRST_LINE_MAX);
 }
 
 /**

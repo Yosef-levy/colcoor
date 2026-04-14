@@ -59,4 +59,34 @@ describe("buildConversationDrawersModel", () => {
     expect(out.todos.map((r) => r.noteId)).toEqual(["n2", "n1"]);
     expect(out.todos.map((r) => r.eventId)).toEqual(["e2", "e1"]);
   });
+
+  it("uses the first line for TODO labels with collapsed whitespace and ellipsis when long", () => {
+    const out = buildConversationDrawersModel(
+      [],
+      [
+        note({
+          id: "n1",
+          event_id: "e1",
+          created_at: "2024-01-01T00:00:00Z",
+          content: "TODO    hello   world\nignored second line",
+        }),
+      ],
+    );
+    expect(out.todos).toHaveLength(1);
+    expect(out.todos[0]?.label).toBe("TODO hello world");
+    const longFirst = `TODO ${"x".repeat(95)}`;
+    const out2 = buildConversationDrawersModel(
+      [],
+      [
+        note({
+          id: "n2",
+          event_id: "e2",
+          created_at: "2024-01-02T00:00:00Z",
+          content: longFirst,
+        }),
+      ],
+    );
+    expect(out2.todos[0]?.label.endsWith("…")).toBe(true);
+    expect(out2.todos[0]?.label.length).toBe(91);
+  });
 });
