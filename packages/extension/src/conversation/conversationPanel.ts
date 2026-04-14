@@ -63,6 +63,8 @@ type FromWebview =
   | { type: "addMember" }
   | { type: "changeMemberRole" }
   | { type: "removeMember" }
+  | { type: "openSideChat" }
+  | { type: "deleteConversation" }
   | { type: "openStarredDrawer" }
   | { type: "openTodoDrawer" }
   | { type: "rename" }
@@ -706,6 +708,24 @@ export function createConversationPanelController(
           return;
         }
         await vscode.commands.executeCommand("colcoor.removeMemberFromConversation", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
+        return;
+      }
+      if (msg.type === "openSideChat") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.openSideChat", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
+        return;
+      }
+      if (msg.type === "deleteConversation") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.deleteConversation", {
           conv: { id: conversationId, title: conversationTitle ?? null },
         });
         return;
