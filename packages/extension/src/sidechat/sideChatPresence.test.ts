@@ -55,4 +55,46 @@ describe("sideChatPresenceSummary", () => {
       ),
     ).toBe("2 collaborators active");
   });
+
+  it("uses member display names when at least one active user has a label", () => {
+    expect(
+      sideChatPresenceSummary(
+        [row({ id: "m1", seq: 1, kind: "system_join", author_user_id: "u1" })],
+        null,
+        { u1: "Alice" },
+      ),
+    ).toBe("Alice active");
+    expect(
+      sideChatPresenceSummary(
+        [
+          row({ id: "m1", seq: 1, kind: "system_join", author_user_id: "u1" }),
+          row({ id: "m2", seq: 2, kind: "system_join", author_user_id: "u2" }),
+        ],
+        null,
+        { u1: "Alice", u2: "Bob" },
+      ),
+    ).toBe("Alice, Bob active");
+    expect(
+      sideChatPresenceSummary(
+        [
+          row({ id: "m1", seq: 1, kind: "system_join", author_user_id: "u1" }),
+          row({ id: "m2", seq: 2, kind: "system_join", author_user_id: "u2" }),
+          row({ id: "m3", seq: 3, kind: "system_join", author_user_id: "u3" }),
+          row({ id: "m4", seq: 4, kind: "system_join", author_user_id: "u4" }),
+        ],
+        null,
+        { u1: "A", u2: "B", u3: "C", u4: "D" },
+      ),
+    ).toBe("A, B +2 others active");
+  });
+
+  it("falls back to count-only when the name map has no labels for active users", () => {
+    expect(
+      sideChatPresenceSummary(
+        [row({ id: "m1", seq: 1, kind: "system_join", author_user_id: "u1" })],
+        null,
+        { u1: "   ", other: "Zed" },
+      ),
+    ).toBe("1 collaborator active");
+  });
 });

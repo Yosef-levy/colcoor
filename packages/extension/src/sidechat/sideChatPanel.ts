@@ -121,6 +121,8 @@ export async function openSideChatPanel(
       : null;
   let eventLabelsById: Record<string, string> = {};
   let noteLabelsById: Record<string, string> = {};
+  /** From `listConversationMembers` — display name or email when present; drives richer presence subtitle. */
+  let memberDisplayByUserId: Record<string, string> = {};
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
   const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
@@ -202,7 +204,7 @@ export async function openSideChatPanel(
         type: "state",
         messages: toSideChatRenderMessages(cached, { eventLabelsById, noteLabelsById }),
         viewerUserId,
-        presenceSummary: sideChatPresenceSummary(cached, viewerUserId),
+        presenceSummary: sideChatPresenceSummary(cached, viewerUserId, memberDisplayByUserId),
         referencedEventId: composerReferencedEventId,
         referencedNoteId: composerReferencedNoteId,
       } satisfies StateMessage);
@@ -218,7 +220,7 @@ export async function openSideChatPanel(
       for (const m of cached) {
         notifiedMessageIds.add(m.id);
       }
-      await refreshReferenceLookups();
+      await Promise.all([refreshReferenceLookups(), refreshMemberDisplayNames()]);
       await postState();
       scheduleMarkRead();
     } catch (e) {
@@ -251,6 +253,20 @@ export async function openSideChatPanel(
       noteLabelsById = n;
     } catch {
       /* keep previous lookups / fallback chips */
+    }
+  }
+
+  async function refreshMemberDisplayNames(): Promise<void> {
+    try {
+      const members = await api.listConversationMembers(conversationId);
+      const next: Record<string, string> = { ...memberDisplayByUserId };
+      for (const m of members) {
+        const label = (m.display_name ?? "").trim() || (m.email ?? "").trim() || "";
+        next[m.user_id] = label;
+      }
+      memberDisplayByUserId = next;
+    } catch {
+      /* keep previous map — e.g. viewer without permission */
     }
   }
 
