@@ -65,4 +65,11 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('continueBtn.disabled = state.busy;');
     expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
   });
+
+  it("includes Reference in side chat detail action wiring", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnReferenceSideChat"');
+    expect(html).toContain('refSideChatBtn.disabled = state.busy;');
+    expect(html).toContain('vscode.postMessage({ type: "referenceInSideChat" });');
+  });
 });
