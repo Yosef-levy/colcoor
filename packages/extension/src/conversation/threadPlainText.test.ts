@@ -153,4 +153,49 @@ describe("buildPlainThread", () => {
     expect(out).toContain("Assistant: Hello.");
     expect(out).toContain("NOTE: TODO: follow up");
   });
+
+  it("includes Checkpoint lines when events have checkpoint_label ([ui-features.md] §8)", () => {
+    const events: GraphEventNode[] = [
+      {
+        id: "u0",
+        conversation_id: "c",
+        parent_event_id: null,
+        kind: "user_input",
+        actor_type: "user",
+        actor_user_id: null,
+        content_text: "",
+        visible_to: null,
+        created_at: "2020-01-01T00:00:00Z",
+        updated_at: "2020-01-01T00:00:00Z",
+      },
+      {
+        id: "u1",
+        conversation_id: "c",
+        parent_event_id: "u0",
+        kind: "user_input",
+        actor_type: "user",
+        actor_user_id: null,
+        content_text: "Q",
+        checkpoint_label: " Gate A ",
+        visible_to: null,
+        created_at: "2020-01-01T00:01:00Z",
+        updated_at: "2020-01-01T00:01:00Z",
+      },
+      {
+        id: "a1",
+        conversation_id: "c",
+        parent_event_id: "u1",
+        kind: "assistant_output",
+        actor_type: "agent",
+        actor_user_id: null,
+        content_text: "A",
+        visible_to: null,
+        created_at: "2020-01-01T00:02:00Z",
+        updated_at: "2020-01-01T00:02:00Z",
+      },
+    ];
+    const out = buildPlainThread(events, "a1");
+    expect(out).toContain("User: Q\nCheckpoint: Gate A");
+    expect(out).toContain("Assistant: A");
+  });
 });

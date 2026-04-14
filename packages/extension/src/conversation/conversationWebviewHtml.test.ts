@@ -47,6 +47,13 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("crumb-checkpoint");
   });
 
+  it("thread path shows optional checkpoint from segment.checkpointLabel ([ui-features.md] §8)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain(".thread .msg .thread-checkpoint");
+    expect(html).toContain('class="thread-checkpoint">');
+    expect(html).toContain('esc("Checkpoint: " + String(s.checkpointLabel))');
+  });
+
   it("uses dir=auto on the composer textarea for RTL-capable typing", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(

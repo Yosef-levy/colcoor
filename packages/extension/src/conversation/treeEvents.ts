@@ -101,3 +101,13 @@ export function graphPathToTranscriptTurns(
   }
   return turns;
 }
+
+/** Display-only checkpoint from tree `events.checkpoint_label` ([ui-features.md] §8). */
+export function trimmedGraphCheckpointLabel(ev: GraphEventNode): string | undefined {
+  const raw = ev.checkpoint_label;
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const t = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  return t.length > 0 ? t : undefined;
+}

@@ -5,6 +5,7 @@ import {
   graphPathToTranscriptTurns,
   indexNotesByEventId,
   pathFromRootToTip,
+  trimmedGraphCheckpointLabel,
 } from "./treeEvents";
 
 const convId = "00000000-0000-4000-8000-000000000001";
@@ -194,5 +195,42 @@ describe("graphPathToTranscriptTurns", () => {
         notes: [{ id: "nr", createdAt: "2026-01-01T00:00:00Z", body: "root note" }],
       },
     ]);
+  });
+});
+
+describe("trimmedGraphCheckpointLabel", () => {
+  it("returns trimmed text when checkpoint_label is non-empty", () => {
+    const ev = node({
+      id: "u",
+      parent_event_id: null,
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:00Z",
+      checkpoint_label: "  Mile A\r\n",
+    });
+    expect(trimmedGraphCheckpointLabel(ev)).toBe("Mile A");
+  });
+
+  it("returns undefined when missing or whitespace-only", () => {
+    expect(
+      trimmedGraphCheckpointLabel(
+        node({
+          id: "u",
+          parent_event_id: null,
+          kind: "user_input",
+          created_at: "2026-01-01T00:00:00Z",
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      trimmedGraphCheckpointLabel(
+        node({
+          id: "u",
+          parent_event_id: null,
+          kind: "user_input",
+          created_at: "2026-01-01T00:00:00Z",
+          checkpoint_label: "  \t\n  ",
+        }),
+      ),
+    ).toBeUndefined();
   });
 });

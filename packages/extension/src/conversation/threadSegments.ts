@@ -1,5 +1,5 @@
 import type { GraphEventNode, NoteOut } from "../api/client";
-import { indexNotesByEventId, pathFromRootToTip } from "./treeEvents";
+import { indexNotesByEventId, pathFromRootToTip, trimmedGraphCheckpointLabel } from "./treeEvents";
 import { markdownToSafeHtml } from "./threadMarkdown";
 import { countUnifiedDiffLineChanges, formatUnifiedDiffColoredHtml } from "./unifiedDiffFormat";
 
@@ -30,6 +30,8 @@ export type ThreadSegment = {
   /** Host graph event id (for diagnostics; notes are keyed to this row). */
   eventId: string;
   html: string;
+  /** When the API set `checkpoint_label` on this event, show in thread + plain copy ([ui-features.md] §8). */
+  checkpointLabel?: string;
   /** Notes attached to this message on the active path. */
   notes?: ThreadNoteBlock[];
   /** Entries from `content_json.colcoor_agent_trace` for assistant rows (webview renders collapsible). */
@@ -94,6 +96,7 @@ export function buildThreadSegments(
       rawNotes && rawNotes.length > 0
         ? rawNotes.map((n) => ({ id: n.id, html: bodyHtmlFromMarkdown(n.body) }))
         : undefined;
+    const checkpointLabel = trimmedGraphCheckpointLabel(ev);
     if (ev.kind === "user_input") {
       if (i === 0 && !text.trim() && !noteBlocks?.length) {
         continue;
@@ -102,6 +105,7 @@ export function buildThreadSegments(
         role: "user",
         eventId: ev.id,
         html: bodyHtmlFromMarkdown(text),
+        ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),
         notes: noteBlocks,
       });
     } else if (ev.kind === "assistant_output") {
@@ -110,6 +114,7 @@ export function buildThreadSegments(
         role: "assistant",
         eventId: ev.id,
         html: bodyHtmlFromMarkdown(text),
+        ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),
         notes: noteBlocks,
         traceEntries: rawTrace ? enrichTraceEntriesForWebview(rawTrace) : undefined,
       });

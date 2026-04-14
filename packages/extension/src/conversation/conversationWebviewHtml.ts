@@ -443,6 +443,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
     }
     .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
+    .thread .msg .thread-checkpoint {
+      font-size: 0.92em;
+      font-weight: 500;
+      color: var(--vscode-descriptionForeground);
+      margin: -2px 0 6px 0;
+    }
     .msg-notes {
       margin-top: 8px;
       padding-top: 8px;
@@ -1283,7 +1289,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           cls +
           '"><div class="role">' +
           role +
-          '</div><div class="body md" dir="auto">' +
+          "</div>" +
+          (s.checkpointLabel
+            ? '<div class="thread-checkpoint">' + esc("Checkpoint: " + String(s.checkpointLabel)) + "</div>"
+            : "") +
+          '<div class="body md" dir="auto">' +
           s.html +
           "</div>";
         if (s.notes && s.notes.length) {
