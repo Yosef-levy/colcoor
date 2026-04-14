@@ -393,6 +393,15 @@
           "default": true,
           "description": "Use a distinct mention sound pattern when a visible side-chat message mentions your profile handle."
         },
+        "colcoor.sideChatOpenTarget": {
+          "type": "string",
+          "enum": [
+            "beside",
+            "active"
+          ],
+          "default": "beside",
+          "description": "Where new Colcoor side-chat panels open ([ui-features.md] §10). beside: split to the side of the current editor (ViewColumn.Beside). active: tab in the current editor group (ViewColumn.Active), same as About."
+        },
         "colcoor.legalTermsUrl": {
           "type": "string",
           "default": "",

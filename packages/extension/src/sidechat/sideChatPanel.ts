@@ -33,6 +33,7 @@ import {
   clampSideChatComposerTextareaHeightPx,
 } from "./sideChatComposerLayoutPersistence";
 import { shouldDisposeSideChatPanelAfterDelete } from "./sideChatDisposeAfterConversationDelete";
+import { viewColumnValueForSideChatOpenTarget } from "./sideChatOpenViewColumn";
 
 function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -137,10 +138,13 @@ export async function openSideChatPanel(
   const conversationId: string = cid;
   const label = title?.trim() ? title.trim() : `Side chat · ${conversationId.slice(0, 8)}…`;
   const nonce = randomNonce();
+  const openCol = viewColumnValueForSideChatOpenTarget(
+    vscode.workspace.getConfiguration("colcoor").get<string>("sideChatOpenTarget"),
+  ) as vscode.ViewColumn;
   const panel = vscode.window.createWebviewPanel(
     "colcoor.sideChat",
     label,
-    vscode.ViewColumn.Beside,
+    openCol,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [context.extensionUri] },
   );
   panel.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] };

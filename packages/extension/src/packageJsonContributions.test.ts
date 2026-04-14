@@ -276,4 +276,17 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Remove member…](command:colcoor.removeMemberFromConversation)");
     expect(contents).not.toContain("command:colcoor.deleteConversation");
   });
+
+  it("registers sideChatOpenTarget for side-chat panel placement ([ui-features.md] §10)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: {
+        configuration?: { properties?: Record<string, { enum?: string[]; default?: string }> };
+      };
+    };
+    const prop = pkg.contributes?.configuration?.properties?.["colcoor.sideChatOpenTarget"];
+    expect(prop).toBeDefined();
+    expect(prop?.default).toBe("beside");
+    expect(prop?.enum).toEqual(["beside", "active"]);
+  });
 });
