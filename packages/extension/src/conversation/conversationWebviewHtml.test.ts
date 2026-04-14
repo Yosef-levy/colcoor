@@ -61,6 +61,15 @@ describe("getConversationWebviewHtml", () => {
     );
   });
 
+  it("renders an in-flight pending user row before streaming assistant ([ui-features.md] §7)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("pendingUserHtml: null");
+    expect(html).toContain("if (state.pendingUserHtml)");
+    expect(html).toContain('class="msg user pending-send"');
+    expect(html).toContain("state.pendingUserHtml");
+    expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*if \(state\.streamingHtml\)/);
+  });
+
   it("includes optional composer checkpoint label field and send wiring ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="checkpointLabel"');

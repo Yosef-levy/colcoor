@@ -17,6 +17,7 @@ import {
 import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
+import { pendingUserHtmlForPanelState } from "./pendingUserHtmlForPanelState";
 import {
   staleTreeMissingSelectionPromptKey,
   staleTreeRemoteCollaboratorGrowthFingerprint,
@@ -71,6 +72,8 @@ type WebviewStateMessage = {
   /** Side-chat unread (from GET /conversations) for the Open side chat button ([ui-features.md] §10). */
   sideChatOpenButtonLabel: string;
   sideChatOpenButtonTitle: string;
+  /** In-flight send: sanitized markdown for the user line before the server persists it ([ui-features.md] §7). */
+  pendingUserHtml: string | null;
 };
 
 type FromWebview =
@@ -204,6 +207,8 @@ export function createConversationPanelController(
   let staleTreePromptedForGrowthFingerprint: string | null = null;
   /** Cached GET /me id — avoids repeated calls when checking collaborative tree growth. */
   let viewerUserIdMemo: string | undefined;
+  /** Set while a main-thread send is in flight until the user message exists on the tree ([ui-features.md] §7). */
+  let pendingSendUserMarkdown: string | undefined;
 
   function applySideChatUnreadFromListRow(row: ConversationSummary | undefined): void {
     if (!row) {
@@ -311,6 +316,7 @@ export function createConversationPanelController(
         side_chat_has_unread: sideChatHasUnread,
         side_chat_unread_count: sideChatUnreadCount,
       });
+      const pendingUserHtml = pendingUserHtmlForPanelState(busy, pendingSendUserMarkdown);
       const msg: WebviewStateMessage = {
         type: "state",
         conversationId,
@@ -332,6 +338,7 @@ export function createConversationPanelController(
         ),
         sideChatOpenButtonLabel: sideChatBtn.label,
         sideChatOpenButtonTitle: sideChatBtn.title,
+        pendingUserHtml,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -376,6 +383,7 @@ export function createConversationPanelController(
           ),
           sideChatOpenButtonLabel: sideChatBtnFb.label,
           sideChatOpenButtonTitle: sideChatBtnFb.title,
+          pendingUserHtml: null,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -479,6 +487,7 @@ export function createConversationPanelController(
     if (!trimmed || !conversationId || !selectedEventId) {
       return;
     }
+    pendingSendUserMarkdown = trimmed;
     const ws = getWorkspaceRoot();
     sendAbort?.abort();
     sendAbort = new AbortController();
@@ -501,6 +510,7 @@ export function createConversationPanelController(
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onUserMessagePersisted: async ({ userEventId }) => {
+            pendingSendUserMarkdown = undefined;
             selectedEventId = userEventId;
             await loadTreeAndPush(true, null);
           },
@@ -541,6 +551,7 @@ export function createConversationPanelController(
       stream.dispose();
       await loadTreeAndPush(false, msg);
     } finally {
+      pendingSendUserMarkdown = undefined;
       sendAbort = undefined;
       syncConversationReplyInProgressContext();
     }

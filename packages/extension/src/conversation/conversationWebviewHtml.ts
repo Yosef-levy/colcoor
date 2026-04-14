@@ -359,6 +359,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
     .msg { margin: 8px 0; padding: 8px; border-radius: 4px; border-left: 3px solid var(--vscode-focusBorder); }
     .msg.user { background: var(--vscode-editor-inactiveSelectionBackground); }
+    .msg.user.pending-send {
+      opacity: 0.95;
+      border-left-style: dashed;
+    }
+    .msg.user.pending-send .pending-hint {
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      margin: 0 0 6px 0;
+    }
     .msg.assistant { background: var(--vscode-textBlockQuote-background); }
     .msg.assistant.streaming { box-shadow: inset 0 0 0 1px var(--vscode-focusBorder, var(--vscode-panel-border)); }
     .agent-trace {
@@ -790,6 +799,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       sideChatOpenButtonTitle: "Open side chat for this conversation",
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
+      pendingUserHtml: null,
       /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
       treeCollapsedIds: {},
     };
@@ -1343,6 +1353,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
         }
         html += "</div>";
+      }
+      if (state.pendingUserHtml) {
+        html +=
+          '<div class="msg user pending-send"><div class="role">User</div>' +
+          '<p class="pending-hint">Sending… (not on the tree until saved)</p>' +
+          '<div class="body md" dir="auto">' +
+          state.pendingUserHtml +
+          "</div></div>";
       }
       if (state.streamingHtml) {
         html +=
