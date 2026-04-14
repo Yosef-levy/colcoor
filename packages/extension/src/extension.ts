@@ -887,6 +887,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand("colcoor.refreshConversations");
                 return;
               }
+              if (msg.type === "refreshConversationTree") {
+                await vscode.commands.executeCommand("colcoor.refreshConversationTree");
+                return;
+              }
               if (msg.type === "toggleConversationsSidebar") {
                 await vscode.commands.executeCommand("colcoor.toggleConversationsSidebar");
                 return;
