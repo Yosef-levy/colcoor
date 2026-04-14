@@ -62,7 +62,7 @@
       {
         "command": "colcoor.sendMessage",
         "title": "Colcoor: Send message…",
-        "description": "Prompts for message text, optional checkpoint, shared vs private draft, then saves and runs the agent."
+        "description": "Prompts for message text (single line or multiline editor), optional checkpoint, shared vs private draft, then saves and runs the agent."
       },
       {
         "command": "colcoor.stopGeneration",
@@ -187,7 +187,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign out](command:colcoor.signOut)\n[Edit profile](command:colcoor.editProfile)\n[Open settings](command:colcoor.openSettings)\n[About](command:colcoor.openAbout)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Open side chat](command:colcoor.openSideChat)\n[Open drawers…](command:colcoor.openConversationDrawers)\n[List TODO notes…](command:colcoor.listTodoNotesInConversation)\n[List starred messages…](command:colcoor.listStarredMessagesInConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign out](command:colcoor.signOut)\n[Edit profile](command:colcoor.editProfile)\n[Open settings](command:colcoor.openSettings)\n[About](command:colcoor.openAbout)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Open side chat](command:colcoor.openSideChat)\n[Open drawers…](command:colcoor.openConversationDrawers)\n[List TODO notes…](command:colcoor.listTodoNotesInConversation)\n[List starred messages…](command:colcoor.listStarredMessagesInConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Refresh conversation tree](command:colcoor.refreshConversationTree)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
       }
     ],
     "menus": {

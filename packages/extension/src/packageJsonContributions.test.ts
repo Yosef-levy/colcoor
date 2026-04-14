@@ -30,6 +30,7 @@ describe("package.json Colcoor contributions", () => {
     expect(send?.title).toBe("Colcoor: Send message…");
     expect(send?.description).toContain("checkpoint");
     expect(send?.description).toContain("private");
+    expect(send?.description).toContain("multiline");
   });
 
   it("registers stopGeneration for conversation panel abort (enablement uses reply-in-progress context)", () => {
@@ -102,5 +103,6 @@ describe("package.json Colcoor contributions", () => {
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
     expect(contents).toContain("[Toggle sidebar](command:colcoor.toggleConversationsSidebar)");
+    expect(contents).toContain("[Refresh conversation tree](command:colcoor.refreshConversationTree)");
   });
 });

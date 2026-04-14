@@ -25,6 +25,8 @@ import {
   isPrivateBranchFromPrivacyPick,
   sendMessagePrivacyQuickPickItems,
 } from "./conversation/sendMessagePalettePrivacy";
+import { collectSendMessageBody } from "./conversation/sendMessageBodyCollection";
+import type { SendMessageBodyMode } from "./conversation/sendMessageBodyCollection";
 import { runColcoorUserTurn, type UserTurnResult } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
@@ -50,7 +52,10 @@ import {
   normalizeColcoorInviteUserId,
   validateColcoorInviteUserIdInput,
 } from "./conversations/conversationMemberInvite";
-import { collectFirstMessageFromUntitledEditor } from "./conversations/firstMessageMultilineEditor";
+import {
+  collectFirstMessageFromUntitledEditor,
+  collectMultilineTextInUntitledEditor,
+} from "./conversations/firstMessageMultilineEditor";
 import { normalizedOptionalFollowUpPrompt } from "./conversations/newConversationFirstMessage";
 import { collectOptionalFirstMessage } from "./conversations/optionalFirstMessageCollection";
 import type { FirstMessageCollectionMode } from "./conversations/optionalFirstMessageCollection";
@@ -1001,13 +1006,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           convId = row.id;
           convTitle = row.title;
         }
-        const text = await vscode.window.showInputBox({
-          title: "Colcoor — message",
-          prompt:
-            "Your message (attached under the branch tip, then Cursor agent per Settings → Colcoor → agent mode). Use the next step for shared vs private draft.",
-          ignoreFocusOut: true,
+        type BodyPick = vscode.QuickPickItem & { mode: SendMessageBodyMode };
+        const bodyItems: BodyPick[] = [
+          {
+            label: "Single-line message…",
+            description: "Type in the next input box",
+            mode: "single_line",
+          },
+          {
+            label: "Multiline message…",
+            description: "Opens a temporary editor tab",
+            mode: "multiline_editor",
+          },
+        ];
+        const normalized = await collectSendMessageBody({
+          pickMode: async () => {
+            const picked = await vscode.window.showQuickPick<BodyPick>(bodyItems, {
+              title: "Colcoor — message body",
+              placeHolder: "How do you want to enter the message?",
+              ignoreFocusOut: true,
+            });
+            return picked?.mode ?? "single_line";
+          },
+          promptSingleLine: () =>
+            vscode.window.showInputBox({
+              title: "Colcoor — message",
+              prompt:
+                "Your message (attached under the branch tip, then Cursor agent per Settings → Colcoor → agent mode). Use the next steps for checkpoint and shared vs private.",
+              ignoreFocusOut: true,
+            }),
+          getMultilineFromEditor: () =>
+            collectMultilineTextInUntitledEditor({
+              infoMessage: "Colcoor: type your message in the editor tab, then confirm.",
+              useButtonLabel: "Use as message",
+              dismissButtonLabel: "Cancel send",
+            }),
         });
-        const normalized = text !== undefined ? normalizePersistedUserInputText(text) : "";
         if (!normalized) {
           return;
         }
