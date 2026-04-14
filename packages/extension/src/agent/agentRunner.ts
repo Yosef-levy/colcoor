@@ -5,6 +5,7 @@
  */
 
 import * as vscode from "vscode";
+import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
 import { SECRET_CURSOR_AGENT_API_KEY } from "./cursorAgentApiKey";
 import {
   normalizeAgentCliOutputMode,
@@ -118,7 +119,7 @@ export class AgentRunner {
         throw e;
       }
       if (mode === "auto" && isMissingExecutableError(e)) {
-        const u = input.userMessage.trim();
+        const u = normalizePersistedUserInputText(input.userMessage);
         const text =
           "[Colcoor] Cursor CLI (`agent`) not on PATH — placeholder reply only.\n\n" +
           `Your message:\n${u}`;
@@ -135,8 +136,9 @@ export class AgentRunner {
 }
 
 function stubBody(userMessage: string): AgentRunResult {
+  const u = normalizePersistedUserInputText(userMessage);
   return {
-    text: "[Colcoor: stub mode]\n\n" + `You wrote:\n${userMessage.trim()}`,
+    text: "[Colcoor: stub mode]\n\n" + `You wrote:\n${u}`,
     stub: "explicit",
   };
 }
