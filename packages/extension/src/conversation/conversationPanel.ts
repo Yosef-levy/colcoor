@@ -13,6 +13,7 @@ import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { staleTreeMissingSelectionPromptKey } from "./staleTreePromptPolicy";
+import { pruneCollapsedEventIdsForStorage } from "./treeCollapseIds";
 import {
   COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
   clampComposerTextareaHeightPx,
@@ -615,7 +616,7 @@ export function createConversationPanelController(
       }
       if (msg.type === "treeCollapse" && Array.isArray(msg.collapsedEventIds) && conversationId) {
         const valid = new Set(lastTreeEvents.map((e) => e.id));
-        const pruned = msg.collapsedEventIds.map(String).filter((id) => valid.has(id));
+        const pruned = pruneCollapsedEventIdsForStorage(msg.collapsedEventIds, valid);
         const all = { ...readCollapsedByConversation(), [conversationId]: pruned };
         void context.workspaceState.update(TREE_COLLAPSED_BY_CONV_KEY, all);
         return;
