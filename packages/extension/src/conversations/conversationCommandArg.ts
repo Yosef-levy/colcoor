@@ -1,5 +1,6 @@
 import { normalizeOptionalGraphEventId } from "../conversation/normalizeUserInputText";
 import type { ConversationTreeItem } from "./conversationsTreeProvider";
+import { normalizedConversationTitle } from "./renameConversationTitle";
 
 /**
  * Commands that expect a {@link ConversationTreeItem} from the sidebar may also receive
@@ -32,7 +33,7 @@ export function conversationTitleFromCommandArg(arg: ConversationCommandArg | un
   return t ?? "(untitled)";
 }
 
-/** Trimmed title, or `null` when missing / blank (for panels that distinguish untitled from absent). */
+/** Title normalized like PATCH rename (CRLF, single-line); `null` when missing / blank. */
 export function conversationDisplayTitleFromCommandArg(
   arg: ConversationCommandArg | undefined,
 ): string | null {
@@ -40,8 +41,10 @@ export function conversationDisplayTitleFromCommandArg(
     return null;
   }
   const t = arg.conv.title;
-  const s = typeof t === "string" ? t.trim() : "";
-  return s.length > 0 ? s : null;
+  if (typeof t !== "string") {
+    return null;
+  }
+  return normalizedConversationTitle(t);
 }
 
 /** Sidebar items include `pinned`; minimal `{ conv }` payloads may omit it. */

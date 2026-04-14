@@ -85,6 +85,12 @@ describe("conversationDisplayTitleFromCommandArg", () => {
       conversationDisplayTitleFromCommandArg({ conv: { id: "i", title: "  T  " } }),
     ).toBe("T");
   });
+
+  it("normalizes title like rename PATCH (CRLF and newlines to spaces)", () => {
+    expect(
+      conversationDisplayTitleFromCommandArg({ conv: { id: "i", title: "  a\r\nb\nc  " } }),
+    ).toBe("a b c");
+  });
 });
 
 describe("NO_CONVERSATION_FOR_COMMAND_MESSAGE", () => {
