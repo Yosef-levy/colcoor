@@ -237,16 +237,19 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="btnSettings"');
     expect(html).toContain('id="btnLegalPolicySettings"');
     expect(html).toContain('id="btnSideChatSoundSettings"');
+    expect(html).toContain('id="btnSideChatLayoutSettings"');
     expect(html).toContain('id="btnAbout"');
     expect(html).toContain("if (profileBtn) profileBtn.disabled = state.busy;");
     expect(html).toContain("if (settingsBtn) settingsBtn.disabled = state.busy;");
     expect(html).toContain("if (legalPolicySettingsBtn) legalPolicySettingsBtn.disabled = state.busy;");
     expect(html).toContain("if (sideChatSoundSettingsBtn) sideChatSoundSettingsBtn.disabled = state.busy;");
+    expect(html).toContain("if (sideChatLayoutSettingsBtn) sideChatLayoutSettingsBtn.disabled = state.busy;");
     expect(html).toContain("if (aboutBtn) aboutBtn.disabled = state.busy;");
     expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
     expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openLegalPolicySettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openSideChatSoundSettings" });');
+    expect(html).toContain('vscode.postMessage({ type: "openSideChatLayoutSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
   });
 

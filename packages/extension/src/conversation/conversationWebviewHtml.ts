@@ -713,6 +713,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnSettings" class="btn-secondary" title="Open Colcoor extension settings">Settings</button>
           <button type="button" id="btnLegalPolicySettings" class="btn-secondary" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
           <button type="button" id="btnSideChatSoundSettings" class="btn-secondary" title="Open side chat notification and sound settings (Colcoor: Open side chat sound &amp; notification settings…)">Side chat sounds…</button>
+          <button type="button" id="btnSideChatLayoutSettings" class="btn-secondary" title="Open Settings for where new side-chat panels open (Colcoor: Open side chat open-location settings…)">Side chat opens…</button>
           <button type="button" id="btnAbout" class="btn-secondary" title="About Colcoor">About</button>
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
@@ -1015,6 +1016,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const settingsBtn = document.getElementById("btnSettings");
       const legalPolicySettingsBtn = document.getElementById("btnLegalPolicySettings");
       const sideChatSoundSettingsBtn = document.getElementById("btnSideChatSoundSettings");
+      const sideChatLayoutSettingsBtn = document.getElementById("btnSideChatLayoutSettings");
       const aboutBtn = document.getElementById("btnAbout");
       const resendBtn = document.getElementById("btnResend");
       if (
@@ -1055,6 +1057,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (settingsBtn) settingsBtn.disabled = state.busy;
       if (legalPolicySettingsBtn) legalPolicySettingsBtn.disabled = state.busy;
       if (sideChatSoundSettingsBtn) sideChatSoundSettingsBtn.disabled = state.busy;
+      if (sideChatLayoutSettingsBtn) sideChatLayoutSettingsBtn.disabled = state.busy;
       if (aboutBtn) aboutBtn.disabled = state.busy;
       const sel = state.selectedEventId;
       const evs = state.events || [];
@@ -1725,6 +1728,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnSideChatSoundSettings").addEventListener("click", () => {
       vscode.postMessage({ type: "openSideChatSoundSettings" });
+    });
+    document.getElementById("btnSideChatLayoutSettings").addEventListener("click", () => {
+      vscode.postMessage({ type: "openSideChatLayoutSettings" });
     });
     document.getElementById("btnAbout").addEventListener("click", () => {
       vscode.postMessage({ type: "openAbout" });

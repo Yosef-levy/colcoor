@@ -966,6 +966,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand("colcoor.openSideChatSoundSettings");
                 return;
               }
+              if (msg.type === "openSideChatLayoutSettings") {
+                await vscode.commands.executeCommand("colcoor.openSideChatLayoutSettings");
+                return;
+              }
               if (msg.type === "openAbout") {
                 await vscode.commands.executeCommand("colcoor.openAbout");
                 return;
