@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import type { ColcoorApiClient, GraphEventNode, MeOut, NoteOut, SideChatMessageOut } from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
+import { memberPrimaryPresenceLabel } from "../conversations/conversationMemberDisplay";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { eventIdForReferencedNote } from "./sideChatNoteReference";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
@@ -276,8 +277,7 @@ export async function openSideChatPanel(
       const members = await api.listConversationMembers(conversationId);
       const next: Record<string, string> = { ...memberDisplayByUserId };
       for (const m of members) {
-        const label = (m.display_name ?? "").trim() || (m.email ?? "").trim() || "";
-        next[m.user_id] = label;
+        next[m.user_id] = memberPrimaryPresenceLabel(m);
       }
       memberDisplayByUserId = next;
     } catch {

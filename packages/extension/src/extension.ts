@@ -33,6 +33,10 @@ import {
   conversationTitleFromCommandArg,
   NO_CONVERSATION_FOR_COMMAND_MESSAGE,
 } from "./conversations/conversationCommandArg";
+import {
+  formatMemberLogLine,
+  formatMemberQuickPickLabel,
+} from "./conversations/conversationMemberDisplay";
 import { validateColcoorInviteUserIdInput } from "./conversations/conversationMemberInvite";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
@@ -41,12 +45,6 @@ import { openColcoorSettings } from "./util/openColcoorSettings";
 import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
 import { filterTodoNotes } from "./notes/todoNotesFilter";
 import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starredTreeEvents";
-
-function formatMemberQuickPickLabel(m: ConversationMember): string {
-  const name = m.display_name?.trim() ? m.display_name : "—";
-  const em = m.email?.trim() ? m.email : "—";
-  return `${m.role} — ${name} <${em}>`;
-}
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
 
@@ -261,9 +259,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             colcoorLog.appendLine("(no members yet)");
           } else {
             for (const m of members) {
-              const name = m.display_name?.trim() ? m.display_name : "—";
-              const em = m.email?.trim() ? m.email : "—";
-              colcoorLog.appendLine(`  ${m.role.padEnd(8)} ${name}  <${em}>  ${m.user_id}`);
+              colcoorLog.appendLine(formatMemberLogLine(m));
             }
           }
           colcoorLog.show(true);
