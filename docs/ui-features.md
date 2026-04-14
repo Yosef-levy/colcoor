@@ -100,7 +100,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 - **Breadcrumb** root → **selected** (include **checkpoint** label in UI if the backend exposes it on the node — display-only).
 - Full **message body**.
-- **Continue from here** — set active to selection.
+- **Continue from here** — set active to selection (detail bar button; same action from the Command Palette **Colcoor: Continue from here** when the conversation panel is open).
 - **Private branch:** **Commit to shared** and **Delete draft** when supported and role allows.
 - **Resend** — new assistant sibling under an existing **user** message.
 - **Add NOTE** and **Add message title** (modal or inline).

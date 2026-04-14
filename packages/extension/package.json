@@ -140,6 +140,11 @@
       {
         "command": "colcoor.referenceSelectedNoteInSideChat",
         "title": "Colcoor: Reference selected note in side chat"
+      },
+      {
+        "command": "colcoor.continueFromHere",
+        "title": "Colcoor: Continue from here",
+        "description": "Set the active branch anchor to the selected message (conversation panel must be open)."
       }
     ],
     "viewsContainers": {

@@ -38,6 +38,7 @@ describe("package.json Colcoor contributions", () => {
     const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
     expect(cmds).toContain("colcoor.newConversation");
     expect(cmds).toContain("colcoor.openSideChat");
+    expect(cmds).toContain("colcoor.continueFromHere");
   });
 
   it("registers each contributed command id at most once", () => {

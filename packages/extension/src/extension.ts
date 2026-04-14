@@ -624,6 +624,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.toggleStarSelectedMessage", async () => {
       await conversationPanel.toggleStarSelectedMessage();
     }),
+    vscode.commands.registerCommand("colcoor.continueFromHere", async () => {
+      await conversationPanel.continueFromHere();
+    }),
     vscode.commands.registerCommand("colcoor.addNoteToSelectedMessage", async () => {
       await conversationPanel.addNoteToSelectedMessage();
     }),

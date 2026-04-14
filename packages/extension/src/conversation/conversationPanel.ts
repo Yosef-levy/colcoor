@@ -20,6 +20,7 @@ import {
   COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
   clampComposerTextareaHeightPx,
 } from "./composerLayoutPersistence";
+import { evaluateContinueFromHere } from "./continueFromHereGate";
 import { findBranchTip } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
@@ -131,6 +132,8 @@ export function createConversationPanelController(
   getSelectedMessageContext: () => { conversationId: string; selectedEventId: string; title: string | null } | null;
   /** Abort in-flight send/resend in this panel (same as the webview Stop button). No-op if idle. */
   cancelInFlightGeneration: () => void;
+  /** Persist active node to the selected tree message (same as detail bar “Continue from here”). */
+  continueFromHere: () => Promise<void>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -665,18 +668,20 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "continueFromHere") {
-        if (!conversationId || !selectedEventId) {
-          return;
-        }
-        const exists = lastTreeEvents.some((e) => e.id === selectedEventId);
-        if (!exists) {
+        const gate = evaluateContinueFromHere(
+          conversationId,
+          selectedEventId,
+          lastTreeEvents.map((e) => e.id),
+        );
+        if (gate === "not_in_tree") {
           void vscode.window.showWarningMessage(
             "Colcoor: selection is not in the loaded tree — try Refresh tree.",
           );
-          return;
         }
-        syncActiveToBackend(selectedEventId, { needsContextRebuild: false });
-        void vscode.window.setStatusBarMessage("Colcoor: continuing from selected message.", 2200);
+        if (gate === "ok" && selectedEventId) {
+          syncActiveToBackend(selectedEventId, { needsContextRebuild: false });
+          void vscode.window.setStatusBarMessage("Colcoor: continuing from selected message.", 2200);
+        }
         return;
       }
       if (msg.type === "referenceInSideChat") {
@@ -1053,6 +1058,29 @@ export function createConversationPanelController(
     },
     cancelInFlightGeneration: () => {
       sendAbort?.abort();
+    },
+    async continueFromHere(): Promise<void> {
+      const gate = evaluateContinueFromHere(
+        conversationId,
+        selectedEventId,
+        lastTreeEvents.map((e) => e.id),
+      );
+      if (gate === "no_context") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open a conversation and select a message in the tree.",
+        );
+        return;
+      }
+      if (gate === "not_in_tree") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+        );
+        return;
+      }
+      if (selectedEventId) {
+        syncActiveToBackend(selectedEventId, { needsContextRebuild: false });
+        void vscode.window.setStatusBarMessage("Colcoor: continuing from selected message.", 2200);
+      }
     },
     dispose: () => {
       subscription.dispose();
