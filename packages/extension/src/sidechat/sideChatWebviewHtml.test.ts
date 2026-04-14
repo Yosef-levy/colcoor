@@ -133,6 +133,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
   });
 
+  it("includes rename conversation action ([ui-features.md] §12)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnRenameConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "renameConversation" });');
+  });
+
   it("includes optional legal policies and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonceZ", [
       { label: "Terms", url: "https://example.com/t" },

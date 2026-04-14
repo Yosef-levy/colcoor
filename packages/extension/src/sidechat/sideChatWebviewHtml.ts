@@ -216,6 +216,7 @@ export function getSideChatWebviewHtml(
       <button id="btnSignOut" type="button" class="secondary" title="Sign out from Colcoor">Sign out</button>
       <button id="btnRefreshConversations" type="button" class="secondary" title="Reload the Colcoor conversations list in the sidebar (Colcoor: Refresh conversations)">Refresh list</button>
       <button id="btnToggleConversationsSidebar" type="button" class="secondary" title="Show or hide the Colcoor Conversations sidebar (Colcoor: Toggle conversations sidebar)">Toggle sidebar</button>
+      <button id="btnRenameConversation" type="button" class="secondary" title="Rename this conversation (Colcoor: Rename conversation) when your role allows">Rename conversation…</button>
       <button id="btnSetupCursorCli" type="button" class="secondary" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
       <button id="btnSetCursorAgentApiKey" type="button" class="secondary" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
     </div>
@@ -696,6 +697,9 @@ export function getSideChatWebviewHtml(
     });
     document.getElementById("btnToggleConversationsSidebar").addEventListener("click", function () {
       vscode.postMessage({ type: "toggleConversationsSidebar" });
+    });
+    document.getElementById("btnRenameConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "renameConversation" });
     });
     document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
       vscode.postMessage({ type: "setupCursorCli" });
