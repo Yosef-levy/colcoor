@@ -4,6 +4,7 @@ import type { ColcoorApiClient, SideChatMessageOut } from "../api/client";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { maxSideChatSeq } from "./sideChatReadCursor";
+import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
 import { trimmedSideChatSendBody } from "./trimSendBody";
@@ -41,7 +42,7 @@ type FromWebview =
 
 type StateMessage = {
   type: "state";
-  messages: SideChatMessageOut[];
+  messages: SideChatRenderMessage[];
   /** Caller user id for author-only actions in the webview; null if profile could not be loaded. */
   viewerUserId: string | null;
 };
@@ -132,7 +133,7 @@ export async function openSideChatPanel(
     try {
       await panel.webview.postMessage({
         type: "state",
-        messages: cached,
+        messages: toSideChatRenderMessages(cached),
         viewerUserId,
       } satisfies StateMessage);
     } catch {

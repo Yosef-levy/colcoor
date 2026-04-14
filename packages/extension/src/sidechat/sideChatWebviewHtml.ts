@@ -1,4 +1,4 @@
-/** Minimal side-chat webview (list + send + refresh; text-only rendering). */
+/** Minimal side-chat webview (list + send + refresh + markdown rendering). */
 
 export function getSideChatWebviewHtml(cspSource: string, nonce: string): string {
   const csp = [
@@ -158,7 +158,10 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         meta.textContent = "#" + m.seq + " · " + (m.kind || "") + del;
         var body = document.createElement("div");
         body.className = "body";
-        body.textContent = (m.body != null ? String(m.body) : "") || "(empty)";
+        body.innerHTML =
+          typeof m.rendered_body_html === "string" && m.rendered_body_html.length
+            ? m.rendered_body_html
+            : ((m.body != null ? String(m.body) : "") || "(empty)");
         row.appendChild(meta);
         row.appendChild(body);
         if (canMutateRow(m)) {
