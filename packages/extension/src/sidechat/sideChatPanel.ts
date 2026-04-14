@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import type { ColcoorApiClient, SideChatMessageOut } from "../api/client";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
+import { decideSideChatNotification } from "./sideChatNotifications";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
@@ -87,6 +88,9 @@ export async function openSideChatPanel(
   let listRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** `undefined` = not loaded yet, `null` = load failed, string = user id */
   let myUserId: string | null | undefined = undefined;
+  const cfg = vscode.workspace.getConfiguration("colcoor");
+  const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
+  const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
 
   async function ensureMyUserId(): Promise<string | null> {
     if (myUserId !== undefined) {
@@ -179,6 +183,16 @@ export async function openSideChatPanel(
             const o = ev as { type?: string; message?: SideChatMessageOut };
             if (o?.type !== "side_chat" || !o.message) {
               continue;
+            }
+            const notif = decideSideChatNotification({
+              panelVisible: panel.visible,
+              myUserId: await ensureMyUserId(),
+              incoming: o.message,
+              notificationsEnabled,
+              mentionNotificationsEnabled,
+            });
+            if (notif) {
+              void vscode.window.showInformationMessage(notif.title, { detail: notif.detail, modal: false });
             }
             cached = mergeSideChatMessage(cached, o.message);
             lastStreamSeq = Math.max(lastStreamSeq, o.message.seq);

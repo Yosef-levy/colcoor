@@ -238,6 +238,16 @@
           "default": true,
           "description": "When true, the Cursor CLI trace block under each assistant message starts expanded; when false, it starts collapsed."
         },
+        "colcoor.sideChatNotificationsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show VS Code notifications for new side-chat messages when the side-chat panel is not visible."
+        },
+        "colcoor.sideChatMentionNotificationsEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, side-chat messages containing @mentions use mention-priority notification wording."
+        },
         "colcoor.legalTermsUrl": {
           "type": "string",
           "default": "",
