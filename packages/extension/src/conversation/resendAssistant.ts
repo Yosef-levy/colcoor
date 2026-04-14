@@ -19,6 +19,7 @@ export type RunResendAssistantOptions = {
 /**
  * Regenerate assistant for an existing user message (no new `user_input`).
  * Transcript = root → that user only; new `assistant_output` shares parent `user_event_id`.
+ * `userEventId` is trimmed and CRLF-normalized like other persisted ids from the UI.
  * @see docs/data-flow-and-api.md §4
  */
 export async function runResendAssistant(
@@ -26,10 +27,16 @@ export async function runResendAssistant(
   agent: AgentRunner,
   conversationId: string,
   conversationTitle: string | null | undefined,
+  /** Host `user_input` event id (whitespace / line endings normalized before lookup). */
   userEventId: string,
   workspaceRoot: string,
   options?: RunResendAssistantOptions,
 ): Promise<UserTurnResult> {
+  const resolvedUserEventId = normalizePersistedUserInputText(userEventId);
+  if (!resolvedUserEventId) {
+    throw new Error("event not found");
+  }
+
   const [{ events }, notes] = await Promise.all([
     api.getTree(conversationId),
     api.listNotes(conversationId),
@@ -39,7 +46,7 @@ export async function runResendAssistant(
   }
   const notesByEventId = indexNotesByEventId(notes);
   const byId = new Map(events.map((e) => [e.id, e]));
-  const userNode = byId.get(userEventId);
+  const userNode = byId.get(resolvedUserEventId);
   if (!userNode) {
     throw new Error("event not found");
   }
@@ -70,10 +77,10 @@ export async function runResendAssistant(
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
     });
-    return appendAssistantFromAgentResult(api, conversationId, userEventId, runResult);
+    return appendAssistantFromAgentResult(api, conversationId, resolvedUserEventId, runResult);
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
-      return { userEventId, cancelled: true };
+      return { userEventId: resolvedUserEventId, cancelled: true };
     }
     throw e;
   }

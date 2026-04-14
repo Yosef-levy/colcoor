@@ -78,6 +78,18 @@ describe("runResendAssistant", () => {
     ).rejects.toThrow("conversation has no events");
   });
 
+  it("throws when userEventId is blank after normalization", async () => {
+    const getTree = vi.fn();
+    const api = {
+      getTree,
+      listNotes: vi.fn(),
+    } as unknown as ColcoorApiClient;
+    await expect(
+      runResendAssistant(api, {} as AgentRunner, "conv1", null, "  \r\n\t  ", ""),
+    ).rejects.toThrow("event not found");
+    expect(getTree).not.toHaveBeenCalled();
+  });
+
   it("throws when the target id is missing", async () => {
     const api = {
       getTree: vi.fn().mockResolvedValue({ events: defaultTree("hi") }),
@@ -132,6 +144,24 @@ describe("runResendAssistant", () => {
     );
   });
 
+  it("normalizes whitespace and CRLF on userEventId before lookup and append", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "new", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValue({ id: "asst-new" });
+    const api = {
+      getTree: vi.fn().mockResolvedValue({ events: defaultTree("body") }),
+      listNotes: vi.fn().mockResolvedValue([]),
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runResendAssistant(api, agent, "conv1", "T", "  user1\r\n", "/tmp/ws");
+
+    expect(appendEvent).toHaveBeenCalledWith(
+      "conv1",
+      expect.objectContaining({ parent_event_id: "user1" }),
+    );
+  });
+
   it("returns cancelled without append when the agent run aborts", async () => {
     const run = vi.fn().mockRejectedValue(new DOMException("aborted", "AbortError"));
     const agent = { run } as unknown as AgentRunner;
@@ -142,7 +172,7 @@ describe("runResendAssistant", () => {
       appendEvent,
     } as unknown as ColcoorApiClient;
 
-    const out = await runResendAssistant(api, agent, "conv1", null, "user1", "");
+    const out = await runResendAssistant(api, agent, "conv1", null, "  user1\r\n", "");
     expect(out).toEqual({ userEventId: "user1", cancelled: true });
     expect(appendEvent).not.toHaveBeenCalled();
   });
