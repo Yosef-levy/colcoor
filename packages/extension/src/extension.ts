@@ -714,15 +714,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
         const av = await vscode.window.showInputBox({
           title: "Colcoor profile — avatar URL",
-          prompt: "https… Leave empty and press Enter to clear. Esc to keep the current URL.",
+          prompt: "https:// or http:// image URL. Leave empty and press Enter to clear. Esc keeps the current URL.",
           value: me.avatar_url ?? "",
           ignoreFocusOut: true,
         });
-        const patch = profilePatchFromInputs(dn, av);
-        if (!patch) {
+        const planned = profilePatchFromInputs(dn, av);
+        if (!planned.ok) {
+          if (planned.reason === "invalid_avatar_url") {
+            await vscode.window.showWarningMessage(`Colcoor: ${planned.message}`);
+          }
           return;
         }
-        const updated = await api.patchMe(patch);
+        const updated = await api.patchMe(planned.patch);
         await vscode.window.showInformationMessage(`Colcoor: profile saved (${updated.email}).`);
       } catch (e) {
         await showColcoorApiFailure(e);
