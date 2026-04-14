@@ -53,4 +53,14 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("if (send && send.disabled) return;");
     expect(html).toContain("updateComposerSendEnabled();");
   });
+
+  it("includes lightweight mention suggestions while typing @", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="mentionSuggestRow"');
+    expect(html).toContain("function collectMentionUniverse(messages)");
+    expect(html).toContain("function currentMentionQuery(text, caret)");
+    expect(html).toContain("function renderMentionSuggestions()");
+    expect(html).toContain("mentionUniverse = collectMentionUniverse(d.messages || [])");
+    expect(html).toContain('if (ev.key === "Tab" && mentionVisible.length > 0)');
+  });
 });

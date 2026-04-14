@@ -105,6 +105,16 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       border-radius: 3px;
       padding: 6px;
     }
+    .mention-suggest-row { display: none; gap: 6px; flex-wrap: wrap; margin-top: -2px; }
+    .mention-suggest-chip {
+      padding: 1px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--vscode-panel-border);
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-editor-background);
+      font-size: 0.9em;
+      cursor: pointer;
+    }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     button {
       font-family: var(--vscode-font-family);
@@ -137,6 +147,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       <button id="clearRefNote" type="button" class="secondary">Clear note ref</button>
     </div>
     <textarea id="input" dir="auto" placeholder="Message…"></textarea>
+    <div id="mentionSuggestRow" class="mention-suggest-row"></div>
     <div class="row">
       <button id="send" type="button" disabled title="Type a non-empty message. Shift+Enter for newline, Enter to send.">Send</button>
       <button id="refresh" type="button" class="secondary">Refresh</button>
@@ -149,6 +160,8 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     var replyTarget = null;
     var referencedEventId = null;
     var referencedNoteId = null;
+    var mentionUniverse = [];
+    var mentionVisible = [];
     var audioCtx = null;
     function playTone(freq, durationMs, gainValue) {
       try {
@@ -195,6 +208,80 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       send.title = has
         ? ""
         : "Type a non-empty message. Shift+Enter for newline, Enter to send.";
+    }
+    function collectMentionUniverse(messages) {
+      var seen = {};
+      var out = [];
+      (messages || []).forEach(function (m) {
+        if (!m || !Array.isArray(m.mentions)) return;
+        m.mentions.forEach(function (raw) {
+          var h = String(raw || "").trim().toLowerCase();
+          if (!h) return;
+          if (seen[h]) return;
+          seen[h] = true;
+          out.push(h);
+        });
+      });
+      return out;
+    }
+    function currentMentionQuery(text, caret) {
+      var src = String(text || "");
+      var i = typeof caret === "number" && caret >= 0 ? caret : src.length;
+      var left = src.slice(0, i);
+      var m = left.match(/(^|\\s)@([a-z0-9._-]{1,32})$/i);
+      if (!m) return null;
+      var q = String(m[2] || "").trim().toLowerCase();
+      return q || null;
+    }
+    function applyMentionSuggestion(handle) {
+      var ta = document.getElementById("input");
+      if (!ta) return;
+      var v = String(ta.value || "");
+      var caret = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length;
+      var left = v.slice(0, caret);
+      var right = v.slice(caret);
+      var nextLeft = left.replace(/(^|\\s)@[a-z0-9._-]{1,32}$/i, function (all, ws) {
+        return String(ws || "") + "@" + handle + " ";
+      });
+      ta.value = nextLeft + right;
+      var pos = nextLeft.length;
+      try {
+        ta.setSelectionRange(pos, pos);
+      } catch {}
+      ta.focus();
+      renderMentionSuggestions();
+      updateComposerSendEnabled();
+    }
+    function renderMentionSuggestions() {
+      var row = document.getElementById("mentionSuggestRow");
+      var ta = document.getElementById("input");
+      if (!row || !ta) return;
+      var q = currentMentionQuery(ta.value, ta.selectionStart);
+      if (!q) {
+        row.style.display = "none";
+        row.textContent = "";
+        mentionVisible = [];
+        return;
+      }
+      var picked = mentionUniverse.filter(function (h) { return h.indexOf(q) === 0; }).slice(0, 6);
+      mentionVisible = picked;
+      if (!picked.length) {
+        row.style.display = "none";
+        row.textContent = "";
+        return;
+      }
+      row.style.display = "flex";
+      row.textContent = "";
+      picked.forEach(function (h) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "mention-suggest-chip";
+        b.textContent = "@" + h;
+        b.addEventListener("click", function () {
+          applyMentionSuggestion(h);
+        });
+        row.appendChild(b);
+      });
     }
     function canMutateRow(m) {
       return !!(viewerUserId && m && m.kind === "user" && m.author_user_id === viewerUserId && !m.deleted_at);
@@ -397,9 +484,11 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         }
         var sub = document.getElementById("sub");
         if (sub) sub.textContent = (d.messages && d.messages.length) ? d.messages.length + " message(s)" : "No messages yet.";
+        mentionUniverse = collectMentionUniverse(d.messages || []);
         updateRefEventHint();
         updateRefNoteHint();
         render(d.messages || []);
+        renderMentionSuggestions();
       }
       if (d && d.type === "error" && typeof d.text === "string") {
         var err = document.getElementById("err");
@@ -468,8 +557,14 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     });
     document.getElementById("input").addEventListener("input", function () {
       updateComposerSendEnabled();
+      renderMentionSuggestions();
     });
     document.getElementById("input").addEventListener("keydown", function (ev) {
+      if (ev.key === "Tab" && mentionVisible.length > 0) {
+        ev.preventDefault();
+        applyMentionSuggestion(mentionVisible[0]);
+        return;
+      }
       if (!shouldSendOnEnter(ev)) return;
       var send = document.getElementById("send");
       if (send && send.disabled) return;
