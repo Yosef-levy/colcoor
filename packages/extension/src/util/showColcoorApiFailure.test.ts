@@ -12,6 +12,9 @@ vi.mock("vscode", () => ({
 
 import { ColcoorApiHttpError } from "../api/colcoorApiHttpError";
 import {
+  COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+  COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+  COLOOR_API_FAILURE_SIGN_IN_ACTION,
   COLOOR_EXTENSION_SETTINGS_QUERY,
   showColcoorApiFailure,
 } from "./showColcoorApiFailure";
@@ -65,23 +68,51 @@ describe("showColcoorApiFailure", () => {
     expect(text).toContain("viewer");
   });
 
-  it("shows sign-in hint for HTTP 401 ColcoorApiHttpError", async () => {
+  it("shows sign-in action for HTTP 401 ColcoorApiHttpError", async () => {
     showErrorMessage.mockResolvedValue(undefined);
     const e = new ColcoorApiHttpError("list conversations", 401, "{}");
     await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("sign in required"),
+      COLOOR_API_FAILURE_SIGN_IN_ACTION,
+    );
     const [text] = showErrorMessage.mock.calls[0] as [string];
-    expect(text).toContain("sign in required");
     expect(text).toContain(e.message);
-    expect(text).toContain("Sign in");
   });
 
-  it("shows refresh hint for HTTP 404 ColcoorApiHttpError", async () => {
+  it("runs Colcoor: Sign in when user picks the 401 action", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_SIGN_IN_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 401, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.signIn");
+  });
+
+  it("does not run sign-in when user dismisses the 401 toast", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 401, ""));
+    expect(executeCommand).not.toHaveBeenCalledWith("colcoor.signIn");
+  });
+
+  it("shows refresh actions for HTTP 404 ColcoorApiHttpError", async () => {
     showErrorMessage.mockResolvedValue(undefined);
     const e = new ColcoorApiHttpError("get tree", 404, '{"detail":"gone"}');
     await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("not found"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
     const [text] = showErrorMessage.mock.calls[0] as [string];
-    expect(text).toContain("not found");
     expect(text).toContain(e.message);
-    expect(text).toMatch(/Refresh conversations|Refresh conversation tree/);
+  });
+
+  it("runs refresh commands when user picks a 404 action", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 404, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversations");
+
+    executeCommand.mockReset();
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("y", 404, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
   });
 });
