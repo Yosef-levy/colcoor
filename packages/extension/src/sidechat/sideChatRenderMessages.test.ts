@@ -71,4 +71,23 @@ describe("toSideChatRenderMessages", () => {
     ]);
     expect(out[0].reference_chips).toEqual(["event:11111111", "note:22222222", "reply:33333333"]);
   });
+
+  it("uses reference lookup labels in chips when available", () => {
+    const out = toSideChatRenderMessages(
+      [
+        row({
+          id: "m1",
+          seq: 1,
+          body: "ref",
+          referenced_event_id: "11111111-1111-4111-8111-111111111111",
+          referenced_note_id: "22222222-2222-4222-8222-222222222222",
+        }),
+      ],
+      {
+        eventLabelsById: { "11111111-1111-4111-8111-111111111111": "Root summary" },
+        noteLabelsById: { "22222222-2222-4222-8222-222222222222": "Bug note" },
+      },
+    );
+    expect(out[0].reference_chips).toEqual(["event:11111111 Root summary", "note:22222222 Bug note"]);
+  });
 });

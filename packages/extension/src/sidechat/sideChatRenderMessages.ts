@@ -11,11 +11,17 @@ export type SideChatRenderMessage = SideChatMessageOut & {
   mentions: string[];
 };
 
+type ReferenceLabelLookups = {
+  eventLabelsById?: Record<string, string>;
+  noteLabelsById?: Record<string, string>;
+};
+
 /**
  * Converts API rows to webview render rows with sanitized markdown HTML.
  */
 export function toSideChatRenderMessages(
   messages: readonly SideChatMessageOut[],
+  referenceLookups?: ReferenceLabelLookups,
 ): SideChatRenderMessage[] {
   return messages.map((m) => ({
     ...m,
@@ -24,7 +30,7 @@ export function toSideChatRenderMessages(
       messages,
       m.referenced_side_chat_message_id,
     ),
-    reference_chips: sideChatReferenceChips(m),
+    reference_chips: sideChatReferenceChips(m, referenceLookups),
     mentions: extractSideChatMentions(m.body),
   }));
 }

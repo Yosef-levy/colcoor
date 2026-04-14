@@ -38,4 +38,19 @@ describe("sideChatReferenceChips", () => {
       ),
     ).toEqual(["event:11111111", "note:22222222", "reply:33333333"]);
   });
+
+  it("includes lookup labels for event and note references when provided", () => {
+    expect(
+      sideChatReferenceChips(
+        msg({
+          referenced_event_id: "11111111-1111-4111-8111-111111111111",
+          referenced_note_id: "22222222-2222-4222-8222-222222222222",
+        }),
+        {
+          eventLabelsById: { "11111111-1111-4111-8111-111111111111": "Fix auth flow" },
+          noteLabelsById: { "22222222-2222-4222-8222-222222222222": "TODO cleanup" },
+        },
+      ),
+    ).toEqual(["event:11111111 Fix auth flow", "note:22222222 TODO cleanup"]);
+  });
 });

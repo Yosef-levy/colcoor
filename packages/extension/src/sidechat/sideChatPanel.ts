@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import type { ColcoorApiClient, MeOut, SideChatMessageOut } from "../api/client";
+import type { ColcoorApiClient, GraphEventNode, MeOut, NoteOut, SideChatMessageOut } from "../api/client";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { mentionTargetsForMe } from "./sideChatMentionTargets";
@@ -112,6 +112,8 @@ export async function openSideChatPanel(
     typeof options?.referencedNoteId === "string" && options.referencedNoteId.trim()
       ? options.referencedNoteId.trim()
       : null;
+  let eventLabelsById: Record<string, string> = {};
+  let noteLabelsById: Record<string, string> = {};
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
   const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
@@ -173,7 +175,7 @@ export async function openSideChatPanel(
     try {
       await panel.webview.postMessage({
         type: "state",
-        messages: toSideChatRenderMessages(cached),
+        messages: toSideChatRenderMessages(cached, { eventLabelsById, noteLabelsById }),
         viewerUserId,
         referencedEventId: composerReferencedEventId,
         referencedNoteId: composerReferencedNoteId,
@@ -190,6 +192,7 @@ export async function openSideChatPanel(
       for (const m of cached) {
         notifiedMessageIds.add(m.id);
       }
+      await refreshReferenceLookups();
       await postState();
       scheduleMarkRead();
     } catch (e) {
@@ -199,6 +202,34 @@ export async function openSideChatPanel(
       } catch {
         /* */
       }
+    }
+  }
+
+  function shortEventLabel(ev: GraphEventNode): string {
+    const t = (ev.content_text ?? "").replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, 32) : ev.kind;
+  }
+
+  function shortNoteLabel(n: NoteOut): string {
+    const t = n.content.replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, 32) : "(empty note)";
+  }
+
+  async function refreshReferenceLookups(): Promise<void> {
+    try {
+      const [tree, notes] = await Promise.all([api.getTree(conversationId), api.listNotes(conversationId)]);
+      const e: Record<string, string> = {};
+      for (const ev of tree.events) {
+        e[ev.id] = shortEventLabel(ev);
+      }
+      const n: Record<string, string> = {};
+      for (const note of notes) {
+        n[note.id] = shortNoteLabel(note);
+      }
+      eventLabelsById = e;
+      noteLabelsById = n;
+    } catch {
+      /* keep previous lookups / fallback chips */
     }
   }
 
