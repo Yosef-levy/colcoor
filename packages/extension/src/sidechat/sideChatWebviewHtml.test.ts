@@ -22,6 +22,8 @@ describe("getSideChatWebviewHtml", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("reference_chips");
     expect(html).toContain("className = \"ref-chip\"");
+    expect(html).toContain("dataset.refKind");
+    expect(html).toContain("type: \"openReference\"");
   });
 
   it("includes composer referenced-event controls", () => {

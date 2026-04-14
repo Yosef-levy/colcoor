@@ -51,7 +51,8 @@ type FromWebview =
     }
   | { type: "refresh" }
   | { type: "edit"; messageId: string; text: string }
-  | { type: "delete"; messageId: string };
+  | { type: "delete"; messageId: string }
+  | { type: "openReference"; refKind: "event" | "note"; refId: string };
 
 type StateMessage = {
   type: "state";
@@ -419,6 +420,29 @@ export async function openSideChatPanel(
         const t = e instanceof Error ? e.message : String(e);
         await panel.webview.postMessage({ type: "error", text: t } satisfies ErrorMessage);
       }
+    }
+    if (msg.type === "openReference") {
+      const refId = typeof msg.refId === "string" ? msg.refId.trim() : "";
+      if (!refId) {
+        return;
+      }
+      if (msg.refKind === "event") {
+        try {
+          await api.setConversationActive(conversationId, {
+            active_event_id: refId,
+            needs_context_rebuild: false,
+          });
+          await vscode.commands.executeCommand("colcoor.openConversation", conversationId, title);
+        } catch {
+          await vscode.env.clipboard.writeText(refId);
+          await vscode.window.showInformationMessage(
+            "Colcoor: event reference copied (could not open event directly).",
+          );
+        }
+        return;
+      }
+      await vscode.env.clipboard.writeText(refId);
+      await vscode.window.showInformationMessage("Colcoor: note reference ID copied.");
     }
   });
 

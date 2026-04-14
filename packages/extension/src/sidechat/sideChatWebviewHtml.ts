@@ -250,10 +250,20 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         if (Array.isArray(m.reference_chips) && m.reference_chips.length) {
           var refs = document.createElement("span");
           refs.className = "refs";
+          var refItems = [];
+          if (m.referenced_event_id) refItems.push({ kind: "event", id: m.referenced_event_id });
+          if (m.referenced_note_id) refItems.push({ kind: "note", id: m.referenced_note_id });
+          if (m.referenced_side_chat_message_id) refItems.push({ kind: "reply", id: m.referenced_side_chat_message_id });
           m.reference_chips.forEach(function (r) {
             var chip2 = document.createElement("span");
             chip2.className = "ref-chip";
             chip2.textContent = String(r);
+            var ri = refItems.shift();
+            if (ri && (ri.kind === "event" || ri.kind === "note")) {
+              chip2.dataset.refKind = ri.kind;
+              chip2.dataset.refId = ri.id;
+              chip2.title = ri.kind === "event" ? "Open referenced event" : "Copy referenced note ID";
+            }
             refs.appendChild(chip2);
           });
           meta.appendChild(refs);
@@ -406,6 +416,17 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     document.addEventListener("click", function (ev) {
       var tgt = ev.target;
       if (!tgt || typeof tgt.closest !== "function") return;
+      var refChip = tgt.closest(".ref-chip");
+      if (refChip && refChip.dataset && refChip.dataset.refKind && refChip.dataset.refId) {
+        if (refChip.dataset.refKind === "event" || refChip.dataset.refKind === "note") {
+          vscode.postMessage({
+            type: "openReference",
+            refKind: refChip.dataset.refKind,
+            refId: refChip.dataset.refId,
+          });
+          return;
+        }
+      }
       var btn = tgt.closest(".code-copy");
       if (!btn) return;
       var wrap = btn.closest(".code-block-wrap");
