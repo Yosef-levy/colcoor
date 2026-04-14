@@ -379,6 +379,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         searchSuffix: "legal",
       });
     }),
+    vscode.commands.registerCommand("colcoor.openSideChatSoundSettings", async () => {
+      await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query), {
+        searchSuffix: "side chat",
+      });
+    }),
     vscode.commands.registerCommand("colcoor.toggleConversationsSidebar", async () => {
       await toggleSidebarVisibility((cmd) => vscode.commands.executeCommand(cmd));
     }),

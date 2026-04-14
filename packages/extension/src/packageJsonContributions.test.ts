@@ -18,6 +18,7 @@ describe("package.json Colcoor contributions", () => {
     const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
     expect(cmds).toContain("colcoor.sendMessage");
     expect(cmds).toContain("colcoor.openLegalPolicySettings");
+    expect(cmds).toContain("colcoor.openSideChatSoundSettings");
   });
 
   it("documents jumpToLatestInConversation for default-branch navigation ([ui-features.md] §6)", () => {
@@ -166,6 +167,7 @@ describe("package.json Colcoor contributions", () => {
     const contents = welcome?.contents ?? "";
     expect(contents).toContain("[Sign out](command:colcoor.signOut)");
     expect(contents).toContain("[Legal policy URLs…](command:colcoor.openLegalPolicySettings)");
+    expect(contents).toContain("[Side chat sounds & notifications…](command:colcoor.openSideChatSoundSettings)");
     expect(contents).toContain("[About](command:colcoor.openAbout)");
   });
 
@@ -177,6 +179,17 @@ describe("package.json Colcoor contributions", () => {
     const cmd = pkg.contributes?.commands?.find((c) => c.command === "colcoor.openLegalPolicySettings");
     expect(cmd?.title).toBe("Colcoor: Open legal policy settings…");
     expect(cmd?.description).toContain("Terms");
+  });
+
+  it("documents openSideChatSoundSettings for side-chat sounds and notifications ([ui-features.md] §1.1)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const cmd = pkg.contributes?.commands?.find((c) => c.command === "colcoor.openSideChatSoundSettings");
+    expect(cmd?.title).toBe("Colcoor: Open side chat sound & notification settings…");
+    expect(cmd?.description).toContain("§1.1");
+    expect(cmd?.description).toMatch(/sound|notification/i);
   });
 
   it("links Toggle sidebar from the conversations welcome view ([ui-features.md] §4)", () => {

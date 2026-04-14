@@ -21,4 +21,13 @@ describe("openColcoorSettings", () => {
       `${COLOOR_EXTENSION_SETTINGS_QUERY} legal`,
     );
   });
+
+  it("supports side-chat settings narrowing used by colcoor.openSideChatSoundSettings", async () => {
+    const exec = vi.fn().mockResolvedValue(undefined);
+    await openColcoorSettings(exec, { searchSuffix: "side chat" });
+    expect(exec).toHaveBeenCalledWith(
+      OPEN_SETTINGS_COMMAND_ID,
+      `${COLOOR_EXTENSION_SETTINGS_QUERY} side chat`,
+    );
+  });
 });

@@ -46,6 +46,11 @@
         "description": "Open Settings filtered to Colcoor Terms, Privacy, and Refund URL fields ([ui-features.md] §1.3)."
       },
       {
+        "command": "colcoor.openSideChatSoundSettings",
+        "title": "Colcoor: Open side chat sound & notification settings…",
+        "description": "Open Settings filtered to Colcoor side-chat notification and sound toggles ([ui-features.md] §1.1)."
+      },
+      {
         "command": "colcoor.newConversation",
         "title": "Colcoor: New conversation",
         "icon": "$(add)"
@@ -197,7 +202,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign out](command:colcoor.signOut)\n[Edit profile](command:colcoor.editProfile)\n[Open settings](command:colcoor.openSettings)\n[Legal policy URLs…](command:colcoor.openLegalPolicySettings)\n[About](command:colcoor.openAbout)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Open side chat](command:colcoor.openSideChat)\n[Open drawers…](command:colcoor.openConversationDrawers)\n[List TODO notes…](command:colcoor.listTodoNotesInConversation)\n[List starred messages…](command:colcoor.listStarredMessagesInConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Refresh conversation tree](command:colcoor.refreshConversationTree)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign out](command:colcoor.signOut)\n[Edit profile](command:colcoor.editProfile)\n[Open settings](command:colcoor.openSettings)\n[Legal policy URLs…](command:colcoor.openLegalPolicySettings)\n[Side chat sounds & notifications…](command:colcoor.openSideChatSoundSettings)\n[About](command:colcoor.openAbout)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Open side chat](command:colcoor.openSideChat)\n[Open drawers…](command:colcoor.openConversationDrawers)\n[List TODO notes…](command:colcoor.listTodoNotesInConversation)\n[List starred messages…](command:colcoor.listStarredMessagesInConversation)\n[Refresh](command:colcoor.refreshConversations)\n[Refresh conversation tree](command:colcoor.refreshConversationTree)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel."
       }
     ],
     "menus": {
