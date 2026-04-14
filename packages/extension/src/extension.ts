@@ -14,6 +14,7 @@ import { getConversationDrawersPanelHtml } from "./conversation/drawersPanelHtml
 import { buildConversationDrawersModel } from "./conversation/drawersModel";
 import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
+import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import { openSideChatPanel } from "./sidechat/sideChatPanel";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
@@ -39,6 +40,8 @@ function formatMemberQuickPickLabel(m: ConversationMember): string {
 }
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
+
+type OpenSideChatCommandArg = ConversationTreeItem | { conv: { id: string; title?: string | null } };
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const config = vscode.workspace.getConfiguration("colcoor");
@@ -501,13 +504,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.openAbout", () => {
       showAboutPanel();
     }),
-    vscode.commands.registerCommand("colcoor.openSideChat", async (item?: ConversationTreeItem) => {
+    vscode.commands.registerCommand(
+      "colcoor.openSideChat",
+      async (item?: OpenSideChatCommandArg) => {
       if (!(await session.getBackendAccessToken())) {
         await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
         return;
       }
-      let convId = item?.conv.id;
-      let convTitle: string | null | undefined = item?.conv.title ?? null;
+      const picked = conversationIdAndTitleFromOpenSideChatArg(item);
+      let convId = picked.convId;
+      let convTitle: string | null | undefined = picked.convTitle;
       if (!convId) {
         const row = await pickConversationInteractively();
         if (!row) {
@@ -740,9 +746,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                   conv: {
                     id: drawersConversationId,
                     title: drawersConversationTitle ?? null,
-                    pinned: false,
                   },
-                } as ConversationTreeItem);
+                });
                 return;
               }
               if (msg.type !== "openEvent" || typeof msg.eventId !== "string") {
