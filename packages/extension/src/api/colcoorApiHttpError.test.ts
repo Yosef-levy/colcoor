@@ -6,6 +6,7 @@ import {
   isConflictColcoorApiError,
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
+  isGoneColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
@@ -67,6 +68,14 @@ describe("isNotFoundColcoorApiError", () => {
     expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(true);
     expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(false);
     expect(isNotFoundColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isGoneColcoorApiError", () => {
+  it("is true only for HTTP 410 ColcoorApiHttpError", () => {
+    expect(isGoneColcoorApiError(new ColcoorApiHttpError("x", 410, ""))).toBe(true);
+    expect(isGoneColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(false);
+    expect(isGoneColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 

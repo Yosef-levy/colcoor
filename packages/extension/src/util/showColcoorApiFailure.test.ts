@@ -111,6 +111,20 @@ describe("showColcoorApiFailure", () => {
     expect(text).toContain(e.message);
   });
 
+  it("shows refresh actions for HTTP 410 with gone wording", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("get event", 410, '{"detail":"removed"}');
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("no longer available"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain(e.message);
+    expect(text).toContain("permanently");
+  });
+
   it("shows conflict messaging and refresh actions for HTTP 409", async () => {
     showErrorMessage.mockResolvedValue(undefined);
     await showColcoorApiFailure(new ColcoorApiHttpError("add member", 409, "{}"));
@@ -171,6 +185,17 @@ describe("showColcoorApiFailure", () => {
     executeCommand.mockReset();
     showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
     await showColcoorApiFailure(new ColcoorApiHttpError("y", 404, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
+  });
+
+  it("runs refresh commands when user picks a 410 action", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 410, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversations");
+
+    executeCommand.mockReset();
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("y", 410, ""));
     expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
   });
 

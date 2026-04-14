@@ -80,6 +80,12 @@ describe("formatColcoorApiError", () => {
     );
   });
 
+  it("formats HTTP 410 with generic wording", () => {
+    expect(formatColcoorApiError("get event", 410, '{"detail":"resource retired"}')).toBe(
+      "get event failed (HTTP 410): resource retired",
+    );
+  });
+
   it("appends Retry-After hint for HTTP 429 when seconds are provided", () => {
     const msg = formatColcoorApiError("send message", 429, "{}", 90);
     expect(msg).toContain("HTTP 429");

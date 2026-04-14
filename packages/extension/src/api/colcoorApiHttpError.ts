@@ -47,6 +47,11 @@ export function isNotFoundColcoorApiError(e: unknown): e is ColcoorApiHttpError 
   return e instanceof ColcoorApiHttpError && e.status === 404;
 }
 
+/** HTTP 410 — resource permanently gone (deprecated route or hard-removed entity). */
+export function isGoneColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 410;
+}
+
 /** HTTP 409 — conflict (e.g. duplicate member per [api-contracts.md]). */
 export function isConflictColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 409;

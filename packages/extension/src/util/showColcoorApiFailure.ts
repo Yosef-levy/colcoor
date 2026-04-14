@@ -5,6 +5,7 @@ import {
   isConflictColcoorApiError,
   isForbiddenColcoorApiError,
   isGatewayTimeoutColcoorApiError,
+  isGoneColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
@@ -74,6 +75,12 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   }
   if (isNotFoundColcoorApiError(e)) {
     await offerListOrTreeRefresh(`Colcoor: not found — ${e.message} It may have been deleted.`);
+    return;
+  }
+  if (isGoneColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: no longer available — ${e.message} It may have been removed permanently; refresh your list or tree.`,
+    );
     return;
   }
   if (isConflictColcoorApiError(e)) {
