@@ -110,6 +110,7 @@ class Event(Base):
     )
     content_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     content_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    checkpoint_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     visible_to: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )

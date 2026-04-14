@@ -55,6 +55,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | actor_user_id | uuid FK null | Human actor when applicable |
 | content_text | text null | Plain body |
 | content_json | jsonb null | Structured payload |
+| checkpoint_label | text null | Optional display-only label for checkpoint / breadcrumb UI ([ui-features.md] §8) |
 | visible_to | uuid FK null | **NULL** = shared (all members); **non-NULL** = private draft for that `users.id` only |
 | deleted_at | timestamptz null | Soft delete |
 | created_at | timestamptz not null | Inserted |

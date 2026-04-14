@@ -25,12 +25,27 @@ class AppendEventBody(BaseModel):
         default=None,
         description="Optional structured payload (e.g. Cursor CLI stream-json timeline on assistant_output).",
     )
+    checkpoint_label: str | None = Field(
+        default=None,
+        max_length=256,
+        description="Optional display-only label for breadcrumb / checkpoint UI ([ui-features.md] §8).",
+    )
 
     @model_validator(mode="after")
     def _content_json_only_for_assistant(self) -> AppendEventBody:
         if self.content_json is not None and self.kind != EventKind.assistant_output:
             raise ValueError("content_json is only allowed when kind is assistant_output")
         return self
+
+    @field_validator("checkpoint_label", mode="before")
+    @classmethod
+    def _normalize_checkpoint_label(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            return None
+        t = v.strip()
+        return t or None
 
 
 class AuthCursorRequest(BaseModel):
@@ -95,6 +110,7 @@ class EventNodeOut(BaseModel):
     updated_at: datetime
     starred: bool = False
     note_count: int = 0
+    checkpoint_label: str | None = None
 
 
 class TreeResponse(BaseModel):

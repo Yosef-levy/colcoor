@@ -197,6 +197,7 @@ async def append_graph_event(
     content: str,
     private_branch: bool,
     content_json: dict | None = None,
+    checkpoint_label: str | None = None,
 ) -> Event:
     await ensure_conversation_member(session, conversation_id, user_id)
     parent = await load_event(session, conversation_id, parent_event_id)
@@ -221,6 +222,7 @@ async def append_graph_event(
         actor_user_id=actor_user_id,
         content_text=content,
         content_json=content_json,
+        checkpoint_label=checkpoint_label,
         visible_to=visible_to,
         deleted_at=None,
         created_at=now,

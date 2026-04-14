@@ -177,6 +177,7 @@ async def append_event(
             content=body.content,
             private_branch=body.private_branch,
             content_json=body.content_json,
+            checkpoint_label=body.checkpoint_label,
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
@@ -220,6 +221,7 @@ async def get_tree(
                 updated_at=e.updated_at,
                 starred=e.id in starred_ids,
                 note_count=note_counts.get(e.id, 0),
+                checkpoint_label=e.checkpoint_label,
             )
         )
     return TreeResponse(events=out)

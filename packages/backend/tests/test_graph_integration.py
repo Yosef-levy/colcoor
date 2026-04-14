@@ -249,6 +249,7 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
                 "content": "from test",
                 "author": "end_user",
                 "private_branch": False,
+                "checkpoint_label": "  Branch A  ",
             },
         )
         assert r.status_code == 200, r.text
@@ -296,6 +297,7 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         assert r.status_code == 200, r.text
         body = r.json()
         user_ev = next(e for e in body["events"] if e["id"] == user_ev_id)
+        assert user_ev.get("checkpoint_label") == "Branch A"
         assert user_ev["note_count"] == 1
         assert user_ev["starred"] is True
         asst = next(e for e in body["events"] if e.get("content_text") == "from assistant")

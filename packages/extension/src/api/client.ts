@@ -79,6 +79,8 @@ export type AppendEventBody = {
   author: string;
   private_branch?: boolean;
   content_json?: Record<string, unknown>;
+  /** Optional display-only checkpoint label (tree API returns it on nodes). */
+  checkpoint_label?: string | null;
 };
 
 export type AppendEventResponse = {
