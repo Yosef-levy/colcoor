@@ -44,6 +44,14 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "sendMessage" });');
     expect(html).toContain('id="btnStopAssistantGeneration"');
     expect(html).toContain('vscode.postMessage({ type: "stopGeneration" });');
+    expect(html).toContain('id="btnCopySelectedMessage"');
+    expect(html).toContain('vscode.postMessage({ type: "copySelectedMessage" });');
+    expect(html).toContain('id="btnContinueFromHere"');
+    expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
+    expect(html).toContain('id="btnResendAssistant"');
+    expect(html).toContain('vscode.postMessage({ type: "resendAssistant" });');
+    expect(html).toContain('id="btnJumpToLatestInConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "jumpToLatestInConversation" });');
     expect(html).toContain('id="btnListTodoNotesPicker"');
     expect(html).toContain('vscode.postMessage({ type: "listTodoNotesInConversation" });');
     expect(html).toContain('id="btnListStarredPicker"');

@@ -109,6 +109,10 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnOpenSideChat" title="${esc(scTitle)}">${esc(scLabel)}</button>
     <button type="button" id="btnSendMessage" title="Send a main-thread message in this conversation (Colcoor: Send message…)">Send message…</button>
     <button type="button" id="btnStopAssistantGeneration" title="Stop the in-flight assistant reply in the conversation panel, if any (Colcoor: Stop assistant generation). Safe no-op when idle.">Stop generation</button>
+    <button type="button" id="btnCopySelectedMessage" title="Copy the selected tree message body (Colcoor: Copy selected message; conversation panel must be open)">Copy selection</button>
+    <button type="button" id="btnContinueFromHere" title="Set active branch to the selected message (Colcoor: Continue from here; conversation panel must be open)">Continue here</button>
+    <button type="button" id="btnResendAssistant" title="Regenerate assistant under the selected user message (Colcoor: Resend assistant; conversation panel must be open)">Resend</button>
+    <button type="button" id="btnJumpToLatestInConversation" title="Select the newest leaf on the default branch (Colcoor: Jump to latest in conversation; conversation panel must be open)">Jump latest</button>
     <button type="button" id="btnListTodoNotesPicker" title="Pick a TODO note to jump to (Colcoor: List TODO notes in conversation)">List TODO notes…</button>
     <button type="button" id="btnListStarredPicker" title="Pick a starred message to jump to (Colcoor: List starred messages in conversation)">List starred…</button>
     <button type="button" id="btnListMembers" title="Show members of this conversation in the Colcoor output channel">Show members</button>
@@ -175,6 +179,18 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnStopAssistantGeneration").addEventListener("click", function () {
       vscode.postMessage({ type: "stopGeneration" });
+    });
+    document.getElementById("btnCopySelectedMessage").addEventListener("click", function () {
+      vscode.postMessage({ type: "copySelectedMessage" });
+    });
+    document.getElementById("btnContinueFromHere").addEventListener("click", function () {
+      vscode.postMessage({ type: "continueFromHere" });
+    });
+    document.getElementById("btnResendAssistant").addEventListener("click", function () {
+      vscode.postMessage({ type: "resendAssistant" });
+    });
+    document.getElementById("btnJumpToLatestInConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "jumpToLatestInConversation" });
     });
     document.getElementById("btnListTodoNotesPicker").addEventListener("click", function () {
       vscode.postMessage({ type: "listTodoNotesInConversation" });

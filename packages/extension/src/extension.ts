@@ -1006,6 +1006,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand("colcoor.stopGeneration");
                 return;
               }
+              if (msg.type === "copySelectedMessage") {
+                await vscode.commands.executeCommand("colcoor.copySelectedMessage");
+                return;
+              }
+              if (msg.type === "continueFromHere") {
+                await vscode.commands.executeCommand("colcoor.continueFromHere");
+                return;
+              }
+              if (msg.type === "resendAssistant") {
+                await vscode.commands.executeCommand("colcoor.resendAssistant");
+                return;
+              }
+              if (msg.type === "jumpToLatestInConversation") {
+                await vscode.commands.executeCommand("colcoor.jumpToLatestInConversation");
+                return;
+              }
               if (msg.type === "listTodoNotesInConversation") {
                 if (!drawersConversationId) {
                   return;
