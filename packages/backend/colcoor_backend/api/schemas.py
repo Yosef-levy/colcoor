@@ -68,6 +68,10 @@ class ConversationOut(BaseModel):
     title: str | None
     pinned: bool
     updated_at: datetime
+    side_chat_has_unread: bool = Field(
+        default=False,
+        description="True when max non-deleted side-chat seq exceeds caller last_read_seq",
+    )
 
 
 class EventNodeOut(BaseModel):

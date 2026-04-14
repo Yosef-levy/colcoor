@@ -74,6 +74,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `title` | string \| null | yes |
 | `pinned` | boolean | yes | **Per authenticated user** — value read from that user’s `conversation_members.pinned` |
 | `updated_at` | string (ISO-8601 timestamptz) | yes |
+| `side_chat_has_unread` | boolean | yes | `true` when the caller’s side-chat read cursor is behind the latest **non-deleted** side-chat message in that conversation |
 
 ### 3.2 `POST /api/v1/conversations`
 

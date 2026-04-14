@@ -42,16 +42,20 @@ from colcoor_backend.services.graph import (
     update_conversation_member_role,
     update_note_content,
 )
+from colcoor_backend.services.side_chat import side_chat_has_unread_by_conversation_ids
 
 router = APIRouter()
 
 
-def _conversation_out(conv: Conversation, member: ConversationMember) -> ConversationOut:
+def _conversation_out(
+    conv: Conversation, member: ConversationMember, *, side_chat_has_unread: bool = False
+) -> ConversationOut:
     return ConversationOut(
         id=conv.id,
         title=conv.title,
         pinned=member.pinned,
         updated_at=conv.updated_at,
+        side_chat_has_unread=side_chat_has_unread,
     )
 
 
@@ -61,7 +65,9 @@ async def list_conversations(
     user_id: CurrentUserId,
 ) -> list[ConversationOut]:
     rows = await list_conversations_for_user(session, user_id)
-    return [_conversation_out(c, m) for c, m in rows]
+    ids = [c.id for c, _ in rows]
+    unread = await side_chat_has_unread_by_conversation_ids(session, user_id, ids)
+    return [_conversation_out(c, m, side_chat_has_unread=unread.get(c.id, False)) for c, m in rows]
 
 
 @router.post("", response_model=ConversationOut)
@@ -72,7 +78,8 @@ async def create_conversation(
 ) -> ConversationOut:
     conv, member = await create_conversation_with_owner(session, user_id=user_id, title=body.title)
     await session.commit()
-    return _conversation_out(conv, member)
+    unread = await side_chat_has_unread_by_conversation_ids(session, user_id, [conv.id])
+    return _conversation_out(conv, member, side_chat_has_unread=unread.get(conv.id, False))
 
 
 @router.patch("/{conversation_id}", response_model=ConversationOut)
@@ -101,7 +108,8 @@ async def patch_conversation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
     conv, member = row
     await session.commit()
-    return _conversation_out(conv, member)
+    unread = await side_chat_has_unread_by_conversation_ids(session, user_id, [conv.id])
+    return _conversation_out(conv, member, side_chat_has_unread=unread.get(conv.id, False))
 
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)

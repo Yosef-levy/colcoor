@@ -9,8 +9,11 @@ export class ConversationTreeItem extends vscode.TreeItem {
     this.id = conv.id;
     const rel = conv.updated_at ? formatRelativeTime(conv.updated_at) : "";
     const pinPart = conv.pinned ? "Pinned · " : "";
-    this.tooltip = `${label}\n${conv.id}${conv.updated_at ? `\nUpdated ${conv.updated_at}` : ""}`;
-    this.description = [pinPart, rel].filter(Boolean).join("") || undefined;
+    const unreadPart = conv.side_chat_has_unread ? "● side chat · " : "";
+    this.tooltip = `${label}\n${conv.id}${conv.updated_at ? `\nUpdated ${conv.updated_at}` : ""}${
+      conv.side_chat_has_unread ? "\nUnread side chat" : ""
+    }`;
+    this.description = [unreadPart, pinPart, rel].filter(Boolean).join("") || undefined;
     this.contextValue = "conversation";
     this.iconPath = new vscode.ThemeIcon("comment-discussion");
     this.command = {

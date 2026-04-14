@@ -78,6 +78,8 @@ export async function openSideChatPanel(
   /** Last `last_read_seq` successfully PATCHed (avoids spamming the API). */
   let lastPatchedReadSeq = -1;
   let readPatchChain = Promise.resolve();
+  /** Debounce refreshing the conversation list after read cursor updates (SSE can be chatty). */
+  let listRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** `undefined` = not loaded yet, `null` = load failed, string = user id */
   let myUserId: string | null | undefined = undefined;
 
@@ -107,6 +109,15 @@ export async function openSideChatPanel(
         try {
           await api.patchSideChatRead(conversationId, m);
           lastPatchedReadSeq = m;
+          if (listRefreshTimer !== undefined) {
+            clearTimeout(listRefreshTimer);
+          }
+          listRefreshTimer = setTimeout(() => {
+            listRefreshTimer = undefined;
+            if (!disposed) {
+              void vscode.commands.executeCommand("colcoor.refreshConversations");
+            }
+          }, 1500);
         } catch {
           /* ignore — badge / unread can catch up on next open */
         }
@@ -274,6 +285,11 @@ export async function openSideChatPanel(
 
   panel.onDidDispose(() => {
     disposed = true;
+    if (listRefreshTimer !== undefined) {
+      clearTimeout(listRefreshTimer);
+      listRefreshTimer = undefined;
+    }
     ac.abort();
+    void vscode.commands.executeCommand("colcoor.refreshConversations");
   });
 }

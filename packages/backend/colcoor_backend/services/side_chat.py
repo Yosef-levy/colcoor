@@ -5,6 +5,8 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
+from collections.abc import Sequence
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,6 +60,34 @@ async def _validate_post_references(
             session, conversation_id, referenced_side_chat_message_id
         ):
             raise ValueError("referenced_side_chat_message_id not in conversation")
+
+
+async def side_chat_has_unread_by_conversation_ids(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    conversation_ids: Sequence[uuid.UUID],
+) -> dict[uuid.UUID, bool]:
+    """Per conversation: max visible side-chat seq > caller's last_read_seq (default 0)."""
+    ids = list(conversation_ids)
+    if not ids:
+        return {}
+    max_res = await session.execute(
+        select(SideChatMessage.conversation_id, func.max(SideChatMessage.seq).label("mx"))
+        .where(
+            SideChatMessage.conversation_id.in_(ids),
+            SideChatMessage.deleted_at.is_(None),
+        )
+        .group_by(SideChatMessage.conversation_id)
+    )
+    max_by_c: dict[uuid.UUID, int] = {row[0]: int(row[1]) for row in max_res.all()}
+    read_res = await session.execute(
+        select(UserSideChatState.conversation_id, UserSideChatState.last_read_seq).where(
+            UserSideChatState.user_id == user_id,
+            UserSideChatState.conversation_id.in_(ids),
+        )
+    )
+    read_by_c: dict[uuid.UUID, int] = {row[0]: int(row[1]) for row in read_res.all()}
+    return {cid: max_by_c.get(cid, 0) > read_by_c.get(cid, 0) for cid in ids}
 
 
 async def list_side_chat_messages(

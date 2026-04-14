@@ -21,6 +21,8 @@ export type ConversationSummary = {
   pinned: boolean;
   /** ISO 8601; used for sidebar ordering and “last updated”. */
   updated_at?: string;
+  /** True when side-chat max seq is ahead of this user’s read cursor (GET /conversations). */
+  side_chat_has_unread?: boolean;
 };
 
 export type GraphEventNode = {

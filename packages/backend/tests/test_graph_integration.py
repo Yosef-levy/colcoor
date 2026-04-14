@@ -431,6 +431,11 @@ def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> N
         assert m0["seq"] == 1
         mid = m0["id"]
 
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert r.status_code == 200, r.text
+        row = next(x for x in r.json() if x["id"] == cid)
+        assert row["side_chat_has_unread"] is True
+
         r = client.get(f"/api/v1/conversations/{cid}/side-chat/messages", headers=auth)
         assert r.status_code == 200, r.text
         assert len(r.json()["messages"]) == 1
@@ -457,6 +462,11 @@ def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> N
             json={"last_read_seq": 1},
         )
         assert r.status_code == 204, r.text
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert r.status_code == 200, r.text
+        row2 = next(x for x in r.json() if x["id"] == cid)
+        assert row2["side_chat_has_unread"] is False
 
         r = client.delete(
             f"/api/v1/conversations/{cid}/side-chat/messages/{mid}",
