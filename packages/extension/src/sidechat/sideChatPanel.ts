@@ -5,6 +5,7 @@ import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { mentionTargetsForMe } from "./sideChatMentionTargets";
 import { shouldNotifyForIncomingSideChatMessage } from "./sideChatNotifyDedup";
+import { shouldEmitSideChatNotificationNow } from "./sideChatNotificationRateLimit";
 import { decideSideChatNotification } from "./sideChatNotifications";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
@@ -77,6 +78,7 @@ export async function openSideChatPanel(
   const ac = new AbortController();
   let cached: SideChatMessageOut[] = [];
   const notifiedMessageIds = new Set<string>();
+  let lastNotificationAtMs: number | null = null;
   let lastStreamSeq = 0;
   let sseStarted = false;
   /** Increments after each failed stream; reset when the stream yields an event. */
@@ -202,10 +204,20 @@ export async function openSideChatPanel(
                 mentionNotificationsEnabled,
               });
               if (notif) {
-                void vscode.window.showInformationMessage(notif.title, {
-                  detail: notif.detail,
-                  modal: false,
-                });
+                const nowMs = Date.now();
+                if (
+                  shouldEmitSideChatNotificationNow({
+                    nowMs,
+                    lastNotificationAtMs,
+                    decision: notif,
+                  })
+                ) {
+                  lastNotificationAtMs = nowMs;
+                  void vscode.window.showInformationMessage(notif.title, {
+                    detail: notif.detail,
+                    modal: false,
+                  });
+                }
               }
             }
             notifiedMessageIds.add(o.message.id);
