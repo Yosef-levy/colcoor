@@ -86,6 +86,7 @@ export function getConversationDrawersPanelHtml(
   <div class="aux">
     <button type="button" id="btnProfile" title="Edit your Colcoor profile">Profile…</button>
     <button type="button" id="btnSettings" title="Open Colcoor extension settings">Settings</button>
+    <button type="button" id="btnLegalPolicySettings" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
     <button type="button" id="btnAbout" title="About Colcoor">About</button>
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
@@ -111,6 +112,9 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnSettings").addEventListener("click", function () {
       vscode.postMessage({ type: "openSettings" });
+    });
+    document.getElementById("btnLegalPolicySettings").addEventListener("click", function () {
+      vscode.postMessage({ type: "openLegalPolicySettings" });
     });
     document.getElementById("btnAbout").addEventListener("click", function () {
       vscode.postMessage({ type: "openAbout" });

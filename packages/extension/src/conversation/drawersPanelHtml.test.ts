@@ -20,8 +20,10 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openEvent", eventId: eid });');
     expect(html).toContain('id="btnProfile"');
     expect(html).toContain('id="btnSettings"');
+    expect(html).toContain('id="btnLegalPolicySettings"');
     expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
     expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
+    expect(html).toContain('vscode.postMessage({ type: "openLegalPolicySettings" });');
     expect(html).toContain('id="btnAbout"');
     expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
     expect(html).toContain('id="btnOpenConversation"');
