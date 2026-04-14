@@ -33,4 +33,21 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
     expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
   });
+
+  it("includes optional legal policy strip and openLegalPolicyUrl wiring", () => {
+    const html = getConversationDrawersPanelHtml(
+      "vscode-resource://test",
+      "nonce456",
+      { starred: [], todos: [] },
+      "starred",
+      [
+        { label: "Terms", url: "https://example.com/terms" },
+        { label: "Privacy", url: "https://example.com/privacy" },
+      ],
+    );
+    expect(html).toContain("policy-strip");
+    expect(html).toContain('class="policy"');
+    expect(html).toContain('data-url="https://example.com/terms"');
+    expect(html).toContain('vscode.postMessage({ type: "openLegalPolicyUrl", url: u });');
+  });
 });

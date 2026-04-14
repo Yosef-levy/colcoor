@@ -11,6 +11,10 @@ import {
 import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./agent/cursorCliSetup";
 import { showAboutPanel } from "./conversation/aboutPanel";
 import { getConversationDrawersPanelHtml } from "./conversation/drawersPanelHtml";
+import {
+  isSafeHttpUrlForWebview,
+  listLegalPolicyLinksFromColcoorWorkspaceSection,
+} from "./conversation/legalPolicySection";
 import { buildConversationDrawersModel } from "./conversation/drawersModel";
 import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
@@ -720,8 +724,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               drawersConversationTitle = null;
             });
             drawersPanel.webview.onDidReceiveMessage(async (m: unknown) => {
-              const msg = m as { type?: string; eventId?: string };
+              const msg = m as { type?: string; eventId?: string; url?: string };
               if (!msg || typeof msg.type !== "string") {
+                return;
+              }
+              if (msg.type === "openLegalPolicyUrl" && typeof msg.url === "string") {
+                const u = msg.url.trim();
+                if (isSafeHttpUrlForWebview(u)) {
+                  void vscode.env.openExternal(vscode.Uri.parse(u));
+                }
                 return;
               }
               if (msg.type === "openProfile") {
@@ -787,6 +798,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             String(Date.now()),
             model,
             preferredTab,
+            listLegalPolicyLinksFromColcoorWorkspaceSection(vscode.workspace.getConfiguration("colcoor")),
           );
           drawersPanel.reveal(vscode.ViewColumn.Beside, false);
         } catch (e) {

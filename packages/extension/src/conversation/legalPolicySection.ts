@@ -70,6 +70,21 @@ export function listLegalPolicyLinksForWebview(urls: LegalPolicyUrls): { label: 
   return rows;
 }
 
+/**
+ * Read `colcoor.legal*` workspace settings via a configuration section’s `.get`
+ * and return safe http(s) link rows for webviews ([ui-features.md] §1.3).
+ */
+export function listLegalPolicyLinksFromColcoorWorkspaceSection(section: {
+  get: (key: string) => unknown;
+}): { label: string; url: string }[] {
+  const urls = coerceLegalPolicyUrls({
+    termsUrl: section.get("legalTermsUrl") as string | null | undefined,
+    privacyUrl: section.get("legalPrivacyUrl") as string | null | undefined,
+    refundUrl: section.get("legalRefundUrl") as string | null | undefined,
+  });
+  return listLegalPolicyLinksForWebview(urls);
+}
+
 /** Returns HTML fragment (no outer wrapper) or empty string. */
 export function buildLegalPolicySectionHtml(urls: LegalPolicyUrls): string {
   const rows = listLegalPolicyLinksForWebview(urls);

@@ -4,11 +4,7 @@ import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT } from "./colcoorContextKeys";
-import {
-  coerceLegalPolicyUrls,
-  isSafeHttpUrlForWebview,
-  listLegalPolicyLinksForWebview,
-} from "./legalPolicySection";
+import { isSafeHttpUrlForWebview, listLegalPolicyLinksFromColcoorWorkspaceSection } from "./legalPolicySection";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
 import {
@@ -101,15 +97,6 @@ function randomNonce(): string {
     s += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return s;
-}
-
-function readLegalPolicyUrlsFromWorkspaceConfig() {
-  const c = vscode.workspace.getConfiguration("colcoor");
-  return coerceLegalPolicyUrls({
-    termsUrl: c.get<string>("legalTermsUrl"),
-    privacyUrl: c.get<string>("legalPrivacyUrl"),
-    refundUrl: c.get<string>("legalRefundUrl"),
-  });
 }
 
 export type ConversationPanelControllerOptions = {
@@ -275,7 +262,9 @@ export function createConversationPanelController(
         needsContextRebuild: lastNeedsContextRebuild,
         busy,
         lastError,
-        legalPolicyLinks: listLegalPolicyLinksForWebview(readLegalPolicyUrlsFromWorkspaceConfig()),
+        legalPolicyLinks: listLegalPolicyLinksFromColcoorWorkspaceSection(
+          vscode.workspace.getConfiguration("colcoor"),
+        ),
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -311,7 +300,9 @@ export function createConversationPanelController(
           lastError:
             lastError ??
             `Render failed: ${detail}. If the conversation is very large, try the API or a fresh thread.`,
-          legalPolicyLinks: listLegalPolicyLinksForWebview(readLegalPolicyUrlsFromWorkspaceConfig()),
+          legalPolicyLinks: listLegalPolicyLinksFromColcoorWorkspaceSection(
+            vscode.workspace.getConfiguration("colcoor"),
+          ),
         };
         void panel.webview.postMessage(fallback);
       } catch {

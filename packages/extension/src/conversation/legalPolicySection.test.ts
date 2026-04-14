@@ -4,6 +4,7 @@ import {
   coerceLegalPolicyUrls,
   isSafeHttpUrlForWebview,
   listLegalPolicyLinksForWebview,
+  listLegalPolicyLinksFromColcoorWorkspaceSection,
 } from "./legalPolicySection";
 
 describe("isSafeHttpUrlForWebview", () => {
@@ -29,6 +30,20 @@ describe("coerceLegalPolicyUrls", () => {
         refundUrl: null,
       }),
     ).toEqual({ termsUrl: "https://a/t" });
+  });
+});
+
+describe("listLegalPolicyLinksFromColcoorWorkspaceSection", () => {
+  it("reads keys via section.get like vscode WorkspaceConfiguration", () => {
+    const rows = listLegalPolicyLinksFromColcoorWorkspaceSection({
+      get: (key: string) =>
+        ({
+          legalTermsUrl: "https://a/t",
+          legalPrivacyUrl: "javascript:void(0)",
+          legalRefundUrl: "https://a/r",
+        })[key],
+    });
+    expect(rows.map((r) => r.label)).toEqual(["Terms", "Refund policy"]);
   });
 });
 

@@ -16,6 +16,7 @@ export function getConversationDrawersPanelHtml(
   nonce: string,
   model: ConversationDrawersModel,
   preferredTab: "starred" | "todo" = "starred",
+  legalPolicyLinks: { label: string; url: string }[] = [],
 ): string {
   const csp = [
     "default-src 'none'",
@@ -38,6 +39,17 @@ export function getConversationDrawersPanelHtml(
     .join("");
   const showStarred = preferredTab === "starred" ? "block" : "none";
   const showTodo = preferredTab === "todo" ? "block" : "none";
+  const policyBlock =
+    legalPolicyLinks.length === 0
+      ? ""
+      : `<div class="policy-strip" role="region" aria-label="Product policies"><span class="policy-hint">Policies:</span>${legalPolicyLinks
+          .map(
+            (row) =>
+              `<button type="button" class="policy" data-url="${esc(row.url)}" title="Open in browser — ${esc(
+                row.url,
+              )}">${esc(row.label)}</button>`,
+          )
+          .join(" ")}</div>`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -51,6 +63,17 @@ export function getConversationDrawersPanelHtml(
     .tabs button { padding: 4px 10px; }
     .aux { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
     .aux button { padding: 4px 10px; }
+    .policy-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 0.92em;
+      color: var(--vscode-descriptionForeground);
+    }
+    .policy-strip .policy-hint { margin-right: 4px; }
+    .policy-strip button.policy { padding: 4px 10px; }
     ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
     .jump { width: 100%; text-align: left; white-space: normal; }
   </style>
@@ -69,6 +92,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnSetupCursorCli" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
     <button type="button" id="btnSetCursorAgentApiKey" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
   </div>
+  ${policyBlock}
   <ul id="starredList" style="display:${showStarred}">${starredRows || "<li>(none)</li>"}</ul>
   <ul id="todoList" style="display:${showTodo}">${todoRows || "<li>(none)</li>"}</ul>
   <script nonce="${nonce}">
@@ -104,6 +128,12 @@ export function getConversationDrawersPanelHtml(
       vscode.postMessage({ type: "setCursorAgentApiKey" });
     });
     document.addEventListener("click", function (ev) {
+      var pbtn = ev.target && ev.target.closest && ev.target.closest("button.policy");
+      if (pbtn) {
+        var u = pbtn.getAttribute("data-url");
+        if (u) vscode.postMessage({ type: "openLegalPolicyUrl", url: u });
+        return;
+      }
       var btn = ev.target && ev.target.closest && ev.target.closest("button.jump");
       if (!btn) return;
       var eid = btn.getAttribute("data-event-id");
