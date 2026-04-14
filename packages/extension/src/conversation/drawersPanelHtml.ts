@@ -108,6 +108,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="${esc(scTitle)}">${esc(scLabel)}</button>
     <button type="button" id="btnSendMessage" title="Send a main-thread message in this conversation (Colcoor: Send message…)">Send message…</button>
+    <button type="button" id="btnStopAssistantGeneration" title="Stop the in-flight assistant reply in the conversation panel, if any (Colcoor: Stop assistant generation). Safe no-op when idle.">Stop generation</button>
     <button type="button" id="btnListTodoNotesPicker" title="Pick a TODO note to jump to (Colcoor: List TODO notes in conversation)">List TODO notes…</button>
     <button type="button" id="btnListStarredPicker" title="Pick a starred message to jump to (Colcoor: List starred messages in conversation)">List starred…</button>
     <button type="button" id="btnListMembers" title="Show members of this conversation in the Colcoor output channel">Show members</button>
@@ -171,6 +172,9 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnSendMessage").addEventListener("click", function () {
       vscode.postMessage({ type: "sendMessage" });
+    });
+    document.getElementById("btnStopAssistantGeneration").addEventListener("click", function () {
+      vscode.postMessage({ type: "stopGeneration" });
     });
     document.getElementById("btnListTodoNotesPicker").addEventListener("click", function () {
       vscode.postMessage({ type: "listTodoNotesInConversation" });

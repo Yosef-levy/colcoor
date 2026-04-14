@@ -1002,6 +1002,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 });
                 return;
               }
+              if (msg.type === "stopGeneration") {
+                await vscode.commands.executeCommand("colcoor.stopGeneration");
+                return;
+              }
               if (msg.type === "listTodoNotesInConversation") {
                 if (!drawersConversationId) {
                   return;

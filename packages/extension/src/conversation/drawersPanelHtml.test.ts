@@ -42,6 +42,8 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
     expect(html).toContain('id="btnSendMessage"');
     expect(html).toContain('vscode.postMessage({ type: "sendMessage" });');
+    expect(html).toContain('id="btnStopAssistantGeneration"');
+    expect(html).toContain('vscode.postMessage({ type: "stopGeneration" });');
     expect(html).toContain('id="btnListTodoNotesPicker"');
     expect(html).toContain('vscode.postMessage({ type: "listTodoNotesInConversation" });');
     expect(html).toContain('id="btnListStarredPicker"');
