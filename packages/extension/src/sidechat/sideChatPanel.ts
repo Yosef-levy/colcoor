@@ -83,6 +83,7 @@ type FromWebview =
   | { type: "openSettings" }
   | { type: "openLegalPolicySettings" }
   | { type: "openSideChatSoundSettings" }
+  | { type: "openSideChatLayoutSettings" }
   | { type: "openAbout" }
   | { type: "openLegalPolicyUrl"; url: string }
   | { type: "signIn" }
@@ -508,6 +509,10 @@ export async function openSideChatPanel(
     }
     if (msg.type === "openLegalPolicySettings") {
       await vscode.commands.executeCommand("colcoor.openLegalPolicySettings");
+      return;
+    }
+    if (msg.type === "openSideChatLayoutSettings") {
+      await vscode.commands.executeCommand("colcoor.openSideChatLayoutSettings");
       return;
     }
     if (msg.type === "openSideChatSoundSettings") {
