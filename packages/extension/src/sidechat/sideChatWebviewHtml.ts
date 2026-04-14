@@ -115,6 +115,12 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     const vscode = acquireVsCodeApi();
     var viewerUserId = null;
     var replyTarget = null;
+    function shouldSendOnEnter(ev) {
+      if (!ev || ev.key !== "Enter") return false;
+      if (ev.isComposing) return false;
+      if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;
+      return true;
+    }
     function canMutateRow(m) {
       return !!(viewerUserId && m && m.kind === "user" && m.author_user_id === viewerUserId && !m.deleted_at);
     }
@@ -265,6 +271,11 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     });
     document.getElementById("refresh").addEventListener("click", function () {
       vscode.postMessage({ type: "refresh" });
+    });
+    document.getElementById("input").addEventListener("keydown", function (ev) {
+      if (!shouldSendOnEnter(ev)) return;
+      ev.preventDefault();
+      document.getElementById("send").click();
     });
     document.getElementById("clearReply").addEventListener("click", function () {
       replyTarget = null;
