@@ -593,6 +593,12 @@ export class ColcoorApiClient {
       author: body.author,
       private_branch: body.private_branch ?? false,
     };
+    if (body.checkpoint_label !== undefined && body.checkpoint_label !== null) {
+      const t = String(body.checkpoint_label).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+      if (t) {
+        payload.checkpoint_label = t;
+      }
+    }
     if (body.content_json !== undefined) {
       payload.content_json = body.content_json;
     }

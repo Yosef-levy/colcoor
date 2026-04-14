@@ -410,6 +410,53 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.body).toBe(JSON.stringify({ display_name: "Sam" }));
   });
 
+  it("appendEvent includes normalized checkpoint_label in JSON when set", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.appendEvent("cccccccc-cccc-4ccc-8ccc-cccccccccccc", {
+      kind: "user_input",
+      parent_event_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      content: "hi",
+      author: "end_user",
+      checkpoint_label: "  Milestone A\r\n",
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body.checkpoint_label).toBe("Milestone A");
+    expect(body.content).toBe("hi");
+  });
+
+  it("appendEvent omits checkpoint_label when blank after trim", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.appendEvent("cccccccc-cccc-4ccc-8ccc-cccccccccccc", {
+      kind: "user_input",
+      parent_event_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      content: "hi",
+      author: "end_user",
+      checkpoint_label: "  \r\n  ",
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect("checkpoint_label" in body).toBe(false);
+  });
+
   it("createConversation surfaces HTTP 402 as plan / usage wording", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

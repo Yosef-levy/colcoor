@@ -223,6 +223,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `updated_at` | string (ISO-8601) | yes |
 | `starred` | boolean | yes | `true` if the caller has starred this event ([domain-model.md](domain-model.md) §7) |
 | `note_count` | integer | yes | Number of notes on this event (≥ 0); [tree-ui-contract.md](tree-ui-contract.md) §7 |
+| `checkpoint_label` | string \| null | no | Display-only breadcrumb / checkpoint text when set ([ui-features.md](ui-features.md) §8); matches `events.checkpoint_label` ([database.md](database.md) §4) |
 
 ### 5.2 `POST /api/v1/conversations/{conversation_id}/active`
 
@@ -290,6 +291,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `author` | string | yes | e.g. `end_user`, `cursor_agent` |
 | `private_branch` | boolean | no | default `false`; **only** valid when `kind` is `user_input`; must be `false` when `kind` is `assistant_output` |
 | `content_json` | object | no | **Only** when `kind` is `assistant_output`: optional JSON stored on the event (e.g. `{ "colcoor_agent_trace": { "version": 1, "entries": [...] } }` from NDJSON timeline) |
+| `checkpoint_label` | string | no | Optional display-only label stored on the new event (trimmed; max 256 chars); omitted or blank when not used |
 
 ---
 
