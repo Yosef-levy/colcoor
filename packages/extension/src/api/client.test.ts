@@ -480,4 +480,30 @@ describe("ColcoorApiClient note mutations", () => {
       );
     }
   });
+
+  it("surfaces Retry-After on HTTP 429 as retryAfterSeconds and message suffix", async () => {
+    const headers = new Headers();
+    headers.set("Retry-After", "88");
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers,
+      text: async () => JSON.stringify({ detail: "too many requests" }),
+    }) as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    try {
+      await api.listConversations();
+      expect.fail("expected rejection");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ColcoorApiHttpError);
+      const err = e as ColcoorApiHttpError;
+      expect(err.status).toBe(429);
+      expect(err.retryAfterSeconds).toBe(88);
+      expect(err.message).toContain("88 s (Retry-After)");
+    }
+  });
 });

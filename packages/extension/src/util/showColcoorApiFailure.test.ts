@@ -149,6 +149,14 @@ describe("showColcoorApiFailure", () => {
     );
   });
 
+  it("includes Retry-After seconds in the HTTP 429 toast when present on the error", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    await showColcoorApiFailure(new ColcoorApiHttpError("send", 429, "{}", { retryAfterSeconds: 42 }));
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain("rate limited");
+    expect(text).toContain("42 s (Retry-After)");
+  });
+
   it("runs refresh conversation tree when user picks that action on HTTP 429", async () => {
     showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 429, ""));

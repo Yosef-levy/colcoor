@@ -73,4 +73,21 @@ describe("formatColcoorApiError", () => {
       "update note failed (HTTP 403): forbidden",
     );
   });
+
+  it("appends Retry-After hint for HTTP 429 when seconds are provided", () => {
+    const msg = formatColcoorApiError("send message", 429, "{}", 90);
+    expect(msg).toContain("HTTP 429");
+    expect(msg).toContain("Server asked to wait 90 s (Retry-After)");
+  });
+
+  it("appends Retry-After hint for HTTP 503 when seconds are provided", () => {
+    const msg = formatColcoorApiError("get tree", 503, "{}", 12);
+    expect(msg).toContain("HTTP 503");
+    expect(msg).toContain("Server asked to wait 12 s (Retry-After)");
+  });
+
+  it("does not append Retry-After for 429 when seconds are null", () => {
+    const msg = formatColcoorApiError("send", 429, "", null);
+    expect(msg).toBe('send failed (HTTP 429): (no response body)');
+  });
 });

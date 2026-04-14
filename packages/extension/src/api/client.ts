@@ -1,4 +1,5 @@
 import { ColcoorApiHttpError } from "./colcoorApiHttpError";
+import { parseRetryAfterSeconds } from "./retryAfterHeader";
 import { parseCompleteSseDataJsonBlocks } from "./sideChatSseParse";
 
 export type ColcoorApiClientOptions = {
@@ -169,7 +170,11 @@ export class ColcoorApiClient {
     if (res.ok) {
       return;
     }
-    throw new ColcoorApiHttpError(operation, res.status, bodyText);
+    const retryAfterSeconds =
+      res.status === 429 || res.status === 503
+        ? parseRetryAfterSeconds(res.headers.get("Retry-After"))
+        : null;
+    throw new ColcoorApiHttpError(operation, res.status, bodyText, { retryAfterSeconds });
   }
 
   private async fetchOrThrow(url: string, init: RequestInit): Promise<Response> {

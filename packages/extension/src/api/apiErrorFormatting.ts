@@ -58,12 +58,26 @@ export function parseApiErrorDetail(bodyText: string): string | undefined {
  * One-line message for thrown `Error` after a non-OK `fetch` response.
  * HTTP **402** is worded for plan / quota (see api-contracts.md, billing-usage.md).
  */
-export function formatColcoorApiError(operation: string, status: number, bodyText: string): string {
+export function formatColcoorApiError(
+  operation: string,
+  status: number,
+  bodyText: string,
+  retryAfterSeconds?: number | null,
+): string {
   const detail = parseApiErrorDetail(bodyText);
   if (status === 402) {
     const extra = detail ? ` ${detail}` : "";
     return `Plan or usage limit — ${operation}.${extra} Check billing or upgrade your plan.`;
   }
   const tail = detail ?? "(no response body)";
-  return `${operation} failed (HTTP ${status}): ${tail}`;
+  let base = `${operation} failed (HTTP ${status}): ${tail}`;
+  if (
+    (status === 429 || status === 503) &&
+    retryAfterSeconds != null &&
+    Number.isFinite(retryAfterSeconds) &&
+    retryAfterSeconds >= 0
+  ) {
+    base += ` Server asked to wait ${Math.floor(retryAfterSeconds)} s (Retry-After).`;
+  }
+  return base;
 }
