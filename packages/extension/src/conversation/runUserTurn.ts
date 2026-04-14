@@ -11,10 +11,22 @@ import {
   pathFromRootToTip,
 } from "./treeEvents";
 
+/**
+ * Optional reply parent from UI/commands: trim and CRLF-normalize like persisted text.
+ * Empty after normalization → use default branch tip (`findBranchTip`).
+ */
+function resolveReplyParentEventId(raw: string | undefined): string | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const normalized = normalizePersistedUserInputText(raw);
+  return normalized === "" ? undefined : normalized;
+}
+
 export type RunUserTurnOptions = {
   /**
    * Event id to attach the new `user_input` under (and build transcript root → this node).
-   * When omitted, uses the default branch tip (`findBranchTip`).
+   * When omitted or blank after normalization, uses the default branch tip (`findBranchTip`).
    */
   replyParentEventId?: string;
   /** When true, `user_input` is stored as a private draft (`visible_to` user only). */
@@ -64,10 +76,11 @@ export async function runColcoorUserTurn(
   }
   const notesByEventId = indexNotesByEventId(notes);
   const byId = new Map(events.map((e) => [e.id, e]));
+  const replyParentId = resolveReplyParentEventId(options?.replyParentEventId);
   const attach =
-    options?.replyParentEventId !== undefined && options.replyParentEventId !== ""
+    replyParentId !== undefined
       ? (() => {
-          const n = byId.get(options.replyParentEventId);
+          const n = byId.get(replyParentId);
           if (!n) {
             throw new Error("reply parent is not in the current tree");
           }

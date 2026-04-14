@@ -109,6 +109,40 @@ describe("runColcoorUserTurn", () => {
     });
   });
 
+  it("normalizes whitespace and CRLF on replyParentEventId before lookup", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValueOnce({ id: "u-new" }).mockResolvedValueOnce({ id: "a-new" });
+    const api = {
+      getTree: vi.fn().mockResolvedValue({ events: linearTree() }),
+      listNotes: vi.fn().mockResolvedValue([]),
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runColcoorUserTurn(api, agent, "conv1", null, "hello", "", {
+      replyParentEventId: "  root\r\n",
+    });
+
+    expect(appendEvent.mock.calls[0][1].parent_event_id).toBe("root");
+  });
+
+  it("treats whitespace-only replyParentEventId like omitted (branch tip)", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValueOnce({ id: "u-new" }).mockResolvedValueOnce({ id: "a-new" });
+    const api = {
+      getTree: vi.fn().mockResolvedValue({ events: linearTree() }),
+      listNotes: vi.fn().mockResolvedValue([]),
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runColcoorUserTurn(api, agent, "conv1", null, "hello", "", {
+      replyParentEventId: "  \r\n\t  ",
+    });
+
+    expect(appendEvent.mock.calls[0][1].parent_event_id).toBe("asst1");
+  });
+
   it("persists user_input under an explicit reply parent", async () => {
     const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
     const agent = { run } as unknown as AgentRunner;
