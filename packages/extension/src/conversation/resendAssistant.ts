@@ -3,6 +3,7 @@ import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
+import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 import {
   graphPathToTranscriptTurns,
   indexNotesByEventId,
@@ -45,7 +46,7 @@ export async function runResendAssistant(
   if (userNode.kind !== "user_input") {
     throw new Error("Resend only applies to a user message");
   }
-  const userBody = (userNode.content_text ?? "").trim();
+  const userBody = normalizePersistedUserInputText(userNode.content_text ?? "");
   if (!userBody) {
     throw new Error("cannot resend an empty user message");
   }
