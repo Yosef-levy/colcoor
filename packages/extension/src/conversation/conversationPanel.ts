@@ -3,7 +3,10 @@ import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
-import { COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT } from "./colcoorContextKeys";
+import {
+  COLCOOR_CONVERSATION_PANEL_OPEN_CONTEXT,
+  COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT,
+} from "./colcoorContextKeys";
 import { isSafeHttpUrlForWebview, listLegalPolicyLinksFromColcoorWorkspaceSection } from "./legalPolicySection";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
@@ -164,6 +167,11 @@ export function createConversationPanelController(
       COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT,
       sendAbort != null,
     );
+  }
+
+  function syncConversationPanelOpenContext(): void {
+    const open = panel != null && conversationId != undefined;
+    void vscode.commands.executeCommand("setContext", COLCOOR_CONVERSATION_PANEL_OPEN_CONTEXT, open);
   }
 
   /** Last successful tree payload for lightweight UI refresh (e.g. settings). */
@@ -601,6 +609,7 @@ export function createConversationPanelController(
 
   function ensurePanel(): vscode.WebviewPanel {
     if (panel) {
+      syncConversationPanelOpenContext();
       return panel;
     }
     const nonce = randomNonce();
@@ -935,9 +944,11 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       lastNotes = [];
       lastNeedsContextRebuild = false;
+      syncConversationPanelOpenContext();
     });
 
     panel = p;
+    syncConversationPanelOpenContext();
     return p;
   }
 

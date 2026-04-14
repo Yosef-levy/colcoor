@@ -78,6 +78,46 @@ describe("package.json Colcoor contributions", () => {
     expect(copy?.description).toContain("clipboard");
   });
 
+  it("contributes default keybindings gated on conversation panel open ([tree-ui-contract.md] §6)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: {
+        keybindings?: Array<{ command?: string; key?: string; when?: string }>;
+      };
+    };
+    const kb = pkg.contributes?.keybindings ?? [];
+    const row = (cmd: string) => kb.find((k) => k.command === cmd);
+    expect(row("colcoor.jumpToLatestInConversation")).toMatchObject({
+      command: "colcoor.jumpToLatestInConversation",
+      key: "ctrl+shift+alt+j",
+      when: "colcoor.conversationPanelOpen",
+    });
+    expect(row("colcoor.continueFromHere")).toMatchObject({
+      key: "ctrl+shift+alt+h",
+      when: "colcoor.conversationPanelOpen",
+    });
+    expect(row("colcoor.resendAssistant")).toMatchObject({
+      key: "ctrl+shift+alt+e",
+      when: "colcoor.conversationPanelOpen",
+    });
+    expect(row("colcoor.copySelectedMessage")).toMatchObject({
+      key: "ctrl+shift+alt+c",
+      when: "colcoor.conversationPanelOpen",
+    });
+    expect(row("colcoor.refreshConversationTree")).toMatchObject({
+      key: "ctrl+shift+alt+t",
+      when: "colcoor.conversationPanelOpen",
+    });
+    expect(row("colcoor.toggleStarSelectedMessage")).toMatchObject({
+      key: "ctrl+shift+alt+8",
+      when: "colcoor.conversationPanelOpen",
+    });
+    expect(row("colcoor.stopGeneration")).toMatchObject({
+      key: "ctrl+shift+alt+b",
+      when: "colcoor.conversationReplyInProgress && colcoor.conversationPanelOpen",
+    });
+  });
+
   it("registers each contributed command id at most once", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };

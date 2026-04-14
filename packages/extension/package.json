@@ -271,6 +271,43 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "colcoor.jumpToLatestInConversation",
+        "key": "ctrl+shift+alt+j",
+        "when": "colcoor.conversationPanelOpen"
+      },
+      {
+        "command": "colcoor.continueFromHere",
+        "key": "ctrl+shift+alt+h",
+        "when": "colcoor.conversationPanelOpen"
+      },
+      {
+        "command": "colcoor.resendAssistant",
+        "key": "ctrl+shift+alt+e",
+        "when": "colcoor.conversationPanelOpen"
+      },
+      {
+        "command": "colcoor.copySelectedMessage",
+        "key": "ctrl+shift+alt+c",
+        "when": "colcoor.conversationPanelOpen"
+      },
+      {
+        "command": "colcoor.refreshConversationTree",
+        "key": "ctrl+shift+alt+t",
+        "when": "colcoor.conversationPanelOpen"
+      },
+      {
+        "command": "colcoor.toggleStarSelectedMessage",
+        "key": "ctrl+shift+alt+8",
+        "when": "colcoor.conversationPanelOpen"
+      },
+      {
+        "command": "colcoor.stopGeneration",
+        "key": "ctrl+shift+alt+b",
+        "when": "colcoor.conversationReplyInProgress && colcoor.conversationPanelOpen"
+      }
+    ],
     "configuration": {
       "title": "Colcoor",
       "properties": {
