@@ -74,6 +74,12 @@ describe("formatColcoorApiError", () => {
     );
   });
 
+  it("formats HTTP 413 with generic wording", () => {
+    expect(formatColcoorApiError("send", 413, '{"detail":"payload too large"}')).toBe(
+      "send failed (HTTP 413): payload too large",
+    );
+  });
+
   it("appends Retry-After hint for HTTP 429 when seconds are provided", () => {
     const msg = formatColcoorApiError("send message", 429, "{}", 90);
     expect(msg).toContain("HTTP 429");

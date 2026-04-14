@@ -7,6 +7,7 @@ import {
   isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
+  isPayloadTooLargeColcoorApiError,
   isPlanLimitColcoorApiError,
   isRequestTimeoutColcoorApiError,
   isServiceUnavailableColcoorApiError,
@@ -84,6 +85,14 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isUnprocessableEntityColcoorApiError(e)) {
     await vscode.window.showErrorMessage(
       "Colcoor: validation error",
+      { modal: false, detail: e.message },
+      "OK",
+    );
+    return;
+  }
+  if (isPayloadTooLargeColcoorApiError(e)) {
+    await vscode.window.showErrorMessage(
+      "Colcoor: request too large",
       { modal: false, detail: e.message },
       "OK",
     );

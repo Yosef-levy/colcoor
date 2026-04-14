@@ -8,6 +8,7 @@ import {
   isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
+  isPayloadTooLargeColcoorApiError,
   isPlanLimitColcoorApiError,
   isRequestTimeoutColcoorApiError,
   isServiceUnavailableColcoorApiError,
@@ -82,6 +83,14 @@ describe("isUnprocessableEntityColcoorApiError", () => {
     expect(isUnprocessableEntityColcoorApiError(new ColcoorApiHttpError("x", 422, ""))).toBe(true);
     expect(isUnprocessableEntityColcoorApiError(new ColcoorApiHttpError("x", 409, ""))).toBe(false);
     expect(isUnprocessableEntityColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isPayloadTooLargeColcoorApiError", () => {
+  it("is true only for HTTP 413 ColcoorApiHttpError", () => {
+    expect(isPayloadTooLargeColcoorApiError(new ColcoorApiHttpError("x", 413, ""))).toBe(true);
+    expect(isPayloadTooLargeColcoorApiError(new ColcoorApiHttpError("x", 422, ""))).toBe(false);
+    expect(isPayloadTooLargeColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 

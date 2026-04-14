@@ -57,6 +57,11 @@ export function isUnprocessableEntityColcoorApiError(e: unknown): e is ColcoorAp
   return e instanceof ColcoorApiHttpError && e.status === 422;
 }
 
+/** HTTP 413 — request body too large (reverse proxy or server limit). */
+export function isPayloadTooLargeColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 413;
+}
+
 /** HTTP 408 — request timeout (client or upstream). */
 export function isRequestTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 408;
