@@ -21,6 +21,10 @@ import { createConversationPanelController } from "./conversation/conversationPa
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import { openSideChatPanel } from "./sidechat/sideChatPanel";
 import { normalizePersistedUserInputText } from "./conversation/normalizeUserInputText";
+import {
+  isPrivateBranchFromPrivacyPick,
+  sendMessagePrivacyQuickPickItems,
+} from "./conversation/sendMessagePalettePrivacy";
 import { runColcoorUserTurn, type UserTurnResult } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
@@ -997,7 +1001,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const text = await vscode.window.showInputBox({
           title: "Colcoor — message",
           prompt:
-            "Your message (saved to the default branch, then Cursor agent per Settings → Colcoor → agent mode).",
+            "Your message (attached under the branch tip, then Cursor agent per Settings → Colcoor → agent mode). Use the next step for shared vs private draft.",
           ignoreFocusOut: true,
         });
         const normalized = text !== undefined ? normalizePersistedUserInputText(text) : "";
@@ -1011,6 +1015,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           ignoreFocusOut: true,
         });
         const checkpointNorm = normalizedOptionalFollowUpPrompt(checkpointRaw);
+        const privacyPick = await vscode.window.showQuickPick(sendMessagePrivacyQuickPickItems(), {
+          title: "Colcoor — send as",
+          placeHolder: "Shared (default) or private draft under the branch tip",
+          ignoreFocusOut: true,
+        });
+        const privateBranch = isPrivateBranchFromPrivacyPick(privacyPick);
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
         try {
           const result = await runColcoorUserTurn(
@@ -1020,11 +1030,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             convTitle,
             normalized,
             workspaceRoot,
-            checkpointNorm
-              ? {
-                  checkpointLabel: checkpointNorm,
-                }
-              : undefined,
+            {
+              ...(checkpointNorm ? { checkpointLabel: checkpointNorm } : {}),
+              ...(privateBranch ? { privateBranch: true } : {}),
+            },
           );
           await notifyUserTurnOutcome(result);
         } catch (e) {

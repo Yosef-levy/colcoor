@@ -29,6 +29,7 @@ describe("package.json Colcoor contributions", () => {
     const send = pkg.contributes?.commands?.find((c) => c.command === "colcoor.sendMessage");
     expect(send?.title).toBe("Colcoor: Send message…");
     expect(send?.description).toContain("checkpoint");
+    expect(send?.description).toContain("private");
   });
 
   it("registers stopGeneration for conversation panel abort (enablement uses reply-in-progress context)", () => {
