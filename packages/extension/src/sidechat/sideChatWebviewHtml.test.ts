@@ -101,4 +101,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "signIn" });');
     expect(html).toContain('vscode.postMessage({ type: "newConversation" });');
   });
+
+  it("includes Sign out and refresh-conversations (sidebar) actions", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnSignOut"');
+    expect(html).toContain('id="btnRefreshConversations"');
+    expect(html).toContain('vscode.postMessage({ type: "signOut" });');
+    expect(html).toContain('vscode.postMessage({ type: "refreshConversations" });');
+  });
 });

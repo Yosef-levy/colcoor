@@ -62,7 +62,9 @@ type FromWebview =
   | { type: "openSettings" }
   | { type: "openAbout" }
   | { type: "signIn" }
+  | { type: "signOut" }
   | { type: "newConversation" }
+  | { type: "refreshConversations" }
   | { type: "edit"; messageId: string; text: string }
   | { type: "delete"; messageId: string }
   | { type: "openReference"; refKind: "event" | "note"; refId: string };
@@ -423,6 +425,14 @@ export async function openSideChatPanel(
     }
     if (msg.type === "newConversation") {
       await vscode.commands.executeCommand("colcoor.newConversation");
+      return;
+    }
+    if (msg.type === "signOut") {
+      await vscode.commands.executeCommand("colcoor.signOut");
+      return;
+    }
+    if (msg.type === "refreshConversations") {
+      await vscode.commands.executeCommand("colcoor.refreshConversations");
       return;
     }
     if (msg.type === "send") {
