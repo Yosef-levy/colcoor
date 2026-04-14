@@ -96,6 +96,9 @@ function terminalSuccessFullText(result: unknown): string | null {
   if (typeof result === "number" && Number.isFinite(result)) {
     return String(result);
   }
+  if (typeof result === "boolean") {
+    return result ? "true" : "false";
+  }
   return null;
 }
 

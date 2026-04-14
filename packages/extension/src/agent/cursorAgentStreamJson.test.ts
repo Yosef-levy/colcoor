@@ -218,6 +218,15 @@ describe("parseCursorAgentNdjsonLine", () => {
     });
   });
 
+  it("coerces boolean success result to terminal text", () => {
+    expect(
+      parseCursorAgentNdjsonLine(JSON.stringify({ type: "result", subtype: "success", result: true })),
+    ).toEqual({ kind: "terminal_success", fullText: "true" });
+    expect(
+      parseCursorAgentNdjsonLine(JSON.stringify({ type: "result", subtype: "success", result: false })),
+    ).toEqual({ kind: "terminal_success", fullText: "false" });
+  });
+
   it("parses success result with empty string body", () => {
     const line = JSON.stringify({
       type: "result",
@@ -337,6 +346,16 @@ describe("createStreamJsonStdoutFeed", () => {
     feed.push('{"type":"result","subtype":"success","result":99}\n');
     feed.flushTail();
     expect(feed.getResolvedText()).toBe("99");
+  });
+
+  it("accepts boolean terminal success result", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"nope"}]}}\n',
+    );
+    feed.push('{"type":"result","subtype":"success","result":false}\n');
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("false");
   });
 
   it("handles NDJSON split across TCP-like chunks", () => {

@@ -19,6 +19,13 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.openSideChat");
   });
 
+  it("registers each contributed command id at most once", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };
+    const cmds = pkg.contributes?.commands?.map((c) => c.command).filter((c): c is string => Boolean(c)) ?? [];
+    expect(new Set(cmds).size).toBe(cmds.length);
+  });
+
   it("includes Sign out and About command links for discoverability", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
