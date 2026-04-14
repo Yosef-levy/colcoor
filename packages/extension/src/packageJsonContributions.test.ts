@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  COLOOR_API_FAILURE_OPEN_ABOUT_ACTION,
+  COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
   COLOOR_API_FAILURE_SIGN_IN_ACTION,
@@ -65,12 +67,14 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.refreshConversationDrawers");
   });
 
-  it("matches showColcoorApiFailure HTTP 401/404 action labels to command titles ([ui-features.md] §12)", () => {
+  it("matches showColcoorApiFailure toast action labels to command titles ([ui-features.md] §12)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { commands?: Array<{ command?: string; title?: string }> };
     };
     const titleOf = (command: string) => pkg.contributes?.commands?.find((c) => c.command === command)?.title;
+    expect(titleOf("colcoor.openSettings")).toBe(COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION);
+    expect(titleOf("colcoor.openAbout")).toBe(COLOOR_API_FAILURE_OPEN_ABOUT_ACTION);
     expect(titleOf("colcoor.signIn")).toBe(COLOOR_API_FAILURE_SIGN_IN_ACTION);
     expect(titleOf("colcoor.refreshConversations")).toBe(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
     expect(titleOf("colcoor.refreshConversationTree")).toBe(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);

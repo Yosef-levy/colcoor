@@ -7,13 +7,12 @@ import {
   isUnauthorizedColcoorApiError,
 } from "../api/colcoorApiHttpError";
 import {
+  COLOOR_API_FAILURE_OPEN_ABOUT_ACTION,
+  COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
   COLOOR_API_FAILURE_SIGN_IN_ACTION,
 } from "./colcoorApiFailureActions";
-
-/** Settings filter for this extension (publisher.name from package.json). */
-export const COLOOR_EXTENSION_SETTINGS_QUERY = "@ext:colcoor.colcoor-extension";
 
 /**
  * User-facing API failure: special handling for HTTP 401, 402, 403, 404; otherwise a single error toast.
@@ -24,13 +23,10 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
     const choice = await vscode.window.showErrorMessage(
       "Colcoor — plan or usage limit",
       { modal: true, detail: msg },
-      "Open Colcoor settings",
+      COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION,
     );
-    if (choice === "Open Colcoor settings") {
-      await vscode.commands.executeCommand(
-        "workbench.action.openSettings",
-        COLOOR_EXTENSION_SETTINGS_QUERY,
-      );
+    if (choice === COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION) {
+      await vscode.commands.executeCommand("colcoor.openSettings");
     }
     return;
   }
@@ -45,9 +41,13 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
     return;
   }
   if (isForbiddenColcoorApiError(e)) {
-    await vscode.window.showErrorMessage(
+    const choice = await vscode.window.showErrorMessage(
       `Colcoor: permission denied — ${e.message} If you are a viewer, ask an editor or owner to change your role.`,
+      COLOOR_API_FAILURE_OPEN_ABOUT_ACTION,
     );
+    if (choice === COLOOR_API_FAILURE_OPEN_ABOUT_ACTION) {
+      await vscode.commands.executeCommand("colcoor.openAbout");
+    }
     return;
   }
   if (isNotFoundColcoorApiError(e)) {

@@ -12,11 +12,13 @@ vi.mock("vscode", () => ({
 
 import { ColcoorApiHttpError } from "../api/colcoorApiHttpError";
 import {
+  COLOOR_API_FAILURE_OPEN_ABOUT_ACTION,
+  COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
   COLOOR_API_FAILURE_SIGN_IN_ACTION,
 } from "./colcoorApiFailureActions";
-import { COLOOR_EXTENSION_SETTINGS_QUERY, showColcoorApiFailure } from "./showColcoorApiFailure";
+import { showColcoorApiFailure } from "./showColcoorApiFailure";
 
 describe("showColcoorApiFailure", () => {
   beforeEach(() => {
@@ -25,7 +27,7 @@ describe("showColcoorApiFailure", () => {
   });
 
   it("shows modal and can open settings for HTTP 402", async () => {
-    showErrorMessage.mockResolvedValue("Open Colcoor settings");
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION);
     const e = new ColcoorApiHttpError("send", 402, "{}");
     await showColcoorApiFailure(e);
     expect(showErrorMessage).toHaveBeenCalledTimes(1);
@@ -37,11 +39,8 @@ describe("showColcoorApiFailure", () => {
     expect(title).toBe("Colcoor — plan or usage limit");
     expect(opts.modal).toBe(true);
     expect(opts.detail).toBe(e.message);
-    expect(actions).toEqual(["Open Colcoor settings"]);
-    expect(executeCommand).toHaveBeenCalledWith(
-      "workbench.action.openSettings",
-      COLOOR_EXTENSION_SETTINGS_QUERY,
-    );
+    expect(actions).toEqual([COLOOR_API_FAILURE_OPEN_SETTINGS_ACTION]);
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.openSettings");
   });
 
   it("does not open settings when user dismisses 402 modal", async () => {
@@ -56,15 +55,23 @@ describe("showColcoorApiFailure", () => {
     expect(showErrorMessage).toHaveBeenCalledWith("Colcoor: network down");
   });
 
-  it("shows permission hint for HTTP 403 ColcoorApiHttpError", async () => {
+  it("shows permission hint and About action for HTTP 403 ColcoorApiHttpError", async () => {
     showErrorMessage.mockResolvedValue(undefined);
     const e = new ColcoorApiHttpError("patch note", 403, '{"detail":"not allowed"}');
     await showColcoorApiFailure(e);
-    expect(showErrorMessage).toHaveBeenCalledTimes(1);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("permission denied"),
+      COLOOR_API_FAILURE_OPEN_ABOUT_ACTION,
+    );
     const [text] = showErrorMessage.mock.calls[0] as [string];
-    expect(text).toContain("permission denied");
     expect(text).toContain(e.message);
     expect(text).toContain("viewer");
+  });
+
+  it("runs Colcoor: About when user picks the 403 action", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_OPEN_ABOUT_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 403, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.openAbout");
   });
 
   it("shows sign-in action for HTTP 401 ColcoorApiHttpError", async () => {
