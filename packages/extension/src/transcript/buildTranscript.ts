@@ -47,7 +47,7 @@ const BLOCK_SEPARATOR = "\n\n";
 
 /** Escape payload text so literal delimiters are not confused with wrappers (transcript-format §5). */
 export function escapeTranscriptBody(payload: string): string {
-  let s = payload.replace(/\r\n/g, "\n");
+  let s = payload.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const replacements: [string, string][] = [
     ["<<<END USER>>>", "<< <END USER>>>"],
     ["<<<END LLM>>>", "<< <END LLM>>>"],
