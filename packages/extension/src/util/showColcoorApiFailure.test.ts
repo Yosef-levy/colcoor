@@ -214,6 +214,23 @@ describe("showColcoorApiFailure", () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
+  it("shows not acceptable toast with expandable detail for HTTP 406", async () => {
+    showErrorMessage.mockResolvedValue("OK");
+    const e = new ColcoorApiHttpError("get", 406, JSON.stringify({ detail: "cannot satisfy Accept" }));
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledTimes(1);
+    const [title, opts, ok] = showErrorMessage.mock.calls[0] as [
+      string,
+      { modal?: boolean; detail?: string },
+      string,
+    ];
+    expect(title).toBe("Colcoor: not acceptable");
+    expect(opts.modal).toBe(false);
+    expect(opts.detail).toBe(e.message);
+    expect(ok).toBe("OK");
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
   it("runs refresh commands when user picks a 404 action", async () => {
     showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 404, ""));

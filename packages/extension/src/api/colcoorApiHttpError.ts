@@ -77,6 +77,11 @@ export function isUnsupportedMediaTypeColcoorApiError(e: unknown): e is ColcoorA
   return e instanceof ColcoorApiHttpError && e.status === 415;
 }
 
+/** HTTP 406 — cannot satisfy `Accept` / representation constraints for this resource. */
+export function isNotAcceptableColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 406;
+}
+
 /** HTTP 408 — request timeout (client or upstream). */
 export function isRequestTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 408;

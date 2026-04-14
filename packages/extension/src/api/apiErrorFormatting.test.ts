@@ -86,6 +86,12 @@ describe("formatColcoorApiError", () => {
     );
   });
 
+  it("formats HTTP 406 with generic wording", () => {
+    expect(formatColcoorApiError("get tree", 406, '{"detail":"no matching representation"}')).toBe(
+      "get tree failed (HTTP 406): no matching representation",
+    );
+  });
+
   it("formats HTTP 410 with generic wording", () => {
     expect(formatColcoorApiError("get event", 410, '{"detail":"resource retired"}')).toBe(
       "get event failed (HTTP 410): resource retired",

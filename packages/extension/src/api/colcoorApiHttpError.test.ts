@@ -8,6 +8,7 @@ import {
   isGatewayTimeoutColcoorApiError,
   isGoneColcoorApiError,
   isInsufficientStorageColcoorApiError,
+  isNotAcceptableColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
@@ -119,6 +120,14 @@ describe("isUnsupportedMediaTypeColcoorApiError", () => {
     expect(isUnsupportedMediaTypeColcoorApiError(new ColcoorApiHttpError("x", 415, ""))).toBe(true);
     expect(isUnsupportedMediaTypeColcoorApiError(new ColcoorApiHttpError("x", 413, ""))).toBe(false);
     expect(isUnsupportedMediaTypeColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isNotAcceptableColcoorApiError", () => {
+  it("is true only for HTTP 406 ColcoorApiHttpError", () => {
+    expect(isNotAcceptableColcoorApiError(new ColcoorApiHttpError("x", 406, ""))).toBe(true);
+    expect(isNotAcceptableColcoorApiError(new ColcoorApiHttpError("x", 415, ""))).toBe(false);
+    expect(isNotAcceptableColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   isGatewayTimeoutColcoorApiError,
   isGoneColcoorApiError,
   isInsufficientStorageColcoorApiError,
+  isNotAcceptableColcoorApiError,
   isNotFoundColcoorApiError,
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
@@ -117,6 +118,14 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isUnsupportedMediaTypeColcoorApiError(e)) {
     await vscode.window.showErrorMessage(
       "Colcoor: unsupported media type",
+      { modal: false, detail: e.message },
+      "OK",
+    );
+    return;
+  }
+  if (isNotAcceptableColcoorApiError(e)) {
+    await vscode.window.showErrorMessage(
+      "Colcoor: not acceptable",
       { modal: false, detail: e.message },
       "OK",
     );
