@@ -3,6 +3,7 @@ import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
+import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 import {
   findBranchTip,
   graphPathToTranscriptTurns,
@@ -49,7 +50,7 @@ export async function runColcoorUserTurn(
   workspaceRoot: string,
   options?: RunUserTurnOptions,
 ): Promise<UserTurnResult> {
-  const trimmed = userMessage.trim();
+  const trimmed = normalizePersistedUserInputText(userMessage);
   if (!trimmed) {
     throw new Error("message is empty");
   }

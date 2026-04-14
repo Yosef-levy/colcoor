@@ -5,6 +5,7 @@ import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
+import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
@@ -338,7 +339,7 @@ export function createConversationPanelController(
   }
 
   async function handleSend(text: string, privateBranch: boolean): Promise<void> {
-    const trimmed = text.trim();
+    const trimmed = normalizePersistedUserInputText(text);
     if (!trimmed || !conversationId || !selectedEventId) {
       return;
     }
@@ -882,11 +883,15 @@ export function createConversationPanelController(
       prompt: "Note text (attached to the selected message; viewers cannot add notes).",
       ignoreFocusOut: true,
     });
-    if (text === undefined || !text.trim()) {
+    if (text === undefined) {
+      return;
+    }
+    const noteContent = normalizePersistedUserInputText(text);
+    if (!noteContent) {
       return;
     }
     try {
-      await api.createNote(conversationId, { event_id: selectedEventId, content: text.trim() });
+      await api.createNote(conversationId, { event_id: selectedEventId, content: noteContent });
       void vscode.window.setStatusBarMessage("Colcoor: note added.", 2500);
       await loadTreeAndPush(false, null);
     } catch (e) {

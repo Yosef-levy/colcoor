@@ -16,6 +16,7 @@ import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import { openSideChatPanel } from "./sidechat/sideChatPanel";
+import { normalizePersistedUserInputText } from "./conversation/normalizeUserInputText";
 import { runColcoorUserTurn } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
@@ -886,7 +887,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             "Your message (saved to the default branch, then Cursor agent per Settings → Colcoor → agent mode).",
           ignoreFocusOut: true,
         });
-        if (!text?.trim()) {
+        const normalized = text !== undefined ? normalizePersistedUserInputText(text) : "";
+        if (!normalized) {
           return;
         }
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
@@ -896,7 +898,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             agent,
             convId,
             convTitle,
-            text.trim(),
+            normalized,
             workspaceRoot,
           );
           refreshTree();
