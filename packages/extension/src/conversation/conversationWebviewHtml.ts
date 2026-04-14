@@ -1142,12 +1142,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
           subEl.textContent = subBase;
         }
-        if (sendBtn) sendBtn.disabled = state.busy;
-        if (stopBtn) stopBtn.disabled = !state.busy;
+        if (sendBtn) {
+          sendBtn.disabled = state.busy;
+          sendBtn.textContent = state.busy ? "Sending…" : "Send";
+          sendBtn.title = state.busy ? "A reply is in progress. Use Stop to cancel." : "";
+        }
+        if (stopBtn) {
+          stopBtn.disabled = !state.busy;
+          stopBtn.title = state.busy ? "Cancel the in-progress assistant reply." : "";
+        }
         if (refBtn) refBtn.disabled = state.busy;
         if (ta) ta.disabled = state.busy;
         if (priv) priv.disabled = state.busy;
-        if (busyEl) busyEl.style.display = state.busy ? "inline" : "none";
+        if (busyEl) {
+          busyEl.style.display = state.busy ? "inline" : "none";
+          busyEl.textContent = state.busy ? "Sending… Press Stop to cancel." : "Working…";
+        }
         if (ta) {
           var compH = null;
           if (typeof state.composerTextareaHeightPx === "number") {
