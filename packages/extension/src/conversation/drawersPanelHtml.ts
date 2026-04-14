@@ -17,7 +17,17 @@ export function getConversationDrawersPanelHtml(
   model: ConversationDrawersModel,
   preferredTab: "starred" | "todo" = "starred",
   legalPolicyLinks: { label: string; url: string }[] = [],
+  /** Open side chat button; when omitted, default label/title are used ([ui-features.md] §10). */
+  sideChatButton?: { label: string; title: string },
 ): string {
+  const scLabel =
+    sideChatButton && typeof sideChatButton.label === "string" && sideChatButton.label.trim()
+      ? sideChatButton.label.trim()
+      : "Open side chat";
+  const scTitle =
+    sideChatButton && typeof sideChatButton.title === "string" && sideChatButton.title.trim()
+      ? sideChatButton.title.trim()
+      : "Open side chat for this conversation";
   const csp = [
     "default-src 'none'",
     `img-src ${cspSource} https: data:`,
@@ -91,7 +101,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnLegalPolicySettings" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
     <button type="button" id="btnAbout" title="About Colcoor">About</button>
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
-    <button type="button" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
+    <button type="button" id="btnOpenSideChat" title="${esc(scTitle)}">${esc(scLabel)}</button>
     <button type="button" id="btnSendMessage" title="Send a main-thread message in this conversation (Colcoor: Send message…)">Send message…</button>
     <button type="button" id="btnListTodoNotesPicker" title="Pick a TODO note to jump to (Colcoor: List TODO notes in conversation)">List TODO notes…</button>
     <button type="button" id="btnListStarredPicker" title="Pick a starred message to jump to (Colcoor: List starred messages in conversation)">List starred…</button>

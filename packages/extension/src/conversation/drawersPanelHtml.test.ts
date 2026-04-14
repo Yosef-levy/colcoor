@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getConversationDrawersPanelHtml } from "./drawersPanelHtml";
+import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
 
 describe("getConversationDrawersPanelHtml", () => {
   it("renders tab buttons and jump wiring", () => {
@@ -70,6 +71,20 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('id="btnSetCursorAgentApiKey"');
     expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
     expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
+  });
+
+  it("embeds Open side chat label and title from host unread copy ([ui-features.md] §10)", () => {
+    const sc = sideChatOpenButtonCopy({ side_chat_unread_count: 2 });
+    const html = getConversationDrawersPanelHtml(
+      "vscode-resource://test",
+      "nonce789",
+      { starred: [], todos: [] },
+      "starred",
+      [],
+      sc,
+    );
+    expect(html).toContain(">Open side chat (2)<");
+    expect(html).toContain("Open side chat — 2 unread message(s) for you in this conversation");
   });
 
   it("includes optional legal policy strip and openLegalPolicyUrl wiring", () => {

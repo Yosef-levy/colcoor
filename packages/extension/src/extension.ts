@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { ColcoorApiClient, type ConversationMember } from "./api/client";
+import { ColcoorApiClient, type ConversationMember, type ConversationSummary } from "./api/client";
 import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
@@ -16,6 +16,7 @@ import {
   listLegalPolicyLinksFromColcoorWorkspaceSection,
 } from "./conversation/legalPolicySection";
 import { buildConversationDrawersModel } from "./conversation/drawersModel";
+import { sideChatOpenButtonCopy } from "./conversation/sideChatOpenButtonLabel";
 import {
   formatColcoorDrawersChromeTitle,
   shouldCloseDrawersAfterConversationDelete,
@@ -152,17 +153,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (!drawersPanel || !drawersConversationId) {
       return;
     }
-    const [{ events }, notes] = await Promise.all([
+    const [{ events }, notes, rows] = await Promise.all([
       api.getTree(drawersConversationId),
       api.listNotes(drawersConversationId),
+      api.listConversations().catch((): ConversationSummary[] => []),
     ]);
     const model = buildConversationDrawersModel(events, notes);
+    const row = rows.find((r) => r.id === drawersConversationId);
+    const sideChatBtn = row
+      ? sideChatOpenButtonCopy(row)
+      : sideChatOpenButtonCopy({ side_chat_has_unread: false, side_chat_unread_count: 0 });
     drawersPanel.webview.html = getConversationDrawersPanelHtml(
       drawersPanel.webview.cspSource,
       String(Date.now()),
       model,
       drawersPreferredTab,
       listLegalPolicyLinksFromColcoorWorkspaceSection(vscode.workspace.getConfiguration("colcoor")),
+      sideChatBtn,
     );
   }
 
@@ -866,8 +873,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           convTitle = row.title;
         }
         try {
-          const [{ events }, notes] = await Promise.all([api.getTree(convId), api.listNotes(convId)]);
+          const [{ events }, notes, rows] = await Promise.all([
+            api.getTree(convId),
+            api.listNotes(convId),
+            api.listConversations().catch((): ConversationSummary[] => []),
+          ]);
           const model = buildConversationDrawersModel(events, notes);
+          const row = rows.find((r) => r.id === convId);
+          const sideChatBtn = row
+            ? sideChatOpenButtonCopy(row)
+            : sideChatOpenButtonCopy({ side_chat_has_unread: false, side_chat_unread_count: 0 });
           drawersConversationId = convId;
           drawersConversationTitle = convTitle ?? null;
           drawersPreferredTab = preferredTab;
@@ -957,6 +972,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     title: drawersConversationTitle ?? null,
                   },
                 });
+                try {
+                  await refreshDrawersPanelHtmlFromServer();
+                } catch {
+                  /* unread label is best-effort */
+                }
                 return;
               }
               if (msg.type === "sendMessage") {
@@ -1124,6 +1144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             model,
             drawersPreferredTab,
             listLegalPolicyLinksFromColcoorWorkspaceSection(vscode.workspace.getConfiguration("colcoor")),
+            sideChatBtn,
           );
           drawersPanel.reveal(vscode.ViewColumn.Beside, false);
         } catch (e) {
