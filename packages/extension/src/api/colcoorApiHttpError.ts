@@ -23,7 +23,17 @@ export function isPlanLimitColcoorApiError(e: unknown): e is ColcoorApiHttpError
   return e instanceof ColcoorApiHttpError && e.status === 402;
 }
 
+/** HTTP 401 — missing or invalid auth token; sign in again ([api-contracts.md]). */
+export function isUnauthorizedColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 401;
+}
+
 /** HTTP 403 from the Colcoor API — role or ownership blocked the operation ([permissions.md]). */
 export function isForbiddenColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 403;
+}
+
+/** HTTP 404 — conversation, event, or other resource not found on the server. */
+export function isNotFoundColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 404;
 }

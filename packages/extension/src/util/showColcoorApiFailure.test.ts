@@ -64,4 +64,24 @@ describe("showColcoorApiFailure", () => {
     expect(text).toContain(e.message);
     expect(text).toContain("viewer");
   });
+
+  it("shows sign-in hint for HTTP 401 ColcoorApiHttpError", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("list conversations", 401, "{}");
+    await showColcoorApiFailure(e);
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain("sign in required");
+    expect(text).toContain(e.message);
+    expect(text).toContain("Sign in");
+  });
+
+  it("shows refresh hint for HTTP 404 ColcoorApiHttpError", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("get tree", 404, '{"detail":"gone"}');
+    await showColcoorApiFailure(e);
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain("not found");
+    expect(text).toContain(e.message);
+    expect(text).toMatch(/Refresh conversations|Refresh conversation tree/);
+  });
 });

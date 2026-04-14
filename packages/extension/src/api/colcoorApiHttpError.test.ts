@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   ColcoorApiHttpError,
   isForbiddenColcoorApiError,
+  isNotFoundColcoorApiError,
   isPlanLimitColcoorApiError,
+  isUnauthorizedColcoorApiError,
 } from "./colcoorApiHttpError";
 
 describe("ColcoorApiHttpError", () => {
@@ -26,6 +28,14 @@ describe("isPlanLimitColcoorApiError", () => {
   });
 });
 
+describe("isUnauthorizedColcoorApiError", () => {
+  it("is true only for HTTP 401 ColcoorApiHttpError", () => {
+    expect(isUnauthorizedColcoorApiError(new ColcoorApiHttpError("x", 401, ""))).toBe(true);
+    expect(isUnauthorizedColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(false);
+    expect(isUnauthorizedColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
 describe("isForbiddenColcoorApiError", () => {
   it("is true only for HTTP 403 ColcoorApiHttpError", () => {
     expect(isForbiddenColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(true);
@@ -33,5 +43,13 @@ describe("isForbiddenColcoorApiError", () => {
     expect(isForbiddenColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(false);
     expect(isForbiddenColcoorApiError(new Error("x"))).toBe(false);
     expect(isForbiddenColcoorApiError(undefined)).toBe(false);
+  });
+});
+
+describe("isNotFoundColcoorApiError", () => {
+  it("is true only for HTTP 404 ColcoorApiHttpError", () => {
+    expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(true);
+    expect(isNotFoundColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(false);
+    expect(isNotFoundColcoorApiError(new Error("x"))).toBe(false);
   });
 });

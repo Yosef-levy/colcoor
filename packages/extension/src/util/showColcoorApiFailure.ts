@@ -1,13 +1,17 @@
 import * as vscode from "vscode";
 
-import { isForbiddenColcoorApiError, isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
+import {
+  isForbiddenColcoorApiError,
+  isNotFoundColcoorApiError,
+  isPlanLimitColcoorApiError,
+  isUnauthorizedColcoorApiError,
+} from "../api/colcoorApiHttpError";
 
 /** Settings filter for this extension (publisher.name from package.json). */
 export const COLOOR_EXTENSION_SETTINGS_QUERY = "@ext:colcoor.colcoor-extension";
 
 /**
- * User-facing API failure: modal + upgrade path for HTTP 402; clearer copy for HTTP 403;
- * otherwise a single error toast.
+ * User-facing API failure: special handling for HTTP 401, 402, 403, 404; otherwise a single error toast.
  */
 export async function showColcoorApiFailure(e: unknown): Promise<void> {
   const msg = e instanceof Error ? e.message : String(e);
@@ -25,9 +29,21 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
     }
     return;
   }
+  if (isUnauthorizedColcoorApiError(e)) {
+    await vscode.window.showErrorMessage(
+      `Colcoor: sign in required or session expired — ${e.message} Use Colcoor: Sign in from the Command Palette.`,
+    );
+    return;
+  }
   if (isForbiddenColcoorApiError(e)) {
     await vscode.window.showErrorMessage(
       `Colcoor: permission denied — ${e.message} If you are a viewer, ask an editor or owner to change your role.`,
+    );
+    return;
+  }
+  if (isNotFoundColcoorApiError(e)) {
+    await vscode.window.showErrorMessage(
+      `Colcoor: not found — ${e.message} It may have been deleted; try Colcoor: Refresh conversations or Refresh conversation tree.`,
     );
     return;
   }
