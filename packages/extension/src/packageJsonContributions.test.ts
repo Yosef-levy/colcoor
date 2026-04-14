@@ -51,6 +51,17 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.continueFromHere");
     expect(cmds).toContain("colcoor.resendAssistant");
     expect(cmds).toContain("colcoor.jumpToLatestInConversation");
+    expect(cmds).toContain("colcoor.copySelectedMessage");
+  });
+
+  it("documents copySelectedMessage for thread copy ([ui-features.md] §7)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const copy = pkg.contributes?.commands?.find((c) => c.command === "colcoor.copySelectedMessage");
+    expect(copy?.title).toBe("Colcoor: Copy selected message");
+    expect(copy?.description).toContain("clipboard");
   });
 
   it("registers each contributed command id at most once", () => {

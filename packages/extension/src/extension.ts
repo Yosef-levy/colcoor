@@ -633,6 +633,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.jumpToLatestInConversation", async () => {
       await conversationPanel.jumpToLatestInConversation();
     }),
+    vscode.commands.registerCommand("colcoor.copySelectedMessage", async () => {
+      await conversationPanel.copySelectedMessage();
+    }),
     vscode.commands.registerCommand("colcoor.addNoteToSelectedMessage", async () => {
       await conversationPanel.addNoteToSelectedMessage();
     }),

@@ -155,6 +155,11 @@
         "command": "colcoor.jumpToLatestInConversation",
         "title": "Colcoor: Jump to latest in conversation",
         "description": "Select the newest leaf on the default branch (conversation panel must be open)."
+      },
+      {
+        "command": "colcoor.copySelectedMessage",
+        "title": "Colcoor: Copy selected message",
+        "description": "Copy the selected tree message body to the clipboard (conversation panel must be open)."
       }
     ],
     "viewsContainers": {

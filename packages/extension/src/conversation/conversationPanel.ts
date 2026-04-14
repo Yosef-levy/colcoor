@@ -21,6 +21,7 @@ import {
   clampComposerTextareaHeightPx,
 } from "./composerLayoutPersistence";
 import { evaluateContinueFromHere } from "./continueFromHereGate";
+import { clipboardTextForSelectedTreeMessage } from "./selectedMessageClipboardText";
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { findBranchTip } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
@@ -139,6 +140,8 @@ export function createConversationPanelController(
   resendAssistant: () => Promise<void>;
   /** Select the default-branch tip (same as detail bar “Jump to latest”). */
   jumpToLatestInConversation: () => Promise<void>;
+  /** Copy selected tree message body to the system clipboard ([ui-features.md] §7). */
+  copySelectedMessage: () => Promise<void>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -1132,6 +1135,41 @@ export function createConversationPanelController(
     },
     async jumpToLatestInConversation(): Promise<void> {
       await jumpToDefaultBranchTip({ palette: true });
+    },
+    async copySelectedMessage(): Promise<void> {
+      const gate = evaluateContinueFromHere(
+        conversationId,
+        selectedEventId,
+        lastTreeEvents.map((e) => e.id),
+      );
+      if (gate === "no_context") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open a conversation and select a message in the tree.",
+        );
+        return;
+      }
+      if (gate === "not_in_tree") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+        );
+        return;
+      }
+      if (!selectedEventId) {
+        return;
+      }
+      const text = clipboardTextForSelectedTreeMessage(lastTreeEvents, selectedEventId);
+      if (text === undefined) {
+        void vscode.window.showWarningMessage(
+          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+        );
+        return;
+      }
+      if (text.trim().length === 0) {
+        void vscode.window.showInformationMessage("Colcoor: the selected message has no text to copy.");
+        return;
+      }
+      await vscode.env.clipboard.writeText(text);
+      void vscode.window.setStatusBarMessage("Colcoor: message copied to clipboard.", 2500);
     },
     dispose: () => {
       subscription.dispose();
