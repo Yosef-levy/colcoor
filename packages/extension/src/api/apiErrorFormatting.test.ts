@@ -80,6 +80,12 @@ describe("formatColcoorApiError", () => {
     );
   });
 
+  it("formats HTTP 415 with generic wording", () => {
+    expect(formatColcoorApiError("post", 415, '{"detail":"unsupported media type"}')).toBe(
+      "post failed (HTTP 415): unsupported media type",
+    );
+  });
+
   it("formats HTTP 410 with generic wording", () => {
     expect(formatColcoorApiError("get event", 410, '{"detail":"resource retired"}')).toBe(
       "get event failed (HTTP 410): resource retired",

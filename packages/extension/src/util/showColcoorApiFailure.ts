@@ -16,6 +16,7 @@ import {
   isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
   isUnprocessableEntityColcoorApiError,
+  isUnsupportedMediaTypeColcoorApiError,
 } from "../api/colcoorApiHttpError";
 import {
   COLOOR_API_FAILURE_OPEN_ABOUT_ACTION,
@@ -107,6 +108,14 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isPayloadTooLargeColcoorApiError(e)) {
     await vscode.window.showErrorMessage(
       "Colcoor: request too large",
+      { modal: false, detail: e.message },
+      "OK",
+    );
+    return;
+  }
+  if (isUnsupportedMediaTypeColcoorApiError(e)) {
+    await vscode.window.showErrorMessage(
+      "Colcoor: unsupported media type",
       { modal: false, detail: e.message },
       "OK",
     );

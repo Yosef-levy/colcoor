@@ -17,6 +17,7 @@ import {
   isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
   isUnprocessableEntityColcoorApiError,
+  isUnsupportedMediaTypeColcoorApiError,
 } from "./colcoorApiHttpError";
 
 describe("ColcoorApiHttpError", () => {
@@ -109,6 +110,14 @@ describe("isPayloadTooLargeColcoorApiError", () => {
     expect(isPayloadTooLargeColcoorApiError(new ColcoorApiHttpError("x", 413, ""))).toBe(true);
     expect(isPayloadTooLargeColcoorApiError(new ColcoorApiHttpError("x", 422, ""))).toBe(false);
     expect(isPayloadTooLargeColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isUnsupportedMediaTypeColcoorApiError", () => {
+  it("is true only for HTTP 415 ColcoorApiHttpError", () => {
+    expect(isUnsupportedMediaTypeColcoorApiError(new ColcoorApiHttpError("x", 415, ""))).toBe(true);
+    expect(isUnsupportedMediaTypeColcoorApiError(new ColcoorApiHttpError("x", 413, ""))).toBe(false);
+    expect(isUnsupportedMediaTypeColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 

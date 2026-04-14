@@ -72,6 +72,11 @@ export function isPayloadTooLargeColcoorApiError(e: unknown): e is ColcoorApiHtt
   return e instanceof ColcoorApiHttpError && e.status === 413;
 }
 
+/** HTTP 415 — unsupported Content-Type or payload format for this endpoint. */
+export function isUnsupportedMediaTypeColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 415;
+}
+
 /** HTTP 408 — request timeout (client or upstream). */
 export function isRequestTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 408;

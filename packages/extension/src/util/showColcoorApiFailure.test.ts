@@ -197,6 +197,23 @@ describe("showColcoorApiFailure", () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
+  it("shows unsupported media type toast with expandable detail for HTTP 415", async () => {
+    showErrorMessage.mockResolvedValue("OK");
+    const e = new ColcoorApiHttpError("post", 415, JSON.stringify({ detail: "expected application/json" }));
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledTimes(1);
+    const [title, opts, ok] = showErrorMessage.mock.calls[0] as [
+      string,
+      { modal?: boolean; detail?: string },
+      string,
+    ];
+    expect(title).toBe("Colcoor: unsupported media type");
+    expect(opts.modal).toBe(false);
+    expect(opts.detail).toBe(e.message);
+    expect(ok).toBe("OK");
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
   it("runs refresh commands when user picks a 404 action", async () => {
     showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 404, ""));
