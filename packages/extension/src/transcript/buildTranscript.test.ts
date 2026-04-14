@@ -28,12 +28,17 @@ describe("buildAuthoritativeTranscript", () => {
     }
   });
 
-  it("uses trimmed non-empty title as first line", () => {
+  it("uses normalized non-empty title as first line (like rename PATCH)", () => {
     const out = buildAuthoritativeTranscript({
       conversationTitle: "  My chat  ",
       pathFromRoot: [],
     });
     expect(out.startsWith("My chat\n")).toBe(true);
+    const out2 = buildAuthoritativeTranscript({
+      conversationTitle: "  My\r\nChat\tthread  ",
+      pathFromRoot: [],
+    });
+    expect(out2.startsWith("My Chat thread\n")).toBe(true);
   });
 
   it("serializes user and assistant blocks on the path", () => {
@@ -57,6 +62,12 @@ describe("buildAuthoritativeTranscript", () => {
       finalUserMessage: "Q",
     });
     expect(withSame).toBe(base);
+    const withPadded = buildAuthoritativeTranscript({
+      conversationTitle: "T",
+      pathFromRoot: path,
+      finalUserMessage: " Q\r\n",
+    });
+    expect(withPadded).toBe(base);
   });
 
   it("appends final user when it is new", () => {
@@ -72,6 +83,12 @@ describe("buildAuthoritativeTranscript", () => {
     });
     expect(extended.length).toBeGreaterThan(base.length);
     expect(extended.endsWith("<<<USER>>>\nFollow up\n<<<END USER>>>")).toBe(true);
+    const extendedCrlf = buildAuthoritativeTranscript({
+      conversationTitle: "T",
+      pathFromRoot: path,
+      finalUserMessage: "  Follow up\r\n",
+    });
+    expect(extendedCrlf.endsWith("<<<USER>>>\nFollow up\n<<<END USER>>>")).toBe(true);
   });
 
   it("emits NOTE blocks after each turn in createdAt order", () => {

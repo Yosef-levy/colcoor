@@ -4,6 +4,9 @@
  * @see ../../../../docs/principles.md (semantics)
  */
 
+import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
+import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
+
 export const TRANSCRIPT_STATIC_HEADER = `You are given a structured conversation transcript.
 
 The transcript consists of:
@@ -32,7 +35,7 @@ export type TranscriptPathTurn = {
 };
 
 export type BuildAuthoritativeTranscriptParams = {
-  /** Conversation title; empty / null → literal \`Conversation\` (transcript-format §1). */
+  /** Conversation title; empty / null / blank after normalize → literal \`Conversation\` (transcript-format §1). Same single-line rules as rename. */
   conversationTitle: string | null | undefined;
   /** Messages on the active path, root → active inclusive, alternating user / assistant (§3–§4). */
   pathFromRoot: TranscriptPathTurn[];
@@ -100,12 +103,15 @@ function shouldAppendFinalUser(
   path: TranscriptPathTurn[],
   finalUserMessage: string | null | undefined,
 ): boolean {
-  const t = finalUserMessage?.trim();
+  if (finalUserMessage === undefined || finalUserMessage === null) {
+    return false;
+  }
+  const t = normalizePersistedUserInputText(finalUserMessage);
   if (!t) {
     return false;
   }
   const last = path[path.length - 1];
-  if (last?.role === "user" && last.content === t) {
+  if (last?.role === "user" && normalizePersistedUserInputText(last.content) === t) {
     return false;
   }
   return true;
@@ -115,15 +121,14 @@ function shouldAppendFinalUser(
  * Build the full transcript string: title, static header, path (with per-message NOTEs), optional final USER.
  */
 export function buildAuthoritativeTranscript(params: BuildAuthoritativeTranscriptParams): string {
-  const titleLine = params.conversationTitle?.trim()
-    ? params.conversationTitle.trim()
-    : "Conversation";
+  const titleLine =
+    normalizedConversationTitle(String(params.conversationTitle ?? "")) ?? "Conversation";
 
   const pathBody = params.pathFromRoot.map(serializeTurn).join(BLOCK_SEPARATOR);
   const appendFinal = shouldAppendFinalUser(params.pathFromRoot, params.finalUserMessage);
   const finalBlock =
     appendFinal && params.finalUserMessage !== undefined && params.finalUserMessage !== null
-      ? serializeUserBlock(params.finalUserMessage.trim())
+      ? serializeUserBlock(normalizePersistedUserInputText(params.finalUserMessage))
       : "";
 
   const chunks: string[] = [titleLine, "", TRANSCRIPT_STATIC_HEADER];
