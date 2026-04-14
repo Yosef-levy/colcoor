@@ -17,6 +17,10 @@ import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
 import { buildSideChatSendPayload } from "./sideChatSendPayload";
+import {
+  isSafeHttpUrlForWebview,
+  listLegalPolicyLinksFromColcoorWorkspaceSection,
+} from "../conversation/legalPolicySection";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
 import { normalizeSideChatReferenceId } from "./normalizeSideChatReferenceId";
@@ -63,6 +67,7 @@ type FromWebview =
   | { type: "openProfile" }
   | { type: "openSettings" }
   | { type: "openAbout" }
+  | { type: "openLegalPolicyUrl"; url: string }
   | { type: "signIn" }
   | { type: "signOut" }
   | { type: "newConversation" }
@@ -111,7 +116,11 @@ export async function openSideChatPanel(
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [_context.extensionUri] },
   );
   panel.webview.options = { enableScripts: true, localResourceRoots: [_context.extensionUri] };
-  panel.webview.html = getSideChatWebviewHtml(panel.webview.cspSource, nonce);
+  panel.webview.html = getSideChatWebviewHtml(
+    panel.webview.cspSource,
+    nonce,
+    listLegalPolicyLinksFromColcoorWorkspaceSection(vscode.workspace.getConfiguration("colcoor")),
+  );
 
   const ac = new AbortController();
   let cached: SideChatMessageOut[] = [];
@@ -420,6 +429,13 @@ export async function openSideChatPanel(
     }
     if (msg.type === "openAbout") {
       await vscode.commands.executeCommand("colcoor.openAbout");
+      return;
+    }
+    if (msg.type === "openLegalPolicyUrl" && typeof msg.url === "string") {
+      const u = msg.url.trim();
+      if (isSafeHttpUrlForWebview(u)) {
+        void vscode.env.openExternal(vscode.Uri.parse(u));
+      }
       return;
     }
     if (msg.type === "signIn") {

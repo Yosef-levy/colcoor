@@ -1,6 +1,18 @@
 /** Minimal side-chat webview (list + send + refresh + markdown rendering). */
 
-export function getSideChatWebviewHtml(cspSource: string, nonce: string): string {
+function esc(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function getSideChatWebviewHtml(
+  cspSource: string,
+  nonce: string,
+  legalPolicyLinks: { label: string; url: string }[] = [],
+): string {
   const csp = [
     "default-src 'none'",
     `img-src ${cspSource} https: data:`,
@@ -8,6 +20,18 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     `style-src 'nonce-${nonce}'`,
     `script-src 'nonce-${nonce}'`,
   ].join("; ");
+
+  const policyBlock =
+    legalPolicyLinks.length === 0
+      ? ""
+      : `<div class="policy-strip" role="region" aria-label="Product policies"><span class="policy-hint">Policies:</span>${legalPolicyLinks
+          .map(
+            (row) =>
+              `<button type="button" class="policy secondary" data-url="${esc(row.url)}" title="Open in browser — ${esc(
+                row.url,
+              )}">${esc(row.label)}</button>`,
+          )
+          .join(" ")}</div>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -126,12 +150,24 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       border-radius: 3px;
     }
     button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+    .policy-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      margin: 0 0 8px;
+      font-size: 0.92em;
+      color: var(--vscode-descriptionForeground);
+    }
+    .policy-strip .policy-hint { margin-right: 4px; }
+    .policy-strip button.policy { padding: 4px 10px; font-size: 0.92em; }
     .err { color: var(--vscode-errorForeground); font-size: 0.92em; }
   </style>
 </head>
 <body>
   <h1 id="title">Side chat</h1>
   <p class="hint" id="sub">Loading…</p>
+  ${policyBlock}
   <div id="list"></div>
   <div class="composer">
     <div class="row" id="replyingRow" style="display:none">
@@ -616,6 +652,12 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     document.addEventListener("click", function (ev) {
       var tgt = ev.target;
       if (!tgt || typeof tgt.closest !== "function") return;
+      var pbtn = tgt.closest("button.policy");
+      if (pbtn) {
+        var u = pbtn.getAttribute("data-url");
+        if (u) vscode.postMessage({ type: "openLegalPolicyUrl", url: u });
+        return;
+      }
       var refChip = tgt.closest(".ref-chip");
       if (refChip && refChip.dataset && refChip.dataset.refKind && refChip.dataset.refId) {
         if (refChip.dataset.refKind === "event" || refChip.dataset.refKind === "note") {

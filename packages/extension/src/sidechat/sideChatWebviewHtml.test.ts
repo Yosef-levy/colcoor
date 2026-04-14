@@ -117,4 +117,14 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
     expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
   });
+
+  it("includes optional legal policies and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonceZ", [
+      { label: "Terms", url: "https://example.com/t" },
+    ]);
+    expect(html).toContain("policy-strip");
+    expect(html).toContain('class="policy secondary"');
+    expect(html).toContain('data-url="https://example.com/t"');
+    expect(html).toContain('vscode.postMessage({ type: "openLegalPolicyUrl", url: u });');
+  });
 });
