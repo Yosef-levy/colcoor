@@ -70,6 +70,10 @@ type FromWebview =
   | { type: "refresh" }
   | { type: "openConversation" }
   | { type: "refreshConversationTree" }
+  | { type: "copySelectedMessage" }
+  | { type: "continueFromHere" }
+  | { type: "resendAssistant" }
+  | { type: "jumpToLatestInConversation" }
   | { type: "openDrawers" }
   | { type: "listTodoNotesInConversation" }
   | { type: "listStarredMessagesInConversation" }
@@ -449,6 +453,22 @@ export async function openSideChatPanel(
     }
     if (msg.type === "refreshConversationTree") {
       await vscode.commands.executeCommand("colcoor.refreshConversationTree");
+      return;
+    }
+    if (msg.type === "copySelectedMessage") {
+      await vscode.commands.executeCommand("colcoor.copySelectedMessage");
+      return;
+    }
+    if (msg.type === "continueFromHere") {
+      await vscode.commands.executeCommand("colcoor.continueFromHere");
+      return;
+    }
+    if (msg.type === "resendAssistant") {
+      await vscode.commands.executeCommand("colcoor.resendAssistant");
+      return;
+    }
+    if (msg.type === "jumpToLatestInConversation") {
+      await vscode.commands.executeCommand("colcoor.jumpToLatestInConversation");
       return;
     }
     if (msg.type === "openDrawers") {

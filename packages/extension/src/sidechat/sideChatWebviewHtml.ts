@@ -206,6 +206,10 @@ export function getSideChatWebviewHtml(
       <button id="refresh" type="button" class="secondary">Refresh</button>
       <button id="btnOpenConversation" type="button" class="secondary" title="Open the main conversation panel (tree, thread, composer) for this conversation">Open conversation</button>
       <button id="btnRefreshConversationTree" type="button" class="secondary" title="Reload tree and thread in the open conversation panel, if any (Colcoor: Refresh conversation tree)">Refresh tree</button>
+      <button id="btnCopySelectedMessage" type="button" class="secondary" title="Copy the selected tree message body (Colcoor: Copy selected message; conversation panel must be open)">Copy selection</button>
+      <button id="btnContinueFromHere" type="button" class="secondary" title="Set active branch to the selected message (Colcoor: Continue from here; conversation panel must be open)">Continue here</button>
+      <button id="btnResendAssistant" type="button" class="secondary" title="Regenerate assistant under the selected user message (Colcoor: Resend assistant; conversation panel must be open)">Resend</button>
+      <button id="btnJumpToLatestInConversation" type="button" class="secondary" title="Select the newest leaf on the default branch (Colcoor: Jump to latest in conversation; conversation panel must be open)">Jump latest</button>
       <button id="btnOpenDrawers" type="button" class="secondary" title="Open the Starred/TODO drawers panel for this conversation">Drawers</button>
       <button id="btnListTodoNotes" type="button" class="secondary" title="Pick a TODO note and open its host message (Colcoor: List TODO notes in conversation…)">TODO notes…</button>
       <button id="btnListStarredMessages" type="button" class="secondary" title="Pick a starred message to open in the conversation panel (Colcoor: List starred messages in conversation…)">Starred…</button>
@@ -677,6 +681,18 @@ export function getSideChatWebviewHtml(
     });
     document.getElementById("btnRefreshConversationTree").addEventListener("click", function () {
       vscode.postMessage({ type: "refreshConversationTree" });
+    });
+    document.getElementById("btnCopySelectedMessage").addEventListener("click", function () {
+      vscode.postMessage({ type: "copySelectedMessage" });
+    });
+    document.getElementById("btnContinueFromHere").addEventListener("click", function () {
+      vscode.postMessage({ type: "continueFromHere" });
+    });
+    document.getElementById("btnResendAssistant").addEventListener("click", function () {
+      vscode.postMessage({ type: "resendAssistant" });
+    });
+    document.getElementById("btnJumpToLatestInConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "jumpToLatestInConversation" });
     });
     document.getElementById("btnOpenDrawers").addEventListener("click", function () {
       vscode.postMessage({ type: "openDrawers" });

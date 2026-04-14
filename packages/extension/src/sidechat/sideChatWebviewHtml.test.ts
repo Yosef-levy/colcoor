@@ -87,12 +87,20 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("sub.textContent = countPart + presencePart;");
   });
 
-  it("includes Open conversation, refresh tree, Drawers, TODO/starred lists, Profile, Settings, Legal URLs, side-chat sounds, and About next to Refresh", () => {
+  it("includes Open conversation, main-panel shortcuts (tree/copy/continue/resend/jump), Drawers, TODO/starred, Profile, Settings, Legal URLs, sounds, About", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenConversation"');
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
     expect(html).toContain('id="btnRefreshConversationTree"');
     expect(html).toContain('vscode.postMessage({ type: "refreshConversationTree" });');
+    expect(html).toContain('id="btnCopySelectedMessage"');
+    expect(html).toContain('vscode.postMessage({ type: "copySelectedMessage" });');
+    expect(html).toContain('id="btnContinueFromHere"');
+    expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
+    expect(html).toContain('id="btnResendAssistant"');
+    expect(html).toContain('vscode.postMessage({ type: "resendAssistant" });');
+    expect(html).toContain('id="btnJumpToLatestInConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "jumpToLatestInConversation" });');
     expect(html).toContain('id="btnOpenDrawers"');
     expect(html).toContain('vscode.postMessage({ type: "openDrawers" });');
     expect(html).toContain('id="btnListTodoNotes"');
