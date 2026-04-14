@@ -4,6 +4,7 @@ import type { ColcoorApiClient, MeOut, SideChatMessageOut } from "../api/client"
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { mentionTargetsForMe } from "./sideChatMentionTargets";
+import { shouldNotifyForIncomingSideChatMessage } from "./sideChatNotifyDedup";
 import { decideSideChatNotification } from "./sideChatNotifications";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
@@ -75,6 +76,7 @@ export async function openSideChatPanel(
 
   const ac = new AbortController();
   let cached: SideChatMessageOut[] = [];
+  const notifiedMessageIds = new Set<string>();
   let lastStreamSeq = 0;
   let sseStarted = false;
   /** Increments after each failed stream; reset when the stream yields an event. */
@@ -160,6 +162,9 @@ export async function openSideChatPanel(
     try {
       cached = await api.listSideChatMessages(conversationId, 0);
       lastStreamSeq = maxSideChatSeq(cached);
+      for (const m of cached) {
+        notifiedMessageIds.add(m.id);
+      }
       await postState();
       scheduleMarkRead();
     } catch (e) {
@@ -186,18 +191,24 @@ export async function openSideChatPanel(
             if (o?.type !== "side_chat" || !o.message) {
               continue;
             }
-            const me = await ensureMyProfile();
-            const notif = decideSideChatNotification({
-              panelVisible: panel.visible,
-              myUserId: me?.id ?? null,
-              myMentionTargets: mentionTargetsForMe(me),
-              incoming: o.message,
-              notificationsEnabled,
-              mentionNotificationsEnabled,
-            });
-            if (notif) {
-              void vscode.window.showInformationMessage(notif.title, { detail: notif.detail, modal: false });
+            if (shouldNotifyForIncomingSideChatMessage(cached, o.message, notifiedMessageIds)) {
+              const me = await ensureMyProfile();
+              const notif = decideSideChatNotification({
+                panelVisible: panel.visible,
+                myUserId: me?.id ?? null,
+                myMentionTargets: mentionTargetsForMe(me),
+                incoming: o.message,
+                notificationsEnabled,
+                mentionNotificationsEnabled,
+              });
+              if (notif) {
+                void vscode.window.showInformationMessage(notif.title, {
+                  detail: notif.detail,
+                  modal: false,
+                });
+              }
             }
+            notifiedMessageIds.add(o.message.id);
             cached = mergeSideChatMessage(cached, o.message);
             lastStreamSeq = Math.max(lastStreamSeq, o.message.seq);
             await postState();
