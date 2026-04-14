@@ -49,6 +49,8 @@ export function getConversationDrawersPanelHtml(
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 10px; }
     .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
     .tabs button { padding: 4px 10px; }
+    .aux { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .aux button { padding: 4px 10px; }
     ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
     .jump { width: 100%; text-align: left; white-space: normal; }
   </style>
@@ -57,6 +59,10 @@ export function getConversationDrawersPanelHtml(
   <div class="tabs">
     <button type="button" id="tabStarred">Starred (${model.starred.length})</button>
     <button type="button" id="tabTodo">TODO (${model.todos.length})</button>
+  </div>
+  <div class="aux">
+    <button type="button" id="btnProfile" title="Edit your Colcoor profile">Profile…</button>
+    <button type="button" id="btnSettings" title="Open Colcoor extension settings">Settings</button>
   </div>
   <ul id="starredList" style="display:${showStarred}">${starredRows || "<li>(none)</li>"}</ul>
   <ul id="todoList" style="display:${showTodo}">${todoRows || "<li>(none)</li>"}</ul>
@@ -71,6 +77,12 @@ export function getConversationDrawersPanelHtml(
     }
     document.getElementById("tabStarred").addEventListener("click", function () { showTab("starred"); });
     document.getElementById("tabTodo").addEventListener("click", function () { showTab("todo"); });
+    document.getElementById("btnProfile").addEventListener("click", function () {
+      vscode.postMessage({ type: "openProfile" });
+    });
+    document.getElementById("btnSettings").addEventListener("click", function () {
+      vscode.postMessage({ type: "openSettings" });
+    });
     document.addEventListener("click", function (ev) {
       var btn = ev.target && ev.target.closest && ev.target.closest("button.jump");
       if (!btn) return;

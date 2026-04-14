@@ -706,7 +706,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             drawersPanel.webview.onDidReceiveMessage(async (m: unknown) => {
               const msg = m as { type?: string; eventId?: string };
-              if (!msg || msg.type !== "openEvent" || typeof msg.eventId !== "string") {
+              if (!msg || typeof msg.type !== "string") {
+                return;
+              }
+              if (msg.type === "openProfile") {
+                await vscode.commands.executeCommand("colcoor.editProfile");
+                return;
+              }
+              if (msg.type === "openSettings") {
+                await vscode.commands.executeCommand("colcoor.openSettings");
+                return;
+              }
+              if (msg.type !== "openEvent" || typeof msg.eventId !== "string") {
                 return;
               }
               if (!drawersConversationId) {

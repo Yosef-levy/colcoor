@@ -18,5 +18,9 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('data-event-id="e1"');
     expect(html).toContain('data-event-id="e2"');
     expect(html).toContain('vscode.postMessage({ type: "openEvent", eventId: eid });');
+    expect(html).toContain('id="btnProfile"');
+    expect(html).toContain('id="btnSettings"');
+    expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
+    expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
   });
 });
