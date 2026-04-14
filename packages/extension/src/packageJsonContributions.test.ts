@@ -11,6 +11,16 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.sendMessage");
   });
 
+  it("documents sendMessage prompts including optional checkpoint ([ui-features.md] §9)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const send = pkg.contributes?.commands?.find((c) => c.command === "colcoor.sendMessage");
+    expect(send?.title).toBe("Colcoor: Send message…");
+    expect(send?.description).toContain("checkpoint");
+  });
+
   it("registers stopGeneration for conversation panel abort (enablement uses reply-in-progress context)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {

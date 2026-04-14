@@ -46,7 +46,7 @@ Link or embed **Terms**, **Privacy**, **Refund** as product policy requires.
 - List conversations: **per-user pinned** rows first, then unpinned, each group by **recency** (`updated_at`); show **title** and **last updated**.
 - **Select** a conversation to load tree and thread.
 - **Per-conversation menu** (e.g. ⋮): **Add editor/viewer**, **Change name** (where role allows), **Pin / Unpin**, **Delete conversation**.
-- **Create conversation:** optional title + **first message** to start.
+- **Create conversation:** optional title; optional **first message** — leave empty or dismiss the second prompt to create with title only (no agent run until you send from the thread).
 
 The list panel MUST be **minimizable** (collapse to strip or icon).
 
@@ -116,6 +116,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - **Send** with disabled state and messaging while a reply is in progress.
 - **Private (draft)** toggle + short help.
 - **Stop** — cancel in-flight generation ([data-flow-and-api.md](data-flow-and-api.md) §4).
+- **Optional milestone (checkpoint) label** on send — single-line field in the conversation panel composer, and an optional prompt after **Colcoor: Send message…** from the Command Palette; display-only in the detail breadcrumb when set (see §8).
 
 ---
 
