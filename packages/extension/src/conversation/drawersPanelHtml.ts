@@ -65,6 +65,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnSettings" title="Open Colcoor extension settings">Settings</button>
     <button type="button" id="btnAbout" title="About Colcoor">About</button>
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
+    <button type="button" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
   </div>
   <ul id="starredList" style="display:${showStarred}">${starredRows || "<li>(none)</li>"}</ul>
   <ul id="todoList" style="display:${showTodo}">${todoRows || "<li>(none)</li>"}</ul>
@@ -90,6 +91,9 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnOpenConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "openConversation" });
+    });
+    document.getElementById("btnOpenSideChat").addEventListener("click", function () {
+      vscode.postMessage({ type: "openSideChat" });
     });
     document.addEventListener("click", function (ev) {
       var btn = ev.target && ev.target.closest && ev.target.closest("button.jump");

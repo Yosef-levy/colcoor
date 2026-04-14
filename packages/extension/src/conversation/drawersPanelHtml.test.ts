@@ -26,5 +26,7 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
     expect(html).toContain('id="btnOpenConversation"');
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
+    expect(html).toContain('id="btnOpenSideChat"');
+    expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
   });
 });

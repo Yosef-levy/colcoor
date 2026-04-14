@@ -732,6 +732,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 );
                 return;
               }
+              if (msg.type === "openSideChat") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.openSideChat", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                    pinned: false,
+                  },
+                } as ConversationTreeItem);
+                return;
+              }
               if (msg.type !== "openEvent" || typeof msg.eventId !== "string") {
                 return;
               }
