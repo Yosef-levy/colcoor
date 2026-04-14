@@ -772,6 +772,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       busy: false,
       lastError: null,
       legalPolicyLinks: [],
+      sideChatOpenButtonLabel: "Open side chat",
+      sideChatOpenButtonTitle: "Open side chat for this conversation",
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
       /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
@@ -1008,7 +1010,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
       if (drawersBtn) drawersBtn.disabled = state.busy;
-      if (openSideChatBtn) openSideChatBtn.disabled = state.busy;
+      if (openSideChatBtn) {
+        openSideChatBtn.disabled = state.busy;
+        openSideChatBtn.textContent =
+          typeof state.sideChatOpenButtonLabel === "string" && state.sideChatOpenButtonLabel.trim()
+            ? state.sideChatOpenButtonLabel
+            : "Open side chat";
+        openSideChatBtn.title =
+          typeof state.sideChatOpenButtonTitle === "string" && state.sideChatOpenButtonTitle.trim()
+            ? state.sideChatOpenButtonTitle
+            : "Open side chat for this conversation";
+      }
       if (setupCursorCliBtn) setupCursorCliBtn.disabled = state.busy;
       if (setCursorAgentApiKeyBtn) setCursorAgentApiKeyBtn.disabled = state.busy;
       if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;

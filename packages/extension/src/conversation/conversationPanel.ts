@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
-import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
+import type { ColcoorApiClient, ConversationSummary, GraphEventNode, NoteOut } from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import {
@@ -30,6 +30,7 @@ import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { findBranchTip } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
+import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
 /** `conversation_id` → event ids whose branches are collapsed in the webview tree ([tree-ui-contract.md]). */
@@ -60,6 +61,9 @@ type WebviewStateMessage = {
   lastError: string | null;
   /** Terms / Privacy / Refund from workspace settings ([ui-features.md] §1.3). */
   legalPolicyLinks: { label: string; url: string }[];
+  /** Side-chat unread (from GET /conversations) for the Open side chat button ([ui-features.md] §10). */
+  sideChatOpenButtonLabel: string;
+  sideChatOpenButtonTitle: string;
 };
 
 type FromWebview =
@@ -159,6 +163,9 @@ export function createConversationPanelController(
   let conversationId: string | undefined;
   let conversationTitle: string | null | undefined;
   let conversationPinned = false;
+  /** Side-chat unread for the open conversation (from list row or parallel list fetch). */
+  let sideChatUnreadCount = 0;
+  let sideChatHasUnread = false;
   let selectedEventId: string | undefined;
   let sendAbort: AbortController | undefined;
 
@@ -185,6 +192,22 @@ export function createConversationPanelController(
   /** One-time dedupe key for stale-tree prompt when selected node disappears after refresh. */
   let staleTreePromptedForEventId: string | null = null;
 
+  function applySideChatUnreadFromListRow(row: ConversationSummary | undefined): void {
+    if (!row) {
+      return;
+    }
+    sideChatUnreadCount = Math.max(0, Number(row.side_chat_unread_count ?? 0) || 0);
+    sideChatHasUnread = Boolean(row.side_chat_has_unread) || sideChatUnreadCount > 0;
+  }
+
+  function applyConversationMetaFromListRow(row: ConversationSummary | undefined): void {
+    if (row) {
+      conversationPinned = row.pinned;
+      conversationTitle = row.title;
+      applySideChatUnreadFromListRow(row);
+    }
+  }
+
   function syncActiveToBackend(
     activeEventId: string | undefined,
     opts?: { needsContextRebuild?: boolean },
@@ -209,11 +232,7 @@ export function createConversationPanelController(
     }
     try {
       const rows = await api.listConversations();
-      const row = rows.find((r) => r.id === conversationId);
-      if (row) {
-        conversationPinned = row.pinned;
-        conversationTitle = row.title;
-      }
+      applyConversationMetaFromListRow(rows.find((r) => r.id === conversationId));
     } catch {
       /* keep previous meta */
     }
@@ -229,6 +248,8 @@ export function createConversationPanelController(
     lastTreeEvents = [];
     lastNotes = [];
     lastNeedsContextRebuild = false;
+    sideChatUnreadCount = 0;
+    sideChatHasUnread = false;
   }
 
   function readCollapsedByConversation(): Record<string, string[]> {
@@ -273,6 +294,10 @@ export function createConversationPanelController(
       );
       const agentTraceOpen =
         vscode.workspace.getConfiguration("colcoor").get<boolean>("conversationAgentTraceOpen") ?? true;
+      const sideChatBtn = sideChatOpenButtonCopy({
+        side_chat_has_unread: sideChatHasUnread,
+        side_chat_unread_count: sideChatUnreadCount,
+      });
       const msg: WebviewStateMessage = {
         type: "state",
         conversationId,
@@ -292,6 +317,8 @@ export function createConversationPanelController(
         legalPolicyLinks: listLegalPolicyLinksFromColcoorWorkspaceSection(
           vscode.workspace.getConfiguration("colcoor"),
         ),
+        sideChatOpenButtonLabel: sideChatBtn.label,
+        sideChatOpenButtonTitle: sideChatBtn.title,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -309,6 +336,10 @@ export function createConversationPanelController(
         );
         const agentTraceOpen =
           vscode.workspace.getConfiguration("colcoor").get<boolean>("conversationAgentTraceOpen") ?? true;
+        const sideChatBtnFb = sideChatOpenButtonCopy({
+          side_chat_has_unread: sideChatHasUnread,
+          side_chat_unread_count: sideChatUnreadCount,
+        });
         const fallback: WebviewStateMessage = {
           type: "state",
           conversationId,
@@ -330,6 +361,8 @@ export function createConversationPanelController(
           legalPolicyLinks: listLegalPolicyLinksFromColcoorWorkspaceSection(
             vscode.workspace.getConfiguration("colcoor"),
           ),
+          sideChatOpenButtonLabel: sideChatBtnFb.label,
+          sideChatOpenButtonTitle: sideChatBtnFb.title,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -345,11 +378,13 @@ export function createConversationPanelController(
     try {
       const previousSelectedEventId = selectedEventId;
       const previousEventIds = new Set(lastTreeEvents.map((e) => e.id));
-      const [{ events }, notes, caller] = await Promise.all([
+      const [{ events }, notes, caller, listRows] = await Promise.all([
         api.getTree(conversationId),
         api.listNotes(conversationId),
         api.getConversationCallerState(conversationId).catch((): null => null),
+        api.listConversations().catch((): ConversationSummary[] => []),
       ]);
+      applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
       const nextEventIds = new Set(events.map((e) => e.id));
       const stalePromptKey = staleTreeMissingSelectionPromptKey({
         previousSelectedEventId,
@@ -426,12 +461,14 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
-      const [{ events }, notes, caller] = await Promise.all([
+      const [{ events }, notes, caller, listRows] = await Promise.all([
         api.getTree(conversationId),
         api.listNotes(conversationId),
         api.getConversationCallerState(conversationId).catch((): null => null),
+        api.listConversations().catch((): ConversationSummary[] => []),
       ]);
       lastNotes = notes;
+      applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
       if (caller) {
         lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
       } else {
@@ -485,12 +522,14 @@ export function createConversationPanelController(
         { signal, onAssistantTextDelta: (t) => stream.pushDelta(t) },
       );
       stream.dispose();
-      const [{ events }, notes, caller] = await Promise.all([
+      const [{ events }, notes, caller, listRows] = await Promise.all([
         api.getTree(conversationId),
         api.listNotes(conversationId),
         api.getConversationCallerState(conversationId).catch((): null => null),
+        api.listConversations().catch((): ConversationSummary[] => []),
       ]);
       lastNotes = notes;
+      applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
       if (caller) {
         lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
       } else {
@@ -852,6 +891,8 @@ export function createConversationPanelController(
         await vscode.commands.executeCommand("colcoor.openSideChat", {
           conv: { id: conversationId, title: conversationTitle ?? null },
         });
+        await refreshConversationMeta();
+        postState(lastTreeEvents, sendAbort != null, null);
         return;
       }
       if (msg.type === "setupCursorCli") {
@@ -1076,6 +1117,8 @@ export function createConversationPanelController(
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
+      sideChatUnreadCount = 0;
+      sideChatHasUnread = false;
       await refreshConversationMeta();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
@@ -1097,6 +1140,8 @@ export function createConversationPanelController(
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
+      sideChatUnreadCount = 0;
+      sideChatHasUnread = false;
       await refreshConversationMeta();
       try {
         await api.setConversationActive(cid, {

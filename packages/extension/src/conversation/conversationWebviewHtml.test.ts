@@ -67,6 +67,13 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("unicode-bidi: plaintext");
   });
 
+  it("drives Open side chat label and tooltip from host unread state ([ui-features.md] §10)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("sideChatOpenButtonLabel");
+    expect(html).toContain("sideChatOpenButtonTitle");
+    expect(html).toContain("openSideChatBtn.textContent");
+  });
+
   it("posts treeContextMenu on tree node contextmenu ([tree-ui-contract.md] §5.2)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('vscode.postMessage({ type: "treeContextMenu", id: nid });');
@@ -186,7 +193,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="btnSetupCursorCli"');
     expect(html).toContain('id="btnSetCursorAgentApiKey"');
     expect(html).toContain('id="btnDeleteConversation"');
-    expect(html).toContain("if (openSideChatBtn) openSideChatBtn.disabled = state.busy;");
+    expect(html).toContain("openSideChatBtn.disabled = state.busy;");
     expect(html).toContain("if (setupCursorCliBtn) setupCursorCliBtn.disabled = state.busy;");
     expect(html).toContain("if (setCursorAgentApiKeyBtn) setCursorAgentApiKeyBtn.disabled = state.busy;");
     expect(html).toContain("if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;");
