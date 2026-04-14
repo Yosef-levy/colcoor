@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentPrintArgs, normalizeAgentCliOutputMode } from "./cursorCliSpawn";
+import { processEnvForCursorCli } from "./agentPathEnv";
+import { buildAgentPrintArgs, buildEnvForAgentSpawn, normalizeAgentCliOutputMode } from "./cursorCliSpawn";
 
 describe("normalizeAgentCliOutputMode", () => {
   it("accepts known values", () => {
@@ -54,5 +55,20 @@ describe("buildAgentPrintArgs", () => {
       ws,
       prompt,
     ]);
+  });
+});
+
+describe("buildEnvForAgentSpawn", () => {
+  it("matches processEnvForCursorCli when no stored key", () => {
+    expect(buildEnvForAgentSpawn(undefined)).toEqual(processEnvForCursorCli());
+    expect(buildEnvForAgentSpawn("")).toEqual(processEnvForCursorCli());
+    expect(buildEnvForAgentSpawn("   ")).toEqual(processEnvForCursorCli());
+  });
+
+  it("sets CURSOR_API_KEY from trimmed stored key and keeps PATH augmentation", () => {
+    const base = processEnvForCursorCli();
+    const env = buildEnvForAgentSpawn("  my-key  ");
+    expect(env.CURSOR_API_KEY).toBe("my-key");
+    expect(env.PATH).toBe(base.PATH);
   });
 });
