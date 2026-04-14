@@ -23,4 +23,11 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("reference_chips");
     expect(html).toContain("className = \"ref-chip\"");
   });
+
+  it("includes composer referenced-event controls", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("id=\"refEventRow\"");
+    expect(html).toContain("clearRefEvent");
+    expect(html).toContain("referencedEventId");
+  });
 });

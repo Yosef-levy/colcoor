@@ -485,6 +485,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.showNotesOnSelectedMessage", async () => {
       await conversationPanel.showNotesOnSelectedMessage();
     }),
+    vscode.commands.registerCommand("colcoor.referenceSelectedMessageInSideChat", async () => {
+      const ctx = conversationPanel.getSelectedMessageContext();
+      if (!ctx) {
+        await vscode.window.showWarningMessage(
+          "Colcoor: open a conversation and select a message first.",
+        );
+        return;
+      }
+      try {
+        await openSideChatPanel(context, api, ctx.conversationId, ctx.title ?? null, {
+          referencedEventId: ctx.selectedEventId,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      }
+    }),
     vscode.commands.registerCommand(
       "colcoor.openConversation",
       async (arg0?: ConversationTreeItem | string, arg1?: string | null) => {

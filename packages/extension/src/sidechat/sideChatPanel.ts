@@ -42,7 +42,12 @@ function randomNonce(): string {
 
 type FromWebview =
   | { type: "ready" }
-  | { type: "send"; text: string; referencedSideChatMessageId?: string | null }
+  | {
+      type: "send";
+      text: string;
+      referencedSideChatMessageId?: string | null;
+      referencedEventId?: string | null;
+    }
   | { type: "refresh" }
   | { type: "edit"; messageId: string; text: string }
   | { type: "delete"; messageId: string };
@@ -52,6 +57,7 @@ type StateMessage = {
   messages: SideChatRenderMessage[];
   /** Caller user id for author-only actions in the webview; null if profile could not be loaded. */
   viewerUserId: string | null;
+  referencedEventId: string | null;
 };
 
 type ErrorMessage = { type: "error"; text: string };
@@ -65,6 +71,7 @@ export async function openSideChatPanel(
   api: ColcoorApiClient,
   conversationId: string,
   title: string | null,
+  options?: { referencedEventId?: string | null },
 ): Promise<void> {
   const label = title?.trim() ? title.trim() : `Side chat · ${conversationId.slice(0, 8)}…`;
   const nonce = randomNonce();
@@ -95,6 +102,10 @@ export async function openSideChatPanel(
   let listRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** `undefined` = not loaded yet, `null` = load failed profile */
   let myProfile: MeOut | null | undefined = undefined;
+  let composerReferencedEventId =
+    typeof options?.referencedEventId === "string" && options.referencedEventId.trim()
+      ? options.referencedEventId.trim()
+      : null;
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
   const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
@@ -158,6 +169,7 @@ export async function openSideChatPanel(
         type: "state",
         messages: toSideChatRenderMessages(cached),
         viewerUserId,
+        referencedEventId: composerReferencedEventId,
       } satisfies StateMessage);
     } catch {
       /* webview gone */
@@ -280,7 +292,18 @@ export async function openSideChatPanel(
       return;
     }
     if (msg.type === "send") {
-      const payload = buildSideChatSendPayload(msg.text, msg.referencedSideChatMessageId, cached);
+      const explicitRefProvided = Object.prototype.hasOwnProperty.call(msg, "referencedEventId");
+      const referencedEventId = explicitRefProvided
+        ? typeof msg.referencedEventId === "string" && msg.referencedEventId.trim()
+          ? msg.referencedEventId.trim()
+          : null
+        : composerReferencedEventId;
+      const payload = buildSideChatSendPayload(
+        msg.text,
+        msg.referencedSideChatMessageId,
+        referencedEventId,
+        cached,
+      );
       if (!payload) {
         await panel.webview.postMessage({
           type: "error",
@@ -290,6 +313,7 @@ export async function openSideChatPanel(
       }
       try {
         await api.postSideChatMessage(conversationId, payload);
+        composerReferencedEventId = null;
         await pushState();
       } catch (e) {
         const t = e instanceof Error ? e.message : String(e);

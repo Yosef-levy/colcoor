@@ -8,6 +8,7 @@ import { trimmedSideChatSendBody } from "./trimSendBody";
 export function buildSideChatSendPayload(
   text: string | undefined,
   referencedSideChatMessageId: string | null | undefined,
+  referencedEventId: string | null | undefined,
   knownMessages: readonly SideChatMessageOut[],
 ): SideChatPostBody | null {
   const body = trimmedSideChatSendBody(text);
@@ -21,6 +22,7 @@ export function buildSideChatSendPayload(
   return {
     kind: "user",
     body,
+    referenced_event_id: typeof referencedEventId === "string" && referencedEventId.trim() ? referencedEventId.trim() : null,
     referenced_side_chat_message_id: refOk ? ref : null,
   };
 }

@@ -123,6 +123,10 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       <div id="replying" class="hint" style="margin:0"></div>
       <button id="clearReply" type="button" class="secondary">Cancel reply</button>
     </div>
+    <div class="row" id="refEventRow" style="display:none">
+      <div id="refEventText" class="hint" style="margin:0"></div>
+      <button id="clearRefEvent" type="button" class="secondary">Clear reference</button>
+    </div>
     <textarea id="input" placeholder="Message…"></textarea>
     <div class="row">
       <button id="send" type="button">Send</button>
@@ -134,6 +138,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     const vscode = acquireVsCodeApi();
     var viewerUserId = null;
     var replyTarget = null;
+    var referencedEventId = null;
     var audioCtx = null;
     function playTone(freq, durationMs, gainValue) {
       try {
@@ -315,9 +320,26 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       row.style.display = "flex";
       n.textContent = "Replying to #" + replyTarget.seq + " " + (replyTarget.text || "(empty)");
     }
+    function updateRefEventHint() {
+      var t = document.getElementById("refEventText");
+      var row = document.getElementById("refEventRow");
+      if (!t || !row) return;
+      if (!referencedEventId) {
+        row.style.display = "none";
+        t.textContent = "";
+        return;
+      }
+      row.style.display = "flex";
+      t.textContent = "Referencing event " + String(referencedEventId).slice(0, 8);
+    }
     window.addEventListener("message", function (ev) {
       var d = ev.data;
       if (d && d.type === "state") {
+        if (typeof d.referencedEventId === "string" && d.referencedEventId) {
+          referencedEventId = d.referencedEventId;
+        } else if (d.referencedEventId === null) {
+          referencedEventId = null;
+        }
         if (typeof d.viewerUserId === "string") {
           viewerUserId = d.viewerUserId;
         } else if (d.viewerUserId === null) {
@@ -325,6 +347,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         }
         var sub = document.getElementById("sub");
         if (sub) sub.textContent = (d.messages && d.messages.length) ? d.messages.length + " message(s)" : "No messages yet.";
+        updateRefEventHint();
         render(d.messages || []);
       }
       if (d && d.type === "error" && typeof d.text === "string") {
@@ -339,9 +362,16 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       var ta = document.getElementById("input");
       var t = ta && ta.value ? ta.value : "";
       var refId = replyTarget && typeof replyTarget.id === "string" ? replyTarget.id : null;
-      vscode.postMessage({ type: "send", text: t, referencedSideChatMessageId: refId });
+      vscode.postMessage({
+        type: "send",
+        text: t,
+        referencedSideChatMessageId: refId,
+        referencedEventId: referencedEventId,
+      });
       replyTarget = null;
+      referencedEventId = null;
       updateReplyHint();
+      updateRefEventHint();
       if (ta) ta.value = "";
     });
     document.getElementById("refresh").addEventListener("click", function () {
@@ -375,6 +405,10 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     document.getElementById("clearReply").addEventListener("click", function () {
       replyTarget = null;
       updateReplyHint();
+    });
+    document.getElementById("clearRefEvent").addEventListener("click", function () {
+      referencedEventId = null;
+      updateRefEventHint();
     });
     vscode.postMessage({ type: "ready" });
   </script>

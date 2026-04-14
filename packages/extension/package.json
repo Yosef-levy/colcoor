@@ -97,6 +97,10 @@
       {
         "command": "colcoor.showNotesOnSelectedMessage",
         "title": "Colcoor: Show notes on selected message"
+      },
+      {
+        "command": "colcoor.referenceSelectedMessageInSideChat",
+        "title": "Colcoor: Reference selected message in side chat"
       }
     ],
     "viewsContainers": {

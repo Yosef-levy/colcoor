@@ -91,6 +91,8 @@ export function createConversationPanelController(
   addNoteToSelectedMessage: () => Promise<void>;
   /** List notes for the selected event in the “Colcoor notes” output channel. */
   showNotesOnSelectedMessage: () => Promise<void>;
+  /** Current conversation + selected event (for cross-panel actions like side-chat references). */
+  getSelectedMessageContext: () => { conversationId: string; selectedEventId: string; title: string | null } | null;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -748,6 +750,12 @@ export function createConversationPanelController(
     toggleStarSelectedMessage,
     addNoteToSelectedMessage,
     showNotesOnSelectedMessage,
+    getSelectedMessageContext: () => {
+      if (!conversationId || !selectedEventId) {
+        return null;
+      }
+      return { conversationId, selectedEventId, title: conversationTitle ?? null };
+    },
     dispose: () => {
       subscription.dispose();
       colcoorNotesChannel.dispose();
