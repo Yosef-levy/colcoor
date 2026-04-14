@@ -29,6 +29,7 @@ import { clipboardTextForSelectedTreeMessage } from "./selectedMessageClipboardT
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { findBranchTip } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
+import { COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION } from "../util/colcoorApiFailureActions";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
 
@@ -409,9 +410,9 @@ export function createConversationPanelController(
         staleTreePromptedForEventId = stalePromptKey;
         const choice = await vscode.window.showWarningMessage(
           "Colcoor: the shared tree changed and your previous selection is no longer available.",
-          "Refresh tree",
+          COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
         );
-        if (choice === "Refresh tree") {
+        if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
           await loadTreeAndPush(false, null);
           return;
         }
