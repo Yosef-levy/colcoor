@@ -99,4 +99,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openMembers" });');
     expect(html).toContain('vscode.postMessage({ type: "addMember" });');
   });
+
+  it("includes change/remove member quick actions", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnChangeMemberRole"');
+    expect(html).toContain('id="btnRemoveMember"');
+    expect(html).toContain("if (changeMemberRoleBtn) changeMemberRoleBtn.disabled = state.busy;");
+    expect(html).toContain("if (removeMemberBtn) removeMemberBtn.disabled = state.busy;");
+    expect(html).toContain('vscode.postMessage({ type: "changeMemberRole" });');
+    expect(html).toContain('vscode.postMessage({ type: "removeMember" });');
+  });
 });

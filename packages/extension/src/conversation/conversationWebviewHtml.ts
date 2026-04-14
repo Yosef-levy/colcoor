@@ -627,6 +627,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div class="detail-actions">
           <button type="button" id="btnShowMembers" class="btn-secondary" title="Show conversation members">Members</button>
           <button type="button" id="btnAddMember" class="btn-secondary" title="Invite an editor/viewer to this conversation">Add member…</button>
+          <button type="button" id="btnChangeMemberRole" class="btn-secondary" title="Change a member role">Change role…</button>
+          <button type="button" id="btnRemoveMember" class="btn-secondary" title="Remove a member from this conversation">Remove member…</button>
           <button type="button" id="btnStarredDrawer" class="btn-secondary" title="List starred messages in this conversation">Starred</button>
           <button type="button" id="btnTodoDrawer" class="btn-secondary" title="List TODO notes in this conversation">TODO notes</button>
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
@@ -896,6 +898,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
       const showMembersBtn = document.getElementById("btnShowMembers");
       const addMemberBtn = document.getElementById("btnAddMember");
+      const changeMemberRoleBtn = document.getElementById("btnChangeMemberRole");
+      const removeMemberBtn = document.getElementById("btnRemoveMember");
       const starredDrawerBtn = document.getElementById("btnStarredDrawer");
       const todoDrawerBtn = document.getElementById("btnTodoDrawer");
       const resendBtn = document.getElementById("btnResend");
@@ -903,6 +907,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       if (showMembersBtn) showMembersBtn.disabled = state.busy;
       if (addMemberBtn) addMemberBtn.disabled = state.busy;
+      if (changeMemberRoleBtn) changeMemberRoleBtn.disabled = state.busy;
+      if (removeMemberBtn) removeMemberBtn.disabled = state.busy;
       if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
       const sel = state.selectedEventId;
@@ -1425,6 +1431,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnAddMember").addEventListener("click", () => {
       vscode.postMessage({ type: "addMember" });
+    });
+    document.getElementById("btnChangeMemberRole").addEventListener("click", () => {
+      vscode.postMessage({ type: "changeMemberRole" });
+    });
+    document.getElementById("btnRemoveMember").addEventListener("click", () => {
+      vscode.postMessage({ type: "removeMember" });
     });
 
     var btnJump = document.getElementById("btnJumpTip");
