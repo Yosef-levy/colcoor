@@ -221,6 +221,8 @@ export function getSideChatWebviewHtml(
       <button id="btnListConversationMembers" type="button" class="secondary" title="List members in the output channel (Colcoor: Show members)">Show members</button>
       <button id="btnChangeMemberRole" type="button" class="secondary" title="Pick a member and set a new role (Colcoor: Change member role…)">Change role…</button>
       <button id="btnRemoveMember" type="button" class="secondary" title="Remove a member from this conversation (Colcoor: Remove member…)">Remove member…</button>
+      <button id="btnCopyConversationId" type="button" class="secondary" title="Copy this conversation UUID to the clipboard (Colcoor: Copy conversation ID)">Copy ID</button>
+      <button id="btnTogglePinnedConversation" type="button" class="secondary" title="Pin or unpin this conversation in your sidebar list (Colcoor: Pin / unpin conversation)">Pin / unpin</button>
       <button id="btnSetupCursorCli" type="button" class="secondary" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
       <button id="btnSetCursorAgentApiKey" type="button" class="secondary" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
     </div>
@@ -716,6 +718,12 @@ export function getSideChatWebviewHtml(
     });
     document.getElementById("btnRemoveMember").addEventListener("click", function () {
       vscode.postMessage({ type: "removeMember" });
+    });
+    document.getElementById("btnCopyConversationId").addEventListener("click", function () {
+      vscode.postMessage({ type: "copyConversationId" });
+    });
+    document.getElementById("btnTogglePinnedConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "togglePinnedConversation" });
     });
     document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
       vscode.postMessage({ type: "setupCursorCli" });

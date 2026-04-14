@@ -151,6 +151,14 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "removeMember" });');
   });
 
+  it("includes copy conversation id and pin/unpin actions ([ui-features.md] §4)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnCopyConversationId"');
+    expect(html).toContain('id="btnTogglePinnedConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "copyConversationId" });');
+    expect(html).toContain('vscode.postMessage({ type: "togglePinnedConversation" });');
+  });
+
   it("includes optional legal policies and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonceZ", [
       { label: "Terms", url: "https://example.com/t" },
