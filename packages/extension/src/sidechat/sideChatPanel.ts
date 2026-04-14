@@ -79,6 +79,7 @@ type FromWebview =
   | { type: "signOut" }
   | { type: "newConversation" }
   | { type: "refreshConversations" }
+  | { type: "toggleConversationsSidebar" }
   | { type: "setupCursorCli" }
   | { type: "setCursorAgentApiKey" }
   | { type: "edit"; messageId: string; text: string }
@@ -481,6 +482,10 @@ export async function openSideChatPanel(
     }
     if (msg.type === "refreshConversations") {
       await vscode.commands.executeCommand("colcoor.refreshConversations");
+      return;
+    }
+    if (msg.type === "toggleConversationsSidebar") {
+      await vscode.commands.executeCommand("colcoor.toggleConversationsSidebar");
       return;
     }
     if (msg.type === "setupCursorCli") {
