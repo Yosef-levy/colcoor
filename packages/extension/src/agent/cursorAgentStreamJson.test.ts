@@ -3,7 +3,31 @@ import {
   createStreamJsonStdoutFeed,
   parseCursorAgentNdjsonLine,
   slimNdjsonForTimeline,
+  tryParseNdjsonObject,
 } from "./cursorAgentStreamJson";
+
+describe("tryParseNdjsonObject", () => {
+  it("returns a record for a JSON object line", () => {
+    const o = tryParseNdjsonObject('{"type":"system","subtype":"init"}');
+    expect(o).toEqual({ type: "system", subtype: "init" });
+  });
+
+  it("returns null for blank or invalid JSON", () => {
+    expect(tryParseNdjsonObject("")).toBeNull();
+    expect(tryParseNdjsonObject("   ")).toBeNull();
+    expect(tryParseNdjsonObject("{")).toBeNull();
+  });
+
+  it("returns null for JSON arrays and primitives (NDJSON objects only)", () => {
+    expect(tryParseNdjsonObject("[1,2]")).toBeNull();
+    expect(tryParseNdjsonObject('"hello"')).toBeNull();
+    expect(tryParseNdjsonObject("42")).toBeNull();
+  });
+
+  it("trims leading and trailing whitespace", () => {
+    expect(tryParseNdjsonObject('  {"a":1}  ')).toEqual({ a: 1 });
+  });
+});
 
 describe("parseCursorAgentNdjsonLine", () => {
   it("parses assistant text", () => {

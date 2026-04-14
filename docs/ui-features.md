@@ -88,8 +88,9 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - **In-flight turn:** pending user line + updating assistant text until done or cancelled.
 - **Star** on messages.
 - **Copy** message content where the platform supports it.
+- **Optional CLI trace:** assistant messages may include a **collapsible** summary of local agent activity (reads, edits, shell) derived from Cursor CLI **stream-json** output. That block is separate chrome, not part of the message markdown body.
 
-**Excluded:** no tool/step rows in the thread.
+**Excluded:** no dense inline tool-transcript rows in the main message body as the default reading experience.
 
 ---
 
