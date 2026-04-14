@@ -1,0 +1,69 @@
+import { describe, expect, it, vi } from "vitest";
+import type { ColcoorApiClient } from "../api/client";
+import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
+
+function mockApi(appendEvent: ReturnType<typeof vi.fn>): ColcoorApiClient {
+  return { appendEvent } as unknown as ColcoorApiClient;
+}
+
+describe("appendAssistantFromAgentResult", () => {
+  it("does not call append when cancelled and trimmed assistant text is empty", async () => {
+    const appendEvent = vi.fn();
+    const out = await appendAssistantFromAgentResult(mockApi(appendEvent), "conv", "userEv", {
+      text: "  \n\t  ",
+      stub: "none",
+      cancelled: true,
+    });
+    expect(appendEvent).not.toHaveBeenCalled();
+    expect(out).toEqual({ userEventId: "userEv", cancelled: true });
+  });
+
+  it("appends trimmed partial assistant when cancelled with non-empty text", async () => {
+    const appendEvent = vi.fn().mockResolvedValue({ id: "asst-1" });
+    const out = await appendAssistantFromAgentResult(mockApi(appendEvent), "conv", "userEv", {
+      text: "  partial\n",
+      stub: "explicit",
+      cancelled: true,
+      cursorCliTimeline: [{ t: "x" }],
+    });
+    expect(appendEvent).toHaveBeenCalledTimes(1);
+    expect(appendEvent).toHaveBeenCalledWith("conv", {
+      kind: "assistant_output",
+      parent_event_id: "userEv",
+      content: "partial",
+      author: "cursor_agent",
+      private_branch: false,
+      content_json: {
+        colcoor_agent_trace: {
+          version: 2,
+          entries: [{ t: "x" }],
+        },
+      },
+    });
+    expect(out).toEqual({
+      userEventId: "userEv",
+      assistantEventId: "asst-1",
+      assistantText: "partial",
+      assistantStub: "explicit",
+      cancelled: true,
+    });
+  });
+
+  it("appends full assistant text on normal completion without trimming", async () => {
+    const appendEvent = vi.fn().mockResolvedValue({ id: "asst-2" });
+    const out = await appendAssistantFromAgentResult(mockApi(appendEvent), "c", "u", {
+      text: "  keep spaces  ",
+      stub: "none",
+    });
+    expect(appendEvent).toHaveBeenCalledWith("c", expect.objectContaining({ content: "  keep spaces  " }));
+    expect(out.assistantEventId).toBe("asst-2");
+    expect(out.assistantText).toBe("  keep spaces  ");
+    expect(out.cancelled).toBeUndefined();
+  });
+
+  it("passes undefined content_json when there is no CLI timeline", async () => {
+    const appendEvent = vi.fn().mockResolvedValue({ id: "a" });
+    await appendAssistantFromAgentResult(mockApi(appendEvent), "c", "u", { text: "hi", stub: "none" });
+    expect(appendEvent.mock.calls[0][1].content_json).toBeUndefined();
+  });
+});
