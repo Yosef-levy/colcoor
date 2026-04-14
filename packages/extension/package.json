@@ -139,6 +139,11 @@
         "title": "Colcoor: Open conversation drawers…"
       },
       {
+        "command": "colcoor.refreshConversationDrawers",
+        "title": "Colcoor: Refresh conversation drawers",
+        "description": "Reload starred and TODO lists in the open drawers panel from the server."
+      },
+      {
         "command": "colcoor.referenceSelectedMessageInSideChat",
         "title": "Colcoor: Reference selected message in side chat"
       },

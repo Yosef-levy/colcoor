@@ -103,6 +103,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnRemoveMember" title="Remove a member from this conversation (Colcoor: Remove member)">Remove member…</button>
     <button type="button" id="btnRefreshConversations" title="Reload the Colcoor conversations list in the sidebar">Refresh conversations</button>
     <button type="button" id="btnRefreshConversationTree" title="Reload the open conversation tree and thread from the server (Colcoor: Refresh conversation tree)">Refresh tree</button>
+    <button type="button" id="btnReloadDrawersLists" title="Reload starred and TODO lists from the server (Colcoor: Refresh conversation drawers)">Refresh lists</button>
     <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
     <button type="button" id="btnNewConversation" title="Create a new conversation">New conversation</button>
     <button type="button" id="btnDeleteConversation" title="Permanently delete this conversation from Colcoor (Colcoor: Delete conversation)">Delete conversation…</button>
@@ -120,6 +121,7 @@ export function getConversationDrawersPanelHtml(
       if (!s || !t) return;
       s.style.display = which === "starred" ? "block" : "none";
       t.style.display = which === "todo" ? "block" : "none";
+      vscode.postMessage({ type: "drawersPreferredTab", tab: which });
     }
     document.getElementById("tabStarred").addEventListener("click", function () { showTab("starred"); });
     document.getElementById("tabTodo").addEventListener("click", function () { showTab("todo"); });
@@ -180,6 +182,9 @@ export function getConversationDrawersPanelHtml(
     document.getElementById("btnRefreshConversationTree").addEventListener("click", function () {
       vscode.postMessage({ type: "refreshConversationTree" });
     });
+    document.getElementById("btnReloadDrawersLists").addEventListener("click", function () {
+      vscode.postMessage({ type: "reloadDrawersLists" });
+    });
     document.getElementById("btnToggleConversationsSidebar").addEventListener("click", function () {
       vscode.postMessage({ type: "toggleConversationsSidebar" });
     });
@@ -195,6 +200,7 @@ export function getConversationDrawersPanelHtml(
     document.getElementById("btnSetCursorAgentApiKey").addEventListener("click", function () {
       vscode.postMessage({ type: "setCursorAgentApiKey" });
     });
+    showTab("${preferredTab}");
     document.addEventListener("click", function (ev) {
       var pbtn = ev.target && ev.target.closest && ev.target.closest("button.policy");
       if (pbtn) {

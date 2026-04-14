@@ -56,6 +56,17 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.jumpToLatestInConversation");
     expect(cmds).toContain("colcoor.copySelectedMessage");
     expect(cmds).toContain("colcoor.refreshConversationTree");
+    expect(cmds).toContain("colcoor.refreshConversationDrawers");
+  });
+
+  it("documents refreshConversationDrawers for starred/TODO reload ([ui-features.md] §11)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const cmd = pkg.contributes?.commands?.find((c) => c.command === "colcoor.refreshConversationDrawers");
+    expect(cmd?.title).toBe("Colcoor: Refresh conversation drawers");
+    expect(cmd?.description).toMatch(/starred|TODO/i);
   });
 
   it("documents refreshConversationTree for reloading the open panel ([ui-features.md] §6)", () => {

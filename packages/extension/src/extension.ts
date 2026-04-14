@@ -145,6 +145,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let drawersPanel: vscode.WebviewPanel | undefined;
   let drawersConversationId: string | undefined;
   let drawersConversationTitle: string | null = null;
+  /** Active Starred vs TODO tab in the drawers webview; kept for server reloads ([ui-features.md] §11). */
+  let drawersPreferredTab: "starred" | "todo" = "starred";
+
+  async function refreshDrawersPanelHtmlFromServer(): Promise<void> {
+    if (!drawersPanel || !drawersConversationId) {
+      return;
+    }
+    const [{ events }, notes] = await Promise.all([
+      api.getTree(drawersConversationId),
+      api.listNotes(drawersConversationId),
+    ]);
+    const model = buildConversationDrawersModel(events, notes);
+    drawersPanel.webview.html = getConversationDrawersPanelHtml(
+      drawersPanel.webview.cspSource,
+      String(Date.now()),
+      model,
+      drawersPreferredTab,
+      listLegalPolicyLinksFromColcoorWorkspaceSection(vscode.workspace.getConfiguration("colcoor")),
+    );
+  }
+
   const autoRefreshTimer = setInterval(async () => {
     const hasBackendToken = Boolean(await session.getBackendAccessToken());
     if (
@@ -324,6 +345,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.refreshConversations", () => {
       refreshTree();
       void vscode.window.setStatusBarMessage("Colcoor: conversations list refreshed.", 2500);
+    }),
+    vscode.commands.registerCommand("colcoor.refreshConversationDrawers", async () => {
+      if (!(await session.getBackendAccessToken())) {
+        await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
+        return;
+      }
+      if (!drawersPanel || !drawersConversationId) {
+        await vscode.window.showWarningMessage(
+          "Colcoor: open conversation drawers first (Colcoor: Open conversation drawers…).",
+        );
+        return;
+      }
+      try {
+        await refreshDrawersPanelHtmlFromServer();
+        void vscode.window.setStatusBarMessage("Colcoor: drawers lists refreshed.", 2500);
+      } catch (e) {
+        await showColcoorApiFailure(e);
+      }
     }),
     vscode.commands.registerCommand("colcoor.openSettings", async () => {
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
@@ -831,6 +870,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           const model = buildConversationDrawersModel(events, notes);
           drawersConversationId = convId;
           drawersConversationTitle = convTitle ?? null;
+          drawersPreferredTab = preferredTab;
           if (!drawersPanel) {
             drawersPanel = vscode.window.createWebviewPanel(
               "colcoor.drawers",
@@ -842,9 +882,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               drawersPanel = undefined;
               drawersConversationId = undefined;
               drawersConversationTitle = null;
+              drawersPreferredTab = "starred";
             });
             drawersPanel.webview.onDidReceiveMessage(async (m: unknown) => {
-              const msg = m as { type?: string; eventId?: string; url?: string };
+              const msg = m as { type?: string; eventId?: string; url?: string; tab?: string };
               if (!msg || typeof msg.type !== "string") {
                 return;
               }
@@ -852,6 +893,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 const u = msg.url.trim();
                 if (isSafeHttpUrlForWebview(u)) {
                   void vscode.env.openExternal(vscode.Uri.parse(u));
+                }
+                return;
+              }
+              if (msg.type === "drawersPreferredTab" && (msg.tab === "starred" || msg.tab === "todo")) {
+                drawersPreferredTab = msg.tab;
+                return;
+              }
+              if (msg.type === "reloadDrawersLists") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                try {
+                  await refreshDrawersPanelHtmlFromServer();
+                  void vscode.window.setStatusBarMessage("Colcoor: drawers lists refreshed.", 2000);
+                } catch (e) {
+                  await showColcoorApiFailure(e);
                 }
                 return;
               }
@@ -1065,7 +1122,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             drawersPanel.webview.cspSource,
             String(Date.now()),
             model,
-            preferredTab,
+            drawersPreferredTab,
             listLegalPolicyLinksFromColcoorWorkspaceSection(vscode.workspace.getConfiguration("colcoor")),
           );
           drawersPanel.reveal(vscode.ViewColumn.Beside, false);

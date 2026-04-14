@@ -18,6 +18,8 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('data-event-id="e1"');
     expect(html).toContain('data-event-id="e2"');
     expect(html).toContain('vscode.postMessage({ type: "openEvent", eventId: eid });');
+    expect(html).toContain('vscode.postMessage({ type: "drawersPreferredTab", tab: which });');
+    expect(html).toContain('showTab("todo")');
     expect(html).toContain('id="btnSignIn"');
     expect(html).toContain('vscode.postMessage({ type: "signIn" });');
     expect(html).toContain('id="btnSignOut"');
@@ -56,6 +58,8 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "refreshConversations" });');
     expect(html).toContain('id="btnRefreshConversationTree"');
     expect(html).toContain('vscode.postMessage({ type: "refreshConversationTree" });');
+    expect(html).toContain('id="btnReloadDrawersLists"');
+    expect(html).toContain('vscode.postMessage({ type: "reloadDrawersLists" });');
     expect(html).toContain('id="btnToggleConversationsSidebar"');
     expect(html).toContain('vscode.postMessage({ type: "toggleConversationsSidebar" });');
     expect(html).toContain('id="btnNewConversation"');
@@ -83,5 +87,6 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('class="policy"');
     expect(html).toContain('data-url="https://example.com/terms"');
     expect(html).toContain('vscode.postMessage({ type: "openLegalPolicyUrl", url: u });');
+    expect(html).toContain('showTab("starred")');
   });
 });
