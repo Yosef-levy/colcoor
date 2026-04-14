@@ -137,6 +137,8 @@ export function createConversationPanelController(
   continueFromHere: () => Promise<void>;
   /** Regenerate assistant under the selected user message (same as detail bar Resend). */
   resendAssistant: () => Promise<void>;
+  /** Select the default-branch tip (same as detail bar “Jump to latest”). */
+  jumpToLatestInConversation: () => Promise<void>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -504,6 +506,41 @@ export function createConversationPanelController(
     }
   }
 
+  async function jumpToDefaultBranchTip(opts?: { palette?: boolean }): Promise<void> {
+    if (!conversationId) {
+      if (opts?.palette) {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open a conversation (Colcoor: Open conversation) first.",
+        );
+      }
+      return;
+    }
+    try {
+      const prevSel = selectedEventId;
+      const { events } = await api.getTree(conversationId);
+      try {
+        selectedEventId = findBranchTip(events).id;
+      } catch {
+        selectedEventId = events[0]?.id;
+      }
+      syncActiveToBackend(selectedEventId, {
+        needsContextRebuild:
+          selectedEventId !== undefined &&
+          prevSel !== undefined &&
+          prevSel !== selectedEventId,
+      });
+      await loadTreeAndPush(false, null);
+      if (opts?.palette) {
+        void vscode.window.setStatusBarMessage(
+          "Colcoor: selection moved to the latest message on the default branch.",
+          2500,
+        );
+      }
+    } catch (e) {
+      void showColcoorApiFailure(e);
+    }
+  }
+
   async function handleRename(): Promise<void> {
     if (!conversationId) {
       return;
@@ -594,27 +631,7 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "selectTip") {
-        if (!conversationId) {
-          return;
-        }
-        try {
-          const prevSel = selectedEventId;
-          const { events } = await api.getTree(conversationId);
-          try {
-            selectedEventId = findBranchTip(events).id;
-          } catch {
-            selectedEventId = events[0]?.id;
-          }
-          syncActiveToBackend(selectedEventId, {
-            needsContextRebuild:
-              selectedEventId !== undefined &&
-              prevSel !== undefined &&
-              prevSel !== selectedEventId,
-          });
-          await loadTreeAndPush(false, null);
-        } catch (e) {
-          void showColcoorApiFailure(e);
-        }
+        await jumpToDefaultBranchTip();
         return;
       }
       if (msg.type === "refresh") {
@@ -1112,6 +1129,9 @@ export function createConversationPanelController(
         return;
       }
       await handleResend();
+    },
+    async jumpToLatestInConversation(): Promise<void> {
+      await jumpToDefaultBranchTip({ palette: true });
     },
     dispose: () => {
       subscription.dispose();

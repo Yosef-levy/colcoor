@@ -150,6 +150,11 @@
         "command": "colcoor.resendAssistant",
         "title": "Colcoor: Resend assistant",
         "description": "New assistant reply under the selected user message (conversation panel must be open)."
+      },
+      {
+        "command": "colcoor.jumpToLatestInConversation",
+        "title": "Colcoor: Jump to latest in conversation",
+        "description": "Select the newest leaf on the default branch (conversation panel must be open)."
       }
     ],
     "viewsContainers": {

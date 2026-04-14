@@ -11,6 +11,16 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.sendMessage");
   });
 
+  it("documents jumpToLatestInConversation for default-branch navigation ([ui-features.md] §6)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const jump = pkg.contributes?.commands?.find((c) => c.command === "colcoor.jumpToLatestInConversation");
+    expect(jump?.title).toBe("Colcoor: Jump to latest in conversation");
+    expect(jump?.description).toContain("default branch");
+  });
+
   it("documents sendMessage prompts including optional checkpoint ([ui-features.md] §9)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
@@ -40,6 +50,7 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.openSideChat");
     expect(cmds).toContain("colcoor.continueFromHere");
     expect(cmds).toContain("colcoor.resendAssistant");
+    expect(cmds).toContain("colcoor.jumpToLatestInConversation");
   });
 
   it("registers each contributed command id at most once", () => {

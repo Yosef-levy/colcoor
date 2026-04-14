@@ -71,6 +71,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 - **Indented outline** (vertical list, parent/child via indentation) is the **reference** visualization; **expand/collapse** per node that has children.
 - **Select** a node as the primary on-tree action; selection drives **thread** and **detail bar** path.
+- **Jump to latest** on the default branch — detail bar action; Command Palette **Colcoor: Jump to latest in conversation** when the conversation panel is open.
 - Nodes show **role** (user vs assistant), **private** when applicable, **star** and **notes** when applicable, compact **snippet** (and **title** when the product exposes one), and **time** per [tree-ui-contract.md](tree-ui-contract.md) §7.
 - **Star, notes, private commit/delete, resend**, etc. are **not** required as heavy inline controls on each row; they surface via **detail bar**, **context menu**, **command palette**, or shortcuts ([tree-ui-contract.md](tree-ui-contract.md) §5–§6).
 
