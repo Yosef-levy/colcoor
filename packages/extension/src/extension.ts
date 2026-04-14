@@ -50,7 +50,8 @@ function formatMemberQuickPickLabel(m: ConversationMember): string {
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
 
-type OpenSideChatCommandArg = ConversationTreeItem | { conv: { id: string; title?: string | null } };
+/** Same conv payload shape as other conversation-scoped commands (sidebar tree item or `{ conv }`). */
+type OpenSideChatCommandArg = ConversationCommandArg;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const config = vscode.workspace.getConfiguration("colcoor");

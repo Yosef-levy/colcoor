@@ -11,6 +11,14 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.sendMessage");
   });
 
+  it("registers newConversation and openSideChat for palette and menus", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };
+    const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
+    expect(cmds).toContain("colcoor.newConversation");
+    expect(cmds).toContain("colcoor.openSideChat");
+  });
+
   it("includes Sign out and About command links for discoverability", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
