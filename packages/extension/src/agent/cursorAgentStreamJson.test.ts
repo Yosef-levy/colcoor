@@ -40,6 +40,11 @@ describe("tryParseNdjsonObject", () => {
   it("trims leading and trailing whitespace", () => {
     expect(tryParseNdjsonObject('  {"a":1}  ')).toEqual({ a: 1 });
   });
+
+  it("strips a leading UTF-8 BOM before JSON.parse", () => {
+    expect(tryParseNdjsonObject('\uFEFF{"type":"system"}')).toEqual({ type: "system" });
+    expect(tryParseNdjsonObject(' \uFEFF{"b":2} ')).toEqual({ b: 2 });
+  });
 });
 
 describe("parseCursorAgentNdjsonLine", () => {
@@ -323,6 +328,16 @@ describe("createStreamJsonStdoutFeed", () => {
     feed.push("\n");
     feed.flushTail();
     expect(feed.getResolvedText()).toBe("ok");
+  });
+
+  it("parses the first NDJSON line when stdout begins with a UTF-8 BOM", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      "\uFEFF" +
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"bom"}]}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("bom");
   });
 
   it("flushTail parses final line without trailing newline", () => {

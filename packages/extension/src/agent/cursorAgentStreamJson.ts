@@ -58,8 +58,13 @@ export function tryParseNdjsonObject(line: string): Record<string, unknown> | nu
   if (!trimmed) {
     return null;
   }
+  /** UTF-8 BOM as a code unit; some Windows stdout/pipes prepend it once per stream or line. */
+  const jsonText = trimmed.codePointAt(0) === 0xfeff ? trimmed.slice(1) : trimmed;
+  if (!jsonText) {
+    return null;
+  }
   try {
-    const o = JSON.parse(trimmed) as unknown;
+    const o = JSON.parse(jsonText) as unknown;
     if (o && typeof o === "object" && !Array.isArray(o)) {
       return o as Record<string, unknown>;
     }
