@@ -750,6 +750,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 });
                 return;
               }
+              if (msg.type === "setupCursorCli") {
+                await vscode.commands.executeCommand("colcoor.setupCursorCli");
+                return;
+              }
+              if (msg.type === "setCursorAgentApiKey") {
+                await vscode.commands.executeCommand("colcoor.setCursorAgentApiKey");
+                return;
+              }
               if (msg.type !== "openEvent" || typeof msg.eventId !== "string") {
                 return;
               }

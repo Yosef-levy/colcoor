@@ -28,5 +28,9 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
     expect(html).toContain('id="btnOpenSideChat"');
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
+    expect(html).toContain('id="btnSetupCursorCli"');
+    expect(html).toContain('id="btnSetCursorAgentApiKey"');
+    expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
+    expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
   });
 });
