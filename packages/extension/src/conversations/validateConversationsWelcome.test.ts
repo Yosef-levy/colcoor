@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   colcoorCommandIdsFromPackage,
+  colcoorCommandsMissingFromConversationsWelcome,
+  CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS,
+  conversationsWelcomeContents,
   extractMarkdownCommandLinks,
   validateConversationsWelcomeCommands,
 } from "./validateConversationsWelcome";
@@ -37,6 +40,46 @@ describe("validateConversationsWelcomeCommands", () => {
     });
     expect(nonColcoor).toEqual(["workbench.action.files.newUntitledFile"]);
     expect(unknownColcoor).toEqual([]);
+  });
+});
+
+describe("colcoorCommandsMissingFromConversationsWelcome", () => {
+  it("requires every contributed colcoor command in welcome except explicit exclusions", () => {
+    const raw = readFileSync(resolve(__dirname, "../../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as Parameters<typeof colcoorCommandsMissingFromConversationsWelcome>[0];
+    expect(colcoorCommandsMissingFromConversationsWelcome(pkg)).toEqual([]);
+  });
+
+  it("documents delete conversation as the only excluded command", () => {
+    expect([...CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS].sort()).toEqual(["colcoor.deleteConversation"]);
+  });
+
+  it("flags commands absent from welcome when not excluded", () => {
+    const missing = colcoorCommandsMissingFromConversationsWelcome({
+      contributes: {
+        commands: [{ command: "colcoor.signIn" }, { command: "colcoor.signOut" }],
+        viewsWelcome: [{ view: "colcoor.conversations", contents: "[in](command:colcoor.signIn)" }],
+      },
+    });
+    expect(missing).toEqual(["colcoor.signOut"]);
+  });
+
+  it("does not require excluded commands to appear in welcome", () => {
+    const contents = conversationsWelcomeContents({
+      contributes: {
+        commands: [{ command: "colcoor.signIn" }, { command: "colcoor.deleteConversation" }],
+        viewsWelcome: [{ view: "colcoor.conversations", contents: "[in](command:colcoor.signIn)" }],
+      },
+    });
+    expect(contents).not.toContain("deleteConversation");
+    expect(
+      colcoorCommandsMissingFromConversationsWelcome({
+        contributes: {
+          commands: [{ command: "colcoor.signIn" }, { command: "colcoor.deleteConversation" }],
+          viewsWelcome: [{ view: "colcoor.conversations", contents: "[in](command:colcoor.signIn)" }],
+        },
+      }),
+    ).toEqual([]);
   });
 });
 
