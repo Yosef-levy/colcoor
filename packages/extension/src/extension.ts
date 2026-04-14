@@ -38,7 +38,10 @@ import {
   formatMemberLogLine,
   formatMemberQuickPickLabel,
 } from "./conversations/conversationMemberDisplay";
-import { validateColcoorInviteUserIdInput } from "./conversations/conversationMemberInvite";
+import {
+  normalizeColcoorInviteUserId,
+  validateColcoorInviteUserIdInput,
+} from "./conversations/conversationMemberInvite";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
 import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConversation";
@@ -287,7 +290,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (rawUserId === undefined) {
           return;
         }
-        const userId = rawUserId.trim();
+        const userId = normalizeColcoorInviteUserId(rawUserId);
+        if (!userId) {
+          return;
+        }
         const rolePick = await vscode.window.showQuickPick(
           [
             { label: "Editor", role: "editor" as const },
