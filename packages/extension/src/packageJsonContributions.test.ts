@@ -263,4 +263,17 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Reference message in side chat…](command:colcoor.referenceSelectedMessageInSideChat)");
     expect(contents).toContain("[Reference note in side chat…](command:colcoor.referenceSelectedNoteInSideChat)");
   });
+
+  it("links member mutation commands from conversations welcome but not delete ([ui-features.md] §12)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
+    };
+    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
+    const contents = welcome?.contents ?? "";
+    expect(contents).toContain("[Add member…](command:colcoor.addConversationMember)");
+    expect(contents).toContain("[Change member role…](command:colcoor.changeMemberRole)");
+    expect(contents).toContain("[Remove member…](command:colcoor.removeMemberFromConversation)");
+    expect(contents).not.toContain("command:colcoor.deleteConversation");
+  });
 });
