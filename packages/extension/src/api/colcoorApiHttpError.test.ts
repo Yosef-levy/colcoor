@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { ColcoorApiHttpError, isPlanLimitColcoorApiError } from "./colcoorApiHttpError";
+import {
+  ColcoorApiHttpError,
+  isForbiddenColcoorApiError,
+  isPlanLimitColcoorApiError,
+} from "./colcoorApiHttpError";
 
 describe("ColcoorApiHttpError", () => {
   it("carries status, operation, and bodyText", () => {
@@ -19,5 +23,15 @@ describe("isPlanLimitColcoorApiError", () => {
     expect(isPlanLimitColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(false);
     expect(isPlanLimitColcoorApiError(new Error("x"))).toBe(false);
     expect(isPlanLimitColcoorApiError(null)).toBe(false);
+  });
+});
+
+describe("isForbiddenColcoorApiError", () => {
+  it("is true only for HTTP 403 ColcoorApiHttpError", () => {
+    expect(isForbiddenColcoorApiError(new ColcoorApiHttpError("x", 403, ""))).toBe(true);
+    expect(isForbiddenColcoorApiError(new ColcoorApiHttpError("x", 402, ""))).toBe(false);
+    expect(isForbiddenColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(false);
+    expect(isForbiddenColcoorApiError(new Error("x"))).toBe(false);
+    expect(isForbiddenColcoorApiError(undefined)).toBe(false);
   });
 });

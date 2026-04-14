@@ -22,3 +22,8 @@ export class ColcoorApiHttpError extends Error {
 export function isPlanLimitColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 402;
 }
+
+/** HTTP 403 from the Colcoor API — role or ownership blocked the operation ([permissions.md]). */
+export function isForbiddenColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 403;
+}

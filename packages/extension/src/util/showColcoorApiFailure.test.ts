@@ -53,4 +53,15 @@ describe("showColcoorApiFailure", () => {
     await showColcoorApiFailure(new Error("network down"));
     expect(showErrorMessage).toHaveBeenCalledWith("Colcoor: network down");
   });
+
+  it("shows permission hint for HTTP 403 ColcoorApiHttpError", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("patch note", 403, '{"detail":"not allowed"}');
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledTimes(1);
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain("permission denied");
+    expect(text).toContain(e.message);
+    expect(text).toContain("viewer");
+  });
 });
