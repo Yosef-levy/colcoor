@@ -7,19 +7,26 @@ describe("getAboutPanelHtml", () => {
     const html = getAboutPanelHtml("");
     expect(html).toContain("<h1>About Colcoor</h1>");
     expect(html).toContain("branching conversations");
-    expect(html).toContain("not a raw agent transcript");
+    expect(html).toContain("not a raw backstage log");
   });
 
-  it("mentions tree, resend, CLI setup, API key, settings, and command palette discoverability", () => {
+  it("mentions branch view, resend, side chat, drawers, setup, milestone label, settings, and command palette", () => {
     const html = getAboutPanelHtml("");
-    expect(html).toContain("<strong>tree</strong>");
+    expect(html).toContain("<strong>branch view</strong>");
     expect(html).toContain("<strong>Resend assistant</strong>");
-    expect(html).toContain("<strong>CLI setup</strong>");
-    expect(html).toContain("<strong>Agent API key</strong>");
-    expect(html).toContain("side chat");
+    expect(html).toContain("<strong>Side chat</strong>");
     expect(html).toContain("drawers");
+    expect(html).toContain("<strong>setup buttons</strong>");
+    expect(html).toContain("<strong>milestone label</strong>");
     expect(html).toContain("Command Palette");
     expect(html).toContain("<strong>Settings → Colcoor</strong>");
+  });
+
+  it("avoids repository or API jargon in the footer line ([ui-features.md] §2)", () => {
+    const html = getAboutPanelHtml("");
+    expect(html).toContain("Policy links may appear");
+    expect(html).not.toContain("domain model");
+    expect(html).not.toContain("API");
   });
 
   it("inlines the policy fragment from the host", () => {

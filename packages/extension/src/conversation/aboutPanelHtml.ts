@@ -32,22 +32,31 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
 <body>
   <h1>About Colcoor</h1>
   <p>
-    Colcoor helps you run <strong>branching conversations</strong> with the Cursor agent while
-    <strong>you choose where each reply attaches</strong> on the event tree. Your team can share threads,
-    pin important chats, and keep drafts private until you are ready.
+    Colcoor helps you run <strong>branching conversations</strong> with Cursor while
+    <strong>you choose which earlier message each new reply continues from</strong>. Teammates can share the same
+    thread, pin what matters, and keep drafts private until you are ready.
   </p>
-  <p>What you see here is the conversation structure and saved messages — not a raw agent transcript.</p>
+  <p>What you see is the conversation layout and saved messages — not a raw backstage log of the agent.</p>
   <ul>
-    <li>Use the <strong>tree</strong> to pick the parent node for your next message.</li>
-    <li><strong>Resend assistant</strong> asks for a new assistant reply under an existing user message.</li>
+    <li>Use the <strong>branch view</strong> on the left to pick where your next message attaches.</li>
+    <li><strong>Resend assistant</strong> asks for another assistant reply under a message you already sent.</li>
     <li>
-      Use <strong>CLI setup</strong> and <strong>Agent API key</strong> from the conversation detail bar,
-      side chat, or drawers (or the Command Palette) so the local Cursor agent can answer in this workspace.
+      <strong>Side chat</strong> is for quick messages next to the main thread; use drawers or starred items to jump
+      back to highlights.
     </li>
-    <li>Adjust <strong>Settings → Colcoor</strong> for the API base URL and agent mode.</li>
+    <li>
+      Use the <strong>setup buttons</strong> in the conversation panel, side chat, or drawers — or the
+      <strong>Command Palette</strong> — to connect Colcoor with Cursor’s local agent in this workspace when your
+      team enables it.
+    </li>
+    <li>
+      You can add an optional <strong>milestone label</strong> when sending so the heading above the thread stays easy
+      to scan.
+    </li>
+    <li>Open <strong>Settings → Colcoor</strong> for the server address and how replies are produced.</li>
   </ul>
   ${policySectionHtml}
-  <p class="muted">Docs in the repository describe the domain model, API, and permissions.</p>
+  <p class="muted">Policy links may appear above when your administrator configures them.</p>
 </body>
 </html>`;
 }
