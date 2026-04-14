@@ -67,6 +67,7 @@ type FromWebview =
   | { type: "deleteConversation" }
   | { type: "openProfile" }
   | { type: "openSettings" }
+  | { type: "openAbout" }
   | { type: "openStarredDrawer" }
   | { type: "openTodoDrawer" }
   | { type: "rename" }
@@ -738,6 +739,10 @@ export function createConversationPanelController(
       }
       if (msg.type === "openSettings") {
         await vscode.commands.executeCommand("colcoor.openSettings");
+        return;
+      }
+      if (msg.type === "openAbout") {
+        await vscode.commands.executeCommand("colcoor.openAbout");
         return;
       }
       if (msg.type === "rename") {

@@ -717,6 +717,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand("colcoor.openSettings");
                 return;
               }
+              if (msg.type === "openAbout") {
+                await vscode.commands.executeCommand("colcoor.openAbout");
+                return;
+              }
               if (msg.type !== "openEvent" || typeof msg.eventId !== "string") {
                 return;
               }

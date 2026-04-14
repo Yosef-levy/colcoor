@@ -58,6 +58,7 @@ type FromWebview =
   | { type: "refresh" }
   | { type: "openProfile" }
   | { type: "openSettings" }
+  | { type: "openAbout" }
   | { type: "edit"; messageId: string; text: string }
   | { type: "delete"; messageId: string }
   | { type: "openReference"; refKind: "event" | "note"; refId: string };
@@ -398,6 +399,10 @@ export async function openSideChatPanel(
       await vscode.commands.executeCommand("colcoor.openSettings");
       return;
     }
+    if (msg.type === "openAbout") {
+      await vscode.commands.executeCommand("colcoor.openAbout");
+      return;
+    }
     if (msg.type === "send") {
       const explicitRefProvided = Object.prototype.hasOwnProperty.call(msg, "referencedEventId");
       const referencedEventId = explicitRefProvided
@@ -485,6 +490,7 @@ export async function openSideChatPanel(
       } catch (e) {
         await reportApiErrorToSideChat(e);
       }
+      return;
     }
     if (msg.type === "openReference") {
       const refId = typeof msg.refId === "string" ? msg.refId.trim() : "";

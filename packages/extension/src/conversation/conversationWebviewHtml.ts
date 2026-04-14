@@ -635,6 +635,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnDeleteConversation" class="btn-secondary" title="Delete this conversation">Delete conversation…</button>
           <button type="button" id="btnProfile" class="btn-secondary" title="Edit your Colcoor profile">Profile…</button>
           <button type="button" id="btnSettings" class="btn-secondary" title="Open Colcoor extension settings">Settings</button>
+          <button type="button" id="btnAbout" class="btn-secondary" title="About Colcoor">About</button>
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
           <button type="button" id="btnContinueFromHere" class="btn-secondary" title="Set the selected message as the active continue point">Continue from here</button>
@@ -910,6 +911,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const deleteConversationBtn = document.getElementById("btnDeleteConversation");
       const profileBtn = document.getElementById("btnProfile");
       const settingsBtn = document.getElementById("btnSettings");
+      const aboutBtn = document.getElementById("btnAbout");
       const resendBtn = document.getElementById("btnResend");
       if (!crumb || !copyBtn || !resendBtn || !continueBtn || !refSideChatBtn || !refNoteSideChatBtn)
         return;
@@ -923,6 +925,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;
       if (profileBtn) profileBtn.disabled = state.busy;
       if (settingsBtn) settingsBtn.disabled = state.busy;
+      if (aboutBtn) aboutBtn.disabled = state.busy;
       const sel = state.selectedEventId;
       const evs = state.events || [];
       const path = pathChain(evs, sel);
@@ -1449,6 +1452,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnSettings").addEventListener("click", () => {
       vscode.postMessage({ type: "openSettings" });
+    });
+    document.getElementById("btnAbout").addEventListener("click", () => {
+      vscode.postMessage({ type: "openAbout" });
     });
     document.getElementById("btnShowMembers").addEventListener("click", () => {
       vscode.postMessage({ type: "openMembers" });

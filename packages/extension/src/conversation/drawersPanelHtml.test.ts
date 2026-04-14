@@ -22,5 +22,7 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('id="btnSettings"');
     expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
     expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
+    expect(html).toContain('id="btnAbout"');
+    expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
   });
 });
