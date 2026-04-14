@@ -15,9 +15,8 @@ import {
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
   COLOOR_API_FAILURE_SIGN_IN_ACTION,
-  COLOOR_EXTENSION_SETTINGS_QUERY,
-  showColcoorApiFailure,
-} from "./showColcoorApiFailure";
+} from "./colcoorApiFailureActions";
+import { COLOOR_EXTENSION_SETTINGS_QUERY, showColcoorApiFailure } from "./showColcoorApiFailure";
 
 describe("showColcoorApiFailure", () => {
   beforeEach(() => {

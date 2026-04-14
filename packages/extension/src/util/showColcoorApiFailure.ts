@@ -6,14 +6,14 @@ import {
   isPlanLimitColcoorApiError,
   isUnauthorizedColcoorApiError,
 } from "../api/colcoorApiHttpError";
+import {
+  COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+  COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+  COLOOR_API_FAILURE_SIGN_IN_ACTION,
+} from "./colcoorApiFailureActions";
 
 /** Settings filter for this extension (publisher.name from package.json). */
 export const COLOOR_EXTENSION_SETTINGS_QUERY = "@ext:colcoor.colcoor-extension";
-
-/** Action labels on API error toasts — must match `package.json` command titles where applicable. */
-export const COLOOR_API_FAILURE_SIGN_IN_ACTION = "Colcoor: Sign in";
-export const COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION = "Colcoor: Refresh conversations";
-export const COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION = "Colcoor: Refresh conversation tree";
 
 /**
  * User-facing API failure: special handling for HTTP 401, 402, 403, 404; otherwise a single error toast.
