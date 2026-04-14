@@ -63,4 +63,14 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("mentionUniverse = collectMentionUniverse(d.messages || [])");
     expect(html).toContain('if (ev.key === "Tab" && mentionVisible.length > 0)');
   });
+
+  it("persists side-chat composer textarea height in localStorage", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('SIDECHAT_COMPOSER_HEIGHT_KEY = "colcoor.sideChatComposerTextareaHeightPx"');
+    expect(html).toContain("function clampComposerHeightPx(v)");
+    expect(html).toContain("function applyComposerHeightFromLocalStorage()");
+    expect(html).toContain("function wireComposerHeightPersistence()");
+    expect(html).toContain("new ResizeObserver(function ()");
+    expect(html).toContain("localStorage.setItem(SIDECHAT_COMPOSER_HEIGHT_KEY, String(h));");
+  });
 });

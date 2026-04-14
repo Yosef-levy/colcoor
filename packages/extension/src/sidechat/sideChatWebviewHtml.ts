@@ -156,6 +156,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const SIDECHAT_COMPOSER_HEIGHT_KEY = "colcoor.sideChatComposerTextareaHeightPx";
     var viewerUserId = null;
     var replyTarget = null;
     var referencedEventId = null;
@@ -208,6 +209,42 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       send.title = has
         ? ""
         : "Type a non-empty message. Shift+Enter for newline, Enter to send.";
+    }
+    function clampComposerHeightPx(v) {
+      var n = Math.floor(Number(v));
+      if (!Number.isFinite(n)) return null;
+      if (n < 64 || n > 520) return null;
+      return n;
+    }
+    function applyComposerHeightFromLocalStorage() {
+      var ta = document.getElementById("input");
+      if (!ta) return;
+      try {
+        var raw = localStorage.getItem(SIDECHAT_COMPOSER_HEIGHT_KEY);
+        var h = clampComposerHeightPx(raw);
+        if (h != null) ta.style.height = h + "px";
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    function wireComposerHeightPersistence() {
+      var ta = document.getElementById("input");
+      if (!ta || typeof ResizeObserver === "undefined") return;
+      var tid = null;
+      var ro = new ResizeObserver(function () {
+        if (tid) clearTimeout(tid);
+        tid = setTimeout(function () {
+          tid = null;
+          var h = clampComposerHeightPx(ta.getBoundingClientRect().height);
+          if (h == null) return;
+          try {
+            localStorage.setItem(SIDECHAT_COMPOSER_HEIGHT_KEY, String(h));
+          } catch {
+            /* storage unavailable */
+          }
+        }, 120);
+      });
+      ro.observe(ta);
     }
     function collectMentionUniverse(messages) {
       var seen = {};
@@ -583,6 +620,8 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       referencedNoteId = null;
       updateRefNoteHint();
     });
+    applyComposerHeightFromLocalStorage();
+    wireComposerHeightPersistence();
     updateComposerSendEnabled();
     vscode.postMessage({ type: "ready" });
   </script>
