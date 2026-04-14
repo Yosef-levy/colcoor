@@ -25,6 +25,7 @@ import {
   CONVERSATION_AUTO_REFRESH_MS,
   shouldAutoRefreshConversations,
 } from "./conversations/conversationAutoRefreshPolicy";
+import { validateColcoorInviteUserIdInput } from "./conversations/conversationMemberInvite";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
 import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConversation";
@@ -252,10 +253,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           colcoorLog.clear();
           colcoorLog.appendLine(`Conversation ${id}`);
           colcoorLog.appendLine("");
-          for (const m of members) {
-            const name = m.display_name?.trim() ? m.display_name : "—";
-            const em = m.email?.trim() ? m.email : "—";
-            colcoorLog.appendLine(`  ${m.role.padEnd(8)} ${name}  <${em}>  ${m.user_id}`);
+          if (members.length === 0) {
+            colcoorLog.appendLine("(no members yet)");
+          } else {
+            for (const m of members) {
+              const name = m.display_name?.trim() ? m.display_name : "—";
+              const em = m.email?.trim() ? m.email : "—";
+              colcoorLog.appendLine(`  ${m.role.padEnd(8)} ${name}  <${em}>  ${m.user_id}`);
+            }
           }
           colcoorLog.show(true);
         } catch (e) {
@@ -278,15 +283,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           prompt:
             "Existing Colcoor user UUID to invite (they must have signed in once). Role: pick next.",
           ignoreFocusOut: true,
-          validateInput: (v) => {
-            const t = v.trim();
-            if (!t) {
-              return "Enter a user id";
-            }
-            const uuidRe =
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-            return uuidRe.test(t) ? undefined : "Expected UUID format";
-          },
+          validateInput: (v) => validateColcoorInviteUserIdInput(v),
         });
         if (rawUserId === undefined) {
           return;
@@ -325,6 +322,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
         try {
           const members = await api.listConversationMembers(id);
+          if (members.length === 0) {
+            await vscode.window.showInformationMessage(
+              "Colcoor: this conversation has no members yet. Add someone with “Add member…”.",
+            );
+            return;
+          }
           type PickRow = vscode.QuickPickItem & { member: ConversationMember };
           const picked = await vscode.window.showQuickPick<PickRow>(
             members.map((m) => ({
