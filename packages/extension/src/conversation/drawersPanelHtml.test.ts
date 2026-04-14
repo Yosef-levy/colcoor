@@ -18,6 +18,10 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('data-event-id="e1"');
     expect(html).toContain('data-event-id="e2"');
     expect(html).toContain('vscode.postMessage({ type: "openEvent", eventId: eid });');
+    expect(html).toContain('id="btnSignIn"');
+    expect(html).toContain('vscode.postMessage({ type: "signIn" });');
+    expect(html).toContain('id="btnSignOut"');
+    expect(html).toContain('vscode.postMessage({ type: "signOut" });');
     expect(html).toContain('id="btnProfile"');
     expect(html).toContain('id="btnSettings"');
     expect(html).toContain('id="btnLegalPolicySettings"');
@@ -30,6 +34,8 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
     expect(html).toContain('id="btnOpenSideChat"');
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
+    expect(html).toContain('id="btnListMembers"');
+    expect(html).toContain('vscode.postMessage({ type: "listConversationMembers" });');
     expect(html).toContain('id="btnRefreshConversations"');
     expect(html).toContain('vscode.postMessage({ type: "refreshConversations" });');
     expect(html).toContain('id="btnRefreshConversationTree"');

@@ -84,12 +84,15 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="tabTodo">TODO (${model.todos.length})</button>
   </div>
   <div class="aux">
+    <button type="button" id="btnSignIn" title="Sign in to Colcoor with the same account you use in Cursor">Sign in</button>
+    <button type="button" id="btnSignOut" title="Sign out of Colcoor">Sign out</button>
     <button type="button" id="btnProfile" title="Edit your Colcoor profile">Profile…</button>
     <button type="button" id="btnSettings" title="Open Colcoor extension settings">Settings</button>
     <button type="button" id="btnLegalPolicySettings" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
     <button type="button" id="btnAbout" title="About Colcoor">About</button>
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
+    <button type="button" id="btnListMembers" title="Show members of this conversation in the Colcoor output channel">Show members</button>
     <button type="button" id="btnRefreshConversations" title="Reload the Colcoor conversations list in the sidebar">Refresh conversations</button>
     <button type="button" id="btnRefreshConversationTree" title="Reload the open conversation tree and thread from the server (Colcoor: Refresh conversation tree)">Refresh tree</button>
     <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
@@ -111,6 +114,12 @@ export function getConversationDrawersPanelHtml(
     }
     document.getElementById("tabStarred").addEventListener("click", function () { showTab("starred"); });
     document.getElementById("tabTodo").addEventListener("click", function () { showTab("todo"); });
+    document.getElementById("btnSignIn").addEventListener("click", function () {
+      vscode.postMessage({ type: "signIn" });
+    });
+    document.getElementById("btnSignOut").addEventListener("click", function () {
+      vscode.postMessage({ type: "signOut" });
+    });
     document.getElementById("btnProfile").addEventListener("click", function () {
       vscode.postMessage({ type: "openProfile" });
     });
@@ -128,6 +137,9 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnOpenSideChat").addEventListener("click", function () {
       vscode.postMessage({ type: "openSideChat" });
+    });
+    document.getElementById("btnListMembers").addEventListener("click", function () {
+      vscode.postMessage({ type: "listConversationMembers" });
     });
     document.getElementById("btnRefreshConversations").addEventListener("click", function () {
       vscode.postMessage({ type: "refreshConversations" });

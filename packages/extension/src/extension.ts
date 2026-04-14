@@ -844,6 +844,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }
                 return;
               }
+              if (msg.type === "signIn") {
+                await vscode.commands.executeCommand("colcoor.signIn");
+                return;
+              }
+              if (msg.type === "signOut") {
+                await vscode.commands.executeCommand("colcoor.signOut");
+                return;
+              }
               if (msg.type === "openProfile") {
                 await vscode.commands.executeCommand("colcoor.editProfile");
                 return;
@@ -876,6 +884,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                   return;
                 }
                 await vscode.commands.executeCommand("colcoor.openSideChat", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                  },
+                });
+                return;
+              }
+              if (msg.type === "listConversationMembers") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.listConversationMembers", {
                   conv: {
                     id: drawersConversationId,
                     title: drawersConversationTitle ?? null,
