@@ -116,6 +116,18 @@ describe("parseCursorAgentNdjsonLine", () => {
     });
     expect(parseCursorAgentNdjsonLine(line)).toBeNull();
   });
+
+  it("parses success result with empty string body", () => {
+    const line = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      result: "",
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "terminal_success",
+      fullText: "",
+    });
+  });
 });
 
 describe("slimNdjsonForTimeline", () => {
@@ -129,6 +141,21 @@ describe("slimNdjsonForTimeline", () => {
     ).toBeNull();
     expect(slimNdjsonForTimeline({ type: "system", subtype: "init", model: "M" })).toBeNull();
     expect(slimNdjsonForTimeline({ type: "result", subtype: "success", result: "x" })).toBeNull();
+  });
+
+  it("returns null for unknown top-level types", () => {
+    expect(slimNdjsonForTimeline({ type: "thinking", payload: true })).toBeNull();
+  });
+
+  it("returns null for tool_call rows we do not summarize", () => {
+    expect(slimNdjsonForTimeline({ type: "tool_call", subtype: "started", tool_call: {} })).toBeNull();
+    expect(
+      slimNdjsonForTimeline({
+        type: "tool_call",
+        subtype: "started",
+        tool_call: { unknownTool: {} },
+      }),
+    ).toBeNull();
   });
 });
 
@@ -197,6 +224,16 @@ describe("createStreamJsonStdoutFeed", () => {
   it("flushTail ignores a whitespace-only tail without changing resolved text", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push("  \n  \t  ");
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("");
+  });
+
+  it("applies empty-string terminal result over prior assistant text", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"gone"}]}}\n',
+    );
+    feed.push('{"type":"result","subtype":"success","result":""}\n');
     feed.flushTail();
     expect(feed.getResolvedText()).toBe("");
   });
