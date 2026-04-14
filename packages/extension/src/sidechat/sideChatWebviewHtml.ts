@@ -272,6 +272,26 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     document.getElementById("refresh").addEventListener("click", function () {
       vscode.postMessage({ type: "refresh" });
     });
+    document.addEventListener("click", function (ev) {
+      var tgt = ev.target;
+      if (!tgt || typeof tgt.closest !== "function") return;
+      var btn = tgt.closest(".code-copy");
+      if (!btn) return;
+      var wrap = btn.closest(".code-block-wrap");
+      if (!wrap) return;
+      var code = wrap.querySelector("pre code");
+      if (!code || typeof code.textContent !== "string") return;
+      var text = code.textContent;
+      if (!text) return;
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") return;
+      navigator.clipboard.writeText(text).catch(function () {
+        var err = document.getElementById("err");
+        if (err) {
+          err.style.display = "block";
+          err.textContent = "Failed to copy code block.";
+        }
+      });
+    });
     document.getElementById("input").addEventListener("keydown", function (ev) {
       if (!shouldSendOnEnter(ev)) return;
       ev.preventDefault();
