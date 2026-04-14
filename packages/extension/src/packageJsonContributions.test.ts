@@ -250,4 +250,17 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Show members…](command:colcoor.listConversationMembers)");
     expect(contents).toContain("[Refresh conversation drawers](command:colcoor.refreshConversationDrawers)");
   });
+
+  it("links notes and side-chat reference commands from conversations welcome ([ui-features.md] §8 §10)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
+    };
+    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
+    const contents = welcome?.contents ?? "";
+    expect(contents).toContain("[Add note…](command:colcoor.addNoteToSelectedMessage)");
+    expect(contents).toContain("[List notes on selection…](command:colcoor.showNotesOnSelectedMessage)");
+    expect(contents).toContain("[Reference message in side chat…](command:colcoor.referenceSelectedMessageInSideChat)");
+    expect(contents).toContain("[Reference note in side chat…](command:colcoor.referenceSelectedNoteInSideChat)");
+  });
 });
