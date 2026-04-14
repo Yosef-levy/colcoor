@@ -23,6 +23,7 @@ import {
 } from "../conversation/legalPolicySection";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
+import { readSideChatCueSettings } from "./sideChatWorkspaceSettings";
 import { normalizeSideChatReferenceId } from "./normalizeSideChatReferenceId";
 import { trimmedSideChatSendBody } from "./trimSendBody";
 import { reportSideChatPanelApiError } from "./reportSideChatPanelApiError";
@@ -149,12 +150,6 @@ export async function openSideChatPanel(
   /** Throttle member-list refetch after join/leave SSE so presence labels can update without spamming the API. */
   let presenceMemberRefreshLastStartMs: number | null = null;
   let presenceMemberRefreshInFlight = false;
-  const cfg = vscode.workspace.getConfiguration("colcoor");
-  const notificationsEnabled = cfg.get<boolean>("sideChatNotificationsEnabled", true);
-  const mentionNotificationsEnabled = cfg.get<boolean>("sideChatMentionNotificationsEnabled", true);
-  const sideChatSoundEnabled = cfg.get<boolean>("sideChatSoundEnabled", true);
-  const sideChatMentionSoundEnabled = cfg.get<boolean>("sideChatMentionSoundEnabled", true);
-
   async function postWebviewErrorSafe(text: string): Promise<void> {
     try {
       await panel.webview.postMessage({ type: "error", text } satisfies ErrorMessage);
@@ -310,13 +305,14 @@ export async function openSideChatPanel(
               continue;
             }
             const me = await ensureMyProfile();
+            const cue = readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor"));
             const soundKind = decideSideChatSoundKind({
               panelVisible: panel.visible,
               myUserId: me?.id ?? null,
               myMentionTargets: mentionTargetsForMe(me),
               incoming: o.message,
-              messageSoundEnabled: sideChatSoundEnabled,
-              mentionSoundEnabled: sideChatMentionSoundEnabled,
+              messageSoundEnabled: cue.messageSoundEnabled,
+              mentionSoundEnabled: cue.mentionSoundEnabled,
             });
             if (soundKind) {
               await panel.webview.postMessage({
@@ -330,8 +326,8 @@ export async function openSideChatPanel(
                 myUserId: me?.id ?? null,
                 myMentionTargets: mentionTargetsForMe(me),
                 incoming: o.message,
-                notificationsEnabled,
-                mentionNotificationsEnabled,
+                notificationsEnabled: cue.notificationsEnabled,
+                mentionNotificationsEnabled: cue.mentionNotificationsEnabled,
               });
               if (notif) {
                 const nowMs = Date.now();
