@@ -9,6 +9,7 @@ describe("package.json Colcoor contributions", () => {
     const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };
     const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
     expect(cmds).toContain("colcoor.sendMessage");
+    expect(cmds).toContain("colcoor.openLegalPolicySettings");
   });
 
   it("documents jumpToLatestInConversation for default-branch navigation ([ui-features.md] §6)", () => {
@@ -92,7 +93,18 @@ describe("package.json Colcoor contributions", () => {
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
     expect(contents).toContain("[Sign out](command:colcoor.signOut)");
+    expect(contents).toContain("[Legal policy URLs…](command:colcoor.openLegalPolicySettings)");
     expect(contents).toContain("[About](command:colcoor.openAbout)");
+  });
+
+  it("documents openLegalPolicySettings for Terms / Privacy / Refund URLs ([ui-features.md] §1.3)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const cmd = pkg.contributes?.commands?.find((c) => c.command === "colcoor.openLegalPolicySettings");
+    expect(cmd?.title).toBe("Colcoor: Open legal policy settings…");
+    expect(cmd?.description).toContain("Terms");
   });
 
   it("links Toggle sidebar from the conversations welcome view ([ui-features.md] §4)", () => {

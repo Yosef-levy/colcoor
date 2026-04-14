@@ -324,6 +324,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.openSettings", async () => {
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
     }),
+    vscode.commands.registerCommand("colcoor.openLegalPolicySettings", async () => {
+      await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query), {
+        searchSuffix: "legal",
+      });
+    }),
     vscode.commands.registerCommand("colcoor.toggleConversationsSidebar", async () => {
       await toggleSidebarVisibility((cmd) => vscode.commands.executeCommand(cmd));
     }),

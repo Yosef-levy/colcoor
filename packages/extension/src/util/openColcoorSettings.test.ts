@@ -12,4 +12,13 @@ describe("openColcoorSettings", () => {
     await openColcoorSettings(exec);
     expect(exec).toHaveBeenCalledWith(OPEN_SETTINGS_COMMAND_ID, COLOOR_EXTENSION_SETTINGS_QUERY);
   });
+
+  it("appends searchSuffix to narrow the settings search", async () => {
+    const exec = vi.fn().mockResolvedValue(undefined);
+    await openColcoorSettings(exec, { searchSuffix: "legal" });
+    expect(exec).toHaveBeenCalledWith(
+      OPEN_SETTINGS_COMMAND_ID,
+      `${COLOOR_EXTENSION_SETTINGS_QUERY} legal`,
+    );
+  });
 });
