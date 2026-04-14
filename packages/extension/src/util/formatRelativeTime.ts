@@ -8,6 +8,9 @@ export function formatRelativeTime(iso: string | null | undefined): string {
     return "";
   }
   const sec = Math.floor((Date.now() - t) / 1000);
+  if (sec < 0) {
+    return "";
+  }
   if (sec < 45) {
     return "just now";
   }
