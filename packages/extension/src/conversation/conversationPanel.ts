@@ -930,7 +930,11 @@ export function createConversationPanelController(
 
   return {
     async reveal(convId: string, title: string | null): Promise<void> {
-      conversationId = convId;
+      const cid = normalizeOptionalGraphEventId(convId);
+      if (cid === undefined) {
+        return;
+      }
+      conversationId = cid;
       conversationTitle = title;
       conversationPinned = false;
       staleTreePromptedForEventId = null;
@@ -947,11 +951,12 @@ export function createConversationPanelController(
       p.reveal(vscode.ViewColumn.One, false);
     },
     async revealAtEvent(convId: string, title: string | null, eventId: string): Promise<void> {
+      const cid = normalizeOptionalGraphEventId(convId);
       const eid = normalizeOptionalGraphEventId(eventId);
-      if (eid === undefined) {
+      if (cid === undefined || eid === undefined) {
         return;
       }
-      conversationId = convId;
+      conversationId = cid;
       conversationTitle = title;
       conversationPinned = false;
       staleTreePromptedForEventId = null;
@@ -960,7 +965,7 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       await refreshConversationMeta();
       try {
-        await api.setConversationActive(convId, {
+        await api.setConversationActive(cid, {
           active_event_id: eid,
           needs_context_rebuild: false,
         });
@@ -977,7 +982,8 @@ export function createConversationPanelController(
       p.reveal(vscode.ViewColumn.One, false);
     },
     closeIfShowingConversation(convId: string): void {
-      if (conversationId === convId) {
+      const cid = normalizeOptionalGraphEventId(convId);
+      if (cid !== undefined && conversationId === cid) {
         disposePanel();
       }
     },

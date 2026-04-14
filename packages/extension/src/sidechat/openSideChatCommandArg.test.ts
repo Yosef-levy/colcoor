@@ -47,6 +47,15 @@ describe("conversationIdAndTitleFromOpenSideChatArg", () => {
     });
   });
 
+  it("normalizes CRLF in conversation id like other command payloads", () => {
+    expect(
+      conversationIdAndTitleFromOpenSideChatArg({ conv: { id: "  conv-uuid\r\n", title: "X" } }),
+    ).toEqual({
+      convId: "conv-uuid",
+      convTitle: "X",
+    });
+  });
+
   it("trims conversation title (blank after trim becomes null)", () => {
     expect(
       conversationIdAndTitleFromOpenSideChatArg({ conv: { id: "c4", title: "  spaced title  " } }),
