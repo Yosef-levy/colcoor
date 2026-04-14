@@ -44,6 +44,15 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     .msg { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
     .msg:last-child { border-bottom: none; }
     .msg .meta { font-size: 0.88em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .msg .mentions { display: inline-flex; gap: 6px; margin-left: 8px; flex-wrap: wrap; }
+    .msg .mention-chip {
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--vscode-panel-border);
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-editor-background);
+      font-size: 0.92em;
+    }
     .msg .body { white-space: pre-wrap; word-break: break-word; }
     .msg .ref {
       border-left: 2px solid var(--vscode-panel-border);
@@ -176,6 +185,17 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         meta.className = "meta";
         var del = m.deleted_at ? " · deleted" : "";
         meta.textContent = "#" + m.seq + " · " + (m.kind || "") + del;
+        if (Array.isArray(m.mentions) && m.mentions.length) {
+          var mentions = document.createElement("span");
+          mentions.className = "mentions";
+          m.mentions.forEach(function (h) {
+            var chip = document.createElement("span");
+            chip.className = "mention-chip";
+            chip.textContent = "@" + String(h);
+            mentions.appendChild(chip);
+          });
+          meta.appendChild(mentions);
+        }
         var body = document.createElement("div");
         body.className = "body";
         body.innerHTML =

@@ -52,4 +52,9 @@ describe("toSideChatRenderMessages", () => {
     ]);
     expect(out[1].referenced_side_chat_preview).toEqual({ seq: 1, text: "source message" });
   });
+
+  it("extracts mentions for render metadata", () => {
+    const out = toSideChatRenderMessages([row({ id: "m1", seq: 1, body: "cc @alice and @bob" })]);
+    expect(out[0].mentions).toEqual(["alice", "bob"]);
+  });
 });
