@@ -5,7 +5,10 @@ import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
-import { normalizePersistedUserInputText } from "./normalizeUserInputText";
+import {
+  normalizeOptionalGraphEventId,
+  normalizePersistedUserInputText,
+} from "./normalizeUserInputText";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
@@ -944,8 +947,8 @@ export function createConversationPanelController(
       p.reveal(vscode.ViewColumn.One, false);
     },
     async revealAtEvent(convId: string, title: string | null, eventId: string): Promise<void> {
-      const eid = eventId.trim();
-      if (!eid) {
+      const eid = normalizeOptionalGraphEventId(eventId);
+      if (eid === undefined) {
         return;
       }
       conversationId = convId;

@@ -26,6 +26,19 @@ describe("conversationIdFromCommandArg", () => {
     ).toBe("abc-123");
   });
 
+  it("normalizes CRLF and lone CR in conversation id", () => {
+    expect(
+      conversationIdFromCommandArg({
+        conv: { id: "  uuid\r\n", title: "T" },
+      }),
+    ).toBe("uuid");
+    expect(
+      conversationIdFromCommandArg({
+        conv: { id: "a\rb", title: null },
+      }),
+    ).toBe("a\nb");
+  });
+
   it("ignores unrelated keys such as preferredTab (drawers command)", () => {
     expect(
       conversationIdFromCommandArg({

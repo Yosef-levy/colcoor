@@ -1,3 +1,4 @@
+import { normalizeOptionalGraphEventId } from "../conversation/normalizeUserInputText";
 import type { ConversationTreeItem } from "./conversationsTreeProvider";
 
 /**
@@ -23,8 +24,7 @@ export function conversationIdFromCommandArg(arg: ConversationCommandArg | undef
   if (typeof raw !== "string") {
     return undefined;
   }
-  const id = raw.trim();
-  return id.length > 0 ? id : undefined;
+  return normalizeOptionalGraphEventId(raw);
 }
 
 export function conversationTitleFromCommandArg(arg: ConversationCommandArg | undefined): string {
