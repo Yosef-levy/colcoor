@@ -50,4 +50,12 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("updateComposerSendEnabled();");
     expect(html).toContain("if (sb && sb.disabled)");
   });
+
+  it("guards Enter-to-send for IME composition and modifier keys", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function shouldSendComposerOnEnter(ev)");
+    expect(html).toContain("if (ev.isComposing) return false;");
+    expect(html).toContain("if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;");
+    expect(html).toContain("if (!shouldSendComposerOnEnter(e)) return;");
+  });
 });

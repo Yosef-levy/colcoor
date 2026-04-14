@@ -1163,6 +1163,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         : "Type a non-empty message. Shift+Enter for newline, Enter to send.";
     }
 
+    function shouldSendComposerOnEnter(ev) {
+      if (!ev || ev.key !== "Enter") return false;
+      if (ev.isComposing) return false;
+      if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;
+      return true;
+    }
+
     function render() {
       try {
         const errEl = document.getElementById("err");
@@ -1399,14 +1406,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
 
     document.getElementById("input").addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        var sb = document.getElementById("send");
-        if (sb && sb.disabled) {
-          return;
-        }
-        e.preventDefault();
-        if (sb) sb.click();
+      if (!shouldSendComposerOnEnter(e)) return;
+      var sb = document.getElementById("send");
+      if (sb && sb.disabled) {
+        return;
       }
+      e.preventDefault();
+      if (sb) sb.click();
     });
 
     vscode.postMessage({ type: "ready" });
