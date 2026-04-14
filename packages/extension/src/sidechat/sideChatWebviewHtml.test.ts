@@ -80,8 +80,10 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("sub.textContent = countPart + presencePart;");
   });
 
-  it("includes Profile, Settings, and About actions next to Refresh", () => {
+  it("includes Open conversation, Profile, Settings, and About next to Refresh", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnOpenConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
     expect(html).toContain('id="btnProfile"');
     expect(html).toContain('id="btnSettings"');
     expect(html).toContain('id="btnAbout"');

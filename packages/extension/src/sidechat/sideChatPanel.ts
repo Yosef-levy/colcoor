@@ -56,6 +56,7 @@ type FromWebview =
       referencedNoteId?: string | null;
     }
   | { type: "refresh" }
+  | { type: "openConversation" }
   | { type: "openProfile" }
   | { type: "openSettings" }
   | { type: "openAbout" }
@@ -389,6 +390,10 @@ export async function openSideChatPanel(
     }
     if (msg.type === "refresh") {
       await pushState();
+      return;
+    }
+    if (msg.type === "openConversation") {
+      await vscode.commands.executeCommand("colcoor.openConversation", conversationId, title ?? null);
       return;
     }
     if (msg.type === "openProfile") {
