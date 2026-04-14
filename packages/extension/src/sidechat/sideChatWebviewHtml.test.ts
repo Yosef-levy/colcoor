@@ -73,4 +73,10 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("new ResizeObserver(function ()");
     expect(html).toContain("localStorage.setItem(SIDECHAT_COMPOSER_HEIGHT_KEY, String(h));");
   });
+
+  it("includes subtitle wiring for presence summary text", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("typeof d.presenceSummary === \"string\" && d.presenceSummary.trim()");
+    expect(html).toContain("sub.textContent = countPart + presencePart;");
+  });
 });
