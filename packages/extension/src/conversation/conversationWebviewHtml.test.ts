@@ -104,6 +104,16 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "toggleStar" })');
   });
 
+  it("includes Add note and List notes on selection in the detail bar ([ui-features.md] §8)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnAddNote"');
+    expect(html).toContain('id="btnListNotesOnSelection"');
+    expect(html).toContain('vscode.postMessage({ type: "addNote" })');
+    expect(html).toContain('vscode.postMessage({ type: "listNotesOnSelection" })');
+    expect(html).toContain("addNoteBtn.disabled = true");
+    expect(html).toContain("listNotesOnSelectionBtn.disabled = true");
+  });
+
   it("includes Reference in side chat detail action wiring", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnReferenceSideChat"');

@@ -695,6 +695,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnContinueFromHere" class="btn-secondary" title="Set the selected message as the active continue point">Continue from here</button>
           <button type="button" id="btnReferenceSideChat" class="btn-secondary" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
           <button type="button" id="btnReferenceNoteSideChat" class="btn-secondary" title="Open side chat and choose a note from the selected message to reference">Reference note in side chat</button>
+          <button type="button" id="btnAddNote" class="btn-secondary" title="Attach a note to the selected message (owner/editor)">Add note…</button>
+          <button type="button" id="btnListNotesOnSelection" class="btn-secondary" title="List notes on the selected message in the Colcoor notes output">List notes…</button>
           <button type="button" id="btnCopy" class="btn-secondary">Copy message</button>
           <button type="button" id="btnToggleStar" class="btn-secondary" title="Star or unstar the selected message">
             Star
@@ -980,6 +982,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const continueBtn = document.getElementById("btnContinueFromHere");
       const refSideChatBtn = document.getElementById("btnReferenceSideChat");
       const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
+      const addNoteBtn = document.getElementById("btnAddNote");
+      const listNotesOnSelectionBtn = document.getElementById("btnListNotesOnSelection");
       const showMembersBtn = document.getElementById("btnShowMembers");
       const addMemberBtn = document.getElementById("btnAddMember");
       const changeMemberRoleBtn = document.getElementById("btnChangeMemberRole");
@@ -1002,7 +1006,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         !resendBtn ||
         !continueBtn ||
         !refSideChatBtn ||
-        !refNoteSideChatBtn
+        !refNoteSideChatBtn ||
+        !addNoteBtn ||
+        !listNotesOnSelectionBtn
       )
         return;
       if (showMembersBtn) showMembersBtn.disabled = state.busy;
@@ -1031,6 +1037,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         refNoteSideChatBtn.disabled = true;
         resendBtn.disabled = true;
         if (copyThreadBtn) copyThreadBtn.disabled = true;
+        addNoteBtn.disabled = true;
+        addNoteBtn.title = "Select a message in the tree first.";
+        listNotesOnSelectionBtn.disabled = true;
+        listNotesOnSelectionBtn.title = "Select a message in the tree first.";
         toggleStarBtn.textContent = "Star";
         toggleStarBtn.title = "Select a message in the tree to star or unstar.";
         const renameBtn = document.getElementById("btnRename");
@@ -1070,6 +1080,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         last.starred === true
           ? "Remove your star from this message."
           : "Star this message (visible in Starred drawer).";
+      addNoteBtn.disabled = state.busy;
+      addNoteBtn.title = state.busy
+        ? "Wait for the current operation to finish."
+        : "Attach a note to the selected message (owner/editor).";
+      listNotesOnSelectionBtn.disabled = state.busy;
+      listNotesOnSelectionBtn.title = state.busy
+        ? "Wait for the current operation to finish."
+        : "List notes on the selected message in the Colcoor notes output.";
       continueBtn.disabled = state.busy;
       continueBtn.title = state.busy
         ? "Wait for the current operation to finish."
@@ -1580,6 +1598,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("btnToggleStar").addEventListener("click", () => {
       vscode.postMessage({ type: "toggleStar" });
+    });
+
+    document.getElementById("btnAddNote").addEventListener("click", () => {
+      vscode.postMessage({ type: "addNote" });
+    });
+
+    document.getElementById("btnListNotesOnSelection").addEventListener("click", () => {
+      vscode.postMessage({ type: "listNotesOnSelection" });
     });
 
     document.getElementById("btnCopyThread").addEventListener("click", () => {

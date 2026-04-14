@@ -87,6 +87,8 @@ type FromWebview =
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "toggleStar" }
+  | { type: "addNote" }
+  | { type: "listNotesOnSelection" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
   | { type: "editNote"; noteId: string }
   | { type: "deleteNote"; noteId: string };
@@ -818,6 +820,14 @@ export function createConversationPanelController(
       }
       if (msg.type === "toggleStar") {
         await toggleStarSelectedMessage();
+        return;
+      }
+      if (msg.type === "addNote") {
+        await addNoteToSelectedMessage();
+        return;
+      }
+      if (msg.type === "listNotesOnSelection") {
+        await showNotesOnSelectedMessage();
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {
