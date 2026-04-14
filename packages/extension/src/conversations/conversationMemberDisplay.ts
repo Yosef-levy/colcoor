@@ -1,14 +1,22 @@
 import type { ConversationMember } from "../api/client";
+import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
 
 const EM_DASH = "—";
 
+function normalizedCell(raw: string | null | undefined): string {
+  if (raw == null) {
+    return "";
+  }
+  return normalizePersistedUserInputText(raw);
+}
+
 export function memberDisplayNameCell(m: ConversationMember): string {
-  const t = m.display_name?.trim();
+  const t = normalizedCell(m.display_name);
   return t ? t : EM_DASH;
 }
 
 export function memberEmailCell(m: ConversationMember): string {
-  const t = m.email?.trim();
+  const t = normalizedCell(m.email);
   return t ? t : EM_DASH;
 }
 
@@ -27,5 +35,5 @@ export function formatMemberLogLine(m: ConversationMember): string {
  * (caller may keep a previous map entry when still empty).
  */
 export function memberPrimaryPresenceLabel(m: ConversationMember): string {
-  return (m.display_name ?? "").trim() || (m.email ?? "").trim() || "";
+  return normalizedCell(m.display_name) || normalizedCell(m.email) || "";
 }

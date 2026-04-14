@@ -36,6 +36,21 @@ describe("conversationMemberDisplay", () => {
     expect(memberEmailCell(row)).toBe("pat@ex.com");
   });
 
+  it("normalizes CRLF in display name and email cells", () => {
+    const row = m({
+      user_id: "u1",
+      role: "editor",
+      display_name: "  Sam\r\n",
+      email: "  sam@ex.com\r\n",
+    });
+    expect(memberDisplayNameCell(row)).toBe("Sam");
+    expect(memberEmailCell(row)).toBe("sam@ex.com");
+    expect(memberPrimaryPresenceLabel(row)).toBe("Sam");
+    expect(
+      memberPrimaryPresenceLabel(m({ user_id: "u2", role: "editor", email: "  e@e\r\n" })),
+    ).toBe("e@e");
+  });
+
   it("formats quick pick label with role", () => {
     expect(
       formatMemberQuickPickLabel(
