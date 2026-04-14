@@ -9,6 +9,7 @@ import {
   PRIVATE_BRANCH_LABEL_TITLE,
   PRIVATE_BRANCH_LEAD,
 } from "./privateBranchComposerCopy";
+import { treeEventTimeLabelWebviewScriptBlock } from "./treeEventTimeLabel";
 import { TREE_EVENT_DISPLAY_TITLE_MAX, TREE_EVENT_SNIPPET_MAX } from "./treeNodeDisplay";
 
 export function getConversationWebviewHtml(cspSource: string, nonce: string): string {
@@ -813,25 +814,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         .replace(/"/g, "&quot;");
     }
 
-    /** Tree time label: &lt; 1h → minutes ago; else hh:mm DD/MM/YYYY ([tree-ui-contract.md] §7). */
-    function eventTimeLabel(iso) {
-      if (!iso) return "";
-      var t = Date.parse(String(iso));
-      if (!Number.isFinite(t)) return "";
-      var sec = Math.floor((Date.now() - t) / 1000);
-      if (sec < 60) return "just now";
-      if (sec < 3600) {
-        var mins = Math.floor(sec / 60);
-        return mins === 1 ? "1 minute ago" : mins + " minutes ago";
-      }
-      var d = new Date(t);
-      var hh = String(d.getHours()).padStart(2, "0");
-      var mm = String(d.getMinutes()).padStart(2, "0");
-      var DD = String(d.getDate()).padStart(2, "0");
-      var MM = String(d.getMonth() + 1).padStart(2, "0");
-      var YYYY = d.getFullYear();
-      return hh + ":" + mm + " " + DD + "/" + MM + "/" + YYYY;
-    }
+    ${treeEventTimeLabelWebviewScriptBlock()}
 
     function eventDisplayTitle(ev) {
       var j = ev.content_json;

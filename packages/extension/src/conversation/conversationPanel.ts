@@ -654,6 +654,9 @@ export function createConversationPanelController(
       }
       if (msg.type === "copy" && typeof msg.text === "string") {
         await vscode.env.clipboard.writeText(msg.text);
+        if (msg.text.trim().length > 0) {
+          void vscode.window.setStatusBarMessage("Colcoor: message copied to clipboard.", 2500);
+        }
         return;
       }
       if (msg.type === "copyThread" && typeof msg.text === "string") {

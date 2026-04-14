@@ -310,6 +310,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("colcoor.refreshConversations", () => {
       refreshTree();
+      void vscode.window.setStatusBarMessage("Colcoor: conversations list refreshed.", 2500);
     }),
     vscode.commands.registerCommand("colcoor.openSettings", async () => {
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));

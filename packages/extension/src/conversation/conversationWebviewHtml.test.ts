@@ -18,6 +18,12 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain(`slice(0, ${TREE_EVENT_DISPLAY_TITLE_MAX})`);
   });
 
+  it("embeds shared tree event time formatter for node labels ([tree-ui-contract.md] §7)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function eventTimeLabel(iso)");
+    expect(html).toContain("formatTreeEventTimeLabel");
+  });
+
   it("includes legal policy strip and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="legalPolicyStrip"');
