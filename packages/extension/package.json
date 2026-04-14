@@ -61,7 +61,8 @@
       },
       {
         "command": "colcoor.sendMessage",
-        "title": "Colcoor: Send message"
+        "title": "Colcoor: Send message…",
+        "description": "Prompts for message text, optional checkpoint label, then saves and runs the agent."
       },
       {
         "command": "colcoor.stopGeneration",

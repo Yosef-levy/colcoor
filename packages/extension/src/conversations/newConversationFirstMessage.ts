@@ -1,10 +1,11 @@
 import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
 
 /**
- * Second step of “New conversation” ([ui-features.md] §4): optional first message.
- * `showInputBox` returns `undefined` when dismissed (Esc) — treated as skip.
+ * Optional follow-up `showInputBox` step: Esc → `undefined` → skip (empty string).
+ * Used for optional first message on create ([ui-features.md] §4), optional checkpoint
+ * from the palette ([ui-features.md] §8–§9), etc.
  */
-export function normalizedOptionalFirstMessageFromSecondPrompt(raw: string | undefined): string {
+export function normalizedOptionalFollowUpPrompt(raw: string | undefined): string {
   if (raw === undefined) {
     return "";
   }

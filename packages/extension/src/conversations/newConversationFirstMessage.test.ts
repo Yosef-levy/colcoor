@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizedOptionalFirstMessageFromSecondPrompt } from "./newConversationFirstMessage";
+import { normalizedOptionalFollowUpPrompt } from "./newConversationFirstMessage";
 
-describe("normalizedOptionalFirstMessageFromSecondPrompt", () => {
+describe("normalizedOptionalFollowUpPrompt", () => {
   it("treats undefined (Esc) as skip", () => {
-    expect(normalizedOptionalFirstMessageFromSecondPrompt(undefined)).toBe("");
+    expect(normalizedOptionalFollowUpPrompt(undefined)).toBe("");
   });
 
   it("normalizes CRLF and trims", () => {
-    expect(normalizedOptionalFirstMessageFromSecondPrompt("  hi\r\n")).toBe("hi");
+    expect(normalizedOptionalFollowUpPrompt("  hi\r\n")).toBe("hi");
   });
 
   it("returns empty for whitespace-only", () => {
-    expect(normalizedOptionalFirstMessageFromSecondPrompt("  \t\r\n  ")).toBe("");
+    expect(normalizedOptionalFollowUpPrompt("  \t\r\n  ")).toBe("");
   });
 });

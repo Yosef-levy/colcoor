@@ -46,7 +46,7 @@ import {
   normalizeColcoorInviteUserId,
   validateColcoorInviteUserIdInput,
 } from "./conversations/conversationMemberInvite";
-import { normalizedOptionalFirstMessageFromSecondPrompt } from "./conversations/newConversationFirstMessage";
+import { normalizedOptionalFollowUpPrompt } from "./conversations/newConversationFirstMessage";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
 import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConversation";
@@ -255,7 +255,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           "Optional first message — opens the thread and runs the assistant after create (per Settings → Colcoor → agent). Leave empty to skip. Esc skips.",
         ignoreFocusOut: true,
       });
-      const firstMessage = normalizedOptionalFirstMessageFromSecondPrompt(firstRaw);
+      const firstMessage = normalizedOptionalFollowUpPrompt(firstRaw);
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
       try {
         const conv = await api.createConversation({ title: normalizedConversationTitle(title) });
@@ -963,6 +963,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (!normalized) {
           return;
         }
+        const checkpointRaw = await vscode.window.showInputBox({
+          title: "Colcoor — message",
+          prompt:
+            "Optional checkpoint label (breadcrumb on the new message). Leave empty to skip. Esc skips.",
+          ignoreFocusOut: true,
+        });
+        const checkpointNorm = normalizedOptionalFollowUpPrompt(checkpointRaw);
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
         try {
           const result = await runColcoorUserTurn(
@@ -972,6 +979,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             convTitle,
             normalized,
             workspaceRoot,
+            checkpointNorm
+              ? {
+                  checkpointLabel: checkpointNorm,
+                }
+              : undefined,
           );
           await notifyUserTurnOutcome(result);
         } catch (e) {
