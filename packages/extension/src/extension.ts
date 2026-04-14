@@ -23,6 +23,7 @@ import {
   shouldAutoRefreshConversations,
 } from "./conversations/conversationAutoRefreshPolicy";
 import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
+import { filterTodoNotes } from "./notes/todoNotesFilter";
 
 function formatMemberQuickPickLabel(m: ConversationMember): string {
   const name = m.display_name?.trim() ? m.display_name : "—";
@@ -476,6 +477,58 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.showNotesOnSelectedMessage", async () => {
       await conversationPanel.showNotesOnSelectedMessage();
     }),
+    vscode.commands.registerCommand(
+      "colcoor.listTodoNotesInConversation",
+      async (item?: ConversationTreeItem) => {
+        if (!(await session.getBackendAccessToken())) {
+          await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
+          return;
+        }
+        let convId = item?.conv.id;
+        let convTitle: string | null | undefined = item?.conv.title ?? null;
+        if (!convId) {
+          const row = await pickConversationInteractively();
+          if (!row) {
+            return;
+          }
+          convId = row.id;
+          convTitle = row.title;
+        }
+        try {
+          const notes = await api.listNotes(convId);
+          const todos = filterTodoNotes(notes);
+          if (todos.length === 0) {
+            await vscode.window.showInformationMessage(
+              "Colcoor: no TODO notes in this conversation (first line must start with “TODO”).",
+            );
+            return;
+          }
+          type TodoPick = vscode.QuickPickItem & { eventId: string };
+          const picked = await vscode.window.showQuickPick<TodoPick>(
+            todos.map((n) => {
+              const head = n.content.replace(/\r\n/g, "\n").split("\n")[0]?.trim() || "(TODO note)";
+              const label = head.length > 72 ? `${head.slice(0, 72)}…` : head;
+              return {
+                label,
+                description: n.event_id,
+                detail: n.id,
+                eventId: n.event_id,
+              };
+            }),
+            {
+              title: "Colcoor — TODO notes",
+              placeHolder: "Pick a note to open its host message in the conversation panel",
+            },
+          );
+          if (!picked) {
+            return;
+          }
+          await conversationPanel.revealAtEvent(convId, convTitle ?? null, picked.eventId);
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
+      },
+    ),
     vscode.commands.registerCommand("colcoor.referenceSelectedMessageInSideChat", async () => {
       const ctx = conversationPanel.getSelectedMessageContext();
       if (!ctx) {

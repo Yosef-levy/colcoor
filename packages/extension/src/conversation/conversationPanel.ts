@@ -85,6 +85,8 @@ export function createConversationPanelController(
   options: ConversationPanelControllerOptions,
 ): {
   reveal: (conversationId: string, title: string | null) => Promise<void>;
+  /** Open conversation and select a specific tree event (e.g. jump from a TODO note). */
+  revealAtEvent: (conversationId: string, title: string | null, eventId: string) => Promise<void>;
   /** Close the webview panel if it is showing this conversation (e.g. after delete). */
   closeIfShowingConversation: (conversationId: string) => void;
   /** Star or unstar the selected tree node via API (command palette). */
@@ -738,6 +740,35 @@ export function createConversationPanelController(
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
       await refreshConversationMeta();
+      const p = ensurePanel();
+      p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
+      if (webviewReady) {
+        await loadTreeAndPush(false, null);
+      }
+      p.reveal(vscode.ViewColumn.One, false);
+    },
+    async revealAtEvent(convId: string, title: string | null, eventId: string): Promise<void> {
+      const eid = eventId.trim();
+      if (!eid) {
+        return;
+      }
+      conversationId = convId;
+      conversationTitle = title;
+      conversationPinned = false;
+      lastNotes = [];
+      lastNeedsContextRebuild = false;
+      lastTreeEvents = [];
+      await refreshConversationMeta();
+      try {
+        await api.setConversationActive(convId, {
+          active_event_id: eid,
+          needs_context_rebuild: false,
+        });
+      } catch (e) {
+        await showColcoorApiFailure(e);
+        return;
+      }
+      selectedEventId = eid;
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
       if (webviewReady) {
