@@ -22,6 +22,14 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("<strong>Settings → Colcoor</strong>");
   });
 
+  it("points to legal policy URL settings ([ui-features.md] §1.3)", () => {
+    const html = getAboutPanelHtml("");
+    expect(html).toContain("Open legal policy settings");
+    expect(html).toContain("<strong>Terms</strong>");
+    expect(html).toContain("<strong>Privacy</strong>");
+    expect(html).toContain("<strong>Refund</strong>");
+  });
+
   it("avoids repository or API jargon in the footer line ([ui-features.md] §2)", () => {
     const html = getAboutPanelHtml("");
     expect(html).toContain("Policy links may appear");

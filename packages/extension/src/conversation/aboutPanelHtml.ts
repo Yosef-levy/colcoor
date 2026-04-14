@@ -54,6 +54,11 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
       to scan.
     </li>
     <li>Open <strong>Settings → Colcoor</strong> for the server address and how replies are produced.</li>
+    <li>
+      Optional <strong>Terms</strong>, <strong>Privacy</strong>, and <strong>Refund</strong> links: use the Command Palette
+      entry <strong>Colcoor: Open legal policy settings</strong> (or the Conversations welcome view) to jump straight to
+      those fields; when set, they also appear in the conversation panel.
+    </li>
   </ul>
   ${policySectionHtml}
   <p class="muted">Policy links may appear above when your administrator configures them.</p>

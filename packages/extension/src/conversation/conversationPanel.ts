@@ -82,6 +82,7 @@ type FromWebview =
   | { type: "deleteConversation" }
   | { type: "openProfile" }
   | { type: "openSettings" }
+  | { type: "openLegalPolicySettings" }
   | { type: "openAbout" }
   | { type: "openLegalPolicyUrl"; url: string }
   | { type: "openStarredDrawer" }
@@ -837,6 +838,10 @@ export function createConversationPanelController(
       }
       if (msg.type === "openSettings") {
         await vscode.commands.executeCommand("colcoor.openSettings");
+        return;
+      }
+      if (msg.type === "openLegalPolicySettings") {
+        await vscode.commands.executeCommand("colcoor.openLegalPolicySettings");
         return;
       }
       if (msg.type === "openAbout") {
