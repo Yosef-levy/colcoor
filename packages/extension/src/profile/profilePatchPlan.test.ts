@@ -28,4 +28,11 @@ describe("profilePatchFromInputs", () => {
       avatar_url: "https://cdn/x.png",
     });
   });
+
+  it("normalizes CRLF in display name and avatar URL", () => {
+    expect(profilePatchFromInputs("  Ada\r\n", "  https://x/y\r\n")).toEqual({
+      display_name: "Ada",
+      avatar_url: "https://x/y",
+    });
+  });
 });
