@@ -30,6 +30,11 @@ export const TREE_NODE_CONTEXT_MENU_ENTRIES: readonly TreeNodeContextMenuEntry[]
     quickPickLabel: "Reference message in side chat",
   },
   {
+    commandId: "colcoor.referenceSelectedNoteInSideChat",
+    quickPickLabel: "Reference note in side chat",
+    quickPickDescription: "Choose a note on the selected message",
+  },
+  {
     commandId: "colcoor.refreshConversationTree",
     quickPickLabel: "Refresh conversation tree",
     quickPickDescription: "Reload tree and thread from the server",
