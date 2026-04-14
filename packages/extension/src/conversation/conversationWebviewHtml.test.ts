@@ -67,6 +67,12 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("unicode-bidi: plaintext");
   });
 
+  it("posts treeContextMenu on tree node contextmenu ([tree-ui-contract.md] §5.2)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('vscode.postMessage({ type: "treeContextMenu", id: nid });');
+    expect(html).toContain('addEventListener("contextmenu"');
+  });
+
   it("uses dir=auto on trace pre blocks for shell and legacy JSON", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('<pre class="trace-pre" dir="auto">');

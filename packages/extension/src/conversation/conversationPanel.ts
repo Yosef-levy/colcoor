@@ -18,6 +18,7 @@ import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { staleTreeMissingSelectionPromptKey } from "./staleTreePromptPolicy";
+import { TREE_NODE_CONTEXT_MENU_ENTRIES } from "./treeNodeContextMenu";
 import { pruneCollapsedEventIdsForStorage } from "./treeCollapseIds";
 import {
   COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
@@ -65,6 +66,7 @@ type FromWebview =
   | { type: "ready" }
   | { type: "send"; text: string; privateBranch?: boolean; checkpointLabel?: string }
   | { type: "select"; id: string }
+  | { type: "treeContextMenu"; id: string }
   | { type: "selectTip" }
   | { type: "refresh" }
   | { type: "cancel" }
@@ -643,6 +645,34 @@ export function createConversationPanelController(
           needsContextRebuild: prevSel !== undefined && prevSel !== msg.id,
         });
         await loadTreeAndPush(false, null);
+        return;
+      }
+      if (msg.type === "treeContextMenu" && typeof msg.id === "string") {
+        if (!conversationId) {
+          return;
+        }
+        const targetId = msg.id.trim();
+        if (!targetId) {
+          return;
+        }
+        if (selectedEventId !== targetId) {
+          const prevSel = selectedEventId;
+          selectedEventId = targetId;
+          syncActiveToBackend(targetId, {
+            needsContextRebuild: prevSel !== undefined && prevSel !== targetId,
+          });
+          await loadTreeAndPush(false, null);
+        }
+        type TreeCtxPick = vscode.QuickPickItem & { commandId: string };
+        const picks: TreeCtxPick[] = TREE_NODE_CONTEXT_MENU_ENTRIES.map((e) => ({
+          label: e.quickPickLabel,
+          description: e.quickPickDescription,
+          commandId: e.commandId,
+        }));
+        const picked = await vscode.window.showQuickPick(picks, { title: "Colcoor: tree node actions" });
+        if (picked?.commandId) {
+          await vscode.commands.executeCommand(picked.commandId);
+        }
         return;
       }
       if (msg.type === "selectTip") {

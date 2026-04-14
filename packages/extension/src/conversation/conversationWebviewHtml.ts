@@ -1514,6 +1514,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           if (nid) vscode.postMessage({ type: "select", id: nid });
         }
       });
+      root.addEventListener("contextmenu", function (ev) {
+        var node = ev.target.closest && ev.target.closest(".node");
+        if (!node) return;
+        var nid = node.getAttribute("data-id");
+        if (!nid) return;
+        ev.preventDefault();
+        vscode.postMessage({ type: "treeContextMenu", id: nid });
+      });
     })();
 
     window.addEventListener("message", (event) => {
