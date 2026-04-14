@@ -151,6 +151,8 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     <div class="row">
       <button id="send" type="button" disabled title="Type a non-empty message. Shift+Enter for newline, Enter to send.">Send</button>
       <button id="refresh" type="button" class="secondary">Refresh</button>
+      <button id="btnProfile" type="button" class="secondary" title="Edit your Colcoor profile">Profile…</button>
+      <button id="btnSettings" type="button" class="secondary" title="Open Colcoor extension settings">Settings</button>
     </div>
     <p id="err" class="err" style="display:none"></p>
   </div>
@@ -568,6 +570,12 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     });
     document.getElementById("refresh").addEventListener("click", function () {
       vscode.postMessage({ type: "refresh" });
+    });
+    document.getElementById("btnProfile").addEventListener("click", function () {
+      vscode.postMessage({ type: "openProfile" });
+    });
+    document.getElementById("btnSettings").addEventListener("click", function () {
+      vscode.postMessage({ type: "openSettings" });
     });
     document.addEventListener("click", function (ev) {
       var tgt = ev.target;

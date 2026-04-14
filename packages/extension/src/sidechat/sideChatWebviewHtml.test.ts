@@ -79,4 +79,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("typeof d.presenceSummary === \"string\" && d.presenceSummary.trim()");
     expect(html).toContain("sub.textContent = countPart + presencePart;");
   });
+
+  it("includes Profile and Settings actions next to Refresh", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnProfile"');
+    expect(html).toContain('id="btnSettings"');
+    expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
+    expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
+  });
 });
