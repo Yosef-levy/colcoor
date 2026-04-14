@@ -631,6 +631,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnRemoveMember" class="btn-secondary" title="Remove a member from this conversation">Remove member…</button>
           <button type="button" id="btnStarredDrawer" class="btn-secondary" title="List starred messages in this conversation">Starred</button>
           <button type="button" id="btnTodoDrawer" class="btn-secondary" title="List TODO notes in this conversation">TODO notes</button>
+          <button type="button" id="btnDrawers" class="btn-secondary" title="Open the Starred/TODO drawers panel">Drawers</button>
           <button type="button" id="btnOpenSideChat" class="btn-secondary" title="Open side chat for this conversation">Open side chat</button>
           <button type="button" id="btnDeleteConversation" class="btn-secondary" title="Delete this conversation">Delete conversation…</button>
           <button type="button" id="btnProfile" class="btn-secondary" title="Edit your Colcoor profile">Profile…</button>
@@ -907,6 +908,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const removeMemberBtn = document.getElementById("btnRemoveMember");
       const starredDrawerBtn = document.getElementById("btnStarredDrawer");
       const todoDrawerBtn = document.getElementById("btnTodoDrawer");
+      const drawersBtn = document.getElementById("btnDrawers");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
       const deleteConversationBtn = document.getElementById("btnDeleteConversation");
       const profileBtn = document.getElementById("btnProfile");
@@ -921,6 +923,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (removeMemberBtn) removeMemberBtn.disabled = state.busy;
       if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
+      if (drawersBtn) drawersBtn.disabled = state.busy;
       if (openSideChatBtn) openSideChatBtn.disabled = state.busy;
       if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;
       if (profileBtn) profileBtn.disabled = state.busy;
@@ -1440,6 +1443,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnTodoDrawer").addEventListener("click", () => {
       vscode.postMessage({ type: "openTodoDrawer" });
+    });
+    document.getElementById("btnDrawers").addEventListener("click", () => {
+      vscode.postMessage({ type: "openDrawers" });
     });
     document.getElementById("btnOpenSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "openSideChat" });

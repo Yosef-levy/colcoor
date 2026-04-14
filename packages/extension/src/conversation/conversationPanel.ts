@@ -70,6 +70,7 @@ type FromWebview =
   | { type: "openAbout" }
   | { type: "openStarredDrawer" }
   | { type: "openTodoDrawer" }
+  | { type: "openDrawers" }
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
@@ -676,6 +677,15 @@ export function createConversationPanelController(
         await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
           conv: { id: conversationId, title: conversationTitle ?? null },
           preferredTab: "todo",
+        });
+        return;
+      }
+      if (msg.type === "openDrawers") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
         });
         return;
       }
