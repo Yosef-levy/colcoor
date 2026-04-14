@@ -81,6 +81,8 @@ type FromWebview =
   | { type: "refreshConversations" }
   | { type: "toggleConversationsSidebar" }
   | { type: "renameConversation" }
+  | { type: "addConversationMember" }
+  | { type: "listConversationMembers" }
   | { type: "setupCursorCli" }
   | { type: "setCursorAgentApiKey" }
   | { type: "edit"; messageId: string; text: string }
@@ -491,6 +493,18 @@ export async function openSideChatPanel(
     }
     if (msg.type === "renameConversation") {
       await vscode.commands.executeCommand("colcoor.renameConversation", {
+        conv: { id: conversationId, title: title ?? null },
+      });
+      return;
+    }
+    if (msg.type === "addConversationMember") {
+      await vscode.commands.executeCommand("colcoor.addConversationMember", {
+        conv: { id: conversationId, title: title ?? null },
+      });
+      return;
+    }
+    if (msg.type === "listConversationMembers") {
+      await vscode.commands.executeCommand("colcoor.listConversationMembers", {
         conv: { id: conversationId, title: title ?? null },
       });
       return;

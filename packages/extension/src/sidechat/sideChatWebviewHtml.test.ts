@@ -139,6 +139,14 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "renameConversation" });');
   });
 
+  it("includes add member and list members actions ([ui-features.md] §12)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnAddConversationMember"');
+    expect(html).toContain('id="btnListConversationMembers"');
+    expect(html).toContain('vscode.postMessage({ type: "addConversationMember" });');
+    expect(html).toContain('vscode.postMessage({ type: "listConversationMembers" });');
+  });
+
   it("includes optional legal policies and openLegalPolicyUrl wiring ([ui-features.md] §1.3)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonceZ", [
       { label: "Terms", url: "https://example.com/t" },
