@@ -113,13 +113,19 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "removeMember" });');
   });
 
-  it("includes Open side chat and Delete conversation quick actions", () => {
+  it("includes Open side chat, Cursor CLI setup, Agent API key, and Delete conversation quick actions", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenSideChat"');
+    expect(html).toContain('id="btnSetupCursorCli"');
+    expect(html).toContain('id="btnSetCursorAgentApiKey"');
     expect(html).toContain('id="btnDeleteConversation"');
     expect(html).toContain("if (openSideChatBtn) openSideChatBtn.disabled = state.busy;");
+    expect(html).toContain("if (setupCursorCliBtn) setupCursorCliBtn.disabled = state.busy;");
+    expect(html).toContain("if (setCursorAgentApiKeyBtn) setCursorAgentApiKeyBtn.disabled = state.busy;");
     expect(html).toContain("if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;");
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
+    expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
+    expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
     expect(html).toContain('vscode.postMessage({ type: "deleteConversation" });');
   });
 

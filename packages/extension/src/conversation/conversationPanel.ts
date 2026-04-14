@@ -64,6 +64,8 @@ type FromWebview =
   | { type: "changeMemberRole" }
   | { type: "removeMember" }
   | { type: "openSideChat" }
+  | { type: "setupCursorCli" }
+  | { type: "setCursorAgentApiKey" }
   | { type: "deleteConversation" }
   | { type: "openProfile" }
   | { type: "openSettings" }
@@ -732,6 +734,14 @@ export function createConversationPanelController(
         await vscode.commands.executeCommand("colcoor.openSideChat", {
           conv: { id: conversationId, title: conversationTitle ?? null },
         });
+        return;
+      }
+      if (msg.type === "setupCursorCli") {
+        await vscode.commands.executeCommand("colcoor.setupCursorCli");
+        return;
+      }
+      if (msg.type === "setCursorAgentApiKey") {
+        await vscode.commands.executeCommand("colcoor.setCursorAgentApiKey");
         return;
       }
       if (msg.type === "deleteConversation") {

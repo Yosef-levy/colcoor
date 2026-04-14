@@ -633,6 +633,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnTodoDrawer" class="btn-secondary" title="List TODO notes in this conversation">TODO notes</button>
           <button type="button" id="btnDrawers" class="btn-secondary" title="Open the Starred/TODO drawers panel">Drawers</button>
           <button type="button" id="btnOpenSideChat" class="btn-secondary" title="Open side chat for this conversation">Open side chat</button>
+          <button type="button" id="btnSetupCursorCli" class="btn-secondary" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
+          <button type="button" id="btnSetCursorAgentApiKey" class="btn-secondary" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
           <button type="button" id="btnDeleteConversation" class="btn-secondary" title="Delete this conversation">Delete conversation…</button>
           <button type="button" id="btnProfile" class="btn-secondary" title="Edit your Colcoor profile">Profile…</button>
           <button type="button" id="btnSettings" class="btn-secondary" title="Open Colcoor extension settings">Settings</button>
@@ -910,6 +912,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const todoDrawerBtn = document.getElementById("btnTodoDrawer");
       const drawersBtn = document.getElementById("btnDrawers");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
+      const setupCursorCliBtn = document.getElementById("btnSetupCursorCli");
+      const setCursorAgentApiKeyBtn = document.getElementById("btnSetCursorAgentApiKey");
       const deleteConversationBtn = document.getElementById("btnDeleteConversation");
       const profileBtn = document.getElementById("btnProfile");
       const settingsBtn = document.getElementById("btnSettings");
@@ -925,6 +929,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
       if (drawersBtn) drawersBtn.disabled = state.busy;
       if (openSideChatBtn) openSideChatBtn.disabled = state.busy;
+      if (setupCursorCliBtn) setupCursorCliBtn.disabled = state.busy;
+      if (setCursorAgentApiKeyBtn) setCursorAgentApiKeyBtn.disabled = state.busy;
       if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;
       if (profileBtn) profileBtn.disabled = state.busy;
       if (settingsBtn) settingsBtn.disabled = state.busy;
@@ -1449,6 +1455,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnOpenSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "openSideChat" });
+    });
+    document.getElementById("btnSetupCursorCli").addEventListener("click", () => {
+      vscode.postMessage({ type: "setupCursorCli" });
+    });
+    document.getElementById("btnSetCursorAgentApiKey").addEventListener("click", () => {
+      vscode.postMessage({ type: "setCursorAgentApiKey" });
     });
     document.getElementById("btnDeleteConversation").addEventListener("click", () => {
       vscode.postMessage({ type: "deleteConversation" });
