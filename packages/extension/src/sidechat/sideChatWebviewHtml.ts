@@ -152,6 +152,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       <button id="send" type="button" disabled title="Type a non-empty message. Shift+Enter for newline, Enter to send.">Send</button>
       <button id="refresh" type="button" class="secondary">Refresh</button>
       <button id="btnOpenConversation" type="button" class="secondary" title="Open the main conversation panel (tree, thread, composer) for this conversation">Open conversation</button>
+      <button id="btnOpenDrawers" type="button" class="secondary" title="Open the Starred/TODO drawers panel for this conversation">Drawers</button>
       <button id="btnProfile" type="button" class="secondary" title="Edit your Colcoor profile">Profile…</button>
       <button id="btnSettings" type="button" class="secondary" title="Open Colcoor extension settings">Settings</button>
       <button id="btnAbout" type="button" class="secondary" title="About Colcoor">About</button>
@@ -575,6 +576,9 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     });
     document.getElementById("btnOpenConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "openConversation" });
+    });
+    document.getElementById("btnOpenDrawers").addEventListener("click", function () {
+      vscode.postMessage({ type: "openDrawers" });
     });
     document.getElementById("btnProfile").addEventListener("click", function () {
       vscode.postMessage({ type: "openProfile" });

@@ -57,6 +57,7 @@ type FromWebview =
     }
   | { type: "refresh" }
   | { type: "openConversation" }
+  | { type: "openDrawers" }
   | { type: "openProfile" }
   | { type: "openSettings" }
   | { type: "openAbout" }
@@ -394,6 +395,12 @@ export async function openSideChatPanel(
     }
     if (msg.type === "openConversation") {
       await vscode.commands.executeCommand("colcoor.openConversation", conversationId, title ?? null);
+      return;
+    }
+    if (msg.type === "openDrawers") {
+      await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
+        conv: { id: conversationId, title: title ?? null },
+      });
       return;
     }
     if (msg.type === "openProfile") {
