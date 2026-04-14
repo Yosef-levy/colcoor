@@ -520,7 +520,15 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
           viewerUserId = null;
         }
         var sub = document.getElementById("sub");
-        if (sub) sub.textContent = (d.messages && d.messages.length) ? d.messages.length + " message(s)" : "No messages yet.";
+        if (sub) {
+          var countPart =
+            d.messages && d.messages.length ? d.messages.length + " message(s)" : "No messages yet.";
+          var presencePart =
+            typeof d.presenceSummary === "string" && d.presenceSummary.trim()
+              ? " · " + d.presenceSummary.trim()
+              : "";
+          sub.textContent = countPart + presencePart;
+        }
         mentionUniverse = collectMentionUniverse(d.messages || []);
         updateRefEventHint();
         updateRefNoteHint();

@@ -9,6 +9,7 @@ import { mentionTargetsForMe } from "./sideChatMentionTargets";
 import { shouldNotifyForIncomingSideChatMessage } from "./sideChatNotifyDedup";
 import { shouldEmitSideChatNotificationNow } from "./sideChatNotificationRateLimit";
 import { decideSideChatNotification } from "./sideChatNotifications";
+import { sideChatPresenceSummary } from "./sideChatPresence";
 import { decideSideChatSoundKind } from "./sideChatSoundDecision";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
@@ -63,6 +64,7 @@ type StateMessage = {
   messages: SideChatRenderMessage[];
   /** Caller user id for author-only actions in the webview; null if profile could not be loaded. */
   viewerUserId: string | null;
+  presenceSummary: string | null;
   referencedEventId: string | null;
   referencedNoteId: string | null;
 };
@@ -200,6 +202,7 @@ export async function openSideChatPanel(
         type: "state",
         messages: toSideChatRenderMessages(cached, { eventLabelsById, noteLabelsById }),
         viewerUserId,
+        presenceSummary: sideChatPresenceSummary(cached, viewerUserId),
         referencedEventId: composerReferencedEventId,
         referencedNoteId: composerReferencedNoteId,
       } satisfies StateMessage);
