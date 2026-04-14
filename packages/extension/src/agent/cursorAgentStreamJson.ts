@@ -15,24 +15,34 @@ function extractAssistantTextFromMessage(message: unknown): string {
   if (!message || typeof message !== "object") {
     return "";
   }
-  const content = (message as { content?: unknown }).content;
+  const m = message as { content?: unknown; text?: unknown };
+  const content = m.content;
   if (typeof content === "string") {
     return content;
   }
-  if (!Array.isArray(content)) {
-    return "";
-  }
-  let s = "";
-  for (const block of content) {
-    if (!block || typeof block !== "object") {
-      continue;
+  if (Array.isArray(content)) {
+    let s = "";
+    for (const block of content) {
+      if (!block || typeof block !== "object") {
+        continue;
+      }
+      const b = block as { type?: unknown; text?: unknown; content?: unknown };
+      if (b.type === "text") {
+        if (typeof b.text === "string") {
+          s += b.text;
+        } else if (typeof b.content === "string") {
+          s += b.content;
+        }
+      }
     }
-    const b = block as { type?: unknown; text?: unknown };
-    if (b.type === "text" && typeof b.text === "string") {
-      s += b.text;
+    if (s.length > 0) {
+      return s;
     }
   }
-  return s;
+  if (typeof m.text === "string") {
+    return m.text;
+  }
+  return "";
 }
 
 export function tryParseNdjsonObject(line: string): Record<string, unknown> | null {

@@ -72,6 +72,60 @@ describe("parseCursorAgentNdjsonLine", () => {
     });
   });
 
+  it("parses text blocks that carry the body in content instead of text", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", content: "from content field" }],
+      },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "append_assistant",
+      delta: "from content field",
+    });
+  });
+
+  it("prefers text field on a block when both text and content strings exist", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "a", content: "b" }],
+      },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "append_assistant",
+      delta: "a",
+    });
+  });
+
+  it("uses message.text when content array has no usable text blocks", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "thinking", text: "nope" }],
+        text: "fallback body",
+      },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "append_assistant",
+      delta: "fallback body",
+    });
+  });
+
+  it("uses top-level message.text when content is omitted", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", text: "plain" },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "append_assistant",
+      delta: "plain",
+    });
+  });
+
   it("parses terminal result", () => {
     const line = JSON.stringify({
       type: "result",
@@ -90,7 +144,7 @@ describe("parseCursorAgentNdjsonLine", () => {
     expect(parseCursorAgentNdjsonLine("not json")).toBeNull();
   });
 
-  it("returns null for assistant rows with no text content blocks", () => {
+  it("returns null for assistant rows with no extractable text", () => {
     const line = JSON.stringify({
       type: "assistant",
       message: { role: "assistant", content: [{ type: "thinking", text: "nope" }] },
@@ -208,6 +262,14 @@ describe("createStreamJsonStdoutFeed", () => {
     );
     feed.flushTail();
     expect(feed.getResolvedText()).toBe("Hi!");
+  });
+
+  it("accumulates assistant lines that only expose message.text", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push('{"type":"assistant","message":{"role":"assistant","text":"One"}}\n');
+    feed.push('{"type":"assistant","message":{"role":"assistant","text":"Two"}}\n');
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("OneTwo");
   });
 
   it("prefers terminal result over summed assistant text", () => {
