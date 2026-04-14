@@ -617,7 +617,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           Private draft (only you see this user message until you continue on a shared branch)
         </label>
         <div class="row">
-          <button id="send" type="button">Send</button>
+          <button id="send" type="button" disabled>Send</button>
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
           <button id="refresh" type="button">Refresh tree</button>
           <span class="hint" id="busy" style="display:none">Working…</span>
@@ -1114,6 +1114,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
     }
 
+    function updateComposerSendEnabled() {
+      var sendBtn = document.getElementById("send");
+      var ta = document.getElementById("input");
+      if (!sendBtn) {
+        return;
+      }
+      if (state.busy) {
+        sendBtn.disabled = true;
+        return;
+      }
+      var has = ta && String(ta.value || "").trim().length > 0;
+      sendBtn.disabled = !has;
+      sendBtn.title = has
+        ? ""
+        : "Type a non-empty message. Shift+Enter for newline, Enter to send.";
+    }
+
     function render() {
       try {
         const errEl = document.getElementById("err");
@@ -1143,9 +1160,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           subEl.textContent = subBase;
         }
         if (sendBtn) {
-          sendBtn.disabled = state.busy;
           sendBtn.textContent = state.busy ? "Sending…" : "Send";
-          sendBtn.title = state.busy ? "A reply is in progress. Use Stop to cancel." : "";
+          if (state.busy) {
+            sendBtn.disabled = true;
+            sendBtn.title = "A reply is in progress. Use Stop to cancel.";
+          } else {
+            updateComposerSendEnabled();
+          }
         }
         if (stopBtn) {
           stopBtn.disabled = !state.busy;
@@ -1274,6 +1295,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const privateBranch = priv && priv.checked;
       vscode.postMessage({ type: "send", text: ta.value.trimEnd(), privateBranch });
       ta.value = "";
+      updateComposerSendEnabled();
     });
 
     document.getElementById("stop").addEventListener("click", () => {
@@ -1340,10 +1362,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vscode.postMessage({ type: "copy", text: text });
     });
 
+    document.getElementById("input").addEventListener("input", function () {
+      updateComposerSendEnabled();
+    });
+
     document.getElementById("input").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
+        var sb = document.getElementById("send");
+        if (sb && sb.disabled) {
+          return;
+        }
         e.preventDefault();
-        document.getElementById("send").click();
+        if (sb) sb.click();
       }
     });
 

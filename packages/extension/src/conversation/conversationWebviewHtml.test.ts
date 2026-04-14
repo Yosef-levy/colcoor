@@ -25,8 +25,17 @@ describe("getConversationWebviewHtml", () => {
   it("shows clearer busy/send/stop messaging while a reply is in progress", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('sendBtn.textContent = state.busy ? "Sending…" : "Send"');
-    expect(html).toContain('sendBtn.title = state.busy ? "A reply is in progress. Use Stop to cancel." : ""');
+    expect(html).toContain('sendBtn.title = "A reply is in progress. Use Stop to cancel."');
     expect(html).toContain('stopBtn.title = state.busy ? "Cancel the in-progress assistant reply." : ""');
     expect(html).toContain('busyEl.textContent = state.busy ? "Sending… Press Stop to cancel." : "Working…"');
+  });
+
+  it("disables Send until the composer has non-whitespace text", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('<button id="send" type="button" disabled>Send</button>');
+    expect(html).toContain("function updateComposerSendEnabled()");
+    expect(html).toContain('addEventListener("input", function ()');
+    expect(html).toContain("updateComposerSendEnabled();");
+    expect(html).toContain("if (sb && sb.disabled)");
   });
 });
