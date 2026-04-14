@@ -5,9 +5,8 @@ import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
+import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
 import { trimmedSideChatSendBody } from "./trimSendBody";
-
-const SIDE_CHAT_SSE_RECONNECT_MS = 2000;
 
 function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -73,6 +72,8 @@ export async function openSideChatPanel(
   let cached: SideChatMessageOut[] = [];
   let lastStreamSeq = 0;
   let sseStarted = false;
+  /** Increments after each failed stream; reset when the stream yields an event. */
+  let sseReconnectAttempt = 0;
   let disposed = false;
   /** Last `last_read_seq` successfully PATCHed (avoids spamming the API). */
   let lastPatchedReadSeq = -1;
@@ -153,6 +154,7 @@ export async function openSideChatPanel(
             afterSeq: startAfter,
             signal: ac.signal,
           })) {
+            sseReconnectAttempt = 0;
             const o = ev as { type?: string; message?: SideChatMessageOut };
             if (o?.type !== "side_chat" || !o.message) {
               continue;
@@ -168,8 +170,10 @@ export async function openSideChatPanel(
         if (disposed || ac.signal.aborted) {
           break;
         }
+        const delayMs = sideChatSseReconnectDelayMs(sseReconnectAttempt);
+        sseReconnectAttempt = Math.min(sseReconnectAttempt + 1, 25);
         try {
-          await sleepAbortable(SIDE_CHAT_SSE_RECONNECT_MS, ac.signal);
+          await sleepAbortable(delayMs, ac.signal);
         } catch {
           break;
         }
