@@ -42,4 +42,17 @@ describe("appendTimelineEntry", () => {
     const last = timeline[timeline.length - 1] as { type: string };
     expect(last.type).toBe("colcoor_truncated");
   });
+
+  it("allows exactly 400 rows then one truncation marker, then ignores further appends", () => {
+    const timeline: unknown[] = [];
+    for (let i = 0; i < 400; i++) {
+      appendTimelineEntry(timeline, { colcoor_row: "read", text: `row ${i}` });
+    }
+    expect(timeline).toHaveLength(400);
+    appendTimelineEntry(timeline, { colcoor_row: "read", text: "overflow" });
+    expect(timeline).toHaveLength(401);
+    expect((timeline[400] as { type: string }).type).toBe("colcoor_truncated");
+    appendTimelineEntry(timeline, { colcoor_row: "read", text: "still ignored" });
+    expect(timeline).toHaveLength(401);
+  });
 });

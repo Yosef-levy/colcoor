@@ -194,6 +194,13 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(feed.getResolvedText()).toBe("z");
   });
 
+  it("flushTail ignores a whitespace-only tail without changing resolved text", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push("  \n  \t  ");
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("");
+  });
+
   it("records compact read and shell rows (no system line)", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push('{"type":"system","subtype":"init","model":"TestModel"}\n');
