@@ -45,6 +45,15 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     .msg:last-child { border-bottom: none; }
     .msg .meta { font-size: 0.88em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
     .msg .body { white-space: pre-wrap; word-break: break-word; }
+    .msg .ref {
+      border-left: 2px solid var(--vscode-panel-border);
+      margin: 0 0 6px;
+      padding: 4px 8px;
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.9em;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
     .msg .msg-actions { margin-top: 6px; }
     .msg .msg-actions button { padding: 4px 10px; font-size: 0.92em; }
     .msg textarea.edit-ta {
@@ -91,6 +100,10 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
   <p class="hint" id="sub">Loading…</p>
   <div id="list"></div>
   <div class="composer">
+    <div class="row" id="replyingRow" style="display:none">
+      <div id="replying" class="hint" style="margin:0"></div>
+      <button id="clearReply" type="button" class="secondary">Cancel reply</button>
+    </div>
     <textarea id="input" placeholder="Message…"></textarea>
     <div class="row">
       <button id="send" type="button">Send</button>
@@ -101,6 +114,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     var viewerUserId = null;
+    var replyTarget = null;
     function canMutateRow(m) {
       return !!(viewerUserId && m && m.kind === "user" && m.author_user_id === viewerUserId && !m.deleted_at);
     }
@@ -162,8 +176,32 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
           typeof m.rendered_body_html === "string" && m.rendered_body_html.length
             ? m.rendered_body_html
             : ((m.body != null ? String(m.body) : "") || "(empty)");
+        if (m.referenced_side_chat_preview && typeof m.referenced_side_chat_preview.seq === "number") {
+          var ref = document.createElement("div");
+          ref.className = "ref";
+          ref.textContent =
+            "↪ #" +
+            m.referenced_side_chat_preview.seq +
+            " " +
+            (m.referenced_side_chat_preview.text || "(empty)");
+          row.appendChild(ref);
+        }
         row.appendChild(meta);
         row.appendChild(body);
+        if (m.kind === "user" && !m.deleted_at) {
+          var replyActions = document.createElement("div");
+          replyActions.className = "row msg-actions";
+          var btnReply = document.createElement("button");
+          btnReply.type = "button";
+          btnReply.className = "secondary";
+          btnReply.textContent = "Reply";
+          btnReply.addEventListener("click", function () {
+            replyTarget = { id: m.id, seq: m.seq, text: (m.body != null ? String(m.body) : "") || "(empty)" };
+            updateReplyHint();
+          });
+          replyActions.appendChild(btnReply);
+          row.appendChild(replyActions);
+        }
         if (canMutateRow(m)) {
           var actions = document.createElement("div");
           actions.className = "row msg-actions";
@@ -187,6 +225,18 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         list.appendChild(row);
       });
     }
+    function updateReplyHint() {
+      var n = document.getElementById("replying");
+      var row = document.getElementById("replyingRow");
+      if (!n || !row) return;
+      if (!replyTarget) {
+        row.style.display = "none";
+        n.textContent = "";
+        return;
+      }
+      row.style.display = "flex";
+      n.textContent = "Replying to #" + replyTarget.seq + " " + (replyTarget.text || "(empty)");
+    }
     window.addEventListener("message", function (ev) {
       var d = ev.data;
       if (d && d.type === "state") {
@@ -207,11 +257,18 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     document.getElementById("send").addEventListener("click", function () {
       var ta = document.getElementById("input");
       var t = ta && ta.value ? ta.value : "";
-      vscode.postMessage({ type: "send", text: t });
+      var refId = replyTarget && typeof replyTarget.id === "string" ? replyTarget.id : null;
+      vscode.postMessage({ type: "send", text: t, referencedSideChatMessageId: refId });
+      replyTarget = null;
+      updateReplyHint();
       if (ta) ta.value = "";
     });
     document.getElementById("refresh").addEventListener("click", function () {
       vscode.postMessage({ type: "refresh" });
+    });
+    document.getElementById("clearReply").addEventListener("click", function () {
+      replyTarget = null;
+      updateReplyHint();
     });
     vscode.postMessage({ type: "ready" });
   </script>

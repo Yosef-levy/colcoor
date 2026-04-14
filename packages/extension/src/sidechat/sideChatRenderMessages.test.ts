@@ -15,7 +15,7 @@ function row(
     body: p.body ?? null,
     referenced_event_id: null,
     referenced_note_id: null,
-    referenced_side_chat_message_id: null,
+    referenced_side_chat_message_id: p.referenced_side_chat_message_id ?? null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     edited_at: null,
@@ -43,5 +43,13 @@ describe("toSideChatRenderMessages", () => {
     ]);
     expect(out[0].rendered_body_html).toContain("(empty)");
     expect(out[1].rendered_body_html).toContain("(empty)");
+  });
+
+  it("resolves referenced side-chat preview for replies", () => {
+    const out = toSideChatRenderMessages([
+      row({ id: "a", seq: 1, body: "source message" }),
+      row({ id: "b", seq: 2, body: "reply", referenced_side_chat_message_id: "a" }),
+    ]);
+    expect(out[1].referenced_side_chat_preview).toEqual({ seq: 1, text: "source message" });
   });
 });

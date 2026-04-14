@@ -35,7 +35,7 @@ function randomNonce(): string {
 
 type FromWebview =
   | { type: "ready" }
-  | { type: "send"; text: string }
+  | { type: "send"; text: string; referencedSideChatMessageId?: string | null }
   | { type: "refresh" }
   | { type: "edit"; messageId: string; text: string }
   | { type: "delete"; messageId: string };
@@ -221,7 +221,17 @@ export async function openSideChatPanel(
         return;
       }
       try {
-        await api.postSideChatMessage(conversationId, { kind: "user", body });
+        const refIdRaw =
+          typeof msg.referencedSideChatMessageId === "string"
+            ? msg.referencedSideChatMessageId.trim()
+            : "";
+        const refId = refIdRaw || null;
+        const refOk = refId == null || cached.some((m) => m.id === refId);
+        await api.postSideChatMessage(conversationId, {
+          kind: "user",
+          body,
+          referenced_side_chat_message_id: refOk ? refId : null,
+        });
         await pushState();
       } catch (e) {
         const t = e instanceof Error ? e.message : String(e);

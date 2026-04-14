@@ -1,8 +1,10 @@
 import type { SideChatMessageOut } from "../api/client";
 import { markdownToSafeHtml } from "../conversation/threadMarkdown";
+import { resolveSideChatReferencePreview } from "./sideChatReferences";
 
 export type SideChatRenderMessage = SideChatMessageOut & {
   rendered_body_html: string;
+  referenced_side_chat_preview: { seq: number; text: string } | null;
 };
 
 /**
@@ -14,5 +16,9 @@ export function toSideChatRenderMessages(
   return messages.map((m) => ({
     ...m,
     rendered_body_html: markdownToSafeHtml(m.body?.trim() ? m.body : "(empty)"),
+    referenced_side_chat_preview: resolveSideChatReferencePreview(
+      messages,
+      m.referenced_side_chat_message_id,
+    ),
   }));
 }
