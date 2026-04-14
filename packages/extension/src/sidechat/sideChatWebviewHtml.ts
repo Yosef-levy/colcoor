@@ -63,7 +63,11 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       font-size: 0.88em;
       font-family: var(--vscode-editor-font-family);
     }
-    .msg .body { white-space: pre-wrap; word-break: break-word; }
+    .msg .body {
+      white-space: pre-wrap;
+      word-break: break-word;
+      unicode-bidi: plaintext;
+    }
     .msg .ref {
       border-left: 2px solid var(--vscode-panel-border);
       margin: 0 0 6px;
@@ -72,6 +76,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       font-size: 0.9em;
       white-space: pre-wrap;
       word-break: break-word;
+      unicode-bidi: plaintext;
     }
     .msg .msg-actions { margin-top: 6px; }
     .msg .msg-actions button { padding: 4px 10px; font-size: 0.92em; }
@@ -131,7 +136,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       <div id="refNoteText" class="hint" style="margin:0"></div>
       <button id="clearRefNote" type="button" class="secondary">Clear note ref</button>
     </div>
-    <textarea id="input" placeholder="Message…"></textarea>
+    <textarea id="input" dir="auto" placeholder="Message…"></textarea>
     <div class="row">
       <button id="send" type="button">Send</button>
       <button id="refresh" type="button" class="secondary">Refresh</button>
@@ -188,6 +193,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       row.dataset.editing = "0";
       var body = document.createElement("div");
       body.className = "body";
+      body.setAttribute("dir", "auto");
       body.textContent = (originalBodyText != null ? String(originalBodyText) : "") || "(empty)";
       if (wrap && wrap.parentNode) wrap.parentNode.replaceChild(body, wrap);
     }
@@ -200,6 +206,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       var wrap = document.createElement("div");
       var ta = document.createElement("textarea");
       ta.className = "edit-ta";
+      ta.setAttribute("dir", "auto");
       ta.value = orig;
       var rb = document.createElement("div");
       rb.className = "row";
@@ -270,6 +277,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         }
         var body = document.createElement("div");
         body.className = "body";
+        body.setAttribute("dir", "auto");
         body.innerHTML =
           typeof m.rendered_body_html === "string" && m.rendered_body_html.length
             ? m.rendered_body_html

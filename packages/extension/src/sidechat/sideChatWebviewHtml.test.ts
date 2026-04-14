@@ -35,4 +35,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("clearRefNote");
     expect(html).toContain("referencedNoteId");
   });
+
+  it("exposes RTL-friendly composer and message bodies (dir=auto, unicode-bidi)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('<textarea id="input" dir="auto" placeholder="Message…"></textarea>');
+    expect(html).toContain("unicode-bidi: plaintext");
+    expect(html).toContain('body.setAttribute("dir", "auto")');
+    expect(html).toContain('ta.setAttribute("dir", "auto")');
+  });
 });

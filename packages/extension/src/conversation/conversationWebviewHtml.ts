@@ -302,6 +302,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       -webkit-box-orient: vertical;
       overflow: hidden;
       word-break: break-word;
+      unicode-bidi: plaintext;
     }
     .node-snippet-empty {
       color: var(--vscode-descriptionForeground);
@@ -453,6 +454,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-descriptionForeground, var(--vscode-foreground));
     }
     /* Thread bodies: GFM markdown from host (sanitized HTML). */
+    .thread .msg .body.md,
+    .thread .msg .note-body.md {
+      unicode-bidi: plaintext;
+    }
     .thread .msg .body.md {
       white-space: normal;
       word-break: break-word;
@@ -606,7 +611,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </div>
       </div>
       <div class="composer">
-        <textarea id="input" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
+        <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
         <label class="priv hint" style="margin-top:6px;display:flex;align-items:center;gap:6px">
           <input type="checkbox" id="privateBranch" />
           Private draft (only you see this user message until you continue on a shared branch)
@@ -772,7 +777,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const n = String(idx + 1);
       if (ev && ev.colcoor_row === "read" && typeof ev.text === "string") {
         return (
-          '<div class="trace-entry trace-row-read"><div class="trace-meta">' + n + ". " + esc(ev.text) + "</div></div>"
+          '<div class="trace-entry trace-row-read"><div class="trace-meta" dir="auto">' +
+            n +
+            ". " +
+            esc(ev.text) +
+            "</div></div>"
         );
       }
       if (ev && ev.colcoor_row === "edit_diff" && typeof ev.diff === "string") {
@@ -791,7 +800,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var body =
           typeof ev.diff_html === "string" && ev.diff_html.length
             ? ev.diff_html
-            : '<pre class="trace-pre trace-diff">' + esc(ev.diff) + "</pre>";
+            : '<pre class="trace-pre trace-diff" dir="auto">' + esc(ev.diff) + "</pre>";
         return (
           '<div class="trace-entry trace-row-edit"><div class="trace-meta">' +
           n +
@@ -807,7 +816,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return (
           '<div class="trace-entry trace-row-shell"><div class="trace-meta">' +
           n +
-          '. Shell</div><pre class="trace-pre">' +
+          '. Shell</div><pre class="trace-pre" dir="auto">' +
           esc(ev.text) +
           "</pre></div>"
         );
@@ -816,7 +825,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return (
           '<div class="trace-entry trace-row-shell"><div class="trace-meta">' +
           n +
-          '. Shell result</div><pre class="trace-pre">' +
+          '. Shell result</div><pre class="trace-pre" dir="auto">' +
           esc(ev.text) +
           "</pre></div>"
         );
@@ -833,7 +842,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         n +
         ". " +
         sum +
-        '</div><pre class="trace-pre">' +
+        '</div><pre class="trace-pre" dir="auto">' +
         raw +
         "</pre></div>"
       );
@@ -1017,7 +1026,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             titleBlock +
             '<div class="node-snippet' +
             snipCls +
-            '">' +
+            '" dir="auto">' +
             esc(snip) +
             "</div></div></div></div>";
           if (hasKids && !collapsed) {
