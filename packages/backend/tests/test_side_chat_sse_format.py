@@ -6,7 +6,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 
-from colcoor_backend.db.models import SideChatMessage
+from colcoor_backend.db.models import SideChatMessage, User
 from colcoor_backend.services.side_chat_sse import format_side_chat_sse_event
 
 
@@ -30,7 +30,7 @@ def test_format_side_chat_sse_event_roundtrip_json() -> None:
         edited_at=None,
         deleted_at=None,
     )
-    frame = format_side_chat_sse_event(row)
+    frame = format_side_chat_sse_event(row, None)
     assert frame.startswith("data: ")
     assert frame.endswith("\n\n")
     json_part = frame.removeprefix("data: ").removesuffix("\n\n")
@@ -39,3 +39,40 @@ def test_format_side_chat_sse_event_roundtrip_json() -> None:
     assert obj["message"]["seq"] == 3
     assert obj["message"]["body"] == "hello"
     assert obj["message"]["id"] == str(mid)
+    assert obj["message"]["author_display_name"] is None
+    assert obj["message"]["author_avatar_url"] is None
+
+
+def test_format_side_chat_sse_event_includes_author_profile() -> None:
+    cid = uuid.uuid4()
+    uid = uuid.uuid4()
+    mid = uuid.uuid4()
+    now = datetime.now(tz=UTC)
+    row = SideChatMessage(
+        id=mid,
+        conversation_id=cid,
+        seq=1,
+        kind="user",
+        author_user_id=uid,
+        body="hi",
+        referenced_event_id=None,
+        referenced_note_id=None,
+        referenced_side_chat_message_id=None,
+        created_at=now,
+        updated_at=now,
+        edited_at=None,
+        deleted_at=None,
+    )
+    author = User(
+        id=uid,
+        cursor_sub="c-sub",
+        email="a@b.c",
+        display_name="Alex",
+        avatar_url="https://cdn.example/a.png",
+        last_login_at=now,
+    )
+    frame = format_side_chat_sse_event(row, author)
+    json_part = frame.removeprefix("data: ").removesuffix("\n\n")
+    obj = json.loads(json_part)
+    assert obj["message"]["author_display_name"] == "Alex"
+    assert obj["message"]["author_avatar_url"] == "https://cdn.example/a.png"

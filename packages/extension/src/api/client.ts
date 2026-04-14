@@ -118,6 +118,9 @@ export type SideChatMessageOut = {
   seq: number;
   kind: "user" | "system_join" | "system_leave";
   author_user_id: string | null;
+  /** Joined from profile when `author_user_id` is set ([api-contracts.md] §10). */
+  author_display_name: string | null;
+  author_avatar_url: string | null;
   body: string | null;
   referenced_event_id: string | null;
   referenced_note_id: string | null;

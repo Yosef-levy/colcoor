@@ -412,6 +412,8 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `seq` | integer | yes |
 | `kind` | string | yes | `user` \| `system_join` \| `system_leave` |
 | `author_user_id` | uuid \| null | yes |
+| `author_display_name` | string \| null | yes | trimmed `users.display_name` when `author_user_id` resolves; otherwise `null` |
+| `author_avatar_url` | string \| null | yes | `users.avatar_url` when `author_user_id` resolves; otherwise `null` |
 | `body` | string \| null | yes |
 | `referenced_event_id` | uuid \| null | yes |
 | `referenced_note_id` | uuid \| null | yes |

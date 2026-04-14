@@ -223,15 +223,15 @@ class MeOut(BaseModel):
 
 
 class SideChatMessageOut(BaseModel):
-    """Side-chat row (api-contracts §10)."""
-
-    model_config = ConfigDict(from_attributes=True)
+    """Side-chat row (api-contracts §10); author fields are joined from ``users`` when present."""
 
     id: UUID
     conversation_id: UUID
     seq: int
     kind: Literal["user", "system_join", "system_leave"]
     author_user_id: UUID | None
+    author_display_name: str | None = None
+    author_avatar_url: str | None = None
     body: str | None
     referenced_event_id: UUID | None
     referenced_note_id: UUID | None

@@ -10,6 +10,8 @@ function msg(id: string, seq: number): SideChatMessageOut {
     seq,
     kind: "user",
     author_user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    author_display_name: null,
+    author_avatar_url: null,
     body: "x",
     referenced_event_id: null,
     referenced_note_id: null,

@@ -9,6 +9,8 @@ function row(
   return {
     conversation_id: "c",
     author_user_id: p.author_user_id ?? null,
+    author_display_name: null,
+    author_avatar_url: null,
     body: null,
     referenced_event_id: null,
     referenced_note_id: null,

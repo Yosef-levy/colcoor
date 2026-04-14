@@ -11,14 +11,17 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from colcoor_backend.api.schemas import SideChatMessageOut
-from colcoor_backend.db.models import SideChatMessage
-from colcoor_backend.services.side_chat import list_side_chat_messages
+from colcoor_backend.db.models import SideChatMessage, User
+from colcoor_backend.services.side_chat import (
+    list_side_chat_messages,
+    load_users_by_ids,
+    side_chat_message_to_out,
+)
 
 
-def format_side_chat_sse_event(row: SideChatMessage) -> str:
+def format_side_chat_sse_event(row: SideChatMessage, author: User | None) -> str:
     """One SSE event: ``data:`` line + blank line. Payload is a single JSON object."""
-    out = SideChatMessageOut.model_validate(row)
+    out = side_chat_message_to_out(row, author)
     payload: dict[str, object] = {
         "type": "side_chat",
         "message": out.model_dump(mode="json"),
@@ -49,9 +52,12 @@ async def iter_side_chat_sse(
             rows = await list_side_chat_messages(
                 session, conversation_id, user_id, after_seq=last
             )
+            author_ids = [r.author_user_id for r in rows if r.author_user_id is not None]
+            authors = await load_users_by_ids(session, author_ids)
         for row in rows:
             last = row.seq
-            yield format_side_chat_sse_event(row).encode("utf-8")
+            au = authors.get(row.author_user_id) if row.author_user_id is not None else None
+            yield format_side_chat_sse_event(row, au).encode("utf-8")
         await asyncio.sleep(poll)
         if max_sec > 0 and (time.monotonic() - t0) >= max_sec:
             break

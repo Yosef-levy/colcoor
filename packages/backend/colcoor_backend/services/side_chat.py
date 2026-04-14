@@ -10,7 +10,8 @@ from collections.abc import Sequence
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from colcoor_backend.db.models import Conversation, Event, Note, SideChatMessage, UserSideChatState
+from colcoor_backend.api.schemas import SideChatMessageOut
+from colcoor_backend.db.models import Conversation, Event, Note, SideChatMessage, User, UserSideChatState
 from colcoor_backend.services.graph import (
     ensure_conversation_member,
     get_conversation_member,
@@ -108,6 +109,66 @@ async def list_side_chat_messages(
         .order_by(SideChatMessage.seq.asc())
     )
     return list(res.scalars().all())
+
+
+async def load_users_by_ids(
+    session: AsyncSession, user_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, User]:
+    ids = list({u for u in user_ids if u is not None})
+    if not ids:
+        return {}
+    res = await session.execute(select(User).where(User.id.in_(ids)))
+    return {u.id: u for u in res.scalars().all()}
+
+
+def side_chat_message_to_out(msg: SideChatMessage, author: User | None) -> SideChatMessageOut:
+    """Map ORM row + optional author profile to API shape ([ui-features.md] §1.1)."""
+    display: str | None = None
+    avatar: str | None = None
+    if author is not None:
+        dn = (author.display_name or "").strip()
+        display = dn if dn else None
+        avatar = author.avatar_url
+    return SideChatMessageOut(
+        id=msg.id,
+        conversation_id=msg.conversation_id,
+        seq=msg.seq,
+        kind=msg.kind,  # type: ignore[arg-type]
+        author_user_id=msg.author_user_id,
+        author_display_name=display,
+        author_avatar_url=avatar,
+        body=msg.body,
+        referenced_event_id=msg.referenced_event_id,
+        referenced_note_id=msg.referenced_note_id,
+        referenced_side_chat_message_id=msg.referenced_side_chat_message_id,
+        created_at=msg.created_at,
+        updated_at=msg.updated_at,
+        edited_at=msg.edited_at,
+        deleted_at=msg.deleted_at,
+    )
+
+
+async def side_chat_messages_to_outs(
+    session: AsyncSession, messages: Sequence[SideChatMessage]
+) -> list[SideChatMessageOut]:
+    author_ids = [m.author_user_id for m in messages if m.author_user_id is not None]
+    authors = await load_users_by_ids(session, author_ids)
+    return [
+        side_chat_message_to_out(
+            m,
+            authors[m.author_user_id] if m.author_user_id is not None else None,
+        )
+        for m in messages
+    ]
+
+
+async def side_chat_message_to_out_fetched(
+    session: AsyncSession, msg: SideChatMessage
+) -> SideChatMessageOut:
+    author: User | None = None
+    if msg.author_user_id is not None:
+        author = await session.get(User, msg.author_user_id)
+    return side_chat_message_to_out(msg, author)
 
 
 async def post_user_side_chat_message(

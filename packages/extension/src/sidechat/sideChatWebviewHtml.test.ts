@@ -138,4 +138,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('data-url="https://example.com/t"');
     expect(html).toContain('vscode.postMessage({ type: "openLegalPolicyUrl", url: u });');
   });
+
+  it("inlines author avatar helpers and render wiring ([ui-features.md] §1.1)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function sideChatHttpsAvatarUrl(url)");
+    expect(html).toContain("function sideChatAuthorSuffix(m)");
+    expect(html).toContain('img.className = "msg-avatar"');
+    expect(html).toContain("sideChatMetaBase(m) + sideChatAuthorSuffix(m)");
+  });
 });

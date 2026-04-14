@@ -12,6 +12,8 @@ function row(
     seq: p.seq,
     kind: p.kind ?? "user",
     author_user_id: p.author_user_id ?? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    author_display_name: p.author_display_name ?? null,
+    author_avatar_url: p.author_avatar_url ?? null,
     body: p.body ?? null,
     referenced_event_id: p.referenced_event_id ?? null,
     referenced_note_id: p.referenced_note_id ?? null,

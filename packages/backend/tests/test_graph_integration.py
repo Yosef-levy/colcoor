@@ -431,6 +431,8 @@ def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> N
         m0 = r.json()
         assert m0["body"] == "hello"
         assert m0["seq"] == 1
+        assert m0["author_display_name"] is None
+        assert m0["author_avatar_url"] is None
         mid = m0["id"]
 
         r = client.get("/api/v1/conversations", headers=auth)
@@ -520,6 +522,8 @@ def test_side_chat_stream_http(monkeypatch: pytest.MonkeyPatch, postgres_url: st
         obj = json.loads(line)
         assert obj["type"] == "side_chat"
         assert obj["message"]["body"] == "stream-me"
+        assert "author_display_name" in obj["message"]
+        assert "author_avatar_url" in obj["message"]
 
     get_settings.cache_clear()
 

@@ -10,6 +10,8 @@ function msg(p: Partial<SideChatMessageOut>): SideChatMessageOut {
     seq: 1,
     kind: "user",
     author_user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    author_display_name: null,
+    author_avatar_url: null,
     body: "x",
     referenced_event_id: null,
     referenced_note_id: null,

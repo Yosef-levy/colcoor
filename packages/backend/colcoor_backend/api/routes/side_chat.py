@@ -17,6 +17,8 @@ from colcoor_backend.services.side_chat import (
     patch_side_chat_message_body,
     patch_side_chat_read_cursor,
     post_user_side_chat_message,
+    side_chat_message_to_out_fetched,
+    side_chat_messages_to_outs,
     soft_delete_side_chat_message,
 )
 from colcoor_backend.services.side_chat_sse import iter_side_chat_sse
@@ -72,7 +74,7 @@ async def get_side_chat_messages(
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
-    return SideChatMessagesResponse(messages=[SideChatMessageOut.model_validate(m) for m in rows])
+    return SideChatMessagesResponse(messages=await side_chat_messages_to_outs(session, rows))
 
 
 @router.post("/{conversation_id}/side-chat/messages", response_model=SideChatMessageOut)
@@ -98,8 +100,9 @@ async def post_side_chat_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    out = await side_chat_message_to_out_fetched(session, msg)
     await session.commit()
-    return SideChatMessageOut.model_validate(msg)
+    return out
 
 
 @router.patch(
@@ -125,8 +128,9 @@ async def patch_side_chat_message_route(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    out = await side_chat_message_to_out_fetched(session, msg)
     await session.commit()
-    return SideChatMessageOut.model_validate(msg)
+    return out
 
 
 @router.delete(
@@ -147,8 +151,9 @@ async def delete_side_chat_message_route(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    out = await side_chat_message_to_out_fetched(session, msg)
     await session.commit()
-    return SideChatMessageOut.model_validate(msg)
+    return out
 
 
 @router.patch("/{conversation_id}/side-chat/read", status_code=status.HTTP_204_NO_CONTENT)

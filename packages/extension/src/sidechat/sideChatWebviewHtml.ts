@@ -1,5 +1,7 @@
 /** Minimal side-chat webview (list + send + refresh + markdown rendering). */
 
+import { SIDECHAT_AUTHOR_WEBVIEW_JS } from "./sideChatAuthorWebviewRuntime";
+
 function esc(s: string): string {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -67,7 +69,22 @@ export function getSideChatWebviewHtml(
     }
     .msg { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
     .msg:last-child { border-bottom: none; }
-    .msg .meta { font-size: 0.88em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .msg .meta {
+      font-size: 0.88em;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .msg .meta .msg-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
     .msg .mentions { display: inline-flex; gap: 6px; margin-left: 8px; flex-wrap: wrap; }
     .msg .refs { display: inline-flex; gap: 6px; margin-left: 8px; flex-wrap: wrap; }
     .msg .mention-chip {
@@ -204,6 +221,7 @@ export function getSideChatWebviewHtml(
     <p id="err" class="err" style="display:none"></p>
   </div>
   <script nonce="${nonce}">
+    ${SIDECHAT_AUTHOR_WEBVIEW_JS}
     const vscode = acquireVsCodeApi();
     const SIDECHAT_COMPOSER_HEIGHT_KEY = "colcoor.sideChatComposerTextareaHeightPx";
     var viewerUserId = null;
@@ -425,8 +443,19 @@ export function getSideChatWebviewHtml(
         row.dataset.editing = "0";
         var meta = document.createElement("div");
         meta.className = "meta";
-        var del = m.deleted_at ? " · deleted" : "";
-        meta.textContent = "#" + m.seq + " · " + (m.kind || "") + del;
+        var avUrl = sideChatHttpsAvatarUrl(m.author_avatar_url);
+        if (avUrl) {
+          var img = document.createElement("img");
+          img.className = "msg-avatar";
+          img.alt = "";
+          img.loading = "lazy";
+          img.referrerPolicy = "no-referrer";
+          img.src = avUrl;
+          meta.appendChild(img);
+        }
+        var metaText = document.createElement("span");
+        metaText.textContent = sideChatMetaBase(m) + sideChatAuthorSuffix(m);
+        meta.appendChild(metaText);
         if (Array.isArray(m.mentions) && m.mentions.length) {
           var mentions = document.createElement("span");
           mentions.className = "mentions";
