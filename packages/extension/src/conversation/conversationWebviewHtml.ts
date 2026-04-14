@@ -625,6 +625,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <div class="detail-bar">
         <div id="breadcrumb" class="crumb hint"></div>
         <div class="detail-actions">
+          <button type="button" id="btnStarredDrawer" class="btn-secondary" title="List starred messages in this conversation">Starred</button>
+          <button type="button" id="btnTodoDrawer" class="btn-secondary" title="List TODO notes in this conversation">TODO notes</button>
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
           <button type="button" id="btnContinueFromHere" class="btn-secondary" title="Set the selected message as the active continue point">Continue from here</button>
@@ -890,9 +892,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const continueBtn = document.getElementById("btnContinueFromHere");
       const refSideChatBtn = document.getElementById("btnReferenceSideChat");
       const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
+      const starredDrawerBtn = document.getElementById("btnStarredDrawer");
+      const todoDrawerBtn = document.getElementById("btnTodoDrawer");
       const resendBtn = document.getElementById("btnResend");
       if (!crumb || !copyBtn || !resendBtn || !continueBtn || !refSideChatBtn || !refNoteSideChatBtn)
         return;
+      if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
+      if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
       const sel = state.selectedEventId;
       const evs = state.events || [];
       const path = pathChain(evs, sel);
@@ -1401,6 +1407,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("btnPin").addEventListener("click", () => {
       vscode.postMessage({ type: "togglePin" });
+    });
+    document.getElementById("btnStarredDrawer").addEventListener("click", () => {
+      vscode.postMessage({ type: "openStarredDrawer" });
+    });
+    document.getElementById("btnTodoDrawer").addEventListener("click", () => {
+      vscode.postMessage({ type: "openTodoDrawer" });
     });
 
     var btnJump = document.getElementById("btnJumpTip");

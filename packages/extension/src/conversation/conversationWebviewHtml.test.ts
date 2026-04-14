@@ -79,4 +79,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('refNoteSideChatBtn.disabled = state.busy;');
     expect(html).toContain('vscode.postMessage({ type: "referenceNoteInSideChat" });');
   });
+
+  it("includes Starred and TODO quick-access drawer actions", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnStarredDrawer"');
+    expect(html).toContain('id="btnTodoDrawer"');
+    expect(html).toContain("if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;");
+    expect(html).toContain("if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;");
+    expect(html).toContain('vscode.postMessage({ type: "openStarredDrawer" });');
+    expect(html).toContain('vscode.postMessage({ type: "openTodoDrawer" });');
+  });
 });

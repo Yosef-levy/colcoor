@@ -59,6 +59,8 @@ type FromWebview =
   | { type: "continueFromHere" }
   | { type: "referenceInSideChat" }
   | { type: "referenceNoteInSideChat" }
+  | { type: "openStarredDrawer" }
+  | { type: "openTodoDrawer" }
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
@@ -646,6 +648,24 @@ export function createConversationPanelController(
           return;
         }
         await vscode.commands.executeCommand("colcoor.referenceSelectedNoteInSideChat");
+        return;
+      }
+      if (msg.type === "openStarredDrawer") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.listStarredMessagesInConversation", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
+        return;
+      }
+      if (msg.type === "openTodoDrawer") {
+        if (!conversationId) {
+          return;
+        }
+        await vscode.commands.executeCommand("colcoor.listTodoNotesInConversation", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
         return;
       }
       if (msg.type === "rename") {
