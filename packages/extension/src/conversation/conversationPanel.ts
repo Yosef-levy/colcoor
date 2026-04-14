@@ -56,6 +56,7 @@ type FromWebview =
   | { type: "copy"; text: string }
   | { type: "copyThread"; text: string }
   | { type: "layout"; treeWidthPx?: number; composerTextareaHeightPx?: number }
+  | { type: "continueFromHere" }
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
@@ -600,6 +601,21 @@ export function createConversationPanelController(
       }
       if (msg.type === "resend") {
         await handleResend();
+        return;
+      }
+      if (msg.type === "continueFromHere") {
+        if (!conversationId || !selectedEventId) {
+          return;
+        }
+        const exists = lastTreeEvents.some((e) => e.id === selectedEventId);
+        if (!exists) {
+          void vscode.window.showWarningMessage(
+            "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+          );
+          return;
+        }
+        syncActiveToBackend(selectedEventId, { needsContextRebuild: false });
+        void vscode.window.setStatusBarMessage("Colcoor: continuing from selected message.", 2200);
         return;
       }
       if (msg.type === "rename") {

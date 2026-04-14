@@ -58,4 +58,11 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;");
     expect(html).toContain("if (!shouldSendComposerOnEnter(e)) return;");
   });
+
+  it("includes Continue from here detail action wiring", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnContinueFromHere"');
+    expect(html).toContain('continueBtn.disabled = state.busy;');
+    expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
+  });
 });

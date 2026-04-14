@@ -627,6 +627,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div class="detail-actions">
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
+          <button type="button" id="btnContinueFromHere" class="btn-secondary" title="Set the selected message as the active continue point">Continue from here</button>
           <button type="button" id="btnCopy" class="btn-secondary">Copy message</button>
           <button type="button" id="btnCopyThread" class="btn-secondary" title="Copy root → selected path as plain text">Copy thread</button>
           <button type="button" id="btnResend" class="btn-secondary">Resend assistant</button>
@@ -884,14 +885,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const crumb = document.getElementById("breadcrumb");
       const copyBtn = document.getElementById("btnCopy");
       const copyThreadBtn = document.getElementById("btnCopyThread");
+      const continueBtn = document.getElementById("btnContinueFromHere");
       const resendBtn = document.getElementById("btnResend");
-      if (!crumb || !copyBtn || !resendBtn) return;
+      if (!crumb || !copyBtn || !resendBtn || !continueBtn) return;
       const sel = state.selectedEventId;
       const evs = state.events || [];
       const path = pathChain(evs, sel);
       if (!path.length) {
         crumb.innerHTML = '<span class="empty">No selection</span>';
         copyBtn.disabled = true;
+        continueBtn.disabled = true;
         resendBtn.disabled = true;
         if (copyThreadBtn) copyThreadBtn.disabled = true;
         const renameBtn = document.getElementById("btnRename");
@@ -918,6 +921,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       crumb.innerHTML = parts.join(' <span class="crumb-sep">→</span> ');
       const last = path[path.length - 1];
       copyBtn.disabled = state.busy;
+      continueBtn.disabled = state.busy;
+      continueBtn.title = state.busy
+        ? "Wait for the current operation to finish."
+        : "Set this selected message as the active continue point.";
       const canCopyThread = String(state.threadPlainText || "").trim().length > 0;
       if (copyThreadBtn) {
         copyThreadBtn.disabled = state.busy || !canCopyThread;
@@ -1359,6 +1366,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("btnResend").addEventListener("click", () => {
       vscode.postMessage({ type: "resend" });
+    });
+
+    document.getElementById("btnContinueFromHere").addEventListener("click", () => {
+      vscode.postMessage({ type: "continueFromHere" });
     });
 
     document.getElementById("btnRename").addEventListener("click", () => {
