@@ -11,12 +11,7 @@ import {
   spawnCursorAgentPrint,
   type AgentCliOutputMode,
 } from "./cursorCliSpawn";
-
-/** Strip ANSI SGR codes from CLI stderr (Cursor colors output). */
-function stripAnsi(s: string): string {
-  // eslint-disable-next-line no-control-regex -- match ESC [ … m from `agent` stderr
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
-}
+import { stripAnsiSgr } from "./stripAnsi";
 
 export type AgentMode = "auto" | "headless" | "stub";
 
@@ -91,7 +86,7 @@ export class AgentRunner {
       }
       if (exitCode !== 0) {
         const raw = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n---\n") || "(no output)";
-        const detail = stripAnsi(raw);
+        const detail = stripAnsiSgr(raw);
         const invalidKey = /invalid.*api key|api key is invalid/i.test(detail);
         const authHint = /authentication|CURSOR_API_KEY|agent login/i.test(detail) || invalidKey
           ? '\n\nColcoor: Command Palette → "Colcoor: Set Cursor API key for agent" (replaces a bad CURSOR_API_KEY from the editor env), ' +
@@ -110,7 +105,7 @@ export class AgentRunner {
       }
       const text = stdout.trim();
       if (!text) {
-        const errTail = stderr ? `\n${stripAnsi(stderr.trim())}` : "";
+        const errTail = stderr ? `\n${stripAnsiSgr(stderr.trim())}` : "";
         throw new Error(`Cursor agent returned empty stdout.${errTail}`);
       }
       return {
