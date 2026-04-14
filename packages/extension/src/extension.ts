@@ -16,6 +16,10 @@ import {
   listLegalPolicyLinksFromColcoorWorkspaceSection,
 } from "./conversation/legalPolicySection";
 import { buildConversationDrawersModel } from "./conversation/drawersModel";
+import {
+  formatColcoorDrawersChromeTitle,
+  shouldCloseDrawersAfterConversationDelete,
+} from "./conversation/drawersChromeTitle";
 import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
@@ -527,6 +531,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         try {
           await api.deleteConversation(id);
           conversationPanel.closeIfShowingConversation(id);
+          if (drawersPanel && shouldCloseDrawersAfterConversationDelete(drawersConversationId, id)) {
+            drawersPanel.dispose();
+          }
           refreshTree();
           await vscode.window.showInformationMessage("Colcoor: conversation deleted.");
         } catch (e) {
@@ -561,6 +568,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             title: normalizedConversationTitle(next),
           });
           refreshTree();
+          if (drawersPanel && drawersConversationId === convId) {
+            drawersConversationTitle = out.title ?? null;
+            drawersPanel.title = formatColcoorDrawersChromeTitle(out.title);
+          }
           await vscode.window.showInformationMessage(
             `Colcoor: renamed conversation to ${out.title?.trim() ? `"${out.title}"` : "(untitled)"}.`,
           );
@@ -891,6 +902,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 });
                 return;
               }
+              if (msg.type === "sendMessage") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.sendMessage", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                  },
+                });
+                return;
+              }
+              if (msg.type === "listTodoNotesInConversation") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.listTodoNotesInConversation", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                  },
+                });
+                return;
+              }
+              if (msg.type === "listStarredMessagesInConversation") {
+                if (!drawersConversationId) {
+                  return;
+                }
+                await vscode.commands.executeCommand("colcoor.listStarredMessagesInConversation", {
+                  conv: {
+                    id: drawersConversationId,
+                    title: drawersConversationTitle ?? null,
+                  },
+                });
+                return;
+              }
               if (msg.type === "listConversationMembers") {
                 if (!drawersConversationId) {
                   return;
@@ -1012,7 +1059,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               );
             });
           }
-          drawersPanel.title = `Colcoor — Drawers · ${convTitle?.trim() ? convTitle : "(untitled)"}`;
+          drawersPanel.title = formatColcoorDrawersChromeTitle(convTitle ?? null);
           drawersPanel.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] };
           drawersPanel.webview.html = getConversationDrawersPanelHtml(
             drawersPanel.webview.cspSource,

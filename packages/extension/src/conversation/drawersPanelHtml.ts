@@ -92,6 +92,9 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnAbout" title="About Colcoor">About</button>
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
+    <button type="button" id="btnSendMessage" title="Send a main-thread message in this conversation (Colcoor: Send message…)">Send message…</button>
+    <button type="button" id="btnListTodoNotesPicker" title="Pick a TODO note to jump to (Colcoor: List TODO notes in conversation)">List TODO notes…</button>
+    <button type="button" id="btnListStarredPicker" title="Pick a starred message to jump to (Colcoor: List starred messages in conversation)">List starred…</button>
     <button type="button" id="btnListMembers" title="Show members of this conversation in the Colcoor output channel">Show members</button>
     <button type="button" id="btnAddMember" title="Invite an existing Colcoor user to this conversation (Colcoor: Add member)">Add member…</button>
     <button type="button" id="btnRenameConversation" title="Rename this conversation (Colcoor: Rename conversation)">Rename…</button>
@@ -143,6 +146,15 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnOpenSideChat").addEventListener("click", function () {
       vscode.postMessage({ type: "openSideChat" });
+    });
+    document.getElementById("btnSendMessage").addEventListener("click", function () {
+      vscode.postMessage({ type: "sendMessage" });
+    });
+    document.getElementById("btnListTodoNotesPicker").addEventListener("click", function () {
+      vscode.postMessage({ type: "listTodoNotesInConversation" });
+    });
+    document.getElementById("btnListStarredPicker").addEventListener("click", function () {
+      vscode.postMessage({ type: "listStarredMessagesInConversation" });
     });
     document.getElementById("btnListMembers").addEventListener("click", function () {
       vscode.postMessage({ type: "listConversationMembers" });
