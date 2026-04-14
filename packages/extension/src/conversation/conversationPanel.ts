@@ -654,8 +654,9 @@ export function createConversationPanelController(
         if (!conversationId) {
           return;
         }
-        await vscode.commands.executeCommand("colcoor.listStarredMessagesInConversation", {
+        await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
           conv: { id: conversationId, title: conversationTitle ?? null },
+          preferredTab: "starred",
         });
         return;
       }
@@ -663,8 +664,9 @@ export function createConversationPanelController(
         if (!conversationId) {
           return;
         }
-        await vscode.commands.executeCommand("colcoor.listTodoNotesInConversation", {
+        await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
           conv: { id: conversationId, title: conversationTitle ?? null },
+          preferredTab: "todo",
         });
         return;
       }

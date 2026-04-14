@@ -1,0 +1,22 @@
+import { describe, expect, it } from "vitest";
+
+import { getConversationDrawersPanelHtml } from "./drawersPanelHtml";
+
+describe("getConversationDrawersPanelHtml", () => {
+  it("renders tab buttons and jump wiring", () => {
+    const html = getConversationDrawersPanelHtml(
+      "vscode-resource://test",
+      "nonce123",
+      {
+        starred: [{ eventId: "e1", label: "User: a", createdAt: "t" }],
+        todos: [{ noteId: "n1", eventId: "e2", label: "TODO: b", createdAt: "t" }],
+      },
+      "todo",
+    );
+    expect(html).toContain('id="tabStarred"');
+    expect(html).toContain('id="tabTodo"');
+    expect(html).toContain('data-event-id="e1"');
+    expect(html).toContain('data-event-id="e2"');
+    expect(html).toContain('vscode.postMessage({ type: "openEvent", eventId: eid });');
+  });
+});

@@ -10,6 +10,8 @@ import {
 } from "./agent/cursorAgentApiKey";
 import { scheduleCursorCliPresenceCheck, setupCursorCliInteractive } from "./agent/cursorCliSetup";
 import { showAboutPanel } from "./conversation/aboutPanel";
+import { getConversationDrawersPanelHtml } from "./conversation/drawersPanelHtml";
+import { buildConversationDrawersModel } from "./conversation/drawersModel";
 import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
 import { openSideChatPanel } from "./sidechat/sideChatPanel";
@@ -73,6 +75,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     showCollapseAll: false,
   });
   context.subscriptions.push(treeView);
+  let drawersPanel: vscode.WebviewPanel | undefined;
+  let drawersConversationId: string | undefined;
+  let drawersConversationTitle: string | null = null;
   const autoRefreshTimer = setInterval(async () => {
     const hasBackendToken = Boolean(await session.getBackendAccessToken());
     if (
@@ -652,6 +657,73 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             return;
           }
           await conversationPanel.revealAtEvent(convId, convTitle ?? null, picked.eventId);
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.openConversationDrawers",
+      async (arg?: ConversationTreeItem | { conv?: { id?: string; title?: string | null }; preferredTab?: "starred" | "todo" }) => {
+        if (!(await session.getBackendAccessToken())) {
+          await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
+          return;
+        }
+        let convId = arg?.conv?.id;
+        let convTitle: string | null | undefined = arg?.conv?.title ?? null;
+        const preferredTab =
+          arg && typeof arg === "object" && "preferredTab" in arg && arg.preferredTab === "todo"
+            ? "todo"
+            : "starred";
+        if (!convId) {
+          const row = await pickConversationInteractively();
+          if (!row) {
+            return;
+          }
+          convId = row.id;
+          convTitle = row.title;
+        }
+        try {
+          const [{ events }, notes] = await Promise.all([api.getTree(convId), api.listNotes(convId)]);
+          const model = buildConversationDrawersModel(events, notes);
+          drawersConversationId = convId;
+          drawersConversationTitle = convTitle ?? null;
+          if (!drawersPanel) {
+            drawersPanel = vscode.window.createWebviewPanel(
+              "colcoor.drawers",
+              "Colcoor — Drawers",
+              vscode.ViewColumn.Beside,
+              { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [context.extensionUri] },
+            );
+            drawersPanel.onDidDispose(() => {
+              drawersPanel = undefined;
+              drawersConversationId = undefined;
+              drawersConversationTitle = null;
+            });
+            drawersPanel.webview.onDidReceiveMessage(async (m: unknown) => {
+              const msg = m as { type?: string; eventId?: string };
+              if (!msg || msg.type !== "openEvent" || typeof msg.eventId !== "string") {
+                return;
+              }
+              if (!drawersConversationId) {
+                return;
+              }
+              await conversationPanel.revealAtEvent(
+                drawersConversationId,
+                drawersConversationTitle ?? null,
+                msg.eventId,
+              );
+            });
+          }
+          drawersPanel.title = `Colcoor — Drawers · ${convTitle?.trim() ? convTitle : "(untitled)"}`;
+          drawersPanel.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] };
+          drawersPanel.webview.html = getConversationDrawersPanelHtml(
+            drawersPanel.webview.cspSource,
+            String(Date.now()),
+            model,
+            preferredTab,
+          );
+          drawersPanel.reveal(vscode.ViewColumn.Beside, false);
         } catch (e) {
           await showColcoorApiFailure(e);
         }
