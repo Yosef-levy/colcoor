@@ -97,6 +97,13 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
   });
 
+  it("includes Star/Unstar on the selected message in the detail bar ([ui-features.md] §7)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnToggleStar"');
+    expect(html).toContain('toggleStarBtn.textContent = last.starred === true ? "Unstar" : "Star"');
+    expect(html).toContain('vscode.postMessage({ type: "toggleStar" })');
+  });
+
   it("includes Reference in side chat detail action wiring", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnReferenceSideChat"');

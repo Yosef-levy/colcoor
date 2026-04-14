@@ -23,4 +23,25 @@ describe("markdownToSafeHtml", () => {
     expect(html).toContain("code-copy");
     expect(html).toContain("<pre");
   });
+
+  it("renders GFM task lists with disabled checkboxes", () => {
+    const html = markdownToSafeHtml("- [ ] todo\n- [x] done");
+    expect(html).toContain("<ul");
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("todo");
+    expect(html).toContain("done");
+  });
+
+  it("renders GFM tables", () => {
+    const html = markdownToSafeHtml("|a|b|\n|-|-|\n|1|2|");
+    expect(html).toContain("<table");
+    expect(html).toContain("<th");
+    expect(html).toContain("1");
+  });
+
+  it("renders strikethrough (GFM del)", () => {
+    const html = markdownToSafeHtml("~~gone~~");
+    expect(html).toContain("<del");
+    expect(html).toContain("gone");
+  });
 });

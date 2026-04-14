@@ -86,6 +86,7 @@ type FromWebview =
   | { type: "openDrawers" }
   | { type: "rename" }
   | { type: "togglePin" }
+  | { type: "toggleStar" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
   | { type: "editNote"; noteId: string }
   | { type: "deleteNote"; noteId: string };
@@ -813,6 +814,10 @@ export function createConversationPanelController(
       }
       if (msg.type === "togglePin") {
         await handleTogglePin();
+        return;
+      }
+      if (msg.type === "toggleStar") {
+        await toggleStarSelectedMessage();
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {

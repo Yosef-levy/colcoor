@@ -47,4 +47,14 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Sign out](command:colcoor.signOut)");
     expect(contents).toContain("[About](command:colcoor.openAbout)");
   });
+
+  it("links Toggle sidebar from the conversations welcome view ([ui-features.md] §4)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
+    };
+    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
+    const contents = welcome?.contents ?? "";
+    expect(contents).toContain("[Toggle sidebar](command:colcoor.toggleConversationsSidebar)");
+  });
 });

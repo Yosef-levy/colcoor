@@ -696,6 +696,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnReferenceSideChat" class="btn-secondary" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
           <button type="button" id="btnReferenceNoteSideChat" class="btn-secondary" title="Open side chat and choose a note from the selected message to reference">Reference note in side chat</button>
           <button type="button" id="btnCopy" class="btn-secondary">Copy message</button>
+          <button type="button" id="btnToggleStar" class="btn-secondary" title="Star or unstar the selected message">
+            Star
+          </button>
           <button type="button" id="btnCopyThread" class="btn-secondary" title="Copy root → selected path as plain text">Copy thread</button>
           <button type="button" id="btnResend" class="btn-secondary">Resend assistant</button>
           <button type="button" id="btnJumpTip" class="btn-secondary" title="Select the newest leaf on the default branch">Jump to latest</button>
@@ -972,6 +975,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function renderDetailBar() {
       const crumb = document.getElementById("breadcrumb");
       const copyBtn = document.getElementById("btnCopy");
+      const toggleStarBtn = document.getElementById("btnToggleStar");
       const copyThreadBtn = document.getElementById("btnCopyThread");
       const continueBtn = document.getElementById("btnContinueFromHere");
       const refSideChatBtn = document.getElementById("btnReferenceSideChat");
@@ -991,7 +995,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const settingsBtn = document.getElementById("btnSettings");
       const aboutBtn = document.getElementById("btnAbout");
       const resendBtn = document.getElementById("btnResend");
-      if (!crumb || !copyBtn || !resendBtn || !continueBtn || !refSideChatBtn || !refNoteSideChatBtn)
+      if (
+        !crumb ||
+        !copyBtn ||
+        !toggleStarBtn ||
+        !resendBtn ||
+        !continueBtn ||
+        !refSideChatBtn ||
+        !refNoteSideChatBtn
+      )
         return;
       if (showMembersBtn) showMembersBtn.disabled = state.busy;
       if (addMemberBtn) addMemberBtn.disabled = state.busy;
@@ -1013,11 +1025,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!path.length) {
         crumb.innerHTML = '<span class="empty">No selection</span>';
         copyBtn.disabled = true;
+        toggleStarBtn.disabled = true;
         continueBtn.disabled = true;
         refSideChatBtn.disabled = true;
         refNoteSideChatBtn.disabled = true;
         resendBtn.disabled = true;
         if (copyThreadBtn) copyThreadBtn.disabled = true;
+        toggleStarBtn.textContent = "Star";
+        toggleStarBtn.title = "Select a message in the tree to star or unstar.";
         const renameBtn = document.getElementById("btnRename");
         const pinBtn = document.getElementById("btnPin");
         if (renameBtn) renameBtn.disabled = state.busy;
@@ -1049,6 +1064,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       crumb.innerHTML = parts.join(' <span class="crumb-sep">→</span> ');
       const last = path[path.length - 1];
       copyBtn.disabled = state.busy;
+      toggleStarBtn.disabled = state.busy;
+      toggleStarBtn.textContent = last.starred === true ? "Unstar" : "Star";
+      toggleStarBtn.title =
+        last.starred === true
+          ? "Remove your star from this message."
+          : "Star this message (visible in Starred drawer).";
       continueBtn.disabled = state.busy;
       continueBtn.title = state.busy
         ? "Wait for the current operation to finish."
@@ -1555,6 +1576,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const ev = (state.events || []).find((e) => e.id === state.selectedEventId);
       if (!ev) return;
       vscode.postMessage({ type: "copy", text: ev.content_text || "" });
+    });
+
+    document.getElementById("btnToggleStar").addEventListener("click", () => {
+      vscode.postMessage({ type: "toggleStar" });
     });
 
     document.getElementById("btnCopyThread").addEventListener("click", () => {
