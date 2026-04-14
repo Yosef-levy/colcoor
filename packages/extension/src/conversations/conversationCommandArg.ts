@@ -6,7 +6,10 @@ import type { ConversationTreeItem } from "./conversationsTreeProvider";
  */
 export type ConversationCommandArg =
   | ConversationTreeItem
-  | { conv?: { id?: string; title?: string | null }; preferredTab?: "starred" | "todo" };
+  | {
+      conv?: { id?: string; title?: string | null; pinned?: boolean };
+      preferredTab?: "starred" | "todo";
+    };
 
 /** Shown when a command requires a conversation id but none was passed (palette / wrong context). */
 export const NO_CONVERSATION_FOR_COMMAND_MESSAGE =
@@ -39,4 +42,15 @@ export function conversationDisplayTitleFromCommandArg(
   const t = arg.conv.title;
   const s = typeof t === "string" ? t.trim() : "";
   return s.length > 0 ? s : null;
+}
+
+/** Sidebar items include `pinned`; minimal `{ conv }` payloads may omit it. */
+export function conversationPinnedFromCommandArg(
+  arg: ConversationCommandArg | undefined,
+): boolean | undefined {
+  if (!arg || typeof arg !== "object" || !("conv" in arg) || !arg.conv || typeof arg.conv !== "object") {
+    return undefined;
+  }
+  const p = arg.conv.pinned;
+  return typeof p === "boolean" ? p : undefined;
 }

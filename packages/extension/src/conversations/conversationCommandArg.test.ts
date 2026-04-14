@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type ConversationCommandArg,
   conversationDisplayTitleFromCommandArg,
   conversationIdFromCommandArg,
+  conversationPinnedFromCommandArg,
   conversationTitleFromCommandArg,
   NO_CONVERSATION_FOR_COMMAND_MESSAGE,
 } from "./conversationCommandArg";
@@ -70,5 +72,18 @@ describe("NO_CONVERSATION_FOR_COMMAND_MESSAGE", () => {
   it("mentions sidebar and conversation panel", () => {
     expect(NO_CONVERSATION_FOR_COMMAND_MESSAGE).toContain("sidebar");
     expect(NO_CONVERSATION_FOR_COMMAND_MESSAGE).toContain("conversation panel");
+  });
+});
+
+describe("conversationPinnedFromCommandArg", () => {
+  it("returns undefined when absent or not a boolean", () => {
+    expect(conversationPinnedFromCommandArg(undefined)).toBeUndefined();
+    expect(conversationPinnedFromCommandArg({ conv: {} })).toBeUndefined();
+    expect(conversationPinnedFromCommandArg({ conv: { pinned: "nope" } } as ConversationCommandArg)).toBeUndefined();
+  });
+
+  it("reads boolean pinned from a plain conv bag", () => {
+    expect(conversationPinnedFromCommandArg({ conv: { id: "x", pinned: true } })).toBe(true);
+    expect(conversationPinnedFromCommandArg({ conv: { id: "x", pinned: false } })).toBe(false);
   });
 });

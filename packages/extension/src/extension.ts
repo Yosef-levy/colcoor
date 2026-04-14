@@ -29,6 +29,7 @@ import {
   type ConversationCommandArg,
   conversationDisplayTitleFromCommandArg,
   conversationIdFromCommandArg,
+  conversationPinnedFromCommandArg,
   conversationTitleFromCommandArg,
   NO_CONVERSATION_FOR_COMMAND_MESSAGE,
 } from "./conversations/conversationCommandArg";
@@ -434,9 +435,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.renameConversation",
-      async (item?: ConversationTreeItem) => {
-        let convId = item?.conv?.id;
-        let convTitle: string | null | undefined = item?.conv?.title ?? null;
+      async (item?: ConversationCommandArg) => {
+        let convId = conversationIdFromCommandArg(item);
+        let convTitle: string | null | undefined = conversationDisplayTitleFromCommandArg(item);
         if (!convId) {
           const row = await pickConversationInteractively();
           if (!row) {
@@ -469,10 +470,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand(
       "colcoor.togglePinnedConversation",
-      async (item?: ConversationTreeItem) => {
-        let convId = item?.conv?.id;
-        let convTitle: string | null | undefined = item?.conv?.title ?? null;
-        let currentPinned = item?.conv?.pinned;
+      async (item?: ConversationCommandArg) => {
+        let convId = conversationIdFromCommandArg(item);
+        let convTitle: string | null | undefined = conversationDisplayTitleFromCommandArg(item);
+        let currentPinned = conversationPinnedFromCommandArg(item);
         if (!convId) {
           const row = await pickConversationInteractively();
           if (!row) {
@@ -480,6 +481,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           }
           convId = row.id;
           convTitle = row.title;
+          try {
+            const rows = await api.listConversations();
+            currentPinned = rows.find((r) => r.id === convId)?.pinned;
+          } catch {
+            currentPinned = false;
+          }
+        } else if (currentPinned === undefined) {
           try {
             const rows = await api.listConversations();
             currentPinned = rows.find((r) => r.id === convId)?.pinned;
