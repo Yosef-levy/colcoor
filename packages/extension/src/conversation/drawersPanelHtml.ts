@@ -96,10 +96,13 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnAddMember" title="Invite an existing Colcoor user to this conversation (Colcoor: Add member)">Add member…</button>
     <button type="button" id="btnRenameConversation" title="Rename this conversation (Colcoor: Rename conversation)">Rename…</button>
     <button type="button" id="btnTogglePinnedConversation" title="Pin or unpin this conversation in the sidebar list (Colcoor: Pin / unpin conversation)">Pin / unpin</button>
+    <button type="button" id="btnChangeMemberRole" title="Change a member’s role in this conversation (Colcoor: Change member role)">Change member role…</button>
+    <button type="button" id="btnRemoveMember" title="Remove a member from this conversation (Colcoor: Remove member)">Remove member…</button>
     <button type="button" id="btnRefreshConversations" title="Reload the Colcoor conversations list in the sidebar">Refresh conversations</button>
     <button type="button" id="btnRefreshConversationTree" title="Reload the open conversation tree and thread from the server (Colcoor: Refresh conversation tree)">Refresh tree</button>
     <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
     <button type="button" id="btnNewConversation" title="Create a new conversation">New conversation</button>
+    <button type="button" id="btnDeleteConversation" title="Permanently delete this conversation from Colcoor (Colcoor: Delete conversation)">Delete conversation…</button>
     <button type="button" id="btnSetupCursorCli" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
     <button type="button" id="btnSetCursorAgentApiKey" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
   </div>
@@ -153,6 +156,12 @@ export function getConversationDrawersPanelHtml(
     document.getElementById("btnTogglePinnedConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "togglePinnedConversation" });
     });
+    document.getElementById("btnChangeMemberRole").addEventListener("click", function () {
+      vscode.postMessage({ type: "changeMemberRole" });
+    });
+    document.getElementById("btnRemoveMember").addEventListener("click", function () {
+      vscode.postMessage({ type: "removeMemberFromConversation" });
+    });
     document.getElementById("btnRefreshConversations").addEventListener("click", function () {
       vscode.postMessage({ type: "refreshConversations" });
     });
@@ -164,6 +173,9 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnNewConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "newConversation" });
+    });
+    document.getElementById("btnDeleteConversation").addEventListener("click", function () {
+      vscode.postMessage({ type: "deleteConversationFromDrawers" });
     });
     document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
       vscode.postMessage({ type: "setupCursorCli" });

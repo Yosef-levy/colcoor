@@ -42,6 +42,10 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "renameConversation" });');
     expect(html).toContain('id="btnTogglePinnedConversation"');
     expect(html).toContain('vscode.postMessage({ type: "togglePinnedConversation" });');
+    expect(html).toContain('id="btnChangeMemberRole"');
+    expect(html).toContain('vscode.postMessage({ type: "changeMemberRole" });');
+    expect(html).toContain('id="btnRemoveMember"');
+    expect(html).toContain('vscode.postMessage({ type: "removeMemberFromConversation" });');
     expect(html).toContain('id="btnRefreshConversations"');
     expect(html).toContain('vscode.postMessage({ type: "refreshConversations" });');
     expect(html).toContain('id="btnRefreshConversationTree"');
@@ -50,6 +54,8 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "toggleConversationsSidebar" });');
     expect(html).toContain('id="btnNewConversation"');
     expect(html).toContain('vscode.postMessage({ type: "newConversation" });');
+    expect(html).toContain('id="btnDeleteConversation"');
+    expect(html).toContain('vscode.postMessage({ type: "deleteConversationFromDrawers" });');
     expect(html).toContain('id="btnSetupCursorCli"');
     expect(html).toContain('id="btnSetCursorAgentApiKey"');
     expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
