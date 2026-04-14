@@ -52,6 +52,11 @@ export function isConflictColcoorApiError(e: unknown): e is ColcoorApiHttpError 
   return e instanceof ColcoorApiHttpError && e.status === 409;
 }
 
+/** HTTP 422 — request body or parameters failed validation (FastAPI / [api-contracts.md]). */
+export function isUnprocessableEntityColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 422;
+}
+
 /** HTTP 408 — request timeout (client or upstream). */
 export function isRequestTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 408;

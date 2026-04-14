@@ -12,6 +12,7 @@ import {
   isServiceUnavailableColcoorApiError,
   isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
+  isUnprocessableEntityColcoorApiError,
 } from "../api/colcoorApiHttpError";
 import {
   COLOOR_API_FAILURE_OPEN_ABOUT_ACTION,
@@ -77,6 +78,14 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isConflictColcoorApiError(e)) {
     await offerListOrTreeRefresh(
       `Colcoor: conflict — ${e.message} Another change may have happened first (for example duplicate membership), or your view is stale. Try refresh or retry.`,
+    );
+    return;
+  }
+  if (isUnprocessableEntityColcoorApiError(e)) {
+    await vscode.window.showErrorMessage(
+      "Colcoor: validation error",
+      { modal: false, detail: e.message },
+      "OK",
     );
     return;
   }

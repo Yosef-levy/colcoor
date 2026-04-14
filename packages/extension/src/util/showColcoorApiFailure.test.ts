@@ -129,6 +129,23 @@ describe("showColcoorApiFailure", () => {
     expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
   });
 
+  it("shows validation error toast with expandable detail for HTTP 422", async () => {
+    showErrorMessage.mockResolvedValue("OK");
+    const e = new ColcoorApiHttpError("append", 422, JSON.stringify({ detail: "invalid payload" }));
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledTimes(1);
+    const [title, opts, ok] = showErrorMessage.mock.calls[0] as [
+      string,
+      { modal?: boolean; detail?: string },
+      string,
+    ];
+    expect(title).toBe("Colcoor: validation error");
+    expect(opts.modal).toBe(false);
+    expect(opts.detail).toBe(e.message);
+    expect(ok).toBe("OK");
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
   it("runs refresh commands when user picks a 404 action", async () => {
     showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 404, ""));

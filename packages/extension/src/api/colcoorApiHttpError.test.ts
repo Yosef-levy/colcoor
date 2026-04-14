@@ -13,6 +13,7 @@ import {
   isServiceUnavailableColcoorApiError,
   isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
+  isUnprocessableEntityColcoorApiError,
 } from "./colcoorApiHttpError";
 
 describe("ColcoorApiHttpError", () => {
@@ -73,6 +74,14 @@ describe("isConflictColcoorApiError", () => {
     expect(isConflictColcoorApiError(new ColcoorApiHttpError("x", 409, ""))).toBe(true);
     expect(isConflictColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(false);
     expect(isConflictColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isUnprocessableEntityColcoorApiError", () => {
+  it("is true only for HTTP 422 ColcoorApiHttpError", () => {
+    expect(isUnprocessableEntityColcoorApiError(new ColcoorApiHttpError("x", 422, ""))).toBe(true);
+    expect(isUnprocessableEntityColcoorApiError(new ColcoorApiHttpError("x", 409, ""))).toBe(false);
+    expect(isUnprocessableEntityColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 
