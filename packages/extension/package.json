@@ -47,6 +47,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "colcoor.toggleConversationsSidebar",
+        "title": "Colcoor: Toggle conversations sidebar",
+        "icon": "$(layout-sidebar-left-off)"
+      },
+      {
         "command": "colcoor.openConversation",
         "title": "Colcoor: Open conversation"
       },
@@ -157,6 +162,11 @@
           "command": "colcoor.refreshConversations",
           "when": "view == colcoor.conversations",
           "group": "navigation@2"
+        },
+        {
+          "command": "colcoor.toggleConversationsSidebar",
+          "when": "view == colcoor.conversations",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
