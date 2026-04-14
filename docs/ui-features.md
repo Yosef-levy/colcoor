@@ -102,7 +102,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - Full **message body**.
 - **Continue from here** — set active to selection (detail bar button; same action from the Command Palette **Colcoor: Continue from here** when the conversation panel is open).
 - **Private branch:** **Commit to shared** and **Delete draft** when supported and role allows.
-- **Resend** — new assistant sibling under an existing **user** message.
+- **Resend** — new assistant sibling under an existing **user** message (detail bar button; Command Palette **Colcoor: Resend assistant** when the conversation panel is open).
 - **Add NOTE** and **Add message title** (modal or inline).
 - **NOTES (attached)** with edit/delete and **Reference in side chat** on notes.
 - **Context / rebuild** messaging when `needs_context_rebuild` is true ([domain-model.md](domain-model.md) §4) — user-facing wording only.

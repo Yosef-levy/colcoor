@@ -21,6 +21,7 @@ import {
   clampComposerTextareaHeightPx,
 } from "./composerLayoutPersistence";
 import { evaluateContinueFromHere } from "./continueFromHereGate";
+import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { findBranchTip } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
@@ -134,6 +135,8 @@ export function createConversationPanelController(
   cancelInFlightGeneration: () => void;
   /** Persist active node to the selected tree message (same as detail bar “Continue from here”). */
   continueFromHere: () => Promise<void>;
+  /** Regenerate assistant under the selected user message (same as detail bar Resend). */
+  resendAssistant: () => Promise<void>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -1081,6 +1084,34 @@ export function createConversationPanelController(
         syncActiveToBackend(selectedEventId, { needsContextRebuild: false });
         void vscode.window.setStatusBarMessage("Colcoor: continuing from selected message.", 2200);
       }
+    },
+    async resendAssistant(): Promise<void> {
+      const gate = evaluateResendAssistantGate(conversationId, selectedEventId, lastTreeEvents);
+      if (gate === "no_context") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open a conversation and select a user message in the tree.",
+        );
+        return;
+      }
+      if (gate === "not_in_tree") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+        );
+        return;
+      }
+      if (gate === "not_user_message") {
+        void vscode.window.showWarningMessage(
+          'Colcoor: resend only applies to a user message — select a "User" row in the tree.',
+        );
+        return;
+      }
+      if (gate === "empty_user_body") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: that user message is empty — pick a user message with text (not the empty root placeholder).",
+        );
+        return;
+      }
+      await handleResend();
     },
     dispose: () => {
       subscription.dispose();
