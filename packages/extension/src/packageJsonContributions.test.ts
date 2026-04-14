@@ -3,7 +3,14 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-describe("package.json conversations view welcome", () => {
+describe("package.json Colcoor contributions", () => {
+  it("registers sendMessage (palette runs without a tree item; handler must tolerate undefined)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };
+    const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
+    expect(cmds).toContain("colcoor.sendMessage");
+  });
+
   it("includes Sign out and About command links for discoverability", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {

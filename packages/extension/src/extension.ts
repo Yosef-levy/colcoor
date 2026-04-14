@@ -858,9 +858,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "colcoor.sendMessage",
-      async (item?: ConversationTreeItem) => {
-        let convId = item?.conv.id;
-        let convTitle: string | null | undefined = item?.conv.title ?? null;
+      async (item?: ConversationCommandArg) => {
+        let convId = conversationIdFromCommandArg(item);
+        let convTitle: string | null | undefined = conversationDisplayTitleFromCommandArg(item);
         if (!convId) {
           const row = await pickConversationInteractively();
           if (!row) {
