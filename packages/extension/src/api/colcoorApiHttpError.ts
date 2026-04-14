@@ -57,6 +57,11 @@ export function isConflictColcoorApiError(e: unknown): e is ColcoorApiHttpError 
   return e instanceof ColcoorApiHttpError && e.status === 409;
 }
 
+/** HTTP 412 — precondition failed (e.g. stale If-Match / optimistic concurrency). */
+export function isPreconditionFailedColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 412;
+}
+
 /** HTTP 422 — request body or parameters failed validation (FastAPI / [api-contracts.md]). */
 export function isUnprocessableEntityColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 422;

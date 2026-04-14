@@ -11,6 +11,7 @@ import {
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
   isPlanLimitColcoorApiError,
+  isPreconditionFailedColcoorApiError,
   isRequestTimeoutColcoorApiError,
   isServiceUnavailableColcoorApiError,
   isTooManyRequestsColcoorApiError,
@@ -84,6 +85,14 @@ describe("isConflictColcoorApiError", () => {
     expect(isConflictColcoorApiError(new ColcoorApiHttpError("x", 409, ""))).toBe(true);
     expect(isConflictColcoorApiError(new ColcoorApiHttpError("x", 404, ""))).toBe(false);
     expect(isConflictColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isPreconditionFailedColcoorApiError", () => {
+  it("is true only for HTTP 412 ColcoorApiHttpError", () => {
+    expect(isPreconditionFailedColcoorApiError(new ColcoorApiHttpError("x", 412, ""))).toBe(true);
+    expect(isPreconditionFailedColcoorApiError(new ColcoorApiHttpError("x", 409, ""))).toBe(false);
+    expect(isPreconditionFailedColcoorApiError(new Error("x"))).toBe(false);
   });
 });
 

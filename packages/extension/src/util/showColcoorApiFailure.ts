@@ -10,6 +10,7 @@ import {
   isNotImplementedColcoorApiError,
   isPayloadTooLargeColcoorApiError,
   isPlanLimitColcoorApiError,
+  isPreconditionFailedColcoorApiError,
   isRequestTimeoutColcoorApiError,
   isServiceUnavailableColcoorApiError,
   isTooManyRequestsColcoorApiError,
@@ -86,6 +87,12 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isConflictColcoorApiError(e)) {
     await offerListOrTreeRefresh(
       `Colcoor: conflict — ${e.message} Another change may have happened first (for example duplicate membership), or your view is stale. Try refresh or retry.`,
+    );
+    return;
+  }
+  if (isPreconditionFailedColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: precondition failed — ${e.message} The resource may have changed on the server; refresh or retry.`,
     );
     return;
   }

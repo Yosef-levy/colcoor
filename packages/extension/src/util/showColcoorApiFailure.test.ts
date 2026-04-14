@@ -143,6 +143,26 @@ describe("showColcoorApiFailure", () => {
     expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
   });
 
+  it("shows precondition failed messaging and refresh actions for HTTP 412", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("patch event", 412, '{"detail":"stale revision"}');
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("precondition failed"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain(e.message);
+    expect(text).toContain("changed");
+  });
+
+  it("runs refresh conversations when user picks that action on HTTP 412", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 412, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversations");
+  });
+
   it("shows validation error toast with expandable detail for HTTP 422", async () => {
     showErrorMessage.mockResolvedValue("OK");
     const e = new ColcoorApiHttpError("append", 422, JSON.stringify({ detail: "invalid payload" }));
