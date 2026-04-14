@@ -205,6 +205,7 @@ export function getSideChatWebviewHtml(
       <button id="send" type="button" disabled title="Type a non-empty message. Shift+Enter for newline, Enter to send.">Send</button>
       <button id="refresh" type="button" class="secondary">Refresh</button>
       <button id="btnOpenConversation" type="button" class="secondary" title="Open the main conversation panel (tree, thread, composer) for this conversation">Open conversation</button>
+      <button id="btnRefreshConversationTree" type="button" class="secondary" title="Reload tree and thread in the open conversation panel, if any (Colcoor: Refresh conversation tree)">Refresh tree</button>
       <button id="btnOpenDrawers" type="button" class="secondary" title="Open the Starred/TODO drawers panel for this conversation">Drawers</button>
       <button id="btnListTodoNotes" type="button" class="secondary" title="Pick a TODO note and open its host message (Colcoor: List TODO notes in conversation…)">TODO notes…</button>
       <button id="btnListStarredMessages" type="button" class="secondary" title="Pick a starred message to open in the conversation panel (Colcoor: List starred messages in conversation…)">Starred…</button>
@@ -673,6 +674,9 @@ export function getSideChatWebviewHtml(
     });
     document.getElementById("btnOpenConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "openConversation" });
+    });
+    document.getElementById("btnRefreshConversationTree").addEventListener("click", function () {
+      vscode.postMessage({ type: "refreshConversationTree" });
     });
     document.getElementById("btnOpenDrawers").addEventListener("click", function () {
       vscode.postMessage({ type: "openDrawers" });

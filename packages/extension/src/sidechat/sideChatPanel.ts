@@ -69,6 +69,7 @@ type FromWebview =
     }
   | { type: "refresh" }
   | { type: "openConversation" }
+  | { type: "refreshConversationTree" }
   | { type: "openDrawers" }
   | { type: "listTodoNotesInConversation" }
   | { type: "listStarredMessagesInConversation" }
@@ -444,6 +445,10 @@ export async function openSideChatPanel(
     }
     if (msg.type === "openConversation") {
       await vscode.commands.executeCommand("colcoor.openConversation", conversationId, title ?? null);
+      return;
+    }
+    if (msg.type === "refreshConversationTree") {
+      await vscode.commands.executeCommand("colcoor.refreshConversationTree");
       return;
     }
     if (msg.type === "openDrawers") {

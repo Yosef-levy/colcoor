@@ -87,10 +87,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("sub.textContent = countPart + presencePart;");
   });
 
-  it("includes Open conversation, Drawers, TODO/starred lists, Profile, Settings, Legal URLs, side-chat sounds, and About next to Refresh", () => {
+  it("includes Open conversation, refresh tree, Drawers, TODO/starred lists, Profile, Settings, Legal URLs, side-chat sounds, and About next to Refresh", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenConversation"');
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
+    expect(html).toContain('id="btnRefreshConversationTree"');
+    expect(html).toContain('vscode.postMessage({ type: "refreshConversationTree" });');
     expect(html).toContain('id="btnOpenDrawers"');
     expect(html).toContain('vscode.postMessage({ type: "openDrawers" });');
     expect(html).toContain('id="btnListTodoNotes"');
