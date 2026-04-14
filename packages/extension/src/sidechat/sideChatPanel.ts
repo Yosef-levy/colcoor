@@ -4,6 +4,7 @@ import type { ColcoorApiClient, SideChatMessageOut } from "../api/client";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { maxSideChatSeq } from "./sideChatReadCursor";
+import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
 import { buildSideChatSendPayload } from "./sideChatSendPayload";
 import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
@@ -80,6 +81,8 @@ export async function openSideChatPanel(
   /** Last `last_read_seq` successfully PATCHed (avoids spamming the API). */
   let lastPatchedReadSeq = -1;
   let readPatchChain = Promise.resolve();
+  /** When updates arrive while hidden, patch read once panel is visible again. */
+  let hasPendingReadPatch = false;
   /** Debounce refreshing the conversation list after read cursor updates (SSE can be chatty). */
   let listRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** `undefined` = not loaded yet, `null` = load failed, string = user id */
@@ -105,12 +108,17 @@ export async function openSideChatPanel(
           return;
         }
         const m = maxSideChatSeq(cached);
-        if (m <= lastPatchedReadSeq) {
+        const nextReadSeq = nextSideChatReadSeqToPatch(m, lastPatchedReadSeq, panel.visible);
+        if (nextReadSeq == null) {
+          if (m > lastPatchedReadSeq && !panel.visible) {
+            hasPendingReadPatch = true;
+          }
           return;
         }
         try {
-          await api.patchSideChatRead(conversationId, m);
-          lastPatchedReadSeq = m;
+          await api.patchSideChatRead(conversationId, nextReadSeq);
+          lastPatchedReadSeq = nextReadSeq;
+          hasPendingReadPatch = false;
           if (listRefreshTimer !== undefined) {
             clearTimeout(listRefreshTimer);
           }
@@ -293,5 +301,10 @@ export async function openSideChatPanel(
     }
     ac.abort();
     void vscode.commands.executeCommand("colcoor.refreshConversations");
+  });
+  panel.onDidChangeViewState(() => {
+    if (!disposed && panel.visible && hasPendingReadPatch) {
+      scheduleMarkRead();
+    }
   });
 }
