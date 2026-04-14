@@ -43,4 +43,14 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('body.setAttribute("dir", "auto")');
     expect(html).toContain('ta.setAttribute("dir", "auto")');
   });
+
+  it("disables Send until composer has non-whitespace text", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('<button id="send" type="button" disabled');
+    expect(html).toContain("function updateComposerSendEnabled()");
+    expect(html).toContain("if (!String(t).trim())");
+    expect(html).toContain('addEventListener("input", function ()');
+    expect(html).toContain("if (send && send.disabled) return;");
+    expect(html).toContain("updateComposerSendEnabled();");
+  });
 });

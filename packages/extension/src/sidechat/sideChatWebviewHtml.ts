@@ -138,7 +138,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     </div>
     <textarea id="input" dir="auto" placeholder="Message…"></textarea>
     <div class="row">
-      <button id="send" type="button">Send</button>
+      <button id="send" type="button" disabled title="Type a non-empty message. Shift+Enter for newline, Enter to send.">Send</button>
       <button id="refresh" type="button" class="secondary">Refresh</button>
     </div>
     <p id="err" class="err" style="display:none"></p>
@@ -185,6 +185,16 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       if (ev.isComposing) return false;
       if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;
       return true;
+    }
+    function updateComposerSendEnabled() {
+      var send = document.getElementById("send");
+      var ta = document.getElementById("input");
+      if (!send) return;
+      var has = ta && String(ta.value || "").trim().length > 0;
+      send.disabled = !has;
+      send.title = has
+        ? ""
+        : "Type a non-empty message. Shift+Enter for newline, Enter to send.";
     }
     function canMutateRow(m) {
       return !!(viewerUserId && m && m.kind === "user" && m.author_user_id === viewerUserId && !m.deleted_at);
@@ -402,6 +412,9 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     document.getElementById("send").addEventListener("click", function () {
       var ta = document.getElementById("input");
       var t = ta && ta.value ? ta.value : "";
+      if (!String(t).trim()) {
+        return;
+      }
       var refId = replyTarget && typeof replyTarget.id === "string" ? replyTarget.id : null;
       vscode.postMessage({
         type: "send",
@@ -417,6 +430,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       updateRefEventHint();
       updateRefNoteHint();
       if (ta) ta.value = "";
+      updateComposerSendEnabled();
     });
     document.getElementById("refresh").addEventListener("click", function () {
       vscode.postMessage({ type: "refresh" });
@@ -452,10 +466,15 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
         }
       });
     });
+    document.getElementById("input").addEventListener("input", function () {
+      updateComposerSendEnabled();
+    });
     document.getElementById("input").addEventListener("keydown", function (ev) {
       if (!shouldSendOnEnter(ev)) return;
+      var send = document.getElementById("send");
+      if (send && send.disabled) return;
       ev.preventDefault();
-      document.getElementById("send").click();
+      if (send) send.click();
     });
     document.getElementById("clearReply").addEventListener("click", function () {
       replyTarget = null;
@@ -469,6 +488,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       referencedNoteId = null;
       updateRefNoteHint();
     });
+    updateComposerSendEnabled();
     vscode.postMessage({ type: "ready" });
   </script>
 </body>
