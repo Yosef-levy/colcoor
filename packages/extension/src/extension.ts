@@ -299,7 +299,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         },
         {
           label: "Multiline first message…",
-          description: "Opens a temporary editor tab; confirm when done",
+          description: "Opens a plaintext editor tab, then a modal dialog to use or skip that text",
           mode: "multiline_editor",
         },
       ];

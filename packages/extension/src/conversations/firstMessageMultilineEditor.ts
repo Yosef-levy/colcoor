@@ -16,8 +16,14 @@ export async function collectMultilineTextInUntitledEditor(
 ): Promise<string> {
   const doc = await vscode.workspace.openTextDocument({ language: "plaintext" });
   await vscode.window.showTextDocument(doc, { preview: true });
+  /** Modal so confirm/skip is not only a corner toast (easy to miss behind the webview). */
   const choice = await vscode.window.showInformationMessage(
     labels.infoMessage,
+    {
+      modal: true,
+      detail:
+        "Type in the plaintext editor tab that just opened. Nothing is sent to Colcoor until you choose an action below.",
+    },
     labels.useButtonLabel,
     labels.dismissButtonLabel,
   );
@@ -34,8 +40,8 @@ export async function collectMultilineTextInUntitledEditor(
  */
 export async function collectFirstMessageFromUntitledEditor(): Promise<string> {
   return collectMultilineTextInUntitledEditor({
-    infoMessage: "Colcoor: type your optional first message in the editor tab, then confirm.",
-    useButtonLabel: "Use as first message",
+    infoMessage: "Colcoor — optional first message (multiline)",
+    useButtonLabel: "Use editor text as first message",
     dismissButtonLabel: "Skip first message",
   });
 }
