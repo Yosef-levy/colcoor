@@ -25,7 +25,6 @@ import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import { openSideChatPanel } from "./sidechat/sideChatPanel";
-import { normalizePersistedUserInputText } from "./conversation/normalizeUserInputText";
 import {
   isPrivateBranchFromPrivacyPick,
   sendMessagePrivacyQuickPickItems,
@@ -33,10 +32,7 @@ import {
 import { collectSendMessageBody } from "./conversation/sendMessageBodyCollection";
 import type { SendMessageBodyMode } from "./conversation/sendMessageBodyCollection";
 import { runColcoorUserTurn, type UserTurnResult } from "./conversation/runUserTurn";
-import {
-  ConversationTreeItem,
-  ConversationsTreeProvider,
-} from "./conversations/conversationsTreeProvider";
+import { ConversationsTreeProvider } from "./conversations/conversationsTreeProvider";
 import {
   CONVERSATION_AUTO_REFRESH_MS,
   shouldAutoRefreshConversations,

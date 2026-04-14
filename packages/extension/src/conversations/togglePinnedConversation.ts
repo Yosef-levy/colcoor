@@ -3,7 +3,7 @@
  * `undefined` behaves like unpinned for safety.
  */
 export function toggledPinnedState(currentPinned: boolean | undefined): boolean {
-  return !Boolean(currentPinned);
+  return !currentPinned;
 }
 
 export function pinnedVerb(nextPinned: boolean): "pinned" | "unpinned" {
