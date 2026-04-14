@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
   createStreamJsonStdoutFeed,
+  normalizeStdoutNewlinesForNdjson,
   parseCursorAgentNdjsonLine,
   slimNdjsonForTimeline,
   tryParseNdjsonObject,
 } from "./cursorAgentStreamJson";
+
+describe("normalizeStdoutNewlinesForNdjson", () => {
+  it("converts CRLF and lone CR to LF", () => {
+    expect(normalizeStdoutNewlinesForNdjson("a\r\nb")).toBe("a\nb");
+    expect(normalizeStdoutNewlinesForNdjson("a\rb")).toBe("a\nb");
+  });
+
+  it("does not leave stray CR characters", () => {
+    expect(normalizeStdoutNewlinesForNdjson('{"x":1}\r\n')).toBe('{"x":1}\n');
+    expect(normalizeStdoutNewlinesForNdjson("")).toBe("");
+  });
+});
 
 describe("tryParseNdjsonObject", () => {
   it("returns a record for a JSON object line", () => {
@@ -292,6 +305,24 @@ describe("createStreamJsonStdoutFeed", () => {
     feed.push(line.slice(10));
     feed.flushTail();
     expect(feed.getResolvedText()).toBe("abc");
+  });
+
+  it("parses CRLF-delimited NDJSON in one chunk", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}\r\n{"type":"result","subtype":"success","result":"done"}\r\n',
+    );
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("done");
+  });
+
+  it("parses CRLF when CR and LF arrive in separate chunks", () => {
+    const feed = createStreamJsonStdoutFeed();
+    const obj = '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}';
+    feed.push(`${obj}\r`);
+    feed.push("\n");
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("ok");
   });
 
   it("flushTail parses final line without trailing newline", () => {

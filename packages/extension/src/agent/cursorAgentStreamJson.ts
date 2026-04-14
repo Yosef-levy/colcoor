@@ -45,6 +45,14 @@ function extractAssistantTextFromMessage(message: unknown): string {
   return "";
 }
 
+/**
+ * Normalize CR/LF so one NDJSON record per `\\n` line. Windows CLI stdout often uses `\\r\\n`;
+ * a lone `\\r` is treated as a line break (classic Mac).
+ */
+export function normalizeStdoutNewlinesForNdjson(s: string): string {
+  return s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
 export function tryParseNdjsonObject(line: string): Record<string, unknown> | null {
   const trimmed = line.trim();
   if (!trimmed) {
@@ -160,7 +168,8 @@ export function createStreamJsonStdoutFeed(): {
   return {
     push(chunk: string, onResolvedSoFar?: (textSoFar: string) => void) {
       lineBuf += chunk;
-      const parts = lineBuf.split("\n");
+      const normalized = normalizeStdoutNewlinesForNdjson(lineBuf);
+      const parts = normalized.split("\n");
       lineBuf = parts.pop() ?? "";
       for (const line of parts) {
         processCompleteLine(line, onResolvedSoFar);
