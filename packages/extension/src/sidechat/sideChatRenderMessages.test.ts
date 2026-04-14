@@ -13,8 +13,8 @@ function row(
     kind: p.kind ?? "user",
     author_user_id: p.author_user_id ?? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     body: p.body ?? null,
-    referenced_event_id: null,
-    referenced_note_id: null,
+    referenced_event_id: p.referenced_event_id ?? null,
+    referenced_note_id: p.referenced_note_id ?? null,
     referenced_side_chat_message_id: p.referenced_side_chat_message_id ?? null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
@@ -56,5 +56,19 @@ describe("toSideChatRenderMessages", () => {
   it("extracts mentions for render metadata", () => {
     const out = toSideChatRenderMessages([row({ id: "m1", seq: 1, body: "cc @alice and @bob" })]);
     expect(out[0].mentions).toEqual(["alice", "bob"]);
+  });
+
+  it("includes reference chips for event/note/reply ids", () => {
+    const out = toSideChatRenderMessages([
+      row({
+        id: "m1",
+        seq: 1,
+        body: "ref",
+        referenced_event_id: "11111111-1111-4111-8111-111111111111",
+        referenced_note_id: "22222222-2222-4222-8222-222222222222",
+        referenced_side_chat_message_id: "33333333-3333-4333-8333-333333333333",
+      }),
+    ]);
+    expect(out[0].reference_chips).toEqual(["event:11111111", "note:22222222", "reply:33333333"]);
   });
 });

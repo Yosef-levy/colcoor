@@ -17,4 +17,10 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("window.AudioContext || window.webkitAudioContext");
     expect(html).toContain("d.type === \"playSound\"");
   });
+
+  it("includes reference chip rendering hooks", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("reference_chips");
+    expect(html).toContain("className = \"ref-chip\"");
+  });
 });

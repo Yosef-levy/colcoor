@@ -45,6 +45,7 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
     .msg:last-child { border-bottom: none; }
     .msg .meta { font-size: 0.88em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
     .msg .mentions { display: inline-flex; gap: 6px; margin-left: 8px; flex-wrap: wrap; }
+    .msg .refs { display: inline-flex; gap: 6px; margin-left: 8px; flex-wrap: wrap; }
     .msg .mention-chip {
       padding: 1px 6px;
       border-radius: 999px;
@@ -52,6 +53,15 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
       color: var(--vscode-descriptionForeground);
       background: var(--vscode-editor-background);
       font-size: 0.92em;
+    }
+    .msg .ref-chip {
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--vscode-panel-border);
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-editor-background);
+      font-size: 0.88em;
+      font-family: var(--vscode-editor-font-family);
     }
     .msg .body { white-space: pre-wrap; word-break: break-word; }
     .msg .ref {
@@ -226,6 +236,17 @@ export function getSideChatWebviewHtml(cspSource: string, nonce: string): string
             mentions.appendChild(chip);
           });
           meta.appendChild(mentions);
+        }
+        if (Array.isArray(m.reference_chips) && m.reference_chips.length) {
+          var refs = document.createElement("span");
+          refs.className = "refs";
+          m.reference_chips.forEach(function (r) {
+            var chip2 = document.createElement("span");
+            chip2.className = "ref-chip";
+            chip2.textContent = String(r);
+            refs.appendChild(chip2);
+          });
+          meta.appendChild(refs);
         }
         var body = document.createElement("div");
         body.className = "body";
