@@ -22,6 +22,7 @@ import {
   CONVERSATION_AUTO_REFRESH_MS,
   shouldAutoRefreshConversations,
 } from "./conversations/conversationAutoRefreshPolicy";
+import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
 import { filterTodoNotes } from "./notes/todoNotesFilter";
 import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starredTreeEvents";
@@ -411,6 +412,41 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           conversationPanel.closeIfShowingConversation(id);
           refreshTree();
           await vscode.window.showInformationMessage("Colcoor: conversation deleted.");
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.renameConversation",
+      async (item?: ConversationTreeItem) => {
+        let convId = item?.conv?.id;
+        let convTitle: string | null | undefined = item?.conv?.title ?? null;
+        if (!convId) {
+          const row = await pickConversationInteractively();
+          if (!row) {
+            return;
+          }
+          convId = row.id;
+          convTitle = row.title;
+        }
+        const next = await vscode.window.showInputBox({
+          title: "Colcoor — rename conversation",
+          prompt: "Leave blank for untitled",
+          value: convTitle ?? "",
+          ignoreFocusOut: true,
+        });
+        if (next === undefined) {
+          return;
+        }
+        try {
+          const out = await api.patchConversation(convId, {
+            title: normalizedConversationTitle(next),
+          });
+          refreshTree();
+          await vscode.window.showInformationMessage(
+            `Colcoor: renamed conversation to ${out.title?.trim() ? `"${out.title}"` : "(untitled)"}.`,
+          );
         } catch (e) {
           await showColcoorApiFailure(e);
         }
