@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import type { ColcoorApiClient, GraphEventNode, MeOut, NoteOut, SideChatMessageOut } from "../api/client";
 import { canMutateOwnSideChatUserMessage } from "./sideChatMessageActions";
+import { eventIdForReferencedNote } from "./sideChatNoteReference";
 import { mergeSideChatMessage } from "./mergeSideChatMessage";
 import { mentionTargetsForMe } from "./sideChatMentionTargets";
 import { shouldNotifyForIncomingSideChatMessage } from "./sideChatNotifyDedup";
@@ -441,8 +442,24 @@ export async function openSideChatPanel(
         }
         return;
       }
-      await vscode.env.clipboard.writeText(refId);
-      await vscode.window.showInformationMessage("Colcoor: note reference ID copied.");
+      try {
+        const notes = await api.listNotes(conversationId);
+        const eventId = eventIdForReferencedNote(notes, refId);
+        if (!eventId) {
+          throw new Error("Referenced note is unavailable.");
+        }
+        await api.setConversationActive(conversationId, {
+          active_event_id: eventId,
+          needs_context_rebuild: false,
+        });
+        await vscode.commands.executeCommand("colcoor.openConversation", conversationId, title);
+        await vscode.commands.executeCommand("colcoor.showNotesOnSelectedMessage");
+      } catch {
+        await vscode.env.clipboard.writeText(refId);
+        await vscode.window.showInformationMessage(
+          "Colcoor: note reference copied (could not open note directly).",
+        );
+      }
     }
   });
 
