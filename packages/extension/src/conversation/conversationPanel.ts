@@ -14,6 +14,7 @@ import {
   clampComposerTextareaHeightPx,
 } from "./composerLayoutPersistence";
 import { findBranchTip } from "./treeEvents";
+import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
@@ -476,7 +477,7 @@ export function createConversationPanelController(
     }
     try {
       const out = await api.patchConversation(conversationId, {
-        title: next.trim() ? next.trim() : null,
+        title: normalizedConversationTitle(next),
       });
       conversationTitle = out.title;
       if (panel) {

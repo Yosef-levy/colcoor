@@ -95,6 +95,15 @@ describe("parseCursorAgentNdjsonLine", () => {
     });
     expect(parseCursorAgentNdjsonLine(line)).toBeNull();
   });
+
+  it("returns null for success result when result is not a string", () => {
+    const line = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      result: { text: "structured" },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toBeNull();
+  });
 });
 
 describe("slimNdjsonForTimeline", () => {
