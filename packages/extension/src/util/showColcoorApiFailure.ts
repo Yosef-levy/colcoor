@@ -1,10 +1,13 @@
 import * as vscode from "vscode";
 
 import {
+  isBadGatewayColcoorApiError,
   isForbiddenColcoorApiError,
+  isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
   isPlanLimitColcoorApiError,
   isRequestTimeoutColcoorApiError,
+  isServiceUnavailableColcoorApiError,
   isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
 } from "../api/colcoorApiHttpError";
@@ -78,6 +81,24 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
   if (isTooManyRequestsColcoorApiError(e)) {
     await offerListOrTreeRefresh(
       `Colcoor: rate limited — ${e.message} Wait a few seconds, then retry or refresh.`,
+    );
+    return;
+  }
+  if (isBadGatewayColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: bad gateway — ${e.message} Check Settings → Colcoor → backend URL, or try again later.`,
+    );
+    return;
+  }
+  if (isServiceUnavailableColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: service unavailable — ${e.message} The server may be overloaded; wait and retry or refresh.`,
+    );
+    return;
+  }
+  if (isGatewayTimeoutColcoorApiError(e)) {
+    await offerListOrTreeRefresh(
+      `Colcoor: gateway timeout — ${e.message} Try again after a short wait, or refresh.`,
     );
     return;
   }

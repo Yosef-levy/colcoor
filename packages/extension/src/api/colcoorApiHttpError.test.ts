@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   ColcoorApiHttpError,
+  isBadGatewayColcoorApiError,
   isForbiddenColcoorApiError,
+  isGatewayTimeoutColcoorApiError,
   isNotFoundColcoorApiError,
   isPlanLimitColcoorApiError,
   isRequestTimeoutColcoorApiError,
+  isServiceUnavailableColcoorApiError,
   isTooManyRequestsColcoorApiError,
   isUnauthorizedColcoorApiError,
 } from "./colcoorApiHttpError";
@@ -69,5 +72,29 @@ describe("isTooManyRequestsColcoorApiError", () => {
     expect(isTooManyRequestsColcoorApiError(new ColcoorApiHttpError("x", 429, ""))).toBe(true);
     expect(isTooManyRequestsColcoorApiError(new ColcoorApiHttpError("x", 408, ""))).toBe(false);
     expect(isTooManyRequestsColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isBadGatewayColcoorApiError", () => {
+  it("is true only for HTTP 502 ColcoorApiHttpError", () => {
+    expect(isBadGatewayColcoorApiError(new ColcoorApiHttpError("x", 502, ""))).toBe(true);
+    expect(isBadGatewayColcoorApiError(new ColcoorApiHttpError("x", 503, ""))).toBe(false);
+    expect(isBadGatewayColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isServiceUnavailableColcoorApiError", () => {
+  it("is true only for HTTP 503 ColcoorApiHttpError", () => {
+    expect(isServiceUnavailableColcoorApiError(new ColcoorApiHttpError("x", 503, ""))).toBe(true);
+    expect(isServiceUnavailableColcoorApiError(new ColcoorApiHttpError("x", 502, ""))).toBe(false);
+    expect(isServiceUnavailableColcoorApiError(new Error("x"))).toBe(false);
+  });
+});
+
+describe("isGatewayTimeoutColcoorApiError", () => {
+  it("is true only for HTTP 504 ColcoorApiHttpError", () => {
+    expect(isGatewayTimeoutColcoorApiError(new ColcoorApiHttpError("x", 504, ""))).toBe(true);
+    expect(isGatewayTimeoutColcoorApiError(new ColcoorApiHttpError("x", 408, ""))).toBe(false);
+    expect(isGatewayTimeoutColcoorApiError(new Error("x"))).toBe(false);
   });
 });

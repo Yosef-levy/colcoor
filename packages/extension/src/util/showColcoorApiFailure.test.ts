@@ -154,4 +154,44 @@ describe("showColcoorApiFailure", () => {
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 429, ""));
     expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversationTree");
   });
+
+  it("shows bad gateway messaging and refresh actions for HTTP 502", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    const e = new ColcoorApiHttpError("get", 502, "{}");
+    await showColcoorApiFailure(e);
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("bad gateway"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+    const [text] = showErrorMessage.mock.calls[0] as [string];
+    expect(text).toContain(e.message);
+    expect(text).toContain("backend URL");
+  });
+
+  it("runs refresh when user picks an action on HTTP 502", async () => {
+    showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 502, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.refreshConversations");
+  });
+
+  it("shows service unavailable messaging and refresh actions for HTTP 503", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    await showColcoorApiFailure(new ColcoorApiHttpError("send", 503, "{}"));
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("service unavailable"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+  });
+
+  it("shows gateway timeout messaging and refresh actions for HTTP 504", async () => {
+    showErrorMessage.mockResolvedValue(undefined);
+    await showColcoorApiFailure(new ColcoorApiHttpError("x", 504, "{}"));
+    expect(showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("gateway timeout"),
+      COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    );
+  });
 });

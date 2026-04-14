@@ -47,3 +47,18 @@ export function isRequestTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttp
 export function isTooManyRequestsColcoorApiError(e: unknown): e is ColcoorApiHttpError {
   return e instanceof ColcoorApiHttpError && e.status === 429;
 }
+
+/** HTTP 502 — bad gateway (proxy/upstream mismatch). */
+export function isBadGatewayColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 502;
+}
+
+/** HTTP 503 — service unavailable (overload or maintenance). */
+export function isServiceUnavailableColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 503;
+}
+
+/** HTTP 504 — gateway timeout (upstream did not respond in time). */
+export function isGatewayTimeoutColcoorApiError(e: unknown): e is ColcoorApiHttpError {
+  return e instanceof ColcoorApiHttpError && e.status === 504;
+}
