@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { ColcoorApiClient, ConversationSummary } from "../api/client";
 import { conversationUnreadBadgeInfo } from "./conversationUnreadBadge";
 import { formatRelativeTime } from "../util/formatRelativeTime";
+import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 
 export class ConversationTreeItem extends vscode.TreeItem {
   constructor(public readonly conv: ConversationSummary) {
@@ -58,8 +59,7 @@ export class ConversationsTreeProvider implements vscode.TreeDataProvider<Conver
       });
       return sorted.map((r) => new ConversationTreeItem(r));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      void vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      void showColcoorApiFailure(e);
       return [];
     }
   }

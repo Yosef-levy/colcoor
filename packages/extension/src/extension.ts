@@ -22,6 +22,7 @@ import {
   CONVERSATION_AUTO_REFRESH_MS,
   shouldAutoRefreshConversations,
 } from "./conversations/conversationAutoRefreshPolicy";
+import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
 
 function formatMemberQuickPickLabel(m: ConversationMember): string {
   const name = m.display_name?.trim() ? m.display_name : "—";
@@ -109,8 +110,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       return { id: picked.cid, title: picked.ctitle };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      await showColcoorApiFailure(e);
       return undefined;
     }
   }
@@ -171,8 +171,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         refreshTree();
         await offerCursorAgentApiKeyAfterSignIn(context.secrets);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        await showColcoorApiFailure(e);
       }
     }),
     vscode.commands.registerCommand("colcoor.signOut", async () => {
@@ -198,8 +197,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           `Colcoor: created "${conv.title ?? "(untitled)"}".`,
         );
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        await showColcoorApiFailure(e);
       }
     }),
     vscode.commands.registerCommand("colcoor.refreshConversations", () => {
@@ -241,8 +239,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           }
           colcoorLog.show(true);
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+          await showColcoorApiFailure(e);
         }
       },
     ),
@@ -292,8 +289,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             `Colcoor: added member (${rolePick.role}). They will see this conversation after refresh.`,
           );
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+          await showColcoorApiFailure(e);
         }
       },
     ),
@@ -338,8 +334,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             `Colcoor: updated role to ${rolePick.role} for ${picked.member.user_id}.`,
           );
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+          await showColcoorApiFailure(e);
         }
       },
     ),
@@ -386,8 +381,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           refreshTree();
           await vscode.window.showInformationMessage("Colcoor: member removed.");
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+          await showColcoorApiFailure(e);
         }
       },
     ),
@@ -416,8 +410,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           refreshTree();
           await vscode.window.showInformationMessage("Colcoor: conversation deleted.");
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+          await showColcoorApiFailure(e);
         }
       },
     ),
@@ -442,8 +435,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         await openSideChatPanel(context, api, convId, convTitle ?? null);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        await showColcoorApiFailure(e);
       }
     }),
     vscode.commands.registerCommand("colcoor.editProfile", async () => {
@@ -472,8 +464,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const updated = await api.patchMe(patch);
         await vscode.window.showInformationMessage(`Colcoor: profile saved (${updated.email}).`);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        await showColcoorApiFailure(e);
       }
     }),
     vscode.commands.registerCommand("colcoor.toggleStarSelectedMessage", async () => {
@@ -498,8 +489,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           referencedEventId: ctx.selectedEventId,
         });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        await showColcoorApiFailure(e);
       }
     }),
     vscode.commands.registerCommand("colcoor.referenceSelectedNoteInSideChat", async () => {
@@ -535,8 +525,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           referencedNoteId: pick.nid,
         });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+        await showColcoorApiFailure(e);
       }
     }),
     vscode.commands.registerCommand(
@@ -621,8 +610,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             );
           }
         } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+          await showColcoorApiFailure(e);
         }
       },
     ),

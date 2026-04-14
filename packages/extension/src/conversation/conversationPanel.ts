@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
+import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { runResendAssistant } from "./resendAssistant";
@@ -12,6 +13,7 @@ import {
   clampComposerTextareaHeightPx,
 } from "./composerLayoutPersistence";
 import { findBranchTip } from "./treeEvents";
+import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
 /** `conversation_id` → event ids whose branches are collapsed in the webview tree ([tree-ui-contract.md]). */
@@ -279,6 +281,9 @@ export function createConversationPanelController(
       }
       postState(events, busy, lastError);
     } catch (e) {
+      if (isPlanLimitColcoorApiError(e)) {
+        void showColcoorApiFailure(e);
+      }
       const msg = e instanceof Error ? e.message : String(e);
       lastNotes = [];
       lastNeedsContextRebuild = false;
@@ -342,6 +347,9 @@ export function createConversationPanelController(
         );
       }
     } catch (e) {
+      if (isPlanLimitColcoorApiError(e)) {
+        void showColcoorApiFailure(e);
+      }
       const msg = e instanceof Error ? e.message : String(e);
       stream.dispose();
       await loadTreeAndPush(false, msg);
@@ -396,6 +404,9 @@ export function createConversationPanelController(
         );
       }
     } catch (e) {
+      if (isPlanLimitColcoorApiError(e)) {
+        void showColcoorApiFailure(e);
+      }
       const msg = e instanceof Error ? e.message : String(e);
       stream.dispose();
       await loadTreeAndPush(false, msg);
@@ -429,8 +440,7 @@ export function createConversationPanelController(
       await refreshConversationMeta();
       await loadTreeAndPush(false, null);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      await showColcoorApiFailure(e);
     }
   }
 
@@ -443,8 +453,7 @@ export function createConversationPanelController(
       await refreshConversationMeta();
       await loadTreeAndPush(false, null);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await vscode.window.showErrorMessage(`Colcoor: ${msg}`);
+      await showColcoorApiFailure(e);
     }
   }
 
@@ -515,8 +524,7 @@ export function createConversationPanelController(
           });
           await loadTreeAndPush(false, null);
         } catch (e) {
-          const m = e instanceof Error ? e.message : String(e);
-          void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+          void showColcoorApiFailure(e);
         }
         return;
       }
@@ -592,8 +600,7 @@ export function createConversationPanelController(
           void vscode.window.setStatusBarMessage("Colcoor: note deleted.", 2000);
           await loadTreeAndPush(false, null);
         } catch (e) {
-          const m = e instanceof Error ? e.message : String(e);
-          void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+          void showColcoorApiFailure(e);
         }
         return;
       }
@@ -623,8 +630,7 @@ export function createConversationPanelController(
           void vscode.window.setStatusBarMessage("Colcoor: note updated.", 2000);
           await loadTreeAndPush(false, null);
         } catch (e) {
-          const m = e instanceof Error ? e.message : String(e);
-          void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+          void showColcoorApiFailure(e);
         }
       }
     });
@@ -666,8 +672,7 @@ export function createConversationPanelController(
       }
       await loadTreeAndPush(false, null);
     } catch (e) {
-      const m = e instanceof Error ? e.message : String(e);
-      void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+      void showColcoorApiFailure(e);
     }
   }
 
@@ -693,8 +698,7 @@ export function createConversationPanelController(
       void vscode.window.setStatusBarMessage("Colcoor: note added.", 2500);
       await loadTreeAndPush(false, null);
     } catch (e) {
-      const m = e instanceof Error ? e.message : String(e);
-      void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+      void showColcoorApiFailure(e);
     }
   }
 
@@ -720,8 +724,7 @@ export function createConversationPanelController(
       }
       colcoorNotesChannel.show(true);
     } catch (e) {
-      const m = e instanceof Error ? e.message : String(e);
-      void vscode.window.showErrorMessage(`Colcoor: ${m}`);
+      void showColcoorApiFailure(e);
     }
   }
 

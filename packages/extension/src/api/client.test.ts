@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ColcoorApiClient } from "./client";
+import { ColcoorApiClient, ColcoorApiHttpError } from "./client";
 
 describe("ColcoorApiClient note mutations", () => {
   const origFetch = globalThis.fetch;
@@ -422,8 +422,15 @@ describe("ColcoorApiClient note mutations", () => {
       baseUrl: "http://127.0.0.1:8000",
       getAccessToken: async () => "jwt-test",
     });
-    await expect(api.createConversation({ title: "x" })).rejects.toThrow(
-      /Plan or usage limit.*create conversation.*event quota exceeded/s,
-    );
+    try {
+      await api.createConversation({ title: "x" });
+      expect.fail("expected rejection");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ColcoorApiHttpError);
+      expect((e as ColcoorApiHttpError).status).toBe(402);
+      expect((e as Error).message).toMatch(
+        /Plan or usage limit.*create conversation.*event quota exceeded/s,
+      );
+    }
   });
 });

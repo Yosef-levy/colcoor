@@ -1,4 +1,4 @@
-import { formatColcoorApiError } from "./apiErrorFormatting";
+import { ColcoorApiHttpError } from "./colcoorApiHttpError";
 import { parseCompleteSseDataJsonBlocks } from "./sideChatSseParse";
 
 export type ColcoorApiClientOptions = {
@@ -165,7 +165,7 @@ export class ColcoorApiClient {
     if (res.ok) {
       return;
     }
-    throw new Error(formatColcoorApiError(operation, res.status, bodyText));
+    throw new ColcoorApiHttpError(operation, res.status, bodyText);
   }
 
   private async fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
@@ -602,3 +602,5 @@ export class ColcoorApiClient {
     return JSON.parse(text) as AppendEventResponse;
   }
 }
+
+export { ColcoorApiHttpError } from "./colcoorApiHttpError";
