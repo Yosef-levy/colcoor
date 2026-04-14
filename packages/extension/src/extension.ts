@@ -21,7 +21,7 @@ import { createConversationPanelController } from "./conversation/conversationPa
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import { openSideChatPanel } from "./sidechat/sideChatPanel";
 import { normalizePersistedUserInputText } from "./conversation/normalizeUserInputText";
-import { runColcoorUserTurn } from "./conversation/runUserTurn";
+import { runColcoorUserTurn, type UserTurnResult } from "./conversation/runUserTurn";
 import {
   ConversationTreeItem,
   ConversationsTreeProvider,
@@ -46,6 +46,7 @@ import {
   normalizeColcoorInviteUserId,
   validateColcoorInviteUserIdInput,
 } from "./conversations/conversationMemberInvite";
+import { normalizedOptionalFirstMessageFromSecondPrompt } from "./conversations/newConversationFirstMessage";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
 import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConversation";
@@ -89,6 +90,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const refreshTree = (): void => {
     treeProvider.refresh();
   };
+
+  async function notifyUserTurnOutcome(result: UserTurnResult): Promise<void> {
+    refreshTree();
+    if (result.cancelled) {
+      await vscode.window.showInformationMessage(
+        result.assistantText?.trim()
+          ? "Colcoor: stopped — partial assistant reply was saved."
+          : "Colcoor: stopped — no assistant text was saved.",
+      );
+    } else if (result.assistantStub === "cli_missing") {
+      const choice = await vscode.window.showInformationMessage(
+        "Colcoor: message saved. Cursor CLI (`agent`) was not on PATH — only a short placeholder was stored.",
+        "Set up Cursor CLI",
+        "OK",
+      );
+      if (choice === "Set up Cursor CLI") {
+        await vscode.commands.executeCommand("colcoor.setupCursorCli");
+      }
+    } else if (result.assistantStub === "explicit") {
+      await vscode.window.showInformationMessage(
+        "Colcoor: message saved (stub mode — assistant text is a local placeholder).",
+      );
+    } else {
+      const body = result.assistantText ?? "";
+      const preview = body.length > 200 ? `${body.slice(0, 200)}…` : body;
+      await vscode.window.showInformationMessage(
+        `Colcoor: sent. Assistant: ${preview.replace(/\s+/g, " ")}`,
+      );
+    }
+  }
 
   const treeView = vscode.window.createTreeView("colcoor.conversations", {
     treeDataProvider: treeProvider,
@@ -218,13 +249,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (title === undefined) {
         return;
       }
+      const firstRaw = await vscode.window.showInputBox({
+        title: "New Colcoor conversation",
+        prompt:
+          "Optional first message — opens the thread and runs the assistant after create (per Settings → Colcoor → agent). Leave empty to skip. Esc skips.",
+        ignoreFocusOut: true,
+      });
+      const firstMessage = normalizedOptionalFirstMessageFromSecondPrompt(firstRaw);
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
       try {
         const conv = await api.createConversation({ title: normalizedConversationTitle(title) });
         refreshTree();
         await conversationPanel.reveal(conv.id, conv.title);
-        await vscode.window.showInformationMessage(
-          `Colcoor: created "${conv.title ?? "(untitled)"}".`,
-        );
+        if (firstMessage) {
+          const result = await runColcoorUserTurn(
+            api,
+            agent,
+            conv.id,
+            conv.title,
+            firstMessage,
+            workspaceRoot,
+          );
+          await notifyUserTurnOutcome(result);
+        } else {
+          await vscode.window.showInformationMessage(
+            `Colcoor: created "${conv.title ?? "(untitled)"}".`,
+          );
+        }
       } catch (e) {
         await showColcoorApiFailure(e);
       }
@@ -922,34 +973,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             normalized,
             workspaceRoot,
           );
-          refreshTree();
-          if (result.cancelled) {
-            await vscode.window.showInformationMessage(
-              result.assistantText?.trim()
-                ? "Colcoor: stopped — partial assistant reply was saved."
-                : "Colcoor: stopped — no assistant text was saved.",
-            );
-          } else if (result.assistantStub === "cli_missing") {
-            const choice = await vscode.window.showInformationMessage(
-              "Colcoor: message saved. Cursor CLI (`agent`) was not on PATH — only a short placeholder was stored.",
-              "Set up Cursor CLI",
-              "OK",
-            );
-            if (choice === "Set up Cursor CLI") {
-              await vscode.commands.executeCommand("colcoor.setupCursorCli");
-            }
-          } else if (result.assistantStub === "explicit") {
-            await vscode.window.showInformationMessage(
-              "Colcoor: message saved (stub mode — assistant text is a local placeholder).",
-            );
-          } else {
-            const body = result.assistantText ?? "";
-            const preview =
-              body.length > 200 ? `${body.slice(0, 200)}…` : body;
-            await vscode.window.showInformationMessage(
-              `Colcoor: sent. Assistant: ${preview.replace(/\s+/g, " ")}`,
-            );
-          }
+          await notifyUserTurnOutcome(result);
         } catch (e) {
           await showColcoorApiFailure(e);
         }
