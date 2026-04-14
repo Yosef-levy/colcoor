@@ -18,6 +18,10 @@ describe("normalizePersistedUserInputText", () => {
   it("returns empty string when only newlines or spaces remain", () => {
     expect(normalizePersistedUserInputText("\r\n  \n")).toBe("");
   });
+
+  it("preserves inner blank lines after CRLF normalize (notes, copy-thread)", () => {
+    expect(normalizePersistedUserInputText("  a\r\n\r\nb  ")).toBe("a\n\nb");
+  });
 });
 
 describe("normalizeOptionalGraphEventId", () => {

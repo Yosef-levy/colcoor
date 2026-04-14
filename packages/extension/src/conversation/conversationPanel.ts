@@ -591,7 +591,7 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "copyThread" && typeof msg.text === "string") {
-        const t = msg.text.trim();
+        const t = normalizePersistedUserInputText(msg.text);
         if (t.length > 0) {
           await vscode.env.clipboard.writeText(t);
           void vscode.window.setStatusBarMessage("Colcoor: thread copied to clipboard.", 2500);
@@ -817,7 +817,7 @@ export function createConversationPanelController(
           if (next === undefined) {
             return;
           }
-          const trimmed = next.trim();
+          const trimmed = normalizePersistedUserInputText(next);
           if (!trimmed) {
             void vscode.window.showWarningMessage("Colcoor: note text cannot be empty.");
             return;
