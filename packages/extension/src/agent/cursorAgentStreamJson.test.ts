@@ -61,6 +61,17 @@ describe("parseCursorAgentNdjsonLine", () => {
     });
   });
 
+  it("parses assistant message when content is a plain string", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", content: "Done." },
+    });
+    expect(parseCursorAgentNdjsonLine(line)).toEqual({
+      kind: "append_assistant",
+      delta: "Done.",
+    });
+  });
+
   it("parses terminal result", () => {
     const line = JSON.stringify({
       type: "result",
@@ -87,7 +98,7 @@ describe("parseCursorAgentNdjsonLine", () => {
     expect(parseCursorAgentNdjsonLine(line)).toBeNull();
   });
 
-  it("returns null when assistant row omits message or content is not an array", () => {
+  it("returns null when assistant row omits message or content is neither string nor text array", () => {
     expect(parseCursorAgentNdjsonLine(JSON.stringify({ type: "assistant" }))).toBeNull();
     expect(
       parseCursorAgentNdjsonLine(
@@ -188,6 +199,15 @@ describe("createStreamJsonStdoutFeed", () => {
     );
     expect(seen).toEqual(["Hi", "Hi there"]);
     expect(feed.getResolvedText()).toBe("Hi there");
+  });
+
+  it("treats string message.content as stream-partial snapshots when lines extend the prefix", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":"Hi"}}\n{"type":"assistant","message":{"role":"assistant","content":"Hi!"}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getResolvedText()).toBe("Hi!");
   });
 
   it("prefers terminal result over summed assistant text", () => {

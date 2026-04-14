@@ -16,6 +16,9 @@ function extractAssistantTextFromMessage(message: unknown): string {
     return "";
   }
   const content = (message as { content?: unknown }).content;
+  if (typeof content === "string") {
+    return content;
+  }
   if (!Array.isArray(content)) {
     return "";
   }
