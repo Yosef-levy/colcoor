@@ -53,6 +53,17 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.resendAssistant");
     expect(cmds).toContain("colcoor.jumpToLatestInConversation");
     expect(cmds).toContain("colcoor.copySelectedMessage");
+    expect(cmds).toContain("colcoor.refreshConversationTree");
+  });
+
+  it("documents refreshConversationTree for reloading the open panel ([ui-features.md] §6)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const cmd = pkg.contributes?.commands?.find((c) => c.command === "colcoor.refreshConversationTree");
+    expect(cmd?.title).toBe("Colcoor: Refresh conversation tree");
+    expect(cmd?.description).toContain("server");
   });
 
   it("documents copySelectedMessage for thread copy ([ui-features.md] §7)", () => {

@@ -142,6 +142,8 @@ export function createConversationPanelController(
   jumpToLatestInConversation: () => Promise<void>;
   /** Copy selected tree message body to the system clipboard ([ui-features.md] §7). */
   copySelectedMessage: () => Promise<void>;
+  /** Reload tree + thread from the API (same as webview “Refresh tree”). */
+  refreshConversationTree: () => Promise<void>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -1173,6 +1175,22 @@ export function createConversationPanelController(
       }
       await vscode.env.clipboard.writeText(text);
       void vscode.window.setStatusBarMessage("Colcoor: message copied to clipboard.", 2500);
+    },
+    async refreshConversationTree(): Promise<void> {
+      if (!conversationId) {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open a conversation (Colcoor: Open conversation) first.",
+        );
+        return;
+      }
+      if (!panel) {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open the conversation panel, then run this command again.",
+        );
+        return;
+      }
+      await loadTreeAndPush(false, null);
+      void vscode.window.setStatusBarMessage("Colcoor: conversation tree refreshed.", 2500);
     },
     dispose: () => {
       subscription.dispose();

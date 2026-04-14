@@ -160,6 +160,11 @@
         "command": "colcoor.copySelectedMessage",
         "title": "Colcoor: Copy selected message",
         "description": "Copy the selected tree message body to the clipboard (conversation panel must be open)."
+      },
+      {
+        "command": "colcoor.refreshConversationTree",
+        "title": "Colcoor: Refresh conversation tree",
+        "description": "Reload the open conversation tree and thread from the server (conversation panel must be open)."
       }
     ],
     "viewsContainers": {
