@@ -62,6 +62,9 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
       You can add an optional <strong>milestone label</strong> when you send so the heading above the thread stays easy
       to scan.
     </li>
+    <li>
+      Use <strong>Copy ID</strong> in the conversation panel, side chat, or drawers when you need the conversation identifier on your clipboard (for example to share with a teammate or support).
+    </li>
     <li>Open <strong>Settings → Colcoor</strong> for the server address and how replies are produced.</li>
     <li>
       Optional <strong>Terms</strong>, <strong>Privacy</strong>, and <strong>Refund</strong> links: use the Command Palette

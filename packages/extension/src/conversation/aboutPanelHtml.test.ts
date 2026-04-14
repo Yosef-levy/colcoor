@@ -20,6 +20,8 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("drawers");
     expect(html).toContain("<strong>setup buttons</strong>");
     expect(html).toContain("<strong>milestone label</strong>");
+    expect(html).toContain("<strong>Copy ID</strong>");
+    expect(html).toContain("conversation identifier");
     expect(html).toContain("<strong>assistant in this workspace</strong>");
     expect(html).toContain("Command Palette");
     expect(html).toContain("<strong>Settings → Colcoor</strong>");
