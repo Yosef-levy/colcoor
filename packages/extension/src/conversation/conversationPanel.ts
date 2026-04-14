@@ -96,6 +96,7 @@ type FromWebview =
   | { type: "openProfile" }
   | { type: "openSettings" }
   | { type: "openLegalPolicySettings" }
+  | { type: "openSideChatSoundSettings" }
   | { type: "openAbout" }
   | { type: "openLegalPolicyUrl"; url: string }
   | { type: "openStarredDrawer" }
@@ -926,6 +927,10 @@ export function createConversationPanelController(
       }
       if (msg.type === "openLegalPolicySettings") {
         await vscode.commands.executeCommand("colcoor.openLegalPolicySettings");
+        return;
+      }
+      if (msg.type === "openSideChatSoundSettings") {
+        await vscode.commands.executeCommand("colcoor.openSideChatSoundSettings");
         return;
       }
       if (msg.type === "openAbout") {

@@ -103,6 +103,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnProfile" title="Edit your Colcoor profile">Profile…</button>
     <button type="button" id="btnSettings" title="Open Colcoor extension settings">Settings</button>
     <button type="button" id="btnLegalPolicySettings" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
+    <button type="button" id="btnSideChatSoundSettings" title="Open side chat notification and sound settings">Side chat sounds…</button>
     <button type="button" id="btnAbout" title="About Colcoor">About</button>
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="${esc(scTitle)}">${esc(scLabel)}</button>
@@ -155,6 +156,9 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnLegalPolicySettings").addEventListener("click", function () {
       vscode.postMessage({ type: "openLegalPolicySettings" });
+    });
+    document.getElementById("btnSideChatSoundSettings").addEventListener("click", function () {
+      vscode.postMessage({ type: "openSideChatSoundSettings" });
     });
     document.getElementById("btnAbout").addEventListener("click", function () {
       vscode.postMessage({ type: "openAbout" });
