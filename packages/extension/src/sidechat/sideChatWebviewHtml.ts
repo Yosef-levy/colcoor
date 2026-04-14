@@ -291,6 +291,7 @@ export function getSideChatWebviewHtml(
           } catch {
             /* storage unavailable */
           }
+          vscode.postMessage({ type: "layout", composerTextareaHeightPx: h });
         }, 120);
       });
       ro.observe(ta);
@@ -567,6 +568,18 @@ export function getSideChatWebviewHtml(
           viewerUserId = d.viewerUserId;
         } else if (d.viewerUserId === null) {
           viewerUserId = null;
+        }
+        if (typeof d.composerTextareaHeightPx === "number") {
+          var taState = document.getElementById("input");
+          var hFromHost = clampComposerHeightPx(d.composerTextareaHeightPx);
+          if (taState && hFromHost != null) {
+            taState.style.height = hFromHost + "px";
+            try {
+              localStorage.setItem(SIDECHAT_COMPOSER_HEIGHT_KEY, String(hFromHost));
+            } catch {
+              /* storage unavailable */
+            }
+          }
         }
         var sub = document.getElementById("sub");
         if (sub) {

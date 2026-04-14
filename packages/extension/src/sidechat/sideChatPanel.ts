@@ -28,6 +28,10 @@ import { normalizeSideChatReferenceId } from "./normalizeSideChatReferenceId";
 import { trimmedSideChatSendBody } from "./trimSendBody";
 import { reportSideChatPanelApiError } from "./reportSideChatPanelApiError";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
+import {
+  SIDECHAT_COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
+  clampSideChatComposerTextareaHeightPx,
+} from "./sideChatComposerLayoutPersistence";
 
 function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -79,7 +83,8 @@ type FromWebview =
   | { type: "setCursorAgentApiKey" }
   | { type: "edit"; messageId: string; text: string }
   | { type: "delete"; messageId: string }
-  | { type: "openReference"; refKind: "event" | "note"; refId: string };
+  | { type: "openReference"; refKind: "event" | "note"; refId: string }
+  | { type: "layout"; composerTextareaHeightPx?: number };
 
 type StateMessage = {
   type: "state";
@@ -89,6 +94,8 @@ type StateMessage = {
   presenceSummary: string | null;
   referencedEventId: string | null;
   referencedNoteId: string | null;
+  /** Workspace-persisted side-chat composer height (px), when set ([ui-features.md] §5). */
+  composerTextareaHeightPx: number | null;
 };
 
 type ErrorMessage = { type: "error"; text: string };
@@ -98,7 +105,7 @@ type PlaySoundMessage = { type: "playSound"; kind: "message" | "mention" };
  * Opens a webview panel listing side-chat messages with send, refresh, and SSE updates.
  */
 export async function openSideChatPanel(
-  _context: vscode.ExtensionContext,
+  context: vscode.ExtensionContext,
   api: ColcoorApiClient,
   rawConversationId: string,
   title: string | null,
@@ -116,14 +123,20 @@ export async function openSideChatPanel(
     "colcoor.sideChat",
     label,
     vscode.ViewColumn.Beside,
-    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [_context.extensionUri] },
+    { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [context.extensionUri] },
   );
-  panel.webview.options = { enableScripts: true, localResourceRoots: [_context.extensionUri] };
+  panel.webview.options = { enableScripts: true, localResourceRoots: [context.extensionUri] };
   panel.webview.html = getSideChatWebviewHtml(
     panel.webview.cspSource,
     nonce,
     listLegalPolicyLinksFromColcoorWorkspaceSection(vscode.workspace.getConfiguration("colcoor")),
   );
+
+  function readSideChatComposerHeightFromWorkspace(): number | null {
+    return clampSideChatComposerTextareaHeightPx(
+      context.workspaceState.get(SIDECHAT_COMPOSER_TEXTAREA_HEIGHT_STATE_KEY),
+    );
+  }
 
   const ac = new AbortController();
   let cached: SideChatMessageOut[] = [];
@@ -230,6 +243,7 @@ export async function openSideChatPanel(
         presenceSummary: sideChatPresenceSummary(cached, viewerUserId, memberDisplayByUserId),
         referencedEventId: composerReferencedEventId,
         referencedNoteId: composerReferencedNoteId,
+        composerTextareaHeightPx: readSideChatComposerHeightFromWorkspace(),
       } satisfies StateMessage);
     } catch {
       /* webview gone */
@@ -400,6 +414,15 @@ export async function openSideChatPanel(
       if (!sseStarted) {
         sseStarted = true;
         startSseLoop();
+      }
+      return;
+    }
+    if (msg.type === "layout") {
+      if (typeof msg.composerTextareaHeightPx === "number") {
+        const h = clampSideChatComposerTextareaHeightPx(msg.composerTextareaHeightPx);
+        if (h != null) {
+          void context.workspaceState.update(SIDECHAT_COMPOSER_TEXTAREA_HEIGHT_STATE_KEY, h);
+        }
       }
       return;
     }

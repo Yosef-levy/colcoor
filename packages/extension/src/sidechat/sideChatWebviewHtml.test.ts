@@ -64,7 +64,7 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('if (ev.key === "Tab" && mentionVisible.length > 0)');
   });
 
-  it("persists side-chat composer textarea height in localStorage", () => {
+  it("persists side-chat composer textarea height in localStorage and notifies the host for workspace save", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('SIDECHAT_COMPOSER_HEIGHT_KEY = "colcoor.sideChatComposerTextareaHeightPx"');
     expect(html).toContain("function clampComposerHeightPx(v)");
@@ -72,6 +72,13 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain("function wireComposerHeightPersistence()");
     expect(html).toContain("new ResizeObserver(function ()");
     expect(html).toContain("localStorage.setItem(SIDECHAT_COMPOSER_HEIGHT_KEY, String(h));");
+    expect(html).toContain('vscode.postMessage({ type: "layout", composerTextareaHeightPx: h });');
+  });
+
+  it("applies composer height from state messages (workspace sync)", () => {
+    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("typeof d.composerTextareaHeightPx === \"number\"");
+    expect(html).toContain("clampComposerHeightPx(d.composerTextareaHeightPx)");
   });
 
   it("includes subtitle wiring for presence summary text", () => {
