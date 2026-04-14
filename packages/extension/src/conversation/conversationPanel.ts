@@ -29,7 +29,10 @@ import { clipboardTextForSelectedTreeMessage } from "./selectedMessageClipboardT
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { findBranchTip } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
-import { COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION } from "../util/colcoorApiFailureActions";
+import {
+  COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+  COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL,
+} from "../util/colcoorApiFailureActions";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
 
@@ -153,7 +156,7 @@ export function createConversationPanelController(
   jumpToLatestInConversation: () => Promise<void>;
   /** Copy selected tree message body to the system clipboard ([ui-features.md] §7). */
   copySelectedMessage: () => Promise<void>;
-  /** Reload tree + thread from the API (same as webview “Refresh tree”). */
+  /** Reload tree + thread from the API (same as webview “Refresh conversation tree”). */
   refreshConversationTree: () => Promise<void>;
   dispose: () => void;
 } {
@@ -783,7 +786,7 @@ export function createConversationPanelController(
         );
         if (gate === "not_in_tree") {
           void vscode.window.showWarningMessage(
-            "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+            `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
           );
         }
         if (gate === "ok" && selectedEventId) {
@@ -799,7 +802,7 @@ export function createConversationPanelController(
         const exists = lastTreeEvents.some((e) => e.id === selectedEventId);
         if (!exists) {
           void vscode.window.showWarningMessage(
-            "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+            `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
           );
           return;
         }
@@ -813,7 +816,7 @@ export function createConversationPanelController(
         const exists = lastTreeEvents.some((e) => e.id === selectedEventId);
         if (!exists) {
           void vscode.window.showWarningMessage(
-            "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+            `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
           );
           return;
         }
@@ -978,7 +981,9 @@ export function createConversationPanelController(
           const all = await api.listNotes(conversationId);
           const row = all.find((n) => n.id === msg.noteId);
           if (!row) {
-            void vscode.window.showWarningMessage("Colcoor: note not found — try Refresh tree.");
+            void vscode.window.showWarningMessage(
+              `Colcoor: note not found — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+            );
             return;
           }
           const next = await vscode.window.showInputBox({
@@ -1031,7 +1036,9 @@ export function createConversationPanelController(
     }
     const ev = lastTreeEvents.find((e) => e.id === selectedEventId);
     if (!ev) {
-      void vscode.window.showWarningMessage("Colcoor: selection not in the loaded tree — try Refresh tree.");
+      void vscode.window.showWarningMessage(
+        `Colcoor: selection not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+      );
       return;
     }
     try {
@@ -1054,7 +1061,9 @@ export function createConversationPanelController(
       return;
     }
     if (!lastTreeEvents.some((e) => e.id === selectedEventId)) {
-      void vscode.window.showWarningMessage("Colcoor: selection not in the loaded tree — try Refresh tree.");
+      void vscode.window.showWarningMessage(
+        `Colcoor: selection not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+      );
       return;
     }
     const text = await vscode.window.showInputBox({
@@ -1193,7 +1202,7 @@ export function createConversationPanelController(
       }
       if (gate === "not_in_tree") {
         void vscode.window.showWarningMessage(
-          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+          `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
         );
         return;
       }
@@ -1212,7 +1221,7 @@ export function createConversationPanelController(
       }
       if (gate === "not_in_tree") {
         void vscode.window.showWarningMessage(
-          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+          `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
         );
         return;
       }
@@ -1247,7 +1256,7 @@ export function createConversationPanelController(
       }
       if (gate === "not_in_tree") {
         void vscode.window.showWarningMessage(
-          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+          `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
         );
         return;
       }
@@ -1257,7 +1266,7 @@ export function createConversationPanelController(
       const text = clipboardTextForSelectedTreeMessage(lastTreeEvents, selectedEventId);
       if (text === undefined) {
         void vscode.window.showWarningMessage(
-          "Colcoor: selection is not in the loaded tree — try Refresh tree.",
+          `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
         );
         return;
       }

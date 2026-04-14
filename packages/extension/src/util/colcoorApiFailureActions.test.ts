@@ -9,6 +9,7 @@ import {
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
   COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION,
   COLOOR_API_FAILURE_SIGN_IN_ACTION,
+  COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL,
 } from "./colcoorApiFailureActions";
 
 describe("colcoorApiFailureActions", () => {
@@ -27,5 +28,11 @@ describe("colcoorApiFailureActions", () => {
     expect(COLOOR_API_FAILURE_SIGN_IN_ACTION).toMatch(/^Colcoor:/);
     expect(COLOOR_API_FAILURE_REFRESH_CONVERSATIONS_ACTION).toMatch(/^Colcoor:/);
     expect(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION).toMatch(/^Colcoor:/);
+  });
+
+  it("panel tree-reload button label matches command title without Colcoor prefix", () => {
+    expect(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL).toBe(
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION.replace(/^Colcoor:\s+/, ""),
+    );
   });
 });

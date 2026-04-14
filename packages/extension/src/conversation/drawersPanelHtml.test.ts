@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { getConversationDrawersPanelHtml } from "./drawersPanelHtml";
 import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
+import { COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL } from "../util/colcoorApiFailureActions";
 
 describe("getConversationDrawersPanelHtml", () => {
   it("renders tab buttons and jump wiring", () => {
@@ -58,6 +59,7 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('id="btnRefreshConversations"');
     expect(html).toContain('vscode.postMessage({ type: "refreshConversations" });');
     expect(html).toContain('id="btnRefreshConversationTree"');
+    expect(html).toContain(`>${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}</button>`);
     expect(html).toContain('vscode.postMessage({ type: "refreshConversationTree" });');
     expect(html).toContain('id="btnReloadDrawersLists"');
     expect(html).toContain('vscode.postMessage({ type: "reloadDrawersLists" });');

@@ -10,8 +10,17 @@ import {
   PRIVATE_BRANCH_DESCRIPTION,
   PRIVATE_BRANCH_LEAD,
 } from "./privateBranchComposerCopy";
+import { COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL } from "../util/colcoorApiFailureActions";
 
 describe("getConversationWebviewHtml", () => {
+  it("names the tree reload control consistently with the refresh command ([ui-features.md] §6)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonceTreeReload");
+    expect(html).toContain(`id="refresh"`);
+    expect(html).toContain(`>${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}</button>`);
+    expect(html).toContain("sign-in — then click ");
+    expect(html).toContain(JSON.stringify(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL));
+  });
+
   it("embeds tree snippet and display-title limits from treeNodeDisplay ([tree-ui-contract.md] §7)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(`slice(0, ${TREE_EVENT_SNIPPET_MAX})`);

@@ -11,6 +11,10 @@ import {
 } from "./privateBranchComposerCopy";
 import { treeEventTimeLabelWebviewScriptBlock } from "./treeEventTimeLabel";
 import { TREE_EVENT_DISPLAY_TITLE_MAX, TREE_EVENT_SNIPPET_MAX } from "./treeNodeDisplay";
+import {
+  COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+  COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL,
+} from "../util/colcoorApiFailureActions";
 
 export function getConversationWebviewHtml(cspSource: string, nonce: string): string {
   const csp = [
@@ -745,7 +749,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div class="row">
           <button id="send" type="button" disabled>Send</button>
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
-          <button id="refresh" type="button">Refresh tree</button>
+          <button id="refresh" type="button" title=${JSON.stringify(
+            COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+          )}>${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}</button>
           <span class="hint" id="busy" style="display:none">Working…</span>
         </div>
       </div>
@@ -1573,7 +1579,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var subEl = document.getElementById("sub");
       if (!subEl) return;
       subEl.textContent =
-        "Still waiting for a conversation snapshot from the extension. API calls time out after 30s — check Settings → Colcoor → backend base URL, that the API is running, and sign-in — then click Refresh tree.";
+        "Still waiting for a conversation snapshot from the extension. API calls time out after 30s — check Settings → Colcoor → backend base URL, that the API is running, and sign-in — then click " +
+        ${JSON.stringify(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL)} +
+        ".";
     }, 32000);
 
     document.getElementById("send").addEventListener("click", () => {

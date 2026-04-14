@@ -1,4 +1,8 @@
 import type { ConversationDrawersModel } from "./drawersModel";
+import {
+  COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+  COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL,
+} from "../util/colcoorApiFailureActions";
 
 function esc(s: string): string {
   return s
@@ -112,7 +116,9 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnChangeMemberRole" title="Change a member’s role in this conversation (Colcoor: Change member role)">Change member role…</button>
     <button type="button" id="btnRemoveMember" title="Remove a member from this conversation (Colcoor: Remove member)">Remove member…</button>
     <button type="button" id="btnRefreshConversations" title="Reload the Colcoor conversations list in the sidebar">Refresh conversations</button>
-    <button type="button" id="btnRefreshConversationTree" title="Reload the open conversation tree and thread from the server (Colcoor: Refresh conversation tree)">Refresh tree</button>
+    <button type="button" id="btnRefreshConversationTree" title="Reload the open conversation tree and thread from the server (${esc(
+      COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+    )})">${esc(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL)}</button>
     <button type="button" id="btnReloadDrawersLists" title="Reload starred and TODO lists from the server (Colcoor: Refresh conversation drawers)">Refresh lists</button>
     <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
     <button type="button" id="btnNewConversation" title="Create a new conversation">New conversation</button>
