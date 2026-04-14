@@ -8,6 +8,7 @@ import { runResendAssistant } from "./resendAssistant";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
+import { staleTreeMissingSelectionPromptKey } from "./staleTreePromptPolicy";
 import {
   COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
   clampComposerTextareaHeightPx,
@@ -114,6 +115,8 @@ export function createConversationPanelController(
   let lastNotes: NoteOut[] = [];
   /** From GET …/caller-state after each successful tree load (domain-model §4). */
   let lastNeedsContextRebuild = false;
+  /** One-time dedupe key for stale-tree prompt when selected node disappears after refresh. */
+  let staleTreePromptedForEventId: string | null = null;
 
   function syncActiveToBackend(
     activeEventId: string | undefined,
@@ -266,11 +269,20 @@ export function createConversationPanelController(
       return;
     }
     try {
+      const previousSelectedEventId = selectedEventId;
+      const previousEventIds = new Set(lastTreeEvents.map((e) => e.id));
       const [{ events }, notes, caller] = await Promise.all([
         api.getTree(conversationId),
         api.listNotes(conversationId),
         api.getConversationCallerState(conversationId).catch((): null => null),
       ]);
+      const nextEventIds = new Set(events.map((e) => e.id));
+      const stalePromptKey = staleTreeMissingSelectionPromptKey({
+        previousSelectedEventId,
+        previousEventIds,
+        nextEventIds,
+        alreadyPromptedForEventId: staleTreePromptedForEventId,
+      });
       lastNotes = notes;
       if (caller) {
         lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
@@ -280,6 +292,20 @@ export function createConversationPanelController(
         }
       } else {
         lastNeedsContextRebuild = false;
+      }
+      if (selectedEventId && nextEventIds.has(selectedEventId)) {
+        staleTreePromptedForEventId = null;
+      }
+      if (!busy && stalePromptKey) {
+        staleTreePromptedForEventId = stalePromptKey;
+        const choice = await vscode.window.showWarningMessage(
+          "Colcoor: the shared tree changed and your previous selection is no longer available.",
+          "Refresh tree",
+        );
+        if (choice === "Refresh tree") {
+          await loadTreeAndPush(false, null);
+          return;
+        }
       }
       postState(events, busy, lastError);
     } catch (e) {
@@ -735,6 +761,7 @@ export function createConversationPanelController(
       conversationId = convId;
       conversationTitle = title;
       conversationPinned = false;
+      staleTreePromptedForEventId = null;
       selectedEventId = undefined;
       lastNotes = [];
       lastNeedsContextRebuild = false;
@@ -755,6 +782,7 @@ export function createConversationPanelController(
       conversationId = convId;
       conversationTitle = title;
       conversationPinned = false;
+      staleTreePromptedForEventId = null;
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
