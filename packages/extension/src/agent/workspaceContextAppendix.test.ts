@@ -29,4 +29,15 @@ describe("buildWorkspaceContextBlock", () => {
     expect(s.length).toBeLessThanOrEqual(MAX_WORKSPACE_CONTEXT_CHARS + 30);
     expect(s).toContain("… (truncated)");
   });
+
+  it("normalizes CRLF and lone CR to LF in the combined block", () => {
+    const s = buildWorkspaceContextBlock({
+      activeFileRelative: "src/x.ts",
+      selectionSnippet: "line1\r\nline2",
+      gitDiffUnified: "a\rb",
+    });
+    expect(s).toContain("line1\nline2");
+    expect(s).toContain("a\nb");
+    expect(s).not.toMatch(/\r/);
+  });
 });

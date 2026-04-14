@@ -36,7 +36,7 @@ export function buildWorkspaceContextBlock(
   if (lines.length === 1) {
     return "";
   }
-  let body = lines.join("\n");
+  let body = lines.join("\n").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (body.length > maxChars) {
     body = body.slice(0, maxChars) + "\n… (truncated)";
   }
