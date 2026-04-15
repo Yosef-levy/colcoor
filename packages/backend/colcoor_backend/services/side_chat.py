@@ -138,6 +138,7 @@ def side_chat_message_to_out(msg: SideChatMessage, author: User | None) -> SideC
         author_display_name=display,
         author_avatar_url=avatar,
         body=msg.body,
+        content_json=msg.content_json,
         referenced_event_id=msg.referenced_event_id,
         referenced_note_id=msg.referenced_note_id,
         referenced_side_chat_message_id=msg.referenced_side_chat_message_id,
@@ -177,6 +178,7 @@ async def post_user_side_chat_message(
     user_id: uuid.UUID,
     *,
     body: str,
+    content_json: dict | None,
     referenced_event_id: uuid.UUID | None,
     referenced_note_id: uuid.UUID | None,
     referenced_side_chat_message_id: uuid.UUID | None,
@@ -194,6 +196,13 @@ async def post_user_side_chat_message(
         referenced_note_id=referenced_note_id,
         referenced_side_chat_message_id=referenced_side_chat_message_id,
     )
+    norm_cj: dict | None = None
+    if content_json is not None:
+        from colcoor_backend.services.conversation_images import normalize_user_media_content_json
+
+        norm_cj = await normalize_user_media_content_json(
+            session, conversation_id=conversation_id, content_json=content_json
+        )
     max_r = await session.execute(
         select(func.coalesce(func.max(SideChatMessage.seq), 0)).where(
             SideChatMessage.conversation_id == conversation_id
@@ -207,6 +216,7 @@ async def post_user_side_chat_message(
         kind="user",
         author_user_id=user_id,
         body=body,
+        content_json=norm_cj,
         referenced_event_id=referenced_event_id,
         referenced_note_id=referenced_note_id,
         referenced_side_chat_message_id=referenced_side_chat_message_id,

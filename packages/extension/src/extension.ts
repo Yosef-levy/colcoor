@@ -53,13 +53,8 @@ import {
   normalizeColcoorInviteUserId,
   validateColcoorInviteUserIdInput,
 } from "./conversations/conversationMemberInvite";
-import {
-  collectFirstMessageFromUntitledEditor,
-  collectMultilineTextInUntitledEditor,
-} from "./conversations/firstMessageMultilineEditor";
+import { collectMultilineTextInUntitledEditor } from "./conversations/firstMessageMultilineEditor";
 import { normalizedOptionalFollowUpPrompt } from "./conversations/newConversationFirstMessage";
-import { collectOptionalFirstMessage } from "./conversations/optionalFirstMessageCollection";
-import type { FirstMessageCollectionMode } from "./conversations/optionalFirstMessageCollection";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
 import { toggleSidebarVisibility } from "./conversations/toggleSidebarVisibility";
 import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConversation";
@@ -289,38 +284,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (title === undefined) {
         return;
       }
-      type FirstMessagePick = vscode.QuickPickItem & { mode: FirstMessageCollectionMode };
-      const firstMessagePickItems: FirstMessagePick[] = [
-        { label: "Skip", description: "Create with title only (no first message)", mode: "skip" },
-        {
-          label: "Single-line first message…",
-          description: "One line; leave empty or Esc in the next box to skip",
-          mode: "single_line",
-        },
-        {
-          label: "Multiline first message…",
-          description: "Opens a plaintext editor tab, then a modal dialog to use or skip that text",
-          mode: "multiline_editor",
-        },
-      ];
-      const firstMessage = await collectOptionalFirstMessage({
-        pickMode: async () => {
-          const picked = await vscode.window.showQuickPick<FirstMessagePick>(firstMessagePickItems, {
-            title: "New Colcoor conversation — first message",
-            placeHolder: "Optional first message (choose skip, one line, or multiline)",
-            ignoreFocusOut: true,
-          });
-          return picked?.mode ?? "skip";
-        },
-        promptSingleLine: () =>
-          vscode.window.showInputBox({
-            title: "New Colcoor conversation",
-            prompt:
-              "Optional first message — opens the thread and runs the assistant after create (per Settings → Colcoor → agent). Leave empty or Esc to skip.",
-            ignoreFocusOut: true,
-          }),
-        getMultilineFromEditor: collectFirstMessageFromUntitledEditor,
+      const firstMessageRaw = await vscode.window.showInputBox({
+        title: "New Colcoor conversation",
+        prompt:
+          "Optional first message to the assistant — press Enter to confirm or Esc to skip (you can send the first message later).",
+        ignoreFocusOut: true,
       });
+      const firstMessage = normalizedOptionalFollowUpPrompt(firstMessageRaw);
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
       try {
         const conv = await api.createConversation({ title: normalizedConversationTitle(title) });

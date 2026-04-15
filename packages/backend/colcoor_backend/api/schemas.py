@@ -23,7 +23,7 @@ class AppendEventBody(BaseModel):
     private_branch: bool = False
     content_json: dict[str, Any] | None = Field(
         default=None,
-        description="Optional structured payload (e.g. Cursor CLI stream-json timeline on assistant_output).",
+        description="assistant_output: e.g. colcoor_agent_trace. user_input: only colcoor_user_media (image refs).",
     )
     checkpoint_label: str | None = Field(
         default=None,
@@ -32,9 +32,16 @@ class AppendEventBody(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _content_json_only_for_assistant(self) -> AppendEventBody:
-        if self.content_json is not None and self.kind != EventKind.assistant_output:
-            raise ValueError("content_json is only allowed when kind is assistant_output")
+    def _content_json_by_kind(self) -> AppendEventBody:
+        if self.content_json is None:
+            return self
+        if self.kind == EventKind.assistant_output:
+            return self
+        if self.kind == EventKind.user_input:
+            keys = set(self.content_json.keys())
+            if keys != {"colcoor_user_media"}:
+                raise ValueError("user_input content_json must only contain the colcoor_user_media key")
+            return self
         return self
 
     @field_validator("checkpoint_label", mode="before")
@@ -115,6 +122,14 @@ class EventNodeOut(BaseModel):
 
 class TreeResponse(BaseModel):
     events: list[EventNodeOut]
+
+
+class ConversationImageUploadOut(BaseModel):
+    """Response from POST …/conversations/{id}/images after persisting bytes."""
+
+    id: UUID
+    mime_type: str
+    byte_size: int
 
 
 class MemberOut(BaseModel):
@@ -233,6 +248,7 @@ class SideChatMessageOut(BaseModel):
     author_display_name: str | None = None
     author_avatar_url: str | None = None
     body: str | None
+    content_json: dict[str, Any] | None = None
     referenced_event_id: UUID | None
     referenced_note_id: UUID | None
     referenced_side_chat_message_id: UUID | None
@@ -250,18 +266,20 @@ class SideChatPostBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["user"] = "user"
-    body: str = Field(..., min_length=1)
+    body: str = ""
+    content_json: dict[str, Any] | None = None
     referenced_event_id: UUID | None = None
     referenced_note_id: UUID | None = None
     referenced_side_chat_message_id: UUID | None = None
 
-    @field_validator("body")
-    @classmethod
-    def _strip_body(cls, v: str) -> str:
-        t = v.strip()
-        if not t:
-            raise ValueError("body must be non-empty after trim")
-        return t
+    @model_validator(mode="after")
+    def _body_or_media(self) -> SideChatPostBody:
+        from colcoor_backend.services.conversation_images import has_colcoor_user_media
+
+        t = self.body.strip()
+        if not t and not has_colcoor_user_media(self.content_json):
+            raise ValueError("body must be non-empty or content_json must include colcoor_user_media images")
+        return self.model_copy(update={"body": t})
 
 
 class SideChatPatchBody(BaseModel):

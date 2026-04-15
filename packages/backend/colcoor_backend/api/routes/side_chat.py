@@ -90,6 +90,7 @@ async def post_side_chat_message(
             conversation_id,
             user_id,
             body=body.body,
+            content_json=body.content_json,
             referenced_event_id=body.referenced_event_id,
             referenced_note_id=body.referenced_note_id,
             referenced_side_chat_message_id=body.referenced_side_chat_message_id,

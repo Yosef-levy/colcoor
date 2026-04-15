@@ -15,6 +15,7 @@ function row(
     author_display_name: p.author_display_name ?? null,
     author_avatar_url: p.author_avatar_url ?? null,
     body: p.body ?? null,
+    content_json: p.content_json ?? undefined,
     referenced_event_id: p.referenced_event_id ?? null,
     referenced_note_id: p.referenced_note_id ?? null,
     referenced_side_chat_message_id: p.referenced_side_chat_message_id ?? null,
@@ -45,6 +46,17 @@ describe("toSideChatRenderMessages", () => {
     ]);
     expect(out[0].rendered_body_html).toContain("(empty)");
     expect(out[1].rendered_body_html).toContain("(empty)");
+  });
+
+  it("renders user image figures when data URLs are provided", () => {
+    const dataUrl = "data:image/png;base64,AAAA";
+    const out = toSideChatRenderMessages(
+      [row({ id: "m1", seq: 1, body: "" })],
+      undefined,
+      new Map([["m1", [dataUrl]]]),
+    );
+    expect(out[0].rendered_body_html).toContain("msg-user-image");
+    expect(out[0].rendered_body_html).toContain('src="data:image/png;base64,AAAA"');
   });
 
   it("resolves referenced side-chat preview for replies", () => {

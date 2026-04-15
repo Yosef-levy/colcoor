@@ -58,4 +58,6 @@ There is **no** server-side SSE for main-thread completion. The extension **MUST
 
 Server persistence and **SSE** are specified in **[api-contracts.md](api-contracts.md)** §10 and **[domain-model.md](domain-model.md)** §6. Side chat **does not** use the main-thread **`append-event`** path.
 
+User-authored side-chat rows may include **`content_json.colcoor_user_media`** (image refs from **`POST …/images`**, same as main-thread `user_input`) so pasted images are durable rows in the side-chat transcript, not local-only UI.
+
 ---

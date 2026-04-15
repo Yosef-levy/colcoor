@@ -109,6 +109,37 @@ export function getSideChatWebviewHtml(
       word-break: break-word;
       unicode-bidi: plaintext;
     }
+    .msg-user-image { margin: 8px 0 0; }
+    .msg-user-image img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+      display: block;
+    }
+    .composer-pending-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
+      margin-top: 4px;
+    }
+    .composer-pending-images .pending-thumb-wrap { position: relative; }
+    .composer-pending-images .pending-thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-panel-border);
+    }
+    .composer-pending-images button.remove-pending {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      padding: 0 5px;
+      font-size: 0.75em;
+      line-height: 1.2;
+      border-radius: 999px;
+    }
     .msg .ref {
       border-left: 2px solid var(--vscode-panel-border);
       margin: 0 0 6px;
@@ -200,6 +231,7 @@ export function getSideChatWebviewHtml(
       <button id="clearRefNote" type="button" class="secondary">Clear note ref</button>
     </div>
     <textarea id="input" dir="auto" placeholder="Message…"></textarea>
+    <div id="pendingSideChatImages" class="composer-pending-images" style="display:none"></div>
     <div id="mentionSuggestRow" class="mention-suggest-row"></div>
     <div class="row">
       <button id="send" type="button" disabled title="Type a non-empty message. Shift+Enter for newline, Enter to send.">Send</button>
@@ -248,7 +280,43 @@ export function getSideChatWebviewHtml(
     var referencedNoteId = null;
     var mentionUniverse = [];
     var mentionVisible = [];
+    var pendingSendImages = [];
     var audioCtx = null;
+    function renderPendingSideChatImages() {
+      var el = document.getElementById("pendingSideChatImages");
+      if (!el) return;
+      el.textContent = "";
+      if (!pendingSendImages.length) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "flex";
+      pendingSendImages.forEach(function (item) {
+        var url = item && item.dataUrl ? String(item.dataUrl) : "";
+        if (!url) return;
+        var wrap = document.createElement("div");
+        wrap.className = "pending-thumb-wrap";
+        var im = document.createElement("img");
+        im.className = "pending-thumb";
+        im.alt = "";
+        im.src = url;
+        var rm = document.createElement("button");
+        rm.type = "button";
+        rm.className = "secondary remove-pending";
+        rm.textContent = "×";
+        rm.title = "Remove image";
+        rm.addEventListener("click", function () {
+          pendingSendImages = pendingSendImages.filter(function (x) {
+            return !x || String(x.dataUrl || "") !== url;
+          });
+          renderPendingSideChatImages();
+          updateComposerSendEnabled();
+        });
+        wrap.appendChild(im);
+        wrap.appendChild(rm);
+        el.appendChild(wrap);
+      });
+    }
     function playTone(freq, durationMs, gainValue) {
       try {
         var Ctx = window.AudioContext || window.webkitAudioContext;
@@ -289,11 +357,12 @@ export function getSideChatWebviewHtml(
       var send = document.getElementById("send");
       var ta = document.getElementById("input");
       if (!send) return;
-      var has = ta && String(ta.value || "").trim().length > 0;
+      var hasText = ta && String(ta.value || "").trim().length > 0;
+      var has = hasText || pendingSendImages.length > 0;
       send.disabled = !has;
       send.title = has
         ? ""
-        : "Type a non-empty message. Shift+Enter for newline, Enter to send.";
+        : "Type a message or paste an image. Shift+Enter for newline, Enter to send.";
     }
     function clampComposerHeightPx(v) {
       var n = Math.floor(Number(v));
@@ -655,17 +724,20 @@ export function getSideChatWebviewHtml(
     document.getElementById("send").addEventListener("click", function () {
       var ta = document.getElementById("input");
       var t = ta && ta.value ? ta.value : "";
-      if (!String(t).trim()) {
+      var imgs = pendingSendImages.slice();
+      if (!String(t).trim() && !imgs.length) {
         return;
       }
       var refId = replyTarget && typeof replyTarget.id === "string" ? replyTarget.id : null;
-      vscode.postMessage({
+      var payload = {
         type: "send",
         text: t,
         referencedSideChatMessageId: refId,
         referencedEventId: referencedEventId,
         referencedNoteId: referencedNoteId,
-      });
+      };
+      if (imgs.length) payload.images = imgs;
+      vscode.postMessage(payload);
       replyTarget = null;
       referencedEventId = null;
       referencedNoteId = null;
@@ -673,6 +745,8 @@ export function getSideChatWebviewHtml(
       updateRefEventHint();
       updateRefNoteHint();
       if (ta) ta.value = "";
+      pendingSendImages = [];
+      renderPendingSideChatImages();
       updateComposerSendEnabled();
     });
     document.getElementById("btnStopAssistantGeneration").addEventListener("click", function () {
@@ -811,6 +885,43 @@ export function getSideChatWebviewHtml(
     document.getElementById("input").addEventListener("input", function () {
       updateComposerSendEnabled();
       renderMentionSuggestions();
+    });
+    document.getElementById("input").addEventListener("paste", function (ev) {
+      var cd = ev.clipboardData;
+      if (!cd || !cd.items || !cd.items.length) return;
+      var files = [];
+      for (var i = 0; i < cd.items.length; i++) {
+        var it = cd.items[i];
+        if (it.kind === "file" && String(it.type || "").indexOf("image/") === 0) {
+          var f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (!files.length) return;
+      ev.preventDefault();
+      var ta = document.getElementById("input");
+      var plain = cd.getData("text/plain") || "";
+      if (plain && ta) {
+        var start = typeof ta.selectionStart === "number" ? ta.selectionStart : (ta.value || "").length;
+        var end = typeof ta.selectionEnd === "number" ? ta.selectionEnd : start;
+        var v = ta.value || "";
+        ta.value = v.slice(0, start) + plain + v.slice(end);
+        var pos = start + plain.length;
+        try {
+          ta.setSelectionRange(pos, pos);
+        } catch {}
+      }
+      files.forEach(function (blob) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          if (typeof fr.result === "string") {
+            pendingSendImages.push({ dataUrl: fr.result });
+            renderPendingSideChatImages();
+            updateComposerSendEnabled();
+          }
+        };
+        fr.readAsDataURL(blob);
+      });
     });
     document.getElementById("input").addEventListener("keydown", function (ev) {
       if (ev.key === "Tab" && mentionVisible.length > 0) {

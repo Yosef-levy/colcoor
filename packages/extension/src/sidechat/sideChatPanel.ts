@@ -15,6 +15,12 @@ import { shouldStartSideChatPresenceMemberRefresh } from "./sideChatPresenceMemb
 import { decideSideChatSoundKind } from "./sideChatSoundDecision";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
+import { buildUserImageDataUrlsByOwnerId } from "../conversation/conversationImageDataUrls";
+import {
+  buildUserMediaContentJson,
+  parseDataUrlToBytes,
+  type ColcoorUserMediaImageRef,
+} from "../conversation/userEventMedia";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
 import { buildSideChatSendPayload } from "./sideChatSendPayload";
 import {
@@ -67,6 +73,8 @@ type FromWebview =
       referencedSideChatMessageId?: string | null;
       referencedEventId?: string | null;
       referencedNoteId?: string | null;
+      /** Pasted images; host uploads then sends `content_json.colcoor_user_media`. */
+      images?: { dataUrl: string }[];
     }
   | { type: "refresh" }
   | { type: "stopGeneration" }
@@ -258,10 +266,20 @@ export async function openSideChatPanel(
   async function postState(): Promise<void> {
     const me = await ensureMyProfile();
     const viewerUserId = me?.id ?? null;
+    let sideChatImageDataUrlsByMessageId = new Map<string, string[]>();
+    try {
+      sideChatImageDataUrlsByMessageId = await buildUserImageDataUrlsByOwnerId(
+        api,
+        conversationId,
+        cached.filter((m) => m.kind === "user"),
+      );
+    } catch {
+      sideChatImageDataUrlsByMessageId = new Map();
+    }
     try {
       await panel.webview.postMessage({
         type: "state",
-        messages: toSideChatRenderMessages(cached, { eventLabelsById, noteLabelsById }),
+        messages: toSideChatRenderMessages(cached, { eventLabelsById, noteLabelsById }, sideChatImageDataUrlsByMessageId),
         viewerUserId,
         presenceSummary: sideChatPresenceSummary(cached, viewerUserId, memberDisplayByUserId),
         referencedEventId: composerReferencedEventId,
@@ -625,12 +643,30 @@ export async function openSideChatPanel(
             typeof msg.referencedNoteId === "string" ? msg.referencedNoteId : undefined,
           )
         : composerReferencedNoteId;
+      const pasted = Array.isArray(msg.images) ? msg.images : [];
+      const refs: ColcoorUserMediaImageRef[] = [];
+      for (const row of pasted) {
+        const du = typeof row?.dataUrl === "string" ? row.dataUrl : "";
+        const parsed = parseDataUrlToBytes(du);
+        if (!parsed) {
+          continue;
+        }
+        try {
+          const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
+          refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
+        } catch (e) {
+          await reportApiErrorToSideChat(e);
+          return;
+        }
+      }
+      const contentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
       const payload = buildSideChatSendPayload(
         msg.text,
         msg.referencedSideChatMessageId,
         referencedEventId,
         referencedNoteId,
         cached,
+        contentJson,
       );
       if (!payload) {
         await panel.webview.postMessage({

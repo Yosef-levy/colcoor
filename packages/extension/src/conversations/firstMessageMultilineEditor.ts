@@ -34,14 +34,3 @@ export async function collectMultilineTextInUntitledEditor(
   const latest = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uriKey);
   return normalizePersistedUserInputText(latest?.getText() ?? "");
 }
-
-/**
- * Optional multiline first message on new conversation ([ui-features.md] §4).
- */
-export async function collectFirstMessageFromUntitledEditor(): Promise<string> {
-  return collectMultilineTextInUntitledEditor({
-    infoMessage: "Colcoor — optional first message (multiline)",
-    useButtonLabel: "Use editor text as first message",
-    dismissButtonLabel: "Skip first message",
-  });
-}

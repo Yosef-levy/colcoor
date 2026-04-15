@@ -21,10 +21,7 @@ vi.mock("vscode", () => ({
 }));
 
 import * as vscode from "vscode";
-import {
-  collectFirstMessageFromUntitledEditor,
-  collectMultilineTextInUntitledEditor,
-} from "./firstMessageMultilineEditor";
+import { collectMultilineTextInUntitledEditor } from "./firstMessageMultilineEditor";
 
 describe("collectMultilineTextInUntitledEditor", () => {
   beforeEach(() => {
@@ -58,23 +55,5 @@ describe("collectMultilineTextInUntitledEditor", () => {
       dismissButtonLabel: "Skip",
     });
     expect(out).toBe("hello\nworld");
-  });
-});
-
-describe("collectFirstMessageFromUntitledEditor", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(mockDoc.getText).mockReturnValue("x");
-  });
-
-  it("labels the modal for the new-conversation multiline path", async () => {
-    vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce("Skip first message" as never);
-    await collectFirstMessageFromUntitledEditor();
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      "Colcoor — optional first message (multiline)",
-      expect.objectContaining({ modal: true }),
-      "Use editor text as first message",
-      "Skip first message",
-    );
   });
 });

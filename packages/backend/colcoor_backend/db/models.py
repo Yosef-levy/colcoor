@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Text,
     UniqueConstraint,
     Uuid,
@@ -147,6 +148,29 @@ class ConversationUserState(Base):
     needs_context_rebuild: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
 
+class ConversationImage(Base):
+    """User-uploaded image bytes; referenced from events/side_chat via ``content_json``."""
+
+    __tablename__ = "conversation_images"
+    __table_args__ = (Index("idx_conversation_images_conversation_id", "conversation_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    uploaded_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    mime_type: Mapped[str] = mapped_column(Text, nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    image_bytes: Mapped[bytes] = mapped_column("bytes", LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Note(Base):
     __tablename__ = "notes"
     __table_args__ = (
@@ -212,6 +236,7 @@ class SideChatMessage(Base):
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    content_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     referenced_event_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
     )

@@ -44,11 +44,13 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('ta.setAttribute("dir", "auto")');
   });
 
-  it("disables Send until composer has non-whitespace text", () => {
+  it("disables Send until composer has text or pasted images", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('<button id="send" type="button" disabled');
     expect(html).toContain("function updateComposerSendEnabled()");
-    expect(html).toContain("if (!String(t).trim())");
+    expect(html).toContain("if (!String(t).trim() && !imgs.length)");
+    expect(html).toContain("pendingSendImages.length");
+    expect(html).toContain('addEventListener("paste", function (ev)');
     expect(html).toContain('addEventListener("input", function ()');
     expect(html).toContain("if (send && send.disabled) return;");
     expect(html).toContain("updateComposerSendEnabled();");

@@ -1,4 +1,5 @@
 import type { GraphEventNode, NoteOut } from "../api/client";
+import { formatUserMediaTranscriptFragment, hasUserMediaImages } from "./userEventMedia";
 import { indexNotesByEventId, pathFromRootToTip, trimmedGraphCheckpointLabel } from "./treeEvents";
 
 /** Plaintext for the root → selected path (for “copy thread”), including NOTE lines when `notes` is provided. */
@@ -20,10 +21,12 @@ export function buildPlainThread(
     const evNotes = byEvent.get(ev.id);
     const cp = trimmedGraphCheckpointLabel(ev);
     if (ev.kind === "user_input") {
-      if (i === 0 && !text.trim() && !evNotes?.length) {
+      if (i === 0 && !text.trim() && !evNotes?.length && !hasUserMediaImages(ev.content_json ?? undefined)) {
         continue;
       }
-      let userLine = `User: ${text.trimEnd()}`;
+      const mediaFrag = formatUserMediaTranscriptFragment(ev.content_json ?? undefined);
+      const userText = [text.trimEnd(), mediaFrag].filter(Boolean).join("\n");
+      let userLine = `User: ${userText}`;
       if (cp !== undefined) {
         userLine += `\nCheckpoint: ${cp}`;
       }

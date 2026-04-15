@@ -4,6 +4,11 @@ import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
+  appendixForAgentImagePaths,
+  cleanupTempPaths,
+  writeUserMediaToTempFiles,
+} from "./conversationAgentImagePaths";
+import {
   normalizeOptionalGraphEventId,
   normalizePersistedUserInputText,
 } from "./normalizeUserInputText";
@@ -12,6 +17,7 @@ import {
   indexNotesByEventId,
   pathFromRootToTip,
 } from "./treeEvents";
+import { hasUserMediaImages } from "./userEventMedia";
 import type { UserTurnResult } from "./runUserTurn";
 
 export type RunResendAssistantOptions = {
@@ -57,7 +63,8 @@ export async function runResendAssistant(
     throw new Error("Resend only applies to a user message");
   }
   const userBody = normalizePersistedUserInputText(userNode.content_text ?? "");
-  if (!userBody) {
+  const persistedMedia = userNode.content_json ?? undefined;
+  if (!userBody && !hasUserMediaImages(persistedMedia)) {
     throw new Error("cannot resend an empty user message");
   }
 
@@ -70,13 +77,18 @@ export async function runResendAssistant(
   });
 
   const workspaceContextAppendix = await collectWorkspaceHintsForAgent(workspaceRoot);
-
+  let tempPaths: string[] = [];
   try {
+    tempPaths = await writeUserMediaToTempFiles(api, conversationId, persistedMedia);
+    const appendix = [workspaceContextAppendix, appendixForAgentImagePaths(tempPaths)]
+      .filter(Boolean)
+      .join("");
     const runResult = await agent.run({
       transcriptText,
-      userMessage: userBody,
+      userMessage:
+        userBody || "[User attached image(s); see transcript USER block and local file paths.]",
       workspaceRoot,
-      workspaceContextAppendix: workspaceContextAppendix || undefined,
+      workspaceContextAppendix: appendix.length > 0 ? appendix : undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
     });
@@ -86,5 +98,7 @@ export async function runResendAssistant(
       return { userEventId: resolvedUserEventId, cancelled: true };
     }
     throw e;
+  } finally {
+    await cleanupTempPaths(tempPaths);
   }
 }

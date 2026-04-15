@@ -25,6 +25,7 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(`slice(0, ${TREE_EVENT_SNIPPET_MAX})`);
     expect(html).toContain(`slice(0, ${TREE_EVENT_DISPLAY_TITLE_MAX})`);
+    expect(html).toContain("(conversation start)");
   });
 
   it("embeds shared tree event time formatter for node labels ([tree-ui-contract.md] §7)", () => {
@@ -124,10 +125,12 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "cancel" })');
   });
 
-  it("disables Send until the composer has non-whitespace text", () => {
+  it("disables Send until the composer has text or pasted images", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('<button id="send" type="button" disabled>Send</button>');
     expect(html).toContain("function updateComposerSendEnabled()");
+    expect(html).toContain("pendingSendImages.length");
+    expect(html).toContain('addEventListener("paste", function (ev)');
     expect(html).toContain('addEventListener("input", function ()');
     expect(html).toContain("updateComposerSendEnabled();");
     expect(html).toContain("if (sb && sb.disabled)");

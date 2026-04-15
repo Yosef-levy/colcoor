@@ -210,18 +210,34 @@ async def append_graph_event(
         visible_to = None
         actor_type = "assistant"
         actor_user_id = None
+        final_text = content
+        final_json = content_json
     else:
         visible_to = user_id if private_branch else None
         actor_type = "user"
         actor_user_id = user_id
+        text_norm = (content or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        norm_cj: dict | None = None
+        if content_json is not None:
+            from colcoor_backend.services.conversation_images import normalize_user_media_content_json
+
+            norm_cj = await normalize_user_media_content_json(
+                session,
+                conversation_id=conversation_id,
+                content_json=content_json,
+            )
+        if not text_norm and not norm_cj:
+            raise ValueError("user_input requires non-empty text and/or colcoor_user_media images")
+        final_text = text_norm
+        final_json = norm_cj
     ev = Event(
         conversation_id=conversation_id,
         parent_event_id=parent_event_id,
         kind=kind,
         actor_type=actor_type,
         actor_user_id=actor_user_id,
-        content_text=content,
-        content_json=content_json,
+        content_text=final_text,
+        content_json=final_json,
         checkpoint_label=checkpoint_label,
         visible_to=visible_to,
         deleted_at=None,

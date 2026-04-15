@@ -5,6 +5,7 @@
  */
 
 import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
+import { formatUserMediaTranscriptFragment } from "../conversation/userEventMedia";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 
 export const TRANSCRIPT_STATIC_HEADER = `You are given a structured conversation transcript.
@@ -44,6 +45,8 @@ export type BuildAuthoritativeTranscriptParams = {
    * appended as a final \`<<<USER>>>\` block (§1.6, §6).
    */
   finalUserMessage?: string | null;
+  /** Optional `colcoor_user_media` envelope for the pending user turn (same shape as persisted `events.content_json`). */
+  finalUserMediaContentJson?: Record<string, unknown> | null;
 };
 
 const BLOCK_SEPARATOR = "\n\n";
@@ -102,16 +105,19 @@ function serializeTurn(turn: TranscriptPathTurn): string {
 function shouldAppendFinalUser(
   path: TranscriptPathTurn[],
   finalUserMessage: string | null | undefined,
+  finalUserMediaContentJson: Record<string, unknown> | null | undefined,
 ): boolean {
-  if (finalUserMessage === undefined || finalUserMessage === null) {
+  const t =
+    finalUserMessage === undefined || finalUserMessage === null
+      ? ""
+      : normalizePersistedUserInputText(finalUserMessage);
+  const m = formatUserMediaTranscriptFragment(finalUserMediaContentJson ?? undefined);
+  if (!t && !m) {
     return false;
   }
-  const t = normalizePersistedUserInputText(finalUserMessage);
-  if (!t) {
-    return false;
-  }
+  const combined = [t, m].filter(Boolean).join("\n\n");
   const last = path[path.length - 1];
-  if (last?.role === "user" && normalizePersistedUserInputText(last.content) === t) {
+  if (last?.role === "user" && normalizePersistedUserInputText(last.content) === combined) {
     return false;
   }
   return true;
@@ -125,11 +131,18 @@ export function buildAuthoritativeTranscript(params: BuildAuthoritativeTranscrip
     normalizedConversationTitle(String(params.conversationTitle ?? "")) ?? "Conversation";
 
   const pathBody = params.pathFromRoot.map(serializeTurn).join(BLOCK_SEPARATOR);
-  const appendFinal = shouldAppendFinalUser(params.pathFromRoot, params.finalUserMessage);
-  const finalBlock =
-    appendFinal && params.finalUserMessage !== undefined && params.finalUserMessage !== null
-      ? serializeUserBlock(normalizePersistedUserInputText(params.finalUserMessage))
-      : "";
+  const appendFinal = shouldAppendFinalUser(
+    params.pathFromRoot,
+    params.finalUserMessage,
+    params.finalUserMediaContentJson,
+  );
+  const tNorm =
+    params.finalUserMessage === undefined || params.finalUserMessage === null
+      ? ""
+      : normalizePersistedUserInputText(params.finalUserMessage);
+  const mediaFrag = formatUserMediaTranscriptFragment(params.finalUserMediaContentJson ?? undefined);
+  const finalCombined = [tNorm, mediaFrag].filter(Boolean).join("\n\n");
+  const finalBlock = appendFinal && finalCombined ? serializeUserBlock(finalCombined) : "";
 
   const chunks: string[] = [titleLine, "", TRANSCRIPT_STATIC_HEADER];
 

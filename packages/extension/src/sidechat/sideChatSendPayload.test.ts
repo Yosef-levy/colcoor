@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SideChatMessageOut } from "../api/client";
+import { buildUserMediaContentJson } from "../conversation/userEventMedia";
 import { buildSideChatSendPayload } from "./sideChatSendPayload";
 
 function msg(id: string): SideChatMessageOut {
@@ -26,6 +27,20 @@ function msg(id: string): SideChatMessageOut {
 describe("buildSideChatSendPayload", () => {
   it("returns null for empty text", () => {
     expect(buildSideChatSendPayload(" \n ", null, null, null, [msg("a")])).toBeNull();
+  });
+
+  it("returns payload for image-only send when content_json has media", () => {
+    const cj = buildUserMediaContentJson([
+      { id: "iiiiiiii-iiii-4iii-8iii-iiiiiiiiiiii", mime_type: "image/png", byte_size: 12 },
+    ]);
+    expect(buildSideChatSendPayload(" \n ", null, null, null, [msg("a")], cj)).toEqual({
+      kind: "user",
+      body: "",
+      content_json: cj,
+      referenced_event_id: null,
+      referenced_note_id: null,
+      referenced_side_chat_message_id: null,
+    });
   });
 
   it("returns trimmed body and null reference by default", () => {

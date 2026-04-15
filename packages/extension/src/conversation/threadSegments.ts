@@ -19,6 +19,13 @@ function bodyHtmlFromMarkdown(markdown: string): string {
   }
 }
 
+function escapeHtmlAttr(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
 /** One rendered note under a thread message (markdown → safe HTML). */
 export type ThreadNoteBlock = {
   id: string;
@@ -80,6 +87,7 @@ export function buildThreadSegments(
   events: GraphEventNode[],
   selectedEventId: string,
   notes: readonly NoteOut[] = [],
+  userImageDataUrlsByEventId?: ReadonlyMap<string, readonly string[]>,
 ): ThreadSegment[] {
   const node = events.find((e) => e.id === selectedEventId);
   if (!node) {
@@ -98,13 +106,20 @@ export function buildThreadSegments(
         : undefined;
     const checkpointLabel = trimmedGraphCheckpointLabel(ev);
     if (ev.kind === "user_input") {
-      if (i === 0 && !text.trim() && !noteBlocks?.length) {
+      if (i === 0 && !text.trim() && !noteBlocks?.length && !(userImageDataUrlsByEventId?.get(ev.id)?.length)) {
         continue;
+      }
+      let bodyHtml = bodyHtmlFromMarkdown(text);
+      const imgs = userImageDataUrlsByEventId?.get(ev.id);
+      if (imgs?.length) {
+        for (const u of imgs) {
+          bodyHtml += `<figure class="msg-user-image"><img src="${escapeHtmlAttr(u)}" alt="User image" /></figure>`;
+        }
       }
       out.push({
         role: "user",
         eventId: ev.id,
-        html: bodyHtmlFromMarkdown(text),
+        html: bodyHtml,
         ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),
         notes: noteBlocks,
       });

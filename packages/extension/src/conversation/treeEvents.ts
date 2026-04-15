@@ -1,5 +1,6 @@
 import type { GraphEventNode, NoteOut } from "../api/client";
 import type { TranscriptNoteInput, TranscriptPathTurn } from "../transcript/buildTranscript";
+import { formatUserMediaTranscriptFragment, hasUserMediaImages } from "./userEventMedia";
 
 /**
  * Group API notes by host `event_id`, each list sorted by `created_at` then `id`
@@ -90,11 +91,14 @@ export function graphPathToTranscriptTurns(
     const ev = path[i];
     const text = ev.content_text ?? "";
     const attached = notesFor(ev.id);
+    const mediaFrag = formatUserMediaTranscriptFragment(ev.content_json ?? undefined);
+    const trimmedText = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
+    const combinedUser = [trimmedText, mediaFrag].filter(Boolean).join("\n\n");
     if (ev.kind === "user_input") {
-      if (i === 0 && !text.trim() && attached.length === 0) {
+      if (i === 0 && !text.trim() && attached.length === 0 && !hasUserMediaImages(ev.content_json ?? undefined)) {
         continue;
       }
-      turns.push({ role: "user", content: text, notes: attached });
+      turns.push({ role: "user", content: combinedUser, notes: attached });
     } else if (ev.kind === "assistant_output") {
       turns.push({ role: "assistant", content: text, notes: attached });
     }

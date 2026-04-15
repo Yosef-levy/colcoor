@@ -4,6 +4,11 @@ import type { ColcoorApiClient } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
+  appendixForAgentImagePaths,
+  cleanupTempPaths,
+  writeUserMediaToTempFiles,
+} from "./conversationAgentImagePaths";
+import {
   normalizeOptionalGraphEventId,
   normalizePersistedUserInputText,
 } from "./normalizeUserInputText";
@@ -43,6 +48,11 @@ export type RunUserTurnOptions = {
   onUserMessagePersisted?: (args: { userEventId: string }) => void | Promise<void>;
   /** Optional display-only label on the new `user_input` (`events.checkpoint_label`; [ui-features.md] §8). */
   checkpointLabel?: string;
+  /**
+   * Persisted `colcoor_user_media` envelope (image ids must already exist via POST …/images).
+   * When set with empty `userMessage`, creates an image-only `user_input`.
+   */
+  userMediaContentJson?: Record<string, unknown> | null;
 };
 
 export type UserTurnResult = {
@@ -69,7 +79,8 @@ export async function runColcoorUserTurn(
   options?: RunUserTurnOptions,
 ): Promise<UserTurnResult> {
   const trimmed = normalizePersistedUserInputText(userMessage);
-  if (!trimmed) {
+  const mediaJson = options?.userMediaContentJson ?? undefined;
+  if (!trimmed && !mediaJson) {
     throw new Error("message is empty");
   }
 
@@ -99,29 +110,36 @@ export async function runColcoorUserTurn(
   const transcriptText = buildAuthoritativeTranscript({
     conversationTitle,
     pathFromRoot: pathTurns,
-    finalUserMessage: trimmed,
+    finalUserMessage: trimmed || null,
+    finalUserMediaContentJson: mediaJson,
   });
 
   const cp = normalizeOptionalCheckpointLabel(options?.checkpointLabel);
   const userRes = await api.appendEvent(conversationId, {
     kind: "user_input",
     parent_event_id: attach.id,
-    content: trimmed,
+    content: trimmed || "",
     author: "end_user",
     private_branch: options?.privateBranch ?? false,
     ...(cp !== undefined ? { checkpoint_label: cp } : {}),
+    ...(mediaJson ? { content_json: mediaJson } : {}),
   });
 
   await options?.onUserMessagePersisted?.({ userEventId: userRes.id });
 
   const workspaceContextAppendix = await collectWorkspaceHintsForAgent(workspaceRoot);
-
+  const persistedMedia = mediaJson ?? undefined;
+  let tempPaths: string[] = [];
   try {
+    tempPaths = await writeUserMediaToTempFiles(api, conversationId, persistedMedia);
+    const appendix = [workspaceContextAppendix, appendixForAgentImagePaths(tempPaths)]
+      .filter(Boolean)
+      .join("");
     const runResult = await agent.run({
       transcriptText,
-      userMessage: trimmed,
+      userMessage: trimmed || "[User attached image(s); see transcript USER block and local file paths.]",
       workspaceRoot,
-      workspaceContextAppendix: workspaceContextAppendix || undefined,
+      workspaceContextAppendix: appendix.length > 0 ? appendix : undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
     });
@@ -131,5 +149,7 @@ export async function runColcoorUserTurn(
       return { userEventId: userRes.id, cancelled: true };
     }
     throw e;
+  } finally {
+    await cleanupTempPaths(tempPaths);
   }
 }

@@ -46,7 +46,7 @@ Link or embed **Terms**, **Privacy**, **Refund** as product policy requires.
 - List conversations: **per-user pinned** rows first, then unpinned, each group by **recency** (`updated_at`); show **title** and **last updated**.
 - **Select** a conversation to load tree and thread.
 - **Per-conversation menu** (e.g. ⋮): **Add editor/viewer**, **Change name** (where role allows), **Pin / Unpin**, **Delete conversation**.
-- **Create conversation:** optional title; optional **first message** — leave empty or dismiss the second prompt to create with title only (no agent run until you send from the thread).
+- **Create conversation:** optional title; optional **first message** in a single-line prompt — leave empty, confirm with Enter, or Esc to create with title only (no agent run until you send from the thread).
 
 The list panel MUST be **minimizable** (collapse to strip or icon).
 

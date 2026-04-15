@@ -14,6 +14,7 @@ import {
   normalizeOptionalGraphEventId,
   normalizePersistedUserInputText,
 } from "./normalizeUserInputText";
+import { buildUserImageDataUrlsByEventId } from "./conversationImageDataUrls";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
@@ -39,6 +40,8 @@ import {
 } from "../util/colcoorApiFailureActions";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
+import { buildUserMediaContentJson, parseDataUrlToBytes } from "./userEventMedia";
+import type { ColcoorUserMediaImageRef } from "./userEventMedia";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
 /** `conversation_id` → event ids whose branches are collapsed in the webview tree ([tree-ui-contract.md]). */
@@ -78,7 +81,14 @@ type WebviewStateMessage = {
 
 type FromWebview =
   | { type: "ready" }
-  | { type: "send"; text: string; privateBranch?: boolean; checkpointLabel?: string }
+  | {
+      type: "send";
+      text: string;
+      privateBranch?: boolean;
+      checkpointLabel?: string;
+      /** Pasted images as data URLs (image/* only); host uploads then appends colcoor_user_media. */
+      images?: { dataUrl: string }[];
+    }
   | { type: "select"; id: string }
   | { type: "treeContextMenu"; id: string }
   | { type: "selectTip" }
@@ -210,6 +220,28 @@ export function createConversationPanelController(
   let viewerUserIdMemo: string | undefined;
   /** Set while a main-thread send is in flight until the user message exists on the tree ([ui-features.md] §7). */
   let pendingSendUserMarkdown: string | undefined;
+  /** Data URLs for `user_input` rows with `colcoor_user_media`, built on each tree refresh for thread HTML. */
+  let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
+  /**
+   * Serialize tree fetches + postMessage so overlapping refreshes (e.g. tree click during send)
+   * cannot apply an older GET /tree after a newer one and leave the UI stuck on a root-only snapshot.
+   */
+  let treeRefreshMutexChain: Promise<void> = Promise.resolve();
+
+  async function withTreeRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = treeRefreshMutexChain;
+    let release!: () => void;
+    const next = new Promise<void>((res) => {
+      release = res;
+    });
+    treeRefreshMutexChain = prev.then(() => next);
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
 
   function applySideChatUnreadFromListRow(row: ConversationSummary | undefined): void {
     if (!row) {
@@ -267,6 +299,7 @@ export function createConversationPanelController(
     lastTreeEvents = [];
     lastNotes = [];
     lastNeedsContextRebuild = false;
+    lastUserImageDataUrlsByEventId = new Map();
     sideChatUnreadCount = 0;
     sideChatHasUnread = false;
   }
@@ -325,7 +358,7 @@ export function createConversationPanelController(
         conversationPinned,
         events,
         selectedEventId: sel ?? "",
-        threadSegments: buildThreadSegments(events, sel ?? "", lastNotes),
+        threadSegments: buildThreadSegments(events, sel ?? "", lastNotes, lastUserImageDataUrlsByEventId),
         threadPlainText: appendPendingPlainThreadFragment(
           buildPlainThread(events, sel ?? "", lastNotes),
           busy,
@@ -397,108 +430,159 @@ export function createConversationPanelController(
     }
   }
 
-  async function loadTreeAndPush(busy: boolean, lastError: string | null): Promise<void> {
-    if (!conversationId) {
-      return;
-    }
-    try {
-      const previousSelectedEventId = selectedEventId;
-      const previousEventIds = new Set(lastTreeEvents.map((e) => e.id));
-      const [{ events }, notes, caller, listRows] = await Promise.all([
-        api.getTree(conversationId),
-        api.listNotes(conversationId),
-        api.getConversationCallerState(conversationId).catch((): null => null),
-        api.listConversations().catch((): ConversationSummary[] => []),
-      ]);
-      applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
-      const nextEventIds = new Set(events.map((e) => e.id));
-      const stalePromptKey = staleTreeMissingSelectionPromptKey({
-        previousSelectedEventId,
-        previousEventIds,
-        nextEventIds,
-        alreadyPromptedForEventId: staleTreePromptedForEventId,
-      });
-      let growthFingerprint: string | null = null;
-      if (!busy && !stalePromptKey && previousEventIds.size > 0) {
-        const maybeNewUserInput = events.some(
-          (e) => !previousEventIds.has(e.id) && e.kind === "user_input",
-        );
-        if (maybeNewUserInput) {
-          if (viewerUserIdMemo === undefined) {
-            try {
-              viewerUserIdMemo = (await api.getMe()).id;
-            } catch {
-              viewerUserIdMemo = undefined;
+  async function loadTreeAndPush(
+    busy: boolean,
+    lastError: string | null,
+    opts?: { finalizeToDefaultBranchTip?: boolean },
+  ): Promise<void> {
+    await withTreeRefreshLock(async () => {
+      if (!conversationId) {
+        return;
+      }
+      let finalizeToDefaultBranchTip = Boolean(opts?.finalizeToDefaultBranchTip);
+      for (;;) {
+        try {
+          const previousSelectedEventId = selectedEventId;
+          const previousEventIds = new Set(lastTreeEvents.map((e) => e.id));
+          const [{ events }, notes, caller, listRows] = await Promise.all([
+            api.getTree(conversationId),
+            api.listNotes(conversationId),
+            api.getConversationCallerState(conversationId).catch((): null => null),
+            api.listConversations().catch((): ConversationSummary[] => []),
+          ]);
+          applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
+          const nextEventIds = new Set(events.map((e) => e.id));
+          const stalePromptKey = staleTreeMissingSelectionPromptKey({
+            previousSelectedEventId,
+            previousEventIds,
+            nextEventIds,
+            alreadyPromptedForEventId: staleTreePromptedForEventId,
+          });
+          let growthFingerprint: string | null = null;
+          if (!busy && !stalePromptKey && previousEventIds.size > 0) {
+            const maybeNewUserInput = events.some(
+              (e) => !previousEventIds.has(e.id) && e.kind === "user_input",
+            );
+            if (maybeNewUserInput) {
+              if (viewerUserIdMemo === undefined) {
+                try {
+                  viewerUserIdMemo = (await api.getMe()).id;
+                } catch {
+                  viewerUserIdMemo = undefined;
+                }
+              }
+              if (viewerUserIdMemo !== undefined) {
+                growthFingerprint = staleTreeRemoteCollaboratorGrowthFingerprint({
+                  previousEventIds,
+                  nextEvents: events,
+                  viewerUserId: viewerUserIdMemo,
+                  alreadyPromptedFingerprint: staleTreePromptedForGrowthFingerprint,
+                });
+              }
             }
           }
-          if (viewerUserIdMemo !== undefined) {
-            growthFingerprint = staleTreeRemoteCollaboratorGrowthFingerprint({
-              previousEventIds,
-              nextEvents: events,
-              viewerUserId: viewerUserIdMemo,
-              alreadyPromptedFingerprint: staleTreePromptedForGrowthFingerprint,
-            });
+          lastNotes = notes;
+          if (caller) {
+            lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
+            const aid = caller.active_event_id;
+            if (events.some((e) => e.id === aid)) {
+              selectedEventId = aid;
+            }
+          } else {
+            lastNeedsContextRebuild = false;
           }
-        }
-      }
-      lastNotes = notes;
-      if (caller) {
-        lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
-        const aid = caller.active_event_id;
-        if (events.some((e) => e.id === aid)) {
-          selectedEventId = aid;
-        }
-      } else {
-        lastNeedsContextRebuild = false;
-      }
-      if (selectedEventId && nextEventIds.has(selectedEventId)) {
-        staleTreePromptedForEventId = null;
-      }
-      if (!busy && stalePromptKey) {
-        staleTreePromptedForEventId = stalePromptKey;
-        const choice = await vscode.window.showWarningMessage(
-          "Colcoor: the shared tree changed and your previous selection is no longer available.",
-          COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
-        );
-        if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
-          await loadTreeAndPush(false, null);
+          if (selectedEventId && nextEventIds.has(selectedEventId)) {
+            staleTreePromptedForEventId = null;
+          }
+          if (!busy && stalePromptKey) {
+            staleTreePromptedForEventId = stalePromptKey;
+            const choice = await vscode.window.showWarningMessage(
+              "Colcoor: the shared tree changed and your previous selection is no longer available.",
+              COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+            );
+            if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
+              finalizeToDefaultBranchTip = false;
+              continue;
+            }
+          } else if (!busy && growthFingerprint) {
+            staleTreePromptedForGrowthFingerprint = growthFingerprint;
+            const choice = await vscode.window.showWarningMessage(
+              "Colcoor: new collaborative messages were added to this conversation’s tree.",
+              COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
+            );
+            if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
+              finalizeToDefaultBranchTip = false;
+              continue;
+            }
+          }
+          if (finalizeToDefaultBranchTip && events.length > 0) {
+            try {
+              selectedEventId = findBranchTip(events).id;
+            } catch {
+              selectedEventId = events.at(-1)?.id;
+            }
+          }
+          try {
+            lastUserImageDataUrlsByEventId = await buildUserImageDataUrlsByEventId(
+              api,
+              conversationId,
+              events,
+            );
+          } catch {
+            lastUserImageDataUrlsByEventId = new Map();
+          }
+          postState(events, busy, lastError);
+          return;
+        } catch (e) {
+          if (isPlanLimitColcoorApiError(e)) {
+            void showColcoorApiFailure(e);
+          }
+          const msg = e instanceof Error ? e.message : String(e);
+          lastNotes = [];
+          lastNeedsContextRebuild = false;
+          lastUserImageDataUrlsByEventId = new Map();
+          postState([], busy, msg);
           return;
         }
-      } else if (!busy && growthFingerprint) {
-        staleTreePromptedForGrowthFingerprint = growthFingerprint;
-        const choice = await vscode.window.showWarningMessage(
-          "Colcoor: new collaborative messages were added to this conversation’s tree.",
-          COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
-        );
-        if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
-          await loadTreeAndPush(false, null);
-          return;
-        }
       }
-      postState(events, busy, lastError);
-    } catch (e) {
-      if (isPlanLimitColcoorApiError(e)) {
-        void showColcoorApiFailure(e);
-      }
-      const msg = e instanceof Error ? e.message : String(e);
-      lastNotes = [];
-      lastNeedsContextRebuild = false;
-      postState([], busy, msg);
-    }
+    });
   }
 
-  async function handleSend(text: string, privateBranch: boolean, checkpointLabel?: string): Promise<void> {
+  async function handleSend(
+    text: string,
+    privateBranch: boolean,
+    checkpointLabel?: string,
+    pastedImages?: { dataUrl: string }[],
+  ): Promise<void> {
     const trimmed = normalizePersistedUserInputText(text);
-    if (!trimmed || !conversationId || !selectedEventId) {
+    const hasPasted =
+      Array.isArray(pastedImages) && pastedImages.some((x) => typeof x?.dataUrl === "string" && x.dataUrl.trim());
+    if ((!trimmed && !hasPasted) || !conversationId || !selectedEventId) {
       return;
     }
-    pendingSendUserMarkdown = trimmed;
+    pendingSendUserMarkdown = trimmed || (hasPasted ? "_Image_…" : "");
     const ws = getWorkspaceRoot();
     sendAbort?.abort();
     sendAbort = new AbortController();
     syncConversationReplyInProgressContext();
     const signal = sendAbort.signal;
     await loadTreeAndPush(true, null);
+    const refs: ColcoorUserMediaImageRef[] = [];
+    for (const row of pastedImages ?? []) {
+      const parsed = parseDataUrlToBytes(row.dataUrl);
+      if (!parsed) {
+        continue;
+      }
+      const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
+      refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
+    }
+    if (!trimmed && refs.length === 0) {
+      sendAbort = undefined;
+      syncConversationReplyInProgressContext();
+      pendingSendUserMarkdown = undefined;
+      return;
+    }
+    const userMediaContentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
     try {
       const result = await runColcoorUserTurn(
@@ -514,6 +598,7 @@ export function createConversationPanelController(
           checkpointLabel,
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
+          ...(userMediaContentJson ? { userMediaContentJson } : {}),
           onUserMessagePersisted: async ({ userEventId }) => {
             pendingSendUserMarkdown = undefined;
             selectedEventId = userEventId;
@@ -522,25 +607,7 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
-      const [{ events }, notes, caller, listRows] = await Promise.all([
-        api.getTree(conversationId),
-        api.listNotes(conversationId),
-        api.getConversationCallerState(conversationId).catch((): null => null),
-        api.listConversations().catch((): ConversationSummary[] => []),
-      ]);
-      lastNotes = notes;
-      applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
-      if (caller) {
-        lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
-      } else {
-        lastNeedsContextRebuild = false;
-      }
-      try {
-        selectedEventId = findBranchTip(events).id;
-      } catch {
-        selectedEventId = events.at(-1)?.id;
-      }
-      postState(events, false, null);
+      await loadTreeAndPush(false, null, { finalizeToDefaultBranchTip: true });
       if (result.cancelled) {
         void vscode.window.showInformationMessage(
           result.assistantText?.trim()
@@ -584,25 +651,7 @@ export function createConversationPanelController(
         { signal, onAssistantTextDelta: (t) => stream.pushDelta(t) },
       );
       stream.dispose();
-      const [{ events }, notes, caller, listRows] = await Promise.all([
-        api.getTree(conversationId),
-        api.listNotes(conversationId),
-        api.getConversationCallerState(conversationId).catch((): null => null),
-        api.listConversations().catch((): ConversationSummary[] => []),
-      ]);
-      lastNotes = notes;
-      applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
-      if (caller) {
-        lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
-      } else {
-        lastNeedsContextRebuild = false;
-      }
-      try {
-        selectedEventId = findBranchTip(events).id;
-      } catch {
-        selectedEventId = events.at(-1)?.id;
-      }
-      postState(events, false, null);
+      await loadTreeAndPush(false, null, { finalizeToDefaultBranchTip: true });
       if (result.cancelled) {
         void vscode.window.showInformationMessage(
           result.assistantText?.trim()
@@ -1030,7 +1079,7 @@ export function createConversationPanelController(
       if (msg.type === "send" && typeof msg.text === "string") {
         const checkpointLabel =
           typeof msg.checkpointLabel === "string" ? msg.checkpointLabel : undefined;
-        await handleSend(msg.text, Boolean(msg.privateBranch), checkpointLabel);
+        await handleSend(msg.text, Boolean(msg.privateBranch), checkpointLabel, msg.images);
         return;
       }
       if (msg.type === "deleteNote" && typeof msg.noteId === "string" && conversationId) {

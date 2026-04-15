@@ -1,12 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 
 from colcoor_backend.api.deps import CurrentUserId, DbSession
 from colcoor_backend.db.models import Conversation, ConversationMember
 from colcoor_backend.api.schemas import (
     AppendEventBody,
     ConversationCreate,
+    ConversationImageUploadOut,
     ConversationOut,
     ConversationPatch,
     ConversationUserStateOut,
@@ -41,6 +42,10 @@ from colcoor_backend.services.graph import (
     tree_event_annotations,
     update_conversation_member_role,
     update_note_content,
+)
+from colcoor_backend.services.conversation_images import (
+    load_conversation_image_bytes,
+    store_conversation_image,
 )
 from colcoor_backend.services.side_chat import side_chat_unread_count_by_conversation_ids
 
@@ -190,6 +195,59 @@ async def append_event(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
     return {"id": str(ev.id)}
+
+
+@router.post("/{conversation_id}/images", response_model=ConversationImageUploadOut)
+async def post_conversation_image(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    file: UploadFile = File(...),
+) -> ConversationImageUploadOut:
+    """Upload image bytes for later reference from a ``user_input`` or side-chat ``content_json``."""
+    try:
+        raw = await file.read()
+        mime = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
+        row = await store_conversation_image(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            mime_type=mime,
+            data=raw,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return ConversationImageUploadOut(
+        id=row.id,
+        mime_type=row.mime_type,
+        byte_size=row.byte_size,
+    )
+
+
+@router.get("/{conversation_id}/images/{image_id}")
+async def get_conversation_image(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    image_id: UUID,
+) -> Response:
+    """Return raw image bytes for conversation members (Authorization: Bearer)."""
+    try:
+        got = await load_conversation_image_bytes(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            image_id=image_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    if got is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    data, mime = got
+    return Response(content=data, media_type=mime)
 
 
 @router.get("/{conversation_id}/tree", response_model=TreeResponse)

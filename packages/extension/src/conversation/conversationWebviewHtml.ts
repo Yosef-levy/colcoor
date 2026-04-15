@@ -604,6 +604,41 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-radius: 4px;
       margin: 0.35em 0;
     }
+    .thread .msg .body.md .msg-user-image {
+      margin: 0.5em 0 0;
+    }
+    .thread .msg .body.md .msg-user-image img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .composer-pending-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
+      margin-top: 6px;
+    }
+    .composer-pending-images .pending-thumb-wrap {
+      position: relative;
+    }
+    .composer-pending-images .pending-thumb {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-panel-border);
+    }
+    .composer-pending-images button.remove-pending {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      padding: 0 5px;
+      font-size: 0.75em;
+      line-height: 1.2;
+      border-radius: 999px;
+    }
     .composer label.priv {
       display: flex;
       align-items: flex-start;
@@ -746,6 +781,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       ></div>
       <div class="composer">
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
+        <div id="pendingConversationImages" class="composer-pending-images" style="display:none"></div>
         <div class="checkpoint-label-wrap">
           <label for="checkpointLabel" class="hint">Checkpoint label (optional)</label>
           <input
@@ -780,6 +816,42 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     const CONTEXT_REBUILD_SUBTITLE_SUFFIX = ${JSON.stringify(CONTEXT_REBUILD_SUBTITLE_SUFFIX)};
     const CONTEXT_REBUILD_COMPOSER_BANNER = ${JSON.stringify(CONTEXT_REBUILD_COMPOSER_BANNER)};
     let hasReceivedState = false;
+    var pendingSendImages = [];
+    function renderPendingConversationImages() {
+      var el = document.getElementById("pendingConversationImages");
+      if (!el) return;
+      el.replaceChildren();
+      if (!pendingSendImages.length) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "flex";
+      pendingSendImages.forEach(function (item) {
+        var url = item && item.dataUrl ? String(item.dataUrl) : "";
+        if (!url) return;
+        var wrap = document.createElement("div");
+        wrap.className = "pending-thumb-wrap";
+        var im = document.createElement("img");
+        im.className = "pending-thumb";
+        im.alt = "";
+        im.src = url;
+        var rm = document.createElement("button");
+        rm.type = "button";
+        rm.className = "btn-secondary remove-pending";
+        rm.textContent = "×";
+        rm.title = "Remove image";
+        rm.addEventListener("click", function () {
+          pendingSendImages = pendingSendImages.filter(function (x) {
+            return !x || String(x.dataUrl || "") !== url;
+          });
+          renderPendingConversationImages();
+          updateComposerSendEnabled();
+        });
+        wrap.appendChild(im);
+        wrap.appendChild(rm);
+        el.appendChild(wrap);
+      });
+    }
     let state = {
       conversationId: "",
       title: null,
@@ -858,7 +930,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     function snippet(ev) {
       const t = (ev.content_text || "").trim().replace(/\\s+/g, " ");
-      if (!t) return "(empty)";
+      if (!t) {
+        if (ev.kind === "user_input" && (ev.parent_event_id == null || ev.parent_event_id === "")) {
+          return "(conversation start)";
+        }
+        return "(empty)";
+      }
       return t.length > ${TREE_EVENT_SNIPPET_MAX}
         ? t.slice(0, ${TREE_EVENT_SNIPPET_MAX}) + "…"
         : t;
@@ -1384,11 +1461,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         sendBtn.disabled = true;
         return;
       }
-      var has = ta && String(ta.value || "").trim().length > 0;
+      var hasText = ta && String(ta.value || "").trim().length > 0;
+      var has = hasText || pendingSendImages.length > 0;
       sendBtn.disabled = !has;
       sendBtn.title = has
         ? ""
-        : "Type a non-empty message. Shift+Enter for newline, Enter to send.";
+        : "Type a message or paste an image. Shift+Enter for newline, Enter to send.";
     }
 
     function shouldSendComposerOnEnter(ev) {
@@ -1624,7 +1702,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("send").addEventListener("click", () => {
       const ta = document.getElementById("input");
       const text = ta && ta.value ? ta.value.trim() : "";
-      if (!text) return;
+      const imgs = pendingSendImages.slice();
+      if (!text && !imgs.length) return;
       const priv = document.getElementById("privateBranch");
       const privateBranch = priv && priv.checked;
       const cpEl = document.getElementById("checkpointLabel");
@@ -1632,9 +1711,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var cpTrim = cpRaw.trimEnd();
       var payload = { type: "send", text: ta.value.trimEnd(), privateBranch };
       if (cpTrim.length) payload.checkpointLabel = cpTrim;
+      if (imgs.length) payload.images = imgs;
       vscode.postMessage(payload);
       ta.value = "";
       if (cpEl) cpEl.value = "";
+      pendingSendImages = [];
+      renderPendingConversationImages();
       updateComposerSendEnabled();
     });
 
@@ -1782,6 +1864,44 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("input").addEventListener("input", function () {
       updateComposerSendEnabled();
+    });
+
+    document.getElementById("input").addEventListener("paste", function (ev) {
+      var cd = ev.clipboardData;
+      if (!cd || !cd.items || !cd.items.length) return;
+      var files = [];
+      for (var i = 0; i < cd.items.length; i++) {
+        var it = cd.items[i];
+        if (it.kind === "file" && String(it.type || "").indexOf("image/") === 0) {
+          var f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (!files.length) return;
+      ev.preventDefault();
+      var ta = document.getElementById("input");
+      var plain = cd.getData("text/plain") || "";
+      if (plain && ta) {
+        var start = typeof ta.selectionStart === "number" ? ta.selectionStart : (ta.value || "").length;
+        var end = typeof ta.selectionEnd === "number" ? ta.selectionEnd : start;
+        var v = ta.value || "";
+        ta.value = v.slice(0, start) + plain + v.slice(end);
+        var pos = start + plain.length;
+        try {
+          ta.setSelectionRange(pos, pos);
+        } catch {}
+      }
+      files.forEach(function (blob) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          if (typeof fr.result === "string") {
+            pendingSendImages.push({ dataUrl: fr.result });
+            renderPendingConversationImages();
+            updateComposerSendEnabled();
+          }
+        };
+        fr.readAsDataURL(blob);
+      });
     });
 
     document.getElementById("input").addEventListener("keydown", (e) => {

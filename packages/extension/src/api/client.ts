@@ -122,6 +122,8 @@ export type SideChatMessageOut = {
   author_display_name: string | null;
   author_avatar_url: string | null;
   body: string | null;
+  /** Same shape as graph `user_input` `colcoor_user_media` when present. */
+  content_json?: Record<string, unknown> | null;
   referenced_event_id: string | null;
   referenced_note_id: string | null;
   referenced_side_chat_message_id: string | null;
@@ -133,7 +135,8 @@ export type SideChatMessageOut = {
 
 export type SideChatPostBody = {
   kind: "user";
-  body: string;
+  body?: string;
+  content_json?: Record<string, unknown> | null;
   referenced_event_id?: string | null;
   referenced_note_id?: string | null;
   referenced_side_chat_message_id?: string | null;
@@ -478,10 +481,26 @@ export class ColcoorApiClient {
     conversationId: string,
     body: SideChatPostBody,
   ): Promise<SideChatMessageOut> {
+    const payload: Record<string, unknown> = {
+      kind: body.kind,
+      body: body.body ?? "",
+    };
+    if (body.content_json !== undefined) {
+      payload.content_json = body.content_json;
+    }
+    if (body.referenced_event_id !== undefined) {
+      payload.referenced_event_id = body.referenced_event_id;
+    }
+    if (body.referenced_note_id !== undefined) {
+      payload.referenced_note_id = body.referenced_note_id;
+    }
+    if (body.referenced_side_chat_message_id !== undefined) {
+      payload.referenced_side_chat_message_id = body.referenced_side_chat_message_id;
+    }
     const res = await this.fetchApi(`/conversations/${conversationId}/side-chat/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     });
     const text = await res.text();
     this.assertOkResponse(res, text, "post side-chat message");
@@ -618,6 +637,55 @@ export class ColcoorApiClient {
     const text = await res.text();
     this.assertOkResponse(res, text, "append event");
     return JSON.parse(text) as AppendEventResponse;
+  }
+
+  /** POST …/conversations/{id}/images — multipart upload; returns persisted image id for ``content_json`` refs. */
+  async uploadConversationImage(
+    conversationId: string,
+    bytes: Uint8Array,
+    mimeType: string,
+  ): Promise<{ id: string; mime_type: string; byte_size: number }> {
+    const token = await this.getAccessToken();
+    const form = new FormData();
+    const ext =
+      mimeType === "image/png"
+        ? "png"
+        : mimeType === "image/jpeg"
+          ? "jpg"
+          : mimeType === "image/webp"
+            ? "webp"
+            : mimeType === "image/gif"
+              ? "gif"
+              : "img";
+    form.append("file", new Blob([bytes], { type: mimeType }), `upload.${ext}`);
+    const url = this.apiUrl(`/conversations/${conversationId}/images`);
+    const headers = new Headers();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const res = await fetch(url, { method: "POST", headers, body: form });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "upload conversation image");
+    return JSON.parse(text) as { id: string; mime_type: string; byte_size: number };
+  }
+
+  /** GET …/conversations/{id}/images/{imageId} — raw bytes (authenticated). */
+  async getConversationImageRaw(
+    conversationId: string,
+    imageId: string,
+  ): Promise<{ mimeType: string; arrayBuffer: ArrayBuffer }> {
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/images/${encodeURIComponent(imageId)}`,
+      { method: "GET" },
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      this.assertOkResponse(res, text, "get conversation image");
+    }
+    const mimeType =
+      res.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase() || "application/octet-stream";
+    const arrayBuffer = await res.arrayBuffer();
+    return { mimeType, arrayBuffer };
   }
 }
 

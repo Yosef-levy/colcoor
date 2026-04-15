@@ -217,7 +217,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `actor_type` | string | yes | `user` \| `assistant` |
 | `actor_user_id` | uuid \| null | yes |
 | `content_text` | string \| null | yes |
-| `content_json` | object \| null | no | Structured payload when present (e.g. `colcoor_agent_trace` from Cursor CLI stream-json) |
+| `content_json` | object \| null | no | Structured payload when present (e.g. `colcoor_agent_trace` on assistant rows; `colcoor_user_media` on user rows with images — §6.2) |
 | `visible_to` | uuid \| null | yes |
 | `created_at` | string (ISO-8601) | yes |
 | `updated_at` | string (ISO-8601) | yes |
@@ -290,8 +290,16 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `content` | string | yes | persisted as `content_text` |
 | `author` | string | yes | e.g. `end_user`, `cursor_agent` |
 | `private_branch` | boolean | no | default `false`; **only** valid when `kind` is `user_input`; must be `false` when `kind` is `assistant_output` |
-| `content_json` | object | no | **Only** when `kind` is `assistant_output`: optional JSON stored on the event (e.g. `{ "colcoor_agent_trace": { "version": 1, "entries": [...] } }` from NDJSON timeline) |
+| `content_json` | object | no | When `kind` is `assistant_output`: optional JSON (e.g. `{ "colcoor_agent_trace": { "version": 1, "entries": [...] } }` from NDJSON). When `kind` is `user_input`: optional JSON **only** if its top-level keys are exactly `{ "colcoor_user_media": … }` — durable refs to bytes stored via `POST …/images` (same envelope as side-chat user rows; see §6.2). |
 | `checkpoint_label` | string | no | Optional display-only label stored on the new event (trimmed; max 256 chars); omitted or blank when not used |
+
+For `user_input`, `content` may be empty after trim when `content_json.colcoor_user_media` includes at least one image ref (image-only turns).
+
+### 6.2 Conversation images (binary storage for `colcoor_user_media`)
+
+**`POST /api/v1/conversations/{conversation_id}/images`** — multipart field `file` (member-only). Returns `{ id, mime_type, byte_size }` to embed under `content_json.colcoor_user_media.images[]` on a subsequent `append-event` or side-chat `POST …/messages`.
+
+**`GET /api/v1/conversations/{conversation_id}/images/{image_id}`** — returns raw bytes with `Content-Type` from upload (member-only).
 
 ---
 
@@ -415,6 +423,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `author_display_name` | string \| null | yes | trimmed `users.display_name` when `author_user_id` resolves; otherwise `null` |
 | `author_avatar_url` | string \| null | yes | `users.avatar_url` when `author_user_id` resolves; otherwise `null` |
 | `body` | string \| null | yes |
+| `content_json` | object \| null | yes | When set on a `user` row, same allowed shape as `user_input` `content_json`: optional `{ "colcoor_user_media": { "version": 1, "images": [{ "id", "mime_type", "byte_size" }] } }` (refs to §6.2). Otherwise `null`. |
 | `referenced_event_id` | uuid \| null | yes |
 | `referenced_note_id` | uuid \| null | yes |
 | `referenced_side_chat_message_id` | uuid \| null | yes |
@@ -430,7 +439,8 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | Field | Type | Required |
 |-------|------|----------|
 | `kind` | string | yes | `user` for user-authored lines |
-| `body` | string | yes | |
+| `body` | string | yes | Trimmed text; may be empty when `content_json` includes `colcoor_user_media` with at least one image (image-only message). |
+| `content_json` | object | no | When present for `kind: user`, same rules as main-thread `user_input`: top-level keys must be exactly `{ "colcoor_user_media": … }`, with image ids from §6.2. |
 | `referenced_event_id` | uuid \| null | no |
 | `referenced_note_id` | uuid \| null | no |
 | `referenced_side_chat_message_id` | uuid \| null | no |
