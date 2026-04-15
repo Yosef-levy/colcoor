@@ -230,7 +230,7 @@ export function getSideChatWebviewHtml(
       <div id="refNoteText" class="hint" style="margin:0"></div>
       <button id="clearRefNote" type="button" class="secondary">Clear note ref</button>
     </div>
-    <textarea id="input" dir="auto" placeholder="Message…"></textarea>
+    <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send."></textarea>
     <div id="pendingSideChatImages" class="composer-pending-images" style="display:none"></div>
     <div id="mentionSuggestRow" class="mention-suggest-row"></div>
     <div class="row">
@@ -343,6 +343,19 @@ export function getSideChatWebviewHtml(
       if (ev.isComposing) return false;
       if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;
       return true;
+    }
+    function scheduleComposerFocus(el) {
+      if (!el) return;
+      var run = function () {
+        try {
+          el.focus();
+        } catch (e) {}
+      };
+      try {
+        requestAnimationFrame(run);
+      } catch (e) {
+        setTimeout(run, 0);
+      }
     }
     function updateComposerSendEnabled() {
       var send = document.getElementById("send");
@@ -739,6 +752,7 @@ export function getSideChatWebviewHtml(
       pendingSendImages = [];
       renderPendingSideChatImages();
       updateComposerSendEnabled();
+      scheduleComposerFocus(ta);
     });
     document.getElementById("btnStopAssistantGeneration").addEventListener("click", function () {
       vscode.postMessage({ type: "stopGeneration" });

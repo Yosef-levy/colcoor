@@ -38,7 +38,9 @@ describe("getSideChatWebviewHtml", () => {
 
   it("exposes RTL-friendly composer and message bodies (dir=auto, unicode-bidi)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('<textarea id="input" dir="auto" placeholder="Message…"></textarea>');
+    expect(html).toContain(
+      '<textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send."></textarea>',
+    );
     expect(html).toContain("unicode-bidi: plaintext");
     expect(html).toContain('body.setAttribute("dir", "auto")');
     expect(html).toContain('ta.setAttribute("dir", "auto")');
@@ -54,6 +56,8 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('addEventListener("input", function ()');
     expect(html).toContain("if (send && send.disabled) return;");
     expect(html).toContain("updateComposerSendEnabled();");
+    expect(html).toContain("function scheduleComposerFocus(el)");
+    expect(html).toContain("scheduleComposerFocus(ta)");
   });
 
   it("includes lightweight mention suggestions while typing @", () => {

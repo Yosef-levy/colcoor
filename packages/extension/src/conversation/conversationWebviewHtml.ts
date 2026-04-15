@@ -938,7 +938,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </div>
         <div id="inlineSideChatList" class="inline-sidechat-list"></div>
         <div class="inline-sidechat-composer" style="flex-shrink:0;">
-          <textarea id="inlineSideChatInput" dir="auto" placeholder="Side chat message…"></textarea>
+          <textarea id="inlineSideChatInput" dir="auto" placeholder="Side chat… Shift+Enter for newline, Enter to send."></textarea>
           <button type="button" id="btnInlineSideChatSend" class="btn-secondary">Send</button>
         </div>
       </div>
@@ -1825,11 +1825,25 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         : "Type a message or paste an image. Shift+Enter for newline, Enter to send.";
     }
 
-    function shouldSendComposerOnEnter(ev) {
+    function shouldSendOnEnter(ev) {
       if (!ev || ev.key !== "Enter") return false;
       if (ev.isComposing) return false;
       if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;
       return true;
+    }
+
+    function scheduleComposerFocus(el) {
+      if (!el) return;
+      var run = function () {
+        try {
+          el.focus();
+        } catch (e) {}
+      };
+      try {
+        requestAnimationFrame(run);
+      } catch (e) {
+        setTimeout(run, 0);
+      }
     }
 
     function updateLegalPolicyStrip() {
@@ -2063,6 +2077,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       pendingSendImages = [];
       renderPendingConversationImages();
       updateComposerSendEnabled();
+      scheduleComposerFocus(ta);
     });
 
     document.getElementById("stop").addEventListener("click", () => {
@@ -2140,8 +2155,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("btnInlineSideChatSend").addEventListener("click", () => {
       var ta = document.getElementById("inlineSideChatInput");
       var text = ta && ta.value ? String(ta.value) : "";
-      vscode.postMessage({ type: "sendSideChat", text: text.trimEnd() });
+      var trimmed = text.trimEnd();
+      if (!String(trimmed).trim()) return;
+      vscode.postMessage({ type: "sendSideChat", text: trimmed });
       if (ta) ta.value = "";
+      scheduleComposerFocus(ta);
     });
     wireMenubar();
 
@@ -2220,12 +2238,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
 
     document.getElementById("input").addEventListener("keydown", (e) => {
-      if (!shouldSendComposerOnEnter(e)) return;
+      if (!shouldSendOnEnter(e)) return;
       var sb = document.getElementById("send");
       if (sb && sb.disabled) {
         return;
       }
       e.preventDefault();
+      if (sb) sb.click();
+    });
+
+    document.getElementById("inlineSideChatInput").addEventListener("keydown", function (e) {
+      if (!shouldSendOnEnter(e)) return;
+      var ta = document.getElementById("inlineSideChatInput");
+      var raw = ta && ta.value ? String(ta.value) : "";
+      if (!String(raw).trim()) return;
+      e.preventDefault();
+      var sb = document.getElementById("btnInlineSideChatSend");
       if (sb) sb.click();
     });
 

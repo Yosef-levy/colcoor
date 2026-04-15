@@ -169,10 +169,13 @@ describe("getConversationWebviewHtml", () => {
 
   it("guards Enter-to-send for IME composition and modifier keys", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain("function shouldSendComposerOnEnter(ev)");
+    expect(html).toContain("function shouldSendOnEnter(ev)");
     expect(html).toContain("if (ev.isComposing) return false;");
     expect(html).toContain("if (ev.shiftKey || ev.ctrlKey || ev.altKey || ev.metaKey) return false;");
-    expect(html).toContain("if (!shouldSendComposerOnEnter(e)) return;");
+    expect(html).toContain("if (!shouldSendOnEnter(e)) return;");
+    expect(html).toContain("function scheduleComposerFocus(el)");
+    expect(html).toContain('getElementById("inlineSideChatInput").addEventListener("keydown"');
+    expect(html).toContain("scheduleComposerFocus(ta)");
   });
 
   it("uses a Windows-style menubar at the top of the page with Account (allowlisted commands) and Help", () => {
