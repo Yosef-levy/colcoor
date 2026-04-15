@@ -46,15 +46,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow: hidden;
       min-height: 0;
     }
-    h1 {
-      font-size: 1.1em;
-      font-weight: 600;
-      margin: 0 0 8px;
-      flex-shrink: 0;
-    }
-    #sub {
-      flex-shrink: 0;
-    }
     .layout {
       flex: 1;
       min-height: 0;
@@ -126,6 +117,89 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       font-size: 0.92em;
     }
     .detail-bar .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .menubar {
+      flex-shrink: 0;
+      flex-grow: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 0;
+      padding: 0 4px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-menu-barBackground, var(--vscode-sideBar-background));
+      position: relative;
+      z-index: 5;
+      user-select: none;
+    }
+    .menu-root {
+      position: relative;
+    }
+    .menu-root-btn {
+      margin: 0;
+      padding: 6px 10px;
+      border: none;
+      border-radius: 0;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.35;
+      color: var(--vscode-menu-foreground, var(--vscode-foreground));
+      background: transparent;
+      cursor: pointer;
+    }
+    .menu-root-btn:hover {
+      background: var(--vscode-menubar-selectionBackground, var(--vscode-list-hoverBackground));
+      color: var(--vscode-menubar-selectionForeground, var(--vscode-list-activeSelectionForeground));
+    }
+    .menu-root-btn.menu-open {
+      background: var(--vscode-menubar-selectionBackground, var(--vscode-list-activeSelectionBackground));
+      color: var(--vscode-menubar-selectionForeground, var(--vscode-list-activeSelectionForeground));
+    }
+    .menu-panel {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 220px;
+      max-width: min(340px, 92vw);
+      margin-top: 2px;
+      padding: 4px 0;
+      border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+      border-radius: 4px;
+      background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+      color: var(--vscode-menu-foreground, var(--vscode-foreground));
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+      z-index: 20;
+    }
+    .menu-item {
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 5px 14px;
+      border: none;
+      border-radius: 0;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: left;
+      white-space: nowrap;
+      color: inherit;
+      background: transparent;
+      cursor: pointer;
+    }
+    .menu-item:hover:not(:disabled) {
+      background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+      color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground));
+    }
+    .menu-item:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    .menu-sep {
+      height: 1px;
+      margin: 4px 8px;
+      border: none;
+      background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, var(--vscode-panel-border)));
+    }
     .crumb-step strong { font-weight: 600; color: var(--vscode-foreground); }
     .crumb-checkpoint { font-weight: 500; color: var(--vscode-descriptionForeground); font-size: 0.95em; }
     .crumb-sep { color: var(--vscode-descriptionForeground); margin: 0 4px; }
@@ -138,6 +212,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-radius: 4px;
       padding: 8px;
       overflow: hidden;
+      position: relative;
+      z-index: 1;
     }
     .thread-hint {
       flex-shrink: 0;
@@ -738,8 +814,67 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 </head>
 <body>
   <div id="err" class="err" style="display:none"></div>
-  <h1 id="title">Colcoor</h1>
-  <p class="hint" id="sub">Loading…</p>
+  <div class="menubar" role="menubar" aria-label="Colcoor">
+        <div class="menu-root">
+          <button type="button" class="menu-root-btn" id="menuBtnConversation" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelConversation">Conversation</button>
+          <div class="menu-panel" id="menuPanelConversation" role="menu" hidden>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="openMembers" title="Show conversation members">Members</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="addMember" title="Invite an editor/viewer to this conversation">Add member…</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="changeMemberRole" title="Change a member role">Change role…</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="removeMember" title="Remove a member from this conversation">Remove member…</button>
+            <hr class="menu-sep" role="separator" />
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="rename">Rename…</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="togglePin">Pin</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="deleteConversation" title="Delete this conversation">Delete conversation…</button>
+          </div>
+        </div>
+        <div class="menu-root">
+          <button type="button" class="menu-root-btn" id="menuBtnMessage" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelMessage">Message</button>
+          <div class="menu-panel" id="menuPanelMessage" role="menu" hidden>
+            <button type="button" class="menu-item" role="menuitem" id="btnCopy">Copy message</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnToggleStar" title="Star or unstar the selected message">Star</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnCopyThread" title="Copy root → selected path as plain text">Copy thread</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnResend">Resend assistant</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnJumpTip" title="Select the newest leaf on the default branch">Jump to latest</button>
+          </div>
+        </div>
+        <div class="menu-root">
+          <button type="button" class="menu-root-btn" id="menuBtnNote" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelNote">Note</button>
+          <div class="menu-panel" id="menuPanelNote" role="menu" hidden>
+            <button type="button" class="menu-item" role="menuitem" id="btnAddNote" title="Attach a note to the selected message (owner/editor)">Add note…</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnListNotesOnSelection" title="List notes on the selected message in the Colcoor notes output">List notes…</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnReferenceNoteSideChat" title="Open side chat and choose a note from the selected message to reference">Reference note in side chat</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnTodoDrawer" title="List TODO notes in this conversation">TODO notes</button>
+          </div>
+        </div>
+        <div class="menu-root">
+          <button type="button" class="menu-root-btn" id="menuBtnView" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelView">View</button>
+          <div class="menu-panel" id="menuPanelView" role="menu" hidden>
+            <button type="button" class="menu-item" role="menuitem" id="btnStarredDrawer" title="List starred messages in this conversation">Starred</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnDrawers" title="Open the Starred/TODO drawers panel">Drawers</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnReferenceSideChat" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
+          </div>
+        </div>
+        <div class="menu-root">
+          <button type="button" class="menu-root-btn" id="menuBtnAccount" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelAccount">Account</button>
+          <div class="menu-panel" id="menuPanelAccount" role="menu" hidden>
+            <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.editProfile">Profile…</button>
+            <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.openSettings">Extension settings…</button>
+            <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.openLegalPolicySettings">Legal policy URLs…</button>
+            <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.openSideChatSoundSettings">Side chat sounds &amp; notifications…</button>
+            <hr class="menu-sep" role="separator" />
+            <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.setupCursorCli">Cursor CLI (agent) setup…</button>
+            <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.setCursorAgentApiKey">Cursor API key for agent…</button>
+          </div>
+        </div>
+        <div class="menu-root">
+          <button type="button" class="menu-root-btn" id="menuBtnHelp" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelHelp">Help</button>
+          <div class="menu-panel" id="menuPanelHelp" role="menu" hidden>
+            <button type="button" class="menu-item" role="menuitem" id="menuItemHelp" title="Product summary, version, and policy links">Help…</button>
+          </div>
+        </div>
+      </div>
   <div
     id="legalPolicyStrip"
     class="legal-policy-strip hint"
@@ -757,39 +892,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     <div class="col-center">
       <div class="detail-bar">
         <div id="breadcrumb" class="crumb hint"></div>
-        <div class="detail-actions">
-          <button type="button" id="btnShowMembers" class="btn-secondary" title="Show conversation members">Members</button>
-          <button type="button" id="btnAddMember" class="btn-secondary" title="Invite an editor/viewer to this conversation">Add member…</button>
-          <button type="button" id="btnChangeMemberRole" class="btn-secondary" title="Change a member role">Change role…</button>
-          <button type="button" id="btnRemoveMember" class="btn-secondary" title="Remove a member from this conversation">Remove member…</button>
-          <button type="button" id="btnStarredDrawer" class="btn-secondary" title="List starred messages in this conversation">Starred</button>
-          <button type="button" id="btnTodoDrawer" class="btn-secondary" title="List TODO notes in this conversation">TODO notes</button>
-          <button type="button" id="btnDrawers" class="btn-secondary" title="Open the Starred/TODO drawers panel">Drawers</button>
-          <button type="button" id="btnOpenSideChat" class="btn-secondary" title="Open side chat for this conversation">Open side chat</button>
-          <button type="button" id="btnSetupCursorCli" class="btn-secondary" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
-          <button type="button" id="btnSetCursorAgentApiKey" class="btn-secondary" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
-          <button type="button" id="btnCopyConversationId" class="btn-secondary" title="Copy this conversation UUID to the clipboard (Colcoor: Copy conversation ID)">Copy ID</button>
-          <button type="button" id="btnDeleteConversation" class="btn-secondary" title="Delete this conversation">Delete conversation…</button>
-          <button type="button" id="btnProfile" class="btn-secondary" title="Edit your Colcoor profile">Profile…</button>
-          <button type="button" id="btnSettings" class="btn-secondary" title="Open Colcoor extension settings">Settings</button>
-          <button type="button" id="btnLegalPolicySettings" class="btn-secondary" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
-          <button type="button" id="btnSideChatSoundSettings" class="btn-secondary" title="Open side chat notification and sound settings (Colcoor: Open side chat sound &amp; notification settings…)">Side chat sounds…</button>
-          <button type="button" id="btnAbout" class="btn-secondary" title="About Colcoor">About</button>
-          <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
-          <button type="button" id="btnPin" class="btn-secondary">Pin</button>
-          <button type="button" id="btnContinueFromHere" class="btn-secondary" title="Set the selected message as the active continue point">Continue from here</button>
-          <button type="button" id="btnReferenceSideChat" class="btn-secondary" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
-          <button type="button" id="btnReferenceNoteSideChat" class="btn-secondary" title="Open side chat and choose a note from the selected message to reference">Reference note in side chat</button>
-          <button type="button" id="btnAddNote" class="btn-secondary" title="Attach a note to the selected message (owner/editor)">Add note…</button>
-          <button type="button" id="btnListNotesOnSelection" class="btn-secondary" title="List notes on the selected message in the Colcoor notes output">List notes…</button>
-          <button type="button" id="btnCopy" class="btn-secondary">Copy message</button>
-          <button type="button" id="btnToggleStar" class="btn-secondary" title="Star or unstar the selected message">
-            Star
-          </button>
-          <button type="button" id="btnCopyThread" class="btn-secondary" title="Copy root → selected path as plain text">Copy thread</button>
-          <button type="button" id="btnResend" class="btn-secondary">Resend assistant</button>
-          <button type="button" id="btnJumpTip" class="btn-secondary" title="Select the newest leaf on the default branch">Jump to latest</button>
-        </div>
       </div>
       <div class="thread">
         <div class="hint thread-hint">Thread (root → selected)</div>
@@ -912,6 +1014,85 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
       treeCollapsedIds: {},
     };
+
+    var menubarOpenId = null;
+    function closeAllMenus() {
+      menubarOpenId = null;
+      document.querySelectorAll(".menu-panel").forEach(function (p) {
+        p.hidden = true;
+      });
+      document.querySelectorAll(".menu-root-btn").forEach(function (b) {
+        b.setAttribute("aria-expanded", "false");
+        b.classList.remove("menu-open");
+      });
+    }
+    function toggleMenu(menuId) {
+      var panel = document.getElementById("menuPanel" + menuId);
+      var btn = document.getElementById("menuBtn" + menuId);
+      var wasOpen = menubarOpenId === menuId;
+      closeAllMenus();
+      if (!wasOpen && panel && btn) {
+        menubarOpenId = menuId;
+        panel.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+        btn.classList.add("menu-open");
+      }
+    }
+    function wireMenubar() {
+      var bar = document.querySelector(".menubar");
+      if (!bar) return;
+      ["Conversation", "Message", "Note", "View", "Account", "Help"].forEach(function (id) {
+        var b = document.getElementById("menuBtn" + id);
+        if (!b) return;
+        b.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          toggleMenu(id);
+        });
+      });
+      document.addEventListener(
+        "mousedown",
+        function (ev) {
+          if (!ev.target.closest(".menubar")) closeAllMenus();
+        },
+        true,
+      );
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") closeAllMenus();
+      });
+      bar.addEventListener("click", function (ev) {
+        if (!ev.target.closest(".menu-panel")) return;
+        var convAct = ev.target.closest("[data-conv-action]");
+        if (convAct && !convAct.disabled) {
+          var ca = convAct.getAttribute("data-conv-action");
+          if (ca === "openMembers") vscode.postMessage({ type: "openMembers" });
+          else if (ca === "addMember") vscode.postMessage({ type: "addMember" });
+          else if (ca === "changeMemberRole") vscode.postMessage({ type: "changeMemberRole" });
+          else if (ca === "removeMember") vscode.postMessage({ type: "removeMember" });
+          else if (ca === "rename") vscode.postMessage({ type: "rename" });
+          else if (ca === "togglePin") vscode.postMessage({ type: "togglePin" });
+          else if (ca === "deleteConversation") vscode.postMessage({ type: "deleteConversation" });
+          else return;
+          closeAllMenus();
+          return;
+        }
+        var cmdEl = ev.target.closest("[data-colcoor-command]");
+        if (cmdEl && !cmdEl.disabled) {
+          var cmd = cmdEl.getAttribute("data-colcoor-command");
+          if (cmd) {
+            vscode.postMessage({ type: "executeColcoorCommand", command: cmd });
+            closeAllMenus();
+            return;
+          }
+        }
+        var h = ev.target.closest("#menuItemHelp");
+        if (h && !h.disabled) {
+          vscode.postMessage({ type: "openHelp" });
+          closeAllMenus();
+          return;
+        }
+        closeAllMenus();
+      });
+    }
 
     function applyTreeWidth() {
       var el = document.querySelector(".col-tree");
@@ -1126,50 +1307,43 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       );
     }
 
+    function syncConversationMenuPanel() {
+      var convMenuPanel = document.getElementById("menuPanelConversation");
+      if (!convMenuPanel) return;
+      convMenuPanel.querySelectorAll("[data-conv-action]").forEach(function (el) {
+        el.disabled = state.busy;
+      });
+      var pin = convMenuPanel.querySelector('[data-conv-action="togglePin"]');
+      if (pin) {
+        pin.textContent = state.conversationPinned ? "Unpin" : "Pin";
+      }
+    }
+
     function renderDetailBar() {
       const crumb = document.getElementById("breadcrumb");
       const copyBtn = document.getElementById("btnCopy");
       const toggleStarBtn = document.getElementById("btnToggleStar");
       const copyThreadBtn = document.getElementById("btnCopyThread");
-      const continueBtn = document.getElementById("btnContinueFromHere");
       const refSideChatBtn = document.getElementById("btnReferenceSideChat");
       const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
       const addNoteBtn = document.getElementById("btnAddNote");
       const listNotesOnSelectionBtn = document.getElementById("btnListNotesOnSelection");
-      const showMembersBtn = document.getElementById("btnShowMembers");
-      const addMemberBtn = document.getElementById("btnAddMember");
-      const changeMemberRoleBtn = document.getElementById("btnChangeMemberRole");
-      const removeMemberBtn = document.getElementById("btnRemoveMember");
       const starredDrawerBtn = document.getElementById("btnStarredDrawer");
       const todoDrawerBtn = document.getElementById("btnTodoDrawer");
       const drawersBtn = document.getElementById("btnDrawers");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
-      const setupCursorCliBtn = document.getElementById("btnSetupCursorCli");
-      const setCursorAgentApiKeyBtn = document.getElementById("btnSetCursorAgentApiKey");
-      const copyConversationIdBtn = document.getElementById("btnCopyConversationId");
-      const deleteConversationBtn = document.getElementById("btnDeleteConversation");
-      const profileBtn = document.getElementById("btnProfile");
-      const settingsBtn = document.getElementById("btnSettings");
-      const legalPolicySettingsBtn = document.getElementById("btnLegalPolicySettings");
-      const sideChatSoundSettingsBtn = document.getElementById("btnSideChatSoundSettings");
-      const aboutBtn = document.getElementById("btnAbout");
       const resendBtn = document.getElementById("btnResend");
       if (
         !crumb ||
         !copyBtn ||
         !toggleStarBtn ||
         !resendBtn ||
-        !continueBtn ||
         !refSideChatBtn ||
         !refNoteSideChatBtn ||
         !addNoteBtn ||
         !listNotesOnSelectionBtn
       )
         return;
-      if (showMembersBtn) showMembersBtn.disabled = state.busy;
-      if (addMemberBtn) addMemberBtn.disabled = state.busy;
-      if (changeMemberRoleBtn) changeMemberRoleBtn.disabled = state.busy;
-      if (removeMemberBtn) removeMemberBtn.disabled = state.busy;
       if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
       if (drawersBtn) drawersBtn.disabled = state.busy;
@@ -1184,15 +1358,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             ? state.sideChatOpenButtonTitle
             : "Open side chat for this conversation";
       }
-      if (setupCursorCliBtn) setupCursorCliBtn.disabled = state.busy;
-      if (setCursorAgentApiKeyBtn) setCursorAgentApiKeyBtn.disabled = state.busy;
-      if (copyConversationIdBtn) copyConversationIdBtn.disabled = state.busy;
-      if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;
-      if (profileBtn) profileBtn.disabled = state.busy;
-      if (settingsBtn) settingsBtn.disabled = state.busy;
-      if (legalPolicySettingsBtn) legalPolicySettingsBtn.disabled = state.busy;
-      if (sideChatSoundSettingsBtn) sideChatSoundSettingsBtn.disabled = state.busy;
-      if (aboutBtn) aboutBtn.disabled = state.busy;
+      document.querySelectorAll("[data-colcoor-command]").forEach(function (el) {
+        el.disabled = state.busy;
+      });
+      var menuHelp = document.getElementById("menuItemHelp");
+      if (menuHelp) menuHelp.disabled = state.busy;
       const sel = state.selectedEventId;
       const evs = state.events || [];
       const path = pathChain(evs, sel);
@@ -1200,7 +1370,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         crumb.innerHTML = '<span class="empty">No selection</span>';
         copyBtn.disabled = true;
         toggleStarBtn.disabled = true;
-        continueBtn.disabled = true;
         refSideChatBtn.disabled = true;
         refNoteSideChatBtn.disabled = true;
         resendBtn.disabled = true;
@@ -1211,17 +1380,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         listNotesOnSelectionBtn.title = "Select a message in the tree first.";
         toggleStarBtn.textContent = "Star";
         toggleStarBtn.title = "Select a message in the tree to star or unstar.";
-        const renameBtn = document.getElementById("btnRename");
-        const pinBtn = document.getElementById("btnPin");
-        if (renameBtn) renameBtn.disabled = state.busy;
-        if (pinBtn) {
-          pinBtn.disabled = state.busy;
-          pinBtn.textContent = state.conversationPinned ? "Unpin" : "Pin";
-        }
         const jumpBtnEmpty = document.getElementById("btnJumpTip");
         if (jumpBtnEmpty) jumpBtnEmpty.disabled = state.busy;
-        return;
-      }
+      } else {
       const parts = path.map((ev) => {
         const lab = ev.kind === "user_input" ? "User" : "Assistant";
         var cpRaw = ev && typeof ev.checkpoint_label === "string" ? ev.checkpoint_label.trim() : "";
@@ -1256,10 +1417,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       listNotesOnSelectionBtn.title = state.busy
         ? "Wait for the current operation to finish."
         : "List notes on the selected message in the Colcoor notes output.";
-      continueBtn.disabled = state.busy;
-      continueBtn.title = state.busy
-        ? "Wait for the current operation to finish."
-        : "Set this selected message as the active continue point.";
       refSideChatBtn.disabled = state.busy;
       refSideChatBtn.title = state.busy
         ? "Wait for the current operation to finish."
@@ -1281,15 +1438,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       resendBtn.title = canResend
         ? "New assistant reply for this user message (same user row; transcript per docs)."
         : "Pick a user message with text (not the empty root placeholder).";
-      const renameBtn = document.getElementById("btnRename");
-      const pinBtn = document.getElementById("btnPin");
-      if (renameBtn) renameBtn.disabled = state.busy;
-      if (pinBtn) {
-        pinBtn.disabled = state.busy;
-        pinBtn.textContent = state.conversationPinned ? "Unpin" : "Pin";
-      }
       const jumpBtn = document.getElementById("btnJumpTip");
       if (jumpBtn) jumpBtn.disabled = state.busy;
+      }
+      syncConversationMenuPanel();
     }
 
     var treeResizeObserver = null;
@@ -1640,8 +1792,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function render() {
       try {
         const errEl = document.getElementById("err");
-        const titleEl = document.getElementById("title");
-        const subEl = document.getElementById("sub");
         const sendBtn = document.getElementById("send");
         const stopBtn = document.getElementById("stop");
         const refBtn = document.getElementById("refresh");
@@ -1654,13 +1804,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         } else if (errEl) {
           errEl.style.display = "none";
           errEl.textContent = "";
-        }
-        if (titleEl) titleEl.textContent = state.title && state.title.trim() ? state.title : "(untitled)";
-        if (subEl) {
-          var subBase =
-            state.events.length +
-            " event(s) — reply attaches under the selected tree node.";
-          subEl.textContent = subBase;
         }
         updateLegalPolicyStrip();
         if (sendBtn) {
@@ -1710,12 +1853,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         wireComposerResize();
       } catch (e) {
         const msg = e && e.message ? String(e.message) : String(e);
-        const subEl = document.getElementById("sub");
-        if (subEl) subEl.textContent = "Colcoor webview render error: " + msg;
         const errEl = document.getElementById("err");
         if (errEl) {
           errEl.style.display = "block";
-          errEl.textContent = msg;
+          errEl.textContent = "Colcoor webview render error: " + msg;
         }
       }
     }
@@ -1756,7 +1897,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var node = ev.target.closest && ev.target.closest(".node");
         if (node) {
           var nid = node.getAttribute("data-id");
-          if (nid) vscode.postMessage({ type: "select", id: nid });
+          if (nid) {
+            state.selectedEventId = nid;
+            try {
+              var prev = root.querySelector(".node.selected");
+              if (prev) prev.classList.remove("selected");
+              node.classList.add("selected");
+            } catch (e2) {}
+            vscode.postMessage({ type: "select", id: nid });
+          }
         }
       });
       root.addEventListener("contextmenu", function (ev) {
@@ -1803,9 +1952,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     setTimeout(function () {
       if (hasReceivedState) return;
-      var subEl = document.getElementById("sub");
-      if (!subEl) return;
-      subEl.textContent =
+      var errEl = document.getElementById("err");
+      if (!errEl) return;
+      errEl.style.display = "block";
+      errEl.textContent =
         "Still waiting for a conversation snapshot from the extension. API calls time out after 30s — check Settings → Colcoor → backend base URL, that the API is running, and sign-in — then click " +
         ${JSON.stringify(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL)} +
         ".";
@@ -1868,10 +2018,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vscode.postMessage({ type: "resend" });
     });
 
-    document.getElementById("btnContinueFromHere").addEventListener("click", () => {
-      vscode.postMessage({ type: "continueFromHere" });
-    });
-
     document.getElementById("btnReferenceSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "referenceInSideChat" });
     });
@@ -1880,13 +2026,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vscode.postMessage({ type: "referenceNoteInSideChat" });
     });
 
-    document.getElementById("btnRename").addEventListener("click", () => {
-      vscode.postMessage({ type: "rename" });
-    });
-
-    document.getElementById("btnPin").addEventListener("click", () => {
-      vscode.postMessage({ type: "togglePin" });
-    });
     document.getElementById("btnStarredDrawer").addEventListener("click", () => {
       vscode.postMessage({ type: "openStarredDrawer" });
     });
@@ -1911,45 +2050,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vscode.postMessage({ type: "sendSideChat", text: text.trimEnd() });
       if (ta) ta.value = "";
     });
-    document.getElementById("btnSetupCursorCli").addEventListener("click", () => {
-      vscode.postMessage({ type: "setupCursorCli" });
-    });
-    document.getElementById("btnSetCursorAgentApiKey").addEventListener("click", () => {
-      vscode.postMessage({ type: "setCursorAgentApiKey" });
-    });
-    document.getElementById("btnCopyConversationId").addEventListener("click", () => {
-      vscode.postMessage({ type: "copyConversationId" });
-    });
-    document.getElementById("btnDeleteConversation").addEventListener("click", () => {
-      vscode.postMessage({ type: "deleteConversation" });
-    });
-    document.getElementById("btnProfile").addEventListener("click", () => {
-      vscode.postMessage({ type: "openProfile" });
-    });
-    document.getElementById("btnSettings").addEventListener("click", () => {
-      vscode.postMessage({ type: "openSettings" });
-    });
-    document.getElementById("btnLegalPolicySettings").addEventListener("click", () => {
-      vscode.postMessage({ type: "openLegalPolicySettings" });
-    });
-    document.getElementById("btnSideChatSoundSettings").addEventListener("click", () => {
-      vscode.postMessage({ type: "openSideChatSoundSettings" });
-    });
-    document.getElementById("btnAbout").addEventListener("click", () => {
-      vscode.postMessage({ type: "openAbout" });
-    });
-    document.getElementById("btnShowMembers").addEventListener("click", () => {
-      vscode.postMessage({ type: "openMembers" });
-    });
-    document.getElementById("btnAddMember").addEventListener("click", () => {
-      vscode.postMessage({ type: "addMember" });
-    });
-    document.getElementById("btnChangeMemberRole").addEventListener("click", () => {
-      vscode.postMessage({ type: "changeMemberRole" });
-    });
-    document.getElementById("btnRemoveMember").addEventListener("click", () => {
-      vscode.postMessage({ type: "removeMember" });
-    });
+    wireMenubar();
 
     var btnJump = document.getElementById("btnJumpTip");
     if (btnJump) {

@@ -16,7 +16,7 @@ export function showAboutPanel(): void {
   const policySectionHtml = buildLegalPolicySectionHtml(readLegalUrlsFromConfig());
   const panel = vscode.window.createWebviewPanel(
     "colcoor.about",
-    "About Colcoor",
+    "Colcoor — Help",
     vscode.ViewColumn.Active,
     { enableScripts: false },
   );

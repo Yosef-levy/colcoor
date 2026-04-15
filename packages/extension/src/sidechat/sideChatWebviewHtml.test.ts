@@ -95,7 +95,7 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "stopGeneration" });');
   });
 
-  it("includes Open conversation, main-panel shortcuts (tree/copy/continue/resend/jump), Drawers, TODO/starred, Profile, Settings, Legal URLs, sounds, About", () => {
+  it("includes Open conversation, main-panel shortcuts (tree/copy/resend/jump), Drawers, TODO/starred, and Colcoor menu", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenConversation"');
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
@@ -103,8 +103,6 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "refreshConversationTree" });');
     expect(html).toContain('id="btnCopySelectedMessage"');
     expect(html).toContain('vscode.postMessage({ type: "copySelectedMessage" });');
-    expect(html).toContain('id="btnContinueFromHere"');
-    expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
     expect(html).toContain('id="btnResendAssistant"');
     expect(html).toContain('vscode.postMessage({ type: "resendAssistant" });');
     expect(html).toContain('id="btnJumpToLatestInConversation"');
@@ -115,16 +113,8 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "listTodoNotesInConversation" });');
     expect(html).toContain('id="btnListStarredMessages"');
     expect(html).toContain('vscode.postMessage({ type: "listStarredMessagesInConversation" });');
-    expect(html).toContain('id="btnProfile"');
-    expect(html).toContain('id="btnSettings"');
-    expect(html).toContain('id="btnLegalPolicySettings"');
-    expect(html).toContain('id="btnSideChatSoundSettings"');
-    expect(html).toContain('id="btnAbout"');
-    expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
-    expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openLegalPolicySettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openSideChatSoundSettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
+    expect(html).toContain('id="btnColcoorMenu"');
+    expect(html).toContain('vscode.postMessage({ type: "openColcoorHub" });');
   });
 
   it("includes Sign in and New conversation actions", () => {
@@ -147,14 +137,6 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "toggleConversationsSidebar" });');
   });
 
-  it("includes Cursor CLI setup and agent API key actions", () => {
-    const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="btnSetupCursorCli"');
-    expect(html).toContain('id="btnSetCursorAgentApiKey"');
-    expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
-    expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
-  });
-
   it("includes rename conversation action ([ui-features.md] §12)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnRenameConversation"');
@@ -173,12 +155,12 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "removeMember" });');
   });
 
-  it("includes copy conversation id and pin/unpin actions ([ui-features.md] §4)", () => {
+  it("includes pin/unpin action without copy-conversation-id chrome ([ui-features.md] §4)", () => {
     const html = getSideChatWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="btnCopyConversationId"');
     expect(html).toContain('id="btnTogglePinnedConversation"');
-    expect(html).toContain('vscode.postMessage({ type: "copyConversationId" });');
     expect(html).toContain('vscode.postMessage({ type: "togglePinnedConversation" });');
+    expect(html).not.toContain('id="btnCopyConversationId"');
+    expect(html).not.toContain('vscode.postMessage({ type: "copyConversationId" });');
   });
 
   it("includes delete conversation action ([ui-features.md] §4)", () => {

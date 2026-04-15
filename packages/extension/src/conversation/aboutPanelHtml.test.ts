@@ -5,7 +5,7 @@ import { getAboutPanelHtml } from "./aboutPanelHtml";
 describe("getAboutPanelHtml", () => {
   it("includes core product framing without implementation jargon", () => {
     const html = getAboutPanelHtml("");
-    expect(html).toContain("<h1>About Colcoor</h1>");
+    expect(html).toContain("<h1>Colcoor — Help</h1>");
     expect(html).toContain("branching conversations");
     expect(html).toContain("not a play-by-play technical log");
   });

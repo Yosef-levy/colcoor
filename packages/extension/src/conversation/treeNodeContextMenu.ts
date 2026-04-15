@@ -11,11 +11,6 @@ export type TreeNodeContextMenuEntry = {
 
 export const TREE_NODE_CONTEXT_MENU_ENTRIES: readonly TreeNodeContextMenuEntry[] = [
   {
-    commandId: "colcoor.continueFromHere",
-    quickPickLabel: "Continue from here",
-    quickPickDescription: "Set the active branch anchor to this message",
-  },
-  {
     commandId: "colcoor.jumpToLatestInConversation",
     quickPickLabel: "Jump to latest in conversation",
     quickPickDescription: "Select the newest leaf on the default branch",

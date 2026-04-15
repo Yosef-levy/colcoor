@@ -26,16 +26,8 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "signIn" });');
     expect(html).toContain('id="btnSignOut"');
     expect(html).toContain('vscode.postMessage({ type: "signOut" });');
-    expect(html).toContain('id="btnProfile"');
-    expect(html).toContain('id="btnSettings"');
-    expect(html).toContain('id="btnLegalPolicySettings"');
-    expect(html).toContain('id="btnSideChatSoundSettings"');
-    expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
-    expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openLegalPolicySettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openSideChatSoundSettings" });');
-    expect(html).toContain('id="btnAbout"');
-    expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
+    expect(html).toContain('id="btnColcoorMenu"');
+    expect(html).toContain('vscode.postMessage({ type: "openColcoorHub" });');
     expect(html).toContain('id="btnOpenConversation"');
     expect(html).toContain('vscode.postMessage({ type: "openConversation" });');
     expect(html).toContain('id="btnOpenSideChat"');
@@ -46,8 +38,6 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "stopGeneration" });');
     expect(html).toContain('id="btnCopySelectedMessage"');
     expect(html).toContain('vscode.postMessage({ type: "copySelectedMessage" });');
-    expect(html).toContain('id="btnContinueFromHere"');
-    expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
     expect(html).toContain('id="btnResendAssistant"');
     expect(html).toContain('vscode.postMessage({ type: "resendAssistant" });');
     expect(html).toContain('id="btnJumpToLatestInConversation"');
@@ -81,10 +71,6 @@ describe("getConversationDrawersPanelHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "newConversation" });');
     expect(html).toContain('id="btnDeleteConversation"');
     expect(html).toContain('vscode.postMessage({ type: "deleteConversationFromDrawers" });');
-    expect(html).toContain('id="btnSetupCursorCli"');
-    expect(html).toContain('id="btnSetCursorAgentApiKey"');
-    expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
-    expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
   });
 
   it("embeds Open side chat label and title from host unread copy ([ui-features.md] §10)", () => {

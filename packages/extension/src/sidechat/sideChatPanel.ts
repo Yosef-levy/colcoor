@@ -80,17 +80,12 @@ type FromWebview =
   | { type: "openConversation" }
   | { type: "refreshConversationTree" }
   | { type: "copySelectedMessage" }
-  | { type: "continueFromHere" }
   | { type: "resendAssistant" }
   | { type: "jumpToLatestInConversation" }
   | { type: "openDrawers" }
   | { type: "listTodoNotesInConversation" }
   | { type: "listStarredMessagesInConversation" }
-  | { type: "openProfile" }
-  | { type: "openSettings" }
-  | { type: "openLegalPolicySettings" }
-  | { type: "openSideChatSoundSettings" }
-  | { type: "openAbout" }
+  | { type: "openColcoorHub" }
   | { type: "openLegalPolicyUrl"; url: string }
   | { type: "signIn" }
   | { type: "signOut" }
@@ -102,11 +97,8 @@ type FromWebview =
   | { type: "listConversationMembers" }
   | { type: "changeMemberRole" }
   | { type: "removeMember" }
-  | { type: "copyConversationId" }
   | { type: "togglePinnedConversation" }
   | { type: "deleteConversation" }
-  | { type: "setupCursorCli" }
-  | { type: "setCursorAgentApiKey" }
   | { type: "edit"; messageId: string; text: string }
   | { type: "delete"; messageId: string }
   | { type: "openReference"; refKind: "event" | "note"; refId: string }
@@ -482,10 +474,6 @@ export async function openSideChatPanel(
       await vscode.commands.executeCommand("colcoor.copySelectedMessage");
       return;
     }
-    if (msg.type === "continueFromHere") {
-      await vscode.commands.executeCommand("colcoor.continueFromHere");
-      return;
-    }
     if (msg.type === "resendAssistant") {
       await vscode.commands.executeCommand("colcoor.resendAssistant");
       return;
@@ -512,24 +500,8 @@ export async function openSideChatPanel(
       });
       return;
     }
-    if (msg.type === "openProfile") {
-      await vscode.commands.executeCommand("colcoor.editProfile");
-      return;
-    }
-    if (msg.type === "openSettings") {
-      await vscode.commands.executeCommand("colcoor.openSettings");
-      return;
-    }
-    if (msg.type === "openLegalPolicySettings") {
-      await vscode.commands.executeCommand("colcoor.openLegalPolicySettings");
-      return;
-    }
-    if (msg.type === "openSideChatSoundSettings") {
-      await vscode.commands.executeCommand("colcoor.openSideChatSoundSettings");
-      return;
-    }
-    if (msg.type === "openAbout") {
-      await vscode.commands.executeCommand("colcoor.openAbout");
+    if (msg.type === "openColcoorHub") {
+      await vscode.commands.executeCommand("colcoor.showColcoorMenu");
       return;
     }
     if (msg.type === "openLegalPolicyUrl" && typeof msg.url === "string") {
@@ -589,12 +561,6 @@ export async function openSideChatPanel(
       });
       return;
     }
-    if (msg.type === "copyConversationId") {
-      await vscode.commands.executeCommand("colcoor.copyConversationId", {
-        conv: { id: conversationId, title: title ?? null },
-      });
-      return;
-    }
     if (msg.type === "togglePinnedConversation") {
       await vscode.commands.executeCommand("colcoor.togglePinnedConversation", {
         conv: { id: conversationId, title: title ?? null },
@@ -611,14 +577,6 @@ export async function openSideChatPanel(
       if (shouldDisposeSideChatPanelAfterDelete(deleted)) {
         panel.dispose();
       }
-      return;
-    }
-    if (msg.type === "setupCursorCli") {
-      await vscode.commands.executeCommand("colcoor.setupCursorCli");
-      return;
-    }
-    if (msg.type === "setCursorAgentApiKey") {
-      await vscode.commands.executeCommand("colcoor.setCursorAgentApiKey");
       return;
     }
     if (msg.type === "send") {

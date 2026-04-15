@@ -41,6 +41,11 @@
         "title": "Colcoor: Open settings"
       },
       {
+        "command": "colcoor.showColcoorMenu",
+        "title": "Colcoor: Menu…",
+        "description": "Profile, extension settings, legal URLs, side-chat sounds, CLI/API setup, and Help (about)."
+      },
+      {
         "command": "colcoor.openLegalPolicySettings",
         "title": "Colcoor: Open legal policy settings…",
         "description": "Open Settings filtered to Colcoor Terms, Privacy, and Refund URL fields ([ui-features.md] §1.3)."
@@ -113,7 +118,7 @@
       },
       {
         "command": "colcoor.openAbout",
-        "title": "Colcoor: About"
+        "title": "Colcoor: Help"
       },
       {
         "command": "colcoor.openSideChat",
@@ -202,7 +207,7 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-          "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign out](command:colcoor.signOut)\n[Edit profile](command:colcoor.editProfile)\n[Open settings](command:colcoor.openSettings)\n[Legal policy URLs…](command:colcoor.openLegalPolicySettings)\n[Side chat sounds & notifications…](command:colcoor.openSideChatSoundSettings)\n[About](command:colcoor.openAbout)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Copy conversation ID…](command:colcoor.copyConversationId)\n[Send message…](command:colcoor.sendMessage)\n[Stop assistant generation](command:colcoor.stopGeneration)\n[Open side chat](command:colcoor.openSideChat)\n[Show members…](command:colcoor.listConversationMembers)\n[Add member…](command:colcoor.addConversationMember)\n[Change member role…](command:colcoor.changeMemberRole)\n[Remove member…](command:colcoor.removeMemberFromConversation)\n[Open drawers…](command:colcoor.openConversationDrawers)\n[Refresh conversation drawers](command:colcoor.refreshConversationDrawers)\n[List TODO notes…](command:colcoor.listTodoNotesInConversation)\n[List starred messages…](command:colcoor.listStarredMessagesInConversation)\n[Rename conversation…](command:colcoor.renameConversation)\n[Pin / unpin conversation…](command:colcoor.togglePinnedConversation)\n[Toggle star on selected message…](command:colcoor.toggleStarSelectedMessage)\n[Refresh](command:colcoor.refreshConversations)\n[Refresh conversation tree](command:colcoor.refreshConversationTree)\n[Jump to latest…](command:colcoor.jumpToLatestInConversation)\n[Continue from here…](command:colcoor.continueFromHere)\n[Resend assistant…](command:colcoor.resendAssistant)\n[Copy selected message…](command:colcoor.copySelectedMessage)\n[Add note…](command:colcoor.addNoteToSelectedMessage)\n[List notes on selection…](command:colcoor.showNotesOnSelectedMessage)\n[Reference message in side chat…](command:colcoor.referenceSelectedMessageInSideChat)\n[Reference note in side chat…](command:colcoor.referenceSelectedNoteInSideChat)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n[Cursor CLI (`agent`) setup](command:colcoor.setupCursorCli)\n[Set Cursor API key for agent](command:colcoor.setCursorAgentApiKey)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel. To delete a conversation, use the row’s ⋯ menu or Command Palette (search “Colcoor delete”)."
+          "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Sign out](command:colcoor.signOut)\n[Colcoor menu…](command:colcoor.showColcoorMenu)\n[Help…](command:colcoor.openAbout)\n[New conversation](command:colcoor.newConversation)\n[Open conversation](command:colcoor.openConversation)\n[Send message…](command:colcoor.sendMessage)\n[Stop assistant generation](command:colcoor.stopGeneration)\n[Open side chat](command:colcoor.openSideChat)\n[Show members…](command:colcoor.listConversationMembers)\n[Add member…](command:colcoor.addConversationMember)\n[Change member role…](command:colcoor.changeMemberRole)\n[Remove member…](command:colcoor.removeMemberFromConversation)\n[Open drawers…](command:colcoor.openConversationDrawers)\n[Refresh conversation drawers](command:colcoor.refreshConversationDrawers)\n[List TODO notes…](command:colcoor.listTodoNotesInConversation)\n[List starred messages…](command:colcoor.listStarredMessagesInConversation)\n[Rename conversation…](command:colcoor.renameConversation)\n[Pin / unpin conversation…](command:colcoor.togglePinnedConversation)\n[Toggle star on selected message…](command:colcoor.toggleStarSelectedMessage)\n[Refresh](command:colcoor.refreshConversations)\n[Refresh conversation tree](command:colcoor.refreshConversationTree)\n[Jump to latest…](command:colcoor.jumpToLatestInConversation)\n[Resend assistant…](command:colcoor.resendAssistant)\n[Copy selected message…](command:colcoor.copySelectedMessage)\n[Add note…](command:colcoor.addNoteToSelectedMessage)\n[List notes on selection…](command:colcoor.showNotesOnSelectedMessage)\n[Reference message in side chat…](command:colcoor.referenceSelectedMessageInSideChat)\n[Reference note in side chat…](command:colcoor.referenceSelectedNoteInSideChat)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n\nTip: click a conversation in this list to open the tree, thread, and composer panel. To delete a conversation, use the row’s ⋯ menu or Command Palette (search “Colcoor delete”)."
       }
     ],
     "menus": {
@@ -238,11 +243,6 @@
           "command": "colcoor.sendMessage",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@1"
-        },
-        {
-          "command": "colcoor.copyConversationId",
-          "when": "view == colcoor.conversations && viewItem == conversation",
-          "group": "1_colcoor@2"
         },
         {
           "command": "colcoor.listConversationMembers",
@@ -285,11 +285,6 @@
       {
         "command": "colcoor.jumpToLatestInConversation",
         "key": "ctrl+shift+alt+j",
-        "when": "colcoor.conversationPanelOpen"
-      },
-      {
-        "command": "colcoor.continueFromHere",
-        "key": "ctrl+shift+alt+h",
         "when": "colcoor.conversationPanelOpen"
       },
       {

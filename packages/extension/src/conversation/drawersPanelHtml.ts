@@ -100,17 +100,12 @@ export function getConversationDrawersPanelHtml(
   <div class="aux">
     <button type="button" id="btnSignIn" title="Sign in to Colcoor with the same account you use in Cursor">Sign in</button>
     <button type="button" id="btnSignOut" title="Sign out of Colcoor">Sign out</button>
-    <button type="button" id="btnProfile" title="Edit your Colcoor profile">Profile…</button>
-    <button type="button" id="btnSettings" title="Open Colcoor extension settings">Settings</button>
-    <button type="button" id="btnLegalPolicySettings" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
-    <button type="button" id="btnSideChatSoundSettings" title="Open side chat notification and sound settings">Side chat sounds…</button>
-    <button type="button" id="btnAbout" title="About Colcoor">About</button>
+    <button type="button" id="btnColcoorMenu" title="Profile, extension settings, legal URLs, sounds, CLI/API setup, and Help (about)">Colcoor menu…</button>
     <button type="button" id="btnOpenConversation" title="Open the main conversation panel for this conversation">Open conversation</button>
     <button type="button" id="btnOpenSideChat" title="${esc(scTitle)}">${esc(scLabel)}</button>
     <button type="button" id="btnSendMessage" title="Send a main-thread message in this conversation (Colcoor: Send message…)">Send message…</button>
     <button type="button" id="btnStopAssistantGeneration" title="Stop the in-flight assistant reply in the conversation panel, if any (Colcoor: Stop assistant generation). Safe no-op when idle.">Stop generation</button>
     <button type="button" id="btnCopySelectedMessage" title="Copy the selected tree message body (Colcoor: Copy selected message; conversation panel must be open)">Copy selection</button>
-    <button type="button" id="btnContinueFromHere" title="Set active branch to the selected message (Colcoor: Continue from here; conversation panel must be open)">Continue here</button>
     <button type="button" id="btnResendAssistant" title="Regenerate assistant under the selected user message (Colcoor: Resend assistant; conversation panel must be open)">Resend</button>
     <button type="button" id="btnJumpToLatestInConversation" title="Select the newest leaf on the default branch (Colcoor: Jump to latest in conversation; conversation panel must be open)">Jump latest</button>
     <button type="button" id="btnListTodoNotesPicker" title="Pick a TODO note to jump to (Colcoor: List TODO notes in conversation)">List TODO notes…</button>
@@ -129,8 +124,6 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
     <button type="button" id="btnNewConversation" title="Create a new conversation">New conversation</button>
     <button type="button" id="btnDeleteConversation" title="Permanently delete this conversation from Colcoor (Colcoor: Delete conversation)">Delete conversation…</button>
-    <button type="button" id="btnSetupCursorCli" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
-    <button type="button" id="btnSetCursorAgentApiKey" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
   </div>
   ${policyBlock}
   <ul id="starredList" style="display:${showStarred}">${starredRows || "<li>(none)</li>"}</ul>
@@ -153,20 +146,8 @@ export function getConversationDrawersPanelHtml(
     document.getElementById("btnSignOut").addEventListener("click", function () {
       vscode.postMessage({ type: "signOut" });
     });
-    document.getElementById("btnProfile").addEventListener("click", function () {
-      vscode.postMessage({ type: "openProfile" });
-    });
-    document.getElementById("btnSettings").addEventListener("click", function () {
-      vscode.postMessage({ type: "openSettings" });
-    });
-    document.getElementById("btnLegalPolicySettings").addEventListener("click", function () {
-      vscode.postMessage({ type: "openLegalPolicySettings" });
-    });
-    document.getElementById("btnSideChatSoundSettings").addEventListener("click", function () {
-      vscode.postMessage({ type: "openSideChatSoundSettings" });
-    });
-    document.getElementById("btnAbout").addEventListener("click", function () {
-      vscode.postMessage({ type: "openAbout" });
+    document.getElementById("btnColcoorMenu").addEventListener("click", function () {
+      vscode.postMessage({ type: "openColcoorHub" });
     });
     document.getElementById("btnOpenConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "openConversation" });
@@ -182,9 +163,6 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnCopySelectedMessage").addEventListener("click", function () {
       vscode.postMessage({ type: "copySelectedMessage" });
-    });
-    document.getElementById("btnContinueFromHere").addEventListener("click", function () {
-      vscode.postMessage({ type: "continueFromHere" });
     });
     document.getElementById("btnResendAssistant").addEventListener("click", function () {
       vscode.postMessage({ type: "resendAssistant" });
@@ -233,12 +211,6 @@ export function getConversationDrawersPanelHtml(
     });
     document.getElementById("btnDeleteConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "deleteConversationFromDrawers" });
-    });
-    document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
-      vscode.postMessage({ type: "setupCursorCli" });
-    });
-    document.getElementById("btnSetCursorAgentApiKey").addEventListener("click", function () {
-      vscode.postMessage({ type: "setCursorAgentApiKey" });
     });
     showTab("${preferredTab}");
     document.addEventListener("click", function (ev) {

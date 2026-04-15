@@ -1,5 +1,5 @@
 /**
- * Static help HTML for the About webview ([ui-features.md] §2).
+ * Static help HTML for the Help webview (product summary + about; [ui-features.md] §2).
  * Policy links are injected as a pre-vetted fragment from {@link buildLegalPolicySectionHtml}.
  */
 export function getAboutPanelHtml(policySectionHtml: string): string {
@@ -8,7 +8,7 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>About Colcoor</title>
+  <title>Colcoor — Help</title>
   <style>
     body {
       margin: 0;
@@ -30,7 +30,7 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
   </style>
 </head>
 <body>
-  <h1>About Colcoor</h1>
+  <h1>Colcoor — Help</h1>
   <p>
     Colcoor helps you run <strong>branching conversations</strong> with Cursor while
     <strong>you choose which earlier message each new reply continues from</strong>. Teammates can share the same

@@ -339,6 +339,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.openSettings", async () => {
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
     }),
+    vscode.commands.registerCommand("colcoor.showColcoorMenu", async () => {
+      type HubPick = vscode.QuickPickItem & { commandId: string };
+      const items: HubPick[] = [
+        {
+          label: "Extension settings…",
+          description: "VS Code Settings → Colcoor",
+          commandId: "colcoor.openSettings",
+        },
+        {
+          label: "Legal policy URLs (Terms, Privacy, Refund)…",
+          commandId: "colcoor.openLegalPolicySettings",
+        },
+        {
+          label: "Side chat sounds & notifications…",
+          commandId: "colcoor.openSideChatSoundSettings",
+        },
+        { label: "Profile…", commandId: "colcoor.editProfile" },
+        { label: "Cursor CLI (agent) setup…", commandId: "colcoor.setupCursorCli" },
+        { label: "Cursor API key for agent…", commandId: "colcoor.setCursorAgentApiKey" },
+        {
+          label: "Help…",
+          description: "About, version, and product info",
+          commandId: "colcoor.openAbout",
+        },
+      ];
+      const picked = await vscode.window.showQuickPick(items, {
+        title: "Colcoor — settings & tools",
+        matchOnDescription: true,
+      });
+      if (picked && "commandId" in picked && typeof (picked as HubPick).commandId === "string") {
+        await vscode.commands.executeCommand((picked as HubPick).commandId);
+      }
+    }),
     vscode.commands.registerCommand("colcoor.openLegalPolicySettings", async () => {
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query), {
         searchSuffix: "legal",
@@ -911,24 +944,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand("colcoor.signOut");
                 return;
               }
-              if (msg.type === "openProfile") {
-                await vscode.commands.executeCommand("colcoor.editProfile");
-                return;
-              }
-              if (msg.type === "openSettings") {
-                await vscode.commands.executeCommand("colcoor.openSettings");
-                return;
-              }
-              if (msg.type === "openLegalPolicySettings") {
-                await vscode.commands.executeCommand("colcoor.openLegalPolicySettings");
-                return;
-              }
-              if (msg.type === "openSideChatSoundSettings") {
-                await vscode.commands.executeCommand("colcoor.openSideChatSoundSettings");
-                return;
-              }
-              if (msg.type === "openAbout") {
-                await vscode.commands.executeCommand("colcoor.openAbout");
+              if (msg.type === "openColcoorHub") {
+                await vscode.commands.executeCommand("colcoor.showColcoorMenu");
                 return;
               }
               if (msg.type === "openConversation") {
@@ -977,10 +994,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               }
               if (msg.type === "copySelectedMessage") {
                 await vscode.commands.executeCommand("colcoor.copySelectedMessage");
-                return;
-              }
-              if (msg.type === "continueFromHere") {
-                await vscode.commands.executeCommand("colcoor.continueFromHere");
                 return;
               }
               if (msg.type === "resendAssistant") {
@@ -1113,14 +1126,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               }
               if (msg.type === "newConversation") {
                 await vscode.commands.executeCommand("colcoor.newConversation");
-                return;
-              }
-              if (msg.type === "setupCursorCli") {
-                await vscode.commands.executeCommand("colcoor.setupCursorCli");
-                return;
-              }
-              if (msg.type === "setCursorAgentApiKey") {
-                await vscode.commands.executeCommand("colcoor.setCursorAgentApiKey");
                 return;
               }
               if (msg.type !== "openEvent" || typeof msg.eventId !== "string") {

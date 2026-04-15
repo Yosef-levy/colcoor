@@ -118,7 +118,6 @@ type FromWebview =
       composerTextareaHeightPx?: number;
       sideChatColumnWidthPx?: number;
     }
-  | { type: "continueFromHere" }
   | { type: "referenceInSideChat" }
   | { type: "referenceNoteInSideChat" }
   | { type: "openMembers" }
@@ -129,15 +128,12 @@ type FromWebview =
   | { type: "closeSideChat" }
   | { type: "refreshSideChat" }
   | { type: "sendSideChat"; text: string; images?: { dataUrl: string }[] }
-  | { type: "setupCursorCli" }
-  | { type: "setCursorAgentApiKey" }
   | { type: "deleteConversation" }
-  | { type: "copyConversationId" }
-  | { type: "openProfile" }
-  | { type: "openSettings" }
-  | { type: "openLegalPolicySettings" }
-  | { type: "openSideChatSoundSettings" }
-  | { type: "openAbout" }
+  | { type: "openColcoorHub" }
+  /** Help panel (product info + policies); same as Colcoor: Help. */
+  | { type: "openHelp" }
+  /** Account / settings commands invoked from the webview menu (allowlist only). */
+  | { type: "executeColcoorCommand"; command: string }
   | { type: "openLegalPolicyUrl"; url: string }
   | { type: "openStarredDrawer" }
   | { type: "openTodoDrawer" }
@@ -150,6 +146,16 @@ type FromWebview =
   | { type: "treeCollapse"; collapsedEventIds: string[] }
   | { type: "editNote"; noteId: string }
   | { type: "deleteNote"; noteId: string };
+
+/** Webview may only run these via {@link FromWebview} `executeColcoorCommand` (Account menu). */
+const WEBVIEW_ACCOUNT_COMMAND_ALLOWLIST = new Set<string>([
+  "colcoor.editProfile",
+  "colcoor.openSettings",
+  "colcoor.openLegalPolicySettings",
+  "colcoor.openSideChatSoundSettings",
+  "colcoor.setupCursorCli",
+  "colcoor.setCursorAgentApiKey",
+]);
 
 function randomNonce(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -250,6 +256,44 @@ export function createConversationPanelController(
   let inlineSideChatRows: SideChatMessageOut[] = [];
   let inlineSideChatRendered: SideChatRenderMessage[] = [];
   let inlineSideChatVisible = false;
+  /** Last state flags sent to webview; reused for lightweight local selection refreshes. */
+  let lastPostedBusy = false;
+  let lastPostedError: string | null = null;
+
+  function noteCountsByEventId(notes: readonly NoteOut[]): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const n of notes) {
+      out.set(n.event_id, (out.get(n.event_id) ?? 0) + 1);
+    }
+    return out;
+  }
+
+  /** Refresh `lastNotes` + per-node `note_count` from the server without reloading the full tree. */
+  async function mergeNotesIntoCachedTreeAndPost(): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    if (lastTreeEvents.length === 0) {
+      await loadTreeAndPush(lastPostedBusy, lastPostedError);
+      return;
+    }
+    try {
+      const notes = await api.listNotes(conversationId);
+      lastNotes = notes;
+      const counts = noteCountsByEventId(notes);
+      lastTreeEvents = lastTreeEvents.map((e) => ({
+        ...e,
+        note_count: counts.get(e.id) ?? 0,
+      }));
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+    } catch (e) {
+      if (isPlanLimitColcoorApiError(e)) {
+        void showColcoorApiFailure(e);
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      await loadTreeAndPush(lastPostedBusy, msg);
+    }
+  }
   /**
    * Serialize tree fetches + postMessage so overlapping refreshes (e.g. tree click during send)
    * cannot apply an older GET /tree after a newer one and leave the UI stuck on a root-only snapshot.
@@ -375,6 +419,8 @@ export function createConversationPanelController(
       return;
     }
     try {
+      lastPostedBusy = busy;
+      lastPostedError = lastError;
       const ids = new Set(events.map((e) => e.id));
       let sel = selectedEventId;
       if (!sel || !ids.has(sel)) {
@@ -498,12 +544,13 @@ export function createConversationPanelController(
   async function loadTreeAndPush(
     busy: boolean,
     lastError: string | null,
-    opts?: { finalizeToDefaultBranchTip?: boolean },
+    opts?: { finalizeToDefaultBranchTip?: boolean; skipConversationsList?: boolean },
   ): Promise<void> {
     await withTreeRefreshLock(async () => {
       if (!conversationId) {
         return;
       }
+      const skipConversationsList = Boolean(opts?.skipConversationsList);
       let finalizeToDefaultBranchTip = Boolean(opts?.finalizeToDefaultBranchTip);
       for (;;) {
         try {
@@ -513,9 +560,13 @@ export function createConversationPanelController(
             api.getTree(conversationId),
             api.listNotes(conversationId),
             api.getConversationCallerState(conversationId).catch((): null => null),
-            api.listConversations().catch((): ConversationSummary[] => []),
+            skipConversationsList
+              ? Promise.resolve([] as ConversationSummary[])
+              : api.listConversations().catch((): ConversationSummary[] => []),
           ]);
-          applySideChatUnreadFromListRow(listRows.find((r) => r.id === conversationId));
+          if (!skipConversationsList) {
+            applyConversationMetaFromListRow(listRows.find((r) => r.id === conversationId));
+          }
           const nextEventIds = new Set(events.map((e) => e.id));
           const stalePromptKey = staleTreeMissingSelectionPromptKey({
             previousSelectedEventId,
@@ -641,7 +692,7 @@ export function createConversationPanelController(
     sendAbort = new AbortController();
     syncConversationReplyInProgressContext();
     const signal = sendAbort.signal;
-    await loadTreeAndPush(true, null);
+    postState(lastTreeEvents, true, lastPostedError);
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
     try {
       const refs: ColcoorUserMediaImageRef[] = [];
@@ -655,7 +706,7 @@ export function createConversationPanelController(
       }
       if (!trimmed && refs.length === 0) {
         stream.dispose();
-        await loadTreeAndPush(false, null);
+        postState(lastTreeEvents, false, lastPostedError);
         return;
       }
       const userMediaContentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
@@ -676,7 +727,7 @@ export function createConversationPanelController(
           onUserMessagePersisted: async ({ userEventId }) => {
             pendingSendUserMarkdown = undefined;
             selectedEventId = userEventId;
-            await loadTreeAndPush(true, null);
+            await loadTreeAndPush(true, null, { skipConversationsList: true });
           },
         },
       );
@@ -712,7 +763,7 @@ export function createConversationPanelController(
     sendAbort = new AbortController();
     syncConversationReplyInProgressContext();
     const signal = sendAbort.signal;
-    await loadTreeAndPush(true, null);
+    postState(lastTreeEvents, true, lastPostedError);
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
     try {
       const result = await runResendAssistant(
@@ -757,19 +808,13 @@ export function createConversationPanelController(
     }
     try {
       const prevSel = selectedEventId;
-      const { events } = await api.getTree(conversationId);
-      try {
-        selectedEventId = findBranchTip(events).id;
-      } catch {
-        selectedEventId = events[0]?.id;
+      await loadTreeAndPush(false, null, { finalizeToDefaultBranchTip: true });
+      if (selectedEventId) {
+        syncActiveToBackend(selectedEventId, {
+          needsContextRebuild:
+            prevSel !== undefined && prevSel !== selectedEventId,
+        });
       }
-      syncActiveToBackend(selectedEventId, {
-        needsContextRebuild:
-          selectedEventId !== undefined &&
-          prevSel !== undefined &&
-          prevSel !== selectedEventId,
-      });
-      await loadTreeAndPush(false, null);
       if (opts?.palette) {
         void vscode.window.setStatusBarMessage(
           "Colcoor: selection moved to the latest message on the default branch.",
@@ -803,8 +848,8 @@ export function createConversationPanelController(
       if (panel) {
         panel.title = `Colcoor — ${out.title?.trim() ? out.title : "(untitled)"}`;
       }
-      await refreshConversationMeta();
-      await loadTreeAndPush(false, null);
+      applyConversationMetaFromListRow(out);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
     } catch (e) {
       await showColcoorApiFailure(e);
     }
@@ -815,9 +860,9 @@ export function createConversationPanelController(
       return;
     }
     try {
-      await api.patchConversation(conversationId, { pinned: !conversationPinned });
-      await refreshConversationMeta();
-      await loadTreeAndPush(false, null);
+      const out = await api.patchConversation(conversationId, { pinned: !conversationPinned });
+      applyConversationMetaFromListRow(out);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
     } catch (e) {
       await showColcoorApiFailure(e);
     }
@@ -863,12 +908,19 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "select" && typeof msg.id === "string") {
+        const nextId = msg.id.trim();
+        if (!nextId) {
+          return;
+        }
         const prevSel = selectedEventId;
-        selectedEventId = msg.id;
-        syncActiveToBackend(msg.id, {
-          needsContextRebuild: prevSel !== undefined && prevSel !== msg.id,
+        selectedEventId = nextId;
+        // Keep tree selection snappy: render immediately from cached state, then sync active in background.
+        if (lastTreeEvents.some((e) => e.id === nextId)) {
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        }
+        void syncActiveToBackend(nextId, {
+          needsContextRebuild: prevSel !== undefined && prevSel !== nextId,
         });
-        await loadTreeAndPush(false, null);
         return;
       }
       if (msg.type === "treeContextMenu" && typeof msg.id === "string") {
@@ -882,10 +934,12 @@ export function createConversationPanelController(
         if (selectedEventId !== targetId) {
           const prevSel = selectedEventId;
           selectedEventId = targetId;
-          syncActiveToBackend(targetId, {
+          if (lastTreeEvents.some((e) => e.id === targetId)) {
+            postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          }
+          void syncActiveToBackend(targetId, {
             needsContextRebuild: prevSel !== undefined && prevSel !== targetId,
           });
-          await loadTreeAndPush(false, null);
         }
         type TreeCtxPick = vscode.QuickPickItem & { commandId: string };
         const picks: TreeCtxPick[] = TREE_NODE_CONTEXT_MENU_ENTRIES.map((e) => ({
@@ -963,23 +1017,6 @@ export function createConversationPanelController(
       }
       if (msg.type === "resend") {
         await handleResend();
-        return;
-      }
-      if (msg.type === "continueFromHere") {
-        const gate = evaluateContinueFromHere(
-          conversationId,
-          selectedEventId,
-          lastTreeEvents.map((e) => e.id),
-        );
-        if (gate === "not_in_tree") {
-          void vscode.window.showWarningMessage(
-            `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
-          );
-        }
-        if (gate === "ok" && selectedEventId) {
-          syncActiveToBackend(selectedEventId, { needsContextRebuild: false });
-          void vscode.window.setStatusBarMessage("Colcoor: continuing from selected message.", 2200);
-        }
         return;
       }
       if (msg.type === "referenceInSideChat") {
@@ -1079,7 +1116,6 @@ export function createConversationPanelController(
         inlineSideChatVisible = true;
         try {
           await refreshInlineSideChat();
-          await refreshConversationMeta();
         } catch (e) {
           if (isPlanLimitColcoorApiError(e)) {
             void showColcoorApiFailure(e);
@@ -1099,7 +1135,6 @@ export function createConversationPanelController(
         }
         try {
           await refreshInlineSideChat();
-          await refreshConversationMeta();
         } catch (e) {
           if (isPlanLimitColcoorApiError(e)) {
             void showColcoorApiFailure(e);
@@ -1144,14 +1179,6 @@ export function createConversationPanelController(
         postState(lastTreeEvents, sendAbort != null, null);
         return;
       }
-      if (msg.type === "setupCursorCli") {
-        await vscode.commands.executeCommand("colcoor.setupCursorCli");
-        return;
-      }
-      if (msg.type === "setCursorAgentApiKey") {
-        await vscode.commands.executeCommand("colcoor.setCursorAgentApiKey");
-        return;
-      }
       if (msg.type === "deleteConversation") {
         if (!conversationId) {
           return;
@@ -1161,33 +1188,18 @@ export function createConversationPanelController(
         });
         return;
       }
-      if (msg.type === "copyConversationId") {
-        if (!conversationId) {
-          return;
-        }
-        await vscode.commands.executeCommand("colcoor.copyConversationId", {
-          conv: { id: conversationId, title: conversationTitle ?? null },
-        });
+      if (msg.type === "openColcoorHub") {
+        await vscode.commands.executeCommand("colcoor.showColcoorMenu");
         return;
       }
-      if (msg.type === "openProfile") {
-        await vscode.commands.executeCommand("colcoor.editProfile");
-        return;
-      }
-      if (msg.type === "openSettings") {
-        await vscode.commands.executeCommand("colcoor.openSettings");
-        return;
-      }
-      if (msg.type === "openLegalPolicySettings") {
-        await vscode.commands.executeCommand("colcoor.openLegalPolicySettings");
-        return;
-      }
-      if (msg.type === "openSideChatSoundSettings") {
-        await vscode.commands.executeCommand("colcoor.openSideChatSoundSettings");
-        return;
-      }
-      if (msg.type === "openAbout") {
+      if (msg.type === "openHelp") {
         await vscode.commands.executeCommand("colcoor.openAbout");
+        return;
+      }
+      if (msg.type === "executeColcoorCommand" && typeof msg.command === "string") {
+        if (WEBVIEW_ACCOUNT_COMMAND_ALLOWLIST.has(msg.command)) {
+          await vscode.commands.executeCommand(msg.command);
+        }
         return;
       }
       if (msg.type === "rename") {
@@ -1228,7 +1240,7 @@ export function createConversationPanelController(
         try {
           await api.deleteNote(conversationId, msg.noteId);
           void vscode.window.setStatusBarMessage("Colcoor: note deleted.", 2000);
-          await loadTreeAndPush(false, null);
+          await mergeNotesIntoCachedTreeAndPost();
         } catch (e) {
           void showColcoorApiFailure(e);
         }
@@ -1236,8 +1248,11 @@ export function createConversationPanelController(
       }
       if (msg.type === "editNote" && typeof msg.noteId === "string" && conversationId) {
         try {
-          const all = await api.listNotes(conversationId);
-          const row = all.find((n) => n.id === msg.noteId);
+          let row = lastNotes.find((n) => n.id === msg.noteId);
+          if (!row) {
+            const all = await api.listNotes(conversationId);
+            row = all.find((n) => n.id === msg.noteId);
+          }
           if (!row) {
             void vscode.window.showWarningMessage(
               `Colcoor: note not found — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
@@ -1258,12 +1273,18 @@ export function createConversationPanelController(
             void vscode.window.showWarningMessage("Colcoor: note text cannot be empty.");
             return;
           }
-          await api.patchNote(conversationId, msg.noteId, { content: trimmed });
+          const updated = await api.patchNote(conversationId, msg.noteId, { content: trimmed });
           void vscode.window.setStatusBarMessage("Colcoor: note updated.", 2000);
-          await loadTreeAndPush(false, null);
+          if (lastNotes.some((n) => n.id === updated.id)) {
+            lastNotes = lastNotes.map((n) => (n.id === updated.id ? updated : n));
+          } else {
+            lastNotes = [...lastNotes, updated];
+          }
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
         } catch (e) {
           void showColcoorApiFailure(e);
         }
+        return;
       }
     });
 
@@ -1303,6 +1324,7 @@ export function createConversationPanelController(
       return;
     }
     try {
+      const nextStarred = ev.starred === true ? false : true;
       if (ev.starred === true) {
         await api.deleteStar(conversationId, selectedEventId);
         void vscode.window.setStatusBarMessage("Colcoor: star removed.", 2000);
@@ -1310,7 +1332,10 @@ export function createConversationPanelController(
         await api.putStar(conversationId, selectedEventId);
         void vscode.window.setStatusBarMessage("Colcoor: message starred.", 2000);
       }
-      await loadTreeAndPush(false, null);
+      lastTreeEvents = lastTreeEvents.map((e) =>
+        e.id === selectedEventId ? { ...e, starred: nextStarred } : e,
+      );
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
     } catch (e) {
       void showColcoorApiFailure(e);
     }
@@ -1340,9 +1365,15 @@ export function createConversationPanelController(
       return;
     }
     try {
-      await api.createNote(conversationId, { event_id: selectedEventId, content: noteContent });
+      const created = await api.createNote(conversationId, { event_id: selectedEventId, content: noteContent });
       void vscode.window.setStatusBarMessage("Colcoor: note added.", 2500);
-      await loadTreeAndPush(false, null);
+      lastNotes = [...lastNotes, created];
+      const counts = noteCountsByEventId(lastNotes);
+      lastTreeEvents = lastTreeEvents.map((e) => ({
+        ...e,
+        note_count: counts.get(e.id) ?? 0,
+      }));
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
     } catch (e) {
       void showColcoorApiFailure(e);
     }
@@ -1354,7 +1385,8 @@ export function createConversationPanelController(
       return;
     }
     try {
-      const all = await api.listNotes(conversationId);
+      const all =
+        lastTreeEvents.length > 0 ? lastNotes : await api.listNotes(conversationId);
       const forEv = all.filter((n) => n.event_id === selectedEventId);
       colcoorNotesChannel.clear();
       colcoorNotesChannel.appendLine(`Notes on event ${selectedEventId} (${forEv.length})`);
@@ -1395,7 +1427,6 @@ export function createConversationPanelController(
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
       inlineSideChatRendered = [];
-      await refreshConversationMeta();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
       if (webviewReady) {
@@ -1423,7 +1454,6 @@ export function createConversationPanelController(
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
       inlineSideChatRendered = [];
-      await refreshConversationMeta();
       try {
         await api.setConversationActive(cid, {
           active_event_id: eid,
@@ -1568,7 +1598,6 @@ export function createConversationPanelController(
       inlineSideChatVisible = true;
       try {
         await refreshInlineSideChat();
-        await refreshConversationMeta();
       } catch (e) {
         if (isPlanLimitColcoorApiError(e)) {
           void showColcoorApiFailure(e);

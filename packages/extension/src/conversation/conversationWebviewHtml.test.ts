@@ -159,11 +159,20 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("if (!shouldSendComposerOnEnter(e)) return;");
   });
 
-  it("includes Continue from here detail action wiring", () => {
+  it("uses a Windows-style menubar at the top of the page with Account (allowlisted commands) and Help", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="btnContinueFromHere"');
-    expect(html).toContain('continueBtn.disabled = state.busy;');
-    expect(html).toContain('vscode.postMessage({ type: "continueFromHere" });');
+    expect(html).toMatch(/<body>[\s\S]*class="menubar"[\s\S]*<div\s+class="layout"/);
+    expect(html).toContain('class="menubar"');
+    expect(html).toContain('id="menuBtnConversation"');
+    expect(html).toContain('id="menuBtnMessage"');
+    expect(html).toContain('id="menuBtnNote"');
+    expect(html).toContain('id="menuBtnView"');
+    expect(html).toContain('id="menuBtnAccount"');
+    expect(html).toContain('id="menuBtnHelp"');
+    expect(html).toContain('data-colcoor-command="colcoor.editProfile"');
+    expect(html).toContain('data-conv-action="openMembers"');
+    expect(html).toContain('vscode.postMessage({ type: "executeColcoorCommand", command: cmd });');
+    expect(html).toContain('vscode.postMessage({ type: "openHelp" });');
   });
 
   it("includes Star/Unstar on the selected message in the detail bar ([ui-features.md] §7)", () => {
@@ -210,62 +219,41 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openDrawers" });');
   });
 
-  it("includes Members and Add member quick actions", () => {
+  it("includes Members and Add member under Conversation menu (data-conv-action)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="btnShowMembers"');
-    expect(html).toContain('id="btnAddMember"');
-    expect(html).toContain("if (showMembersBtn) showMembersBtn.disabled = state.busy;");
-    expect(html).toContain("if (addMemberBtn) addMemberBtn.disabled = state.busy;");
+    expect(html).toContain('data-conv-action="openMembers"');
+    expect(html).toContain('data-conv-action="addMember"');
+    expect(html).toContain("function syncConversationMenuPanel()");
     expect(html).toContain('vscode.postMessage({ type: "openMembers" });');
     expect(html).toContain('vscode.postMessage({ type: "addMember" });');
   });
 
-  it("includes change/remove member quick actions", () => {
+  it("includes change/remove member under Conversation menu", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="btnChangeMemberRole"');
-    expect(html).toContain('id="btnRemoveMember"');
-    expect(html).toContain("if (changeMemberRoleBtn) changeMemberRoleBtn.disabled = state.busy;");
-    expect(html).toContain("if (removeMemberBtn) removeMemberBtn.disabled = state.busy;");
+    expect(html).toContain('data-conv-action="changeMemberRole"');
+    expect(html).toContain('data-conv-action="removeMember"');
     expect(html).toContain('vscode.postMessage({ type: "changeMemberRole" });');
     expect(html).toContain('vscode.postMessage({ type: "removeMember" });');
   });
 
-  it("includes Open side chat, CLI/API keys, Copy conversation ID, and Delete conversation quick actions", () => {
+  it("includes Open side chat in View menu and delete conversation via Conversation menu", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenSideChat"');
-    expect(html).toContain('id="btnSetupCursorCli"');
-    expect(html).toContain('id="btnSetCursorAgentApiKey"');
-    expect(html).toContain('id="btnCopyConversationId"');
-    expect(html).toContain('id="btnDeleteConversation"');
+    expect(html).toContain('data-conv-action="deleteConversation"');
     expect(html).toContain("openSideChatBtn.disabled = state.busy;");
-    expect(html).toContain("if (setupCursorCliBtn) setupCursorCliBtn.disabled = state.busy;");
-    expect(html).toContain("if (setCursorAgentApiKeyBtn) setCursorAgentApiKeyBtn.disabled = state.busy;");
-    expect(html).toContain("if (copyConversationIdBtn) copyConversationIdBtn.disabled = state.busy;");
-    expect(html).toContain("if (deleteConversationBtn) deleteConversationBtn.disabled = state.busy;");
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
-    expect(html).toContain('vscode.postMessage({ type: "setupCursorCli" });');
-    expect(html).toContain('vscode.postMessage({ type: "setCursorAgentApiKey" });');
-    expect(html).toContain('vscode.postMessage({ type: "copyConversationId" });');
     expect(html).toContain('vscode.postMessage({ type: "deleteConversation" });');
+    expect(html).not.toContain('id="btnCopyConversationId"');
+    expect(html).not.toContain('vscode.postMessage({ type: "copyConversationId" });');
   });
 
-  it("includes Profile, Settings, Legal URLs, side-chat sounds, and About quick actions", () => {
+  it("places rename, pin, and delete under the Conversation menu", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="btnProfile"');
-    expect(html).toContain('id="btnSettings"');
-    expect(html).toContain('id="btnLegalPolicySettings"');
-    expect(html).toContain('id="btnSideChatSoundSettings"');
-    expect(html).toContain('id="btnAbout"');
-    expect(html).toContain("if (profileBtn) profileBtn.disabled = state.busy;");
-    expect(html).toContain("if (settingsBtn) settingsBtn.disabled = state.busy;");
-    expect(html).toContain("if (legalPolicySettingsBtn) legalPolicySettingsBtn.disabled = state.busy;");
-    expect(html).toContain("if (sideChatSoundSettingsBtn) sideChatSoundSettingsBtn.disabled = state.busy;");
-    expect(html).toContain("if (aboutBtn) aboutBtn.disabled = state.busy;");
-    expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
-    expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openLegalPolicySettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openSideChatSoundSettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
+    expect(html).toContain('id="menuPanelConversation"');
+    expect(html).toContain('data-conv-action="rename"');
+    expect(html).toContain('data-conv-action="togglePin"');
+    expect(html).toContain('vscode.postMessage({ type: "rename" });');
+    expect(html).toContain('vscode.postMessage({ type: "togglePin" });');
   });
 
 });

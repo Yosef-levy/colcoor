@@ -60,6 +60,7 @@ describe("package.json Colcoor contributions", () => {
     const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
     expect(cmds).toContain("colcoor.newConversation");
     expect(cmds).toContain("colcoor.openSideChat");
+    expect(cmds).toContain("colcoor.showColcoorMenu");
     expect(cmds).toContain("colcoor.continueFromHere");
     expect(cmds).toContain("colcoor.resendAssistant");
     expect(cmds).toContain("colcoor.jumpToLatestInConversation");
@@ -125,10 +126,7 @@ describe("package.json Colcoor contributions", () => {
       key: "ctrl+shift+alt+j",
       when: "colcoor.conversationPanelOpen",
     });
-    expect(row("colcoor.continueFromHere")).toMatchObject({
-      key: "ctrl+shift+alt+h",
-      when: "colcoor.conversationPanelOpen",
-    });
+    expect(row("colcoor.continueFromHere")).toBeUndefined();
     expect(row("colcoor.resendAssistant")).toMatchObject({
       key: "ctrl+shift+alt+e",
       when: "colcoor.conversationPanelOpen",
@@ -158,7 +156,7 @@ describe("package.json Colcoor contributions", () => {
     expect(new Set(cmds).size).toBe(cmds.length);
   });
 
-  it("includes Sign out and About command links for discoverability", () => {
+  it("includes Sign out, Colcoor menu, and Help links for discoverability", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
@@ -166,9 +164,11 @@ describe("package.json Colcoor contributions", () => {
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
     expect(contents).toContain("[Sign out](command:colcoor.signOut)");
-    expect(contents).toContain("[Legal policy URLs…](command:colcoor.openLegalPolicySettings)");
-    expect(contents).toContain("[Side chat sounds & notifications…](command:colcoor.openSideChatSoundSettings)");
-    expect(contents).toContain("[About](command:colcoor.openAbout)");
+    expect(contents).toContain("[Colcoor menu…](command:colcoor.showColcoorMenu)");
+    expect(contents).toContain("[Help…](command:colcoor.openAbout)");
+    expect(contents).not.toContain("command:colcoor.openLegalPolicySettings");
+    expect(contents).not.toContain("command:colcoor.openSideChatSoundSettings");
+    expect(contents).not.toContain("[About](command:colcoor.openAbout)");
   });
 
   it("documents openLegalPolicySettings for Terms / Privacy / Refund URLs ([ui-features.md] §1.3)", () => {
@@ -215,7 +215,7 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Stop assistant generation](command:colcoor.stopGeneration)");
   });
 
-  it("links jump, continue, resend, and copy selection from conversations welcome ([ui-features.md] §6–§9)", () => {
+  it("links jump, resend, and copy selection from conversations welcome ([ui-features.md] §6–§9)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
@@ -223,7 +223,7 @@ describe("package.json Colcoor contributions", () => {
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
     expect(contents).toContain("[Jump to latest…](command:colcoor.jumpToLatestInConversation)");
-    expect(contents).toContain("[Continue from here…](command:colcoor.continueFromHere)");
+    expect(contents).not.toContain("command:colcoor.continueFromHere");
     expect(contents).toContain("[Resend assistant…](command:colcoor.resendAssistant)");
     expect(contents).toContain("[Copy selected message…](command:colcoor.copySelectedMessage)");
   });
@@ -240,14 +240,14 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Toggle star on selected message…](command:colcoor.toggleStarSelectedMessage)");
   });
 
-  it("links copy conversation ID, show members, and refresh drawers from conversations welcome ([ui-features.md] §11 §12)", () => {
+  it("links show members and refresh drawers from conversations welcome without copy ID ([ui-features.md] §11 §12)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
     };
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Copy conversation ID…](command:colcoor.copyConversationId)");
+    expect(contents).not.toContain("command:colcoor.copyConversationId");
     expect(contents).toContain("[Show members…](command:colcoor.listConversationMembers)");
     expect(contents).toContain("[Refresh conversation drawers](command:colcoor.refreshConversationDrawers)");
   });

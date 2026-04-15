@@ -50,8 +50,18 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
     expect(colcoorCommandsMissingFromConversationsWelcome(pkg)).toEqual([]);
   });
 
-  it("documents delete conversation as the only excluded command", () => {
-    expect([...CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS].sort()).toEqual(["colcoor.deleteConversation"]);
+  it("documents welcome exclusions (destructive, copy-id, menu-covered settings, continue palette anchor)", () => {
+    expect([...CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS].sort()).toEqual([
+      "colcoor.continueFromHere",
+      "colcoor.copyConversationId",
+      "colcoor.deleteConversation",
+      "colcoor.editProfile",
+      "colcoor.openLegalPolicySettings",
+      "colcoor.openSettings",
+      "colcoor.openSideChatSoundSettings",
+      "colcoor.setCursorAgentApiKey",
+      "colcoor.setupCursorCli",
+    ]);
   });
 
   it("flags commands absent from welcome when not excluded", () => {

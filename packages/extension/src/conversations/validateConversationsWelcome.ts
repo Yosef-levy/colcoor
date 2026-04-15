@@ -39,9 +39,20 @@ export function conversationsWelcomeContents(
 
 /**
  * Contributed `colcoor.*` commands that must not appear as welcome `command:` links
- * (product choice — e.g. destructive actions belong on the tree row / panel only).
+ * (destructive actions, copy-id, palette-only anchors, or entries reachable from
+ * {@link colcoor.showColcoorMenu} instead of duplicating links here).
  */
-export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>(["colcoor.deleteConversation"]);
+export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
+  "colcoor.deleteConversation",
+  "colcoor.copyConversationId",
+  "colcoor.continueFromHere",
+  "colcoor.editProfile",
+  "colcoor.openSettings",
+  "colcoor.openLegalPolicySettings",
+  "colcoor.openSideChatSoundSettings",
+  "colcoor.setupCursorCli",
+  "colcoor.setCursorAgentApiKey",
+]);
 
 /**
  * Contributed `colcoor.*` commands that lack a `(command:…)` link in the conversations

@@ -240,17 +240,12 @@ export function getSideChatWebviewHtml(
       <button id="btnOpenConversation" type="button" class="secondary" title="Open the main conversation panel (tree, thread, composer) for this conversation">Open conversation</button>
       <button id="btnRefreshConversationTree" type="button" class="secondary" title="Reload tree and thread in the open conversation panel, if any (Colcoor: Refresh conversation tree)">Refresh tree</button>
       <button id="btnCopySelectedMessage" type="button" class="secondary" title="Copy the selected tree message body (Colcoor: Copy selected message; conversation panel must be open)">Copy selection</button>
-      <button id="btnContinueFromHere" type="button" class="secondary" title="Set active branch to the selected message (Colcoor: Continue from here; conversation panel must be open)">Continue here</button>
       <button id="btnResendAssistant" type="button" class="secondary" title="Regenerate assistant under the selected user message (Colcoor: Resend assistant; conversation panel must be open)">Resend</button>
       <button id="btnJumpToLatestInConversation" type="button" class="secondary" title="Select the newest leaf on the default branch (Colcoor: Jump to latest in conversation; conversation panel must be open)">Jump latest</button>
       <button id="btnOpenDrawers" type="button" class="secondary" title="Open the Starred/TODO drawers panel for this conversation">Drawers</button>
       <button id="btnListTodoNotes" type="button" class="secondary" title="Pick a TODO note and open its host message (Colcoor: List TODO notes in conversation…)">TODO notes…</button>
       <button id="btnListStarredMessages" type="button" class="secondary" title="Pick a starred message to open in the conversation panel (Colcoor: List starred messages in conversation…)">Starred…</button>
-      <button id="btnProfile" type="button" class="secondary" title="Edit your Colcoor profile">Profile…</button>
-      <button id="btnSettings" type="button" class="secondary" title="Open Colcoor extension settings">Settings</button>
-      <button id="btnLegalPolicySettings" type="button" class="secondary" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
-      <button id="btnSideChatSoundSettings" type="button" class="secondary" title="Open side chat notification and sound settings">Side chat sounds…</button>
-      <button id="btnAbout" type="button" class="secondary" title="About Colcoor">About</button>
+      <button id="btnColcoorMenu" type="button" class="secondary" title="Profile, extension settings, legal URLs, sounds, CLI/API setup, and Help (about)">Colcoor menu…</button>
       <button id="btnSignIn" type="button" class="secondary" title="Sign in to Colcoor with your Cursor account">Sign in</button>
       <button id="btnNewConversation" type="button" class="secondary" title="Create a new conversation">New conversation</button>
       <button id="btnSignOut" type="button" class="secondary" title="Sign out from Colcoor">Sign out</button>
@@ -261,11 +256,8 @@ export function getSideChatWebviewHtml(
       <button id="btnListConversationMembers" type="button" class="secondary" title="List members in the output channel (Colcoor: Show members)">Show members</button>
       <button id="btnChangeMemberRole" type="button" class="secondary" title="Pick a member and set a new role (Colcoor: Change member role…)">Change role…</button>
       <button id="btnRemoveMember" type="button" class="secondary" title="Remove a member from this conversation (Colcoor: Remove member…)">Remove member…</button>
-      <button id="btnCopyConversationId" type="button" class="secondary" title="Copy this conversation UUID to the clipboard (Colcoor: Copy conversation ID)">Copy ID</button>
       <button id="btnTogglePinnedConversation" type="button" class="secondary" title="Pin or unpin this conversation in your sidebar list (Colcoor: Pin / unpin conversation)">Pin / unpin</button>
       <button id="btnDeleteConversation" type="button" class="secondary" title="Permanently delete this conversation from Colcoor (Colcoor: Delete conversation…). You will be asked to confirm.">Delete conversation…</button>
-      <button id="btnSetupCursorCli" type="button" class="secondary" title="Set up the Cursor CLI for the Colcoor agent">CLI setup</button>
-      <button id="btnSetCursorAgentApiKey" type="button" class="secondary" title="Store the Cursor API key used for the Colcoor agent">Agent API key</button>
     </div>
     <p id="err" class="err" style="display:none"></p>
   </div>
@@ -763,9 +755,6 @@ export function getSideChatWebviewHtml(
     document.getElementById("btnCopySelectedMessage").addEventListener("click", function () {
       vscode.postMessage({ type: "copySelectedMessage" });
     });
-    document.getElementById("btnContinueFromHere").addEventListener("click", function () {
-      vscode.postMessage({ type: "continueFromHere" });
-    });
     document.getElementById("btnResendAssistant").addEventListener("click", function () {
       vscode.postMessage({ type: "resendAssistant" });
     });
@@ -781,20 +770,8 @@ export function getSideChatWebviewHtml(
     document.getElementById("btnListStarredMessages").addEventListener("click", function () {
       vscode.postMessage({ type: "listStarredMessagesInConversation" });
     });
-    document.getElementById("btnProfile").addEventListener("click", function () {
-      vscode.postMessage({ type: "openProfile" });
-    });
-    document.getElementById("btnSettings").addEventListener("click", function () {
-      vscode.postMessage({ type: "openSettings" });
-    });
-    document.getElementById("btnLegalPolicySettings").addEventListener("click", function () {
-      vscode.postMessage({ type: "openLegalPolicySettings" });
-    });
-    document.getElementById("btnSideChatSoundSettings").addEventListener("click", function () {
-      vscode.postMessage({ type: "openSideChatSoundSettings" });
-    });
-    document.getElementById("btnAbout").addEventListener("click", function () {
-      vscode.postMessage({ type: "openAbout" });
+    document.getElementById("btnColcoorMenu").addEventListener("click", function () {
+      vscode.postMessage({ type: "openColcoorHub" });
     });
     document.getElementById("btnSignIn").addEventListener("click", function () {
       vscode.postMessage({ type: "signIn" });
@@ -826,20 +803,11 @@ export function getSideChatWebviewHtml(
     document.getElementById("btnRemoveMember").addEventListener("click", function () {
       vscode.postMessage({ type: "removeMember" });
     });
-    document.getElementById("btnCopyConversationId").addEventListener("click", function () {
-      vscode.postMessage({ type: "copyConversationId" });
-    });
     document.getElementById("btnTogglePinnedConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "togglePinnedConversation" });
     });
     document.getElementById("btnDeleteConversation").addEventListener("click", function () {
       vscode.postMessage({ type: "deleteConversation" });
-    });
-    document.getElementById("btnSetupCursorCli").addEventListener("click", function () {
-      vscode.postMessage({ type: "setupCursorCli" });
-    });
-    document.getElementById("btnSetCursorAgentApiKey").addEventListener("click", function () {
-      vscode.postMessage({ type: "setCursorAgentApiKey" });
     });
     document.addEventListener("click", function (ev) {
       var tgt = ev.target;
