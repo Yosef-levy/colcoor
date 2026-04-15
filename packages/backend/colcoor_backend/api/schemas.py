@@ -272,14 +272,20 @@ class SideChatPostBody(BaseModel):
     referenced_note_id: UUID | None = None
     referenced_side_chat_message_id: UUID | None = None
 
+    @field_validator("body")
+    @classmethod
+    def _strip_body(cls, v: object) -> str:
+        if v is None:
+            return ""
+        return str(v).strip()
+
     @model_validator(mode="after")
     def _body_or_media(self) -> SideChatPostBody:
         from colcoor_backend.services.conversation_images import has_colcoor_user_media
 
-        t = self.body.strip()
-        if not t and not has_colcoor_user_media(self.content_json):
+        if not self.body and not has_colcoor_user_media(self.content_json):
             raise ValueError("body must be non-empty or content_json must include colcoor_user_media images")
-        return self.model_copy(update={"body": t})
+        return self
 
 
 class SideChatPatchBody(BaseModel):

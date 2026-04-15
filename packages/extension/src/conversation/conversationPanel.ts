@@ -222,7 +222,7 @@ export function createConversationPanelController(
   /** Copy selected tree message body to the system clipboard ([ui-features.md] §7). */
   copySelectedMessage: () => Promise<void>;
   /** Reload tree + thread from the API (same as webview “Refresh conversation tree”). */
-  refreshConversationTree: () => Promise<void>;
+  refreshConversationTree: (opts?: { quiet?: boolean }) => Promise<void>;
   /** Show inline side-chat drawer in this conversation tab. */
   openInlineSideChat: () => Promise<void>;
   dispose: () => void;
@@ -1653,7 +1653,7 @@ export function createConversationPanelController(
       await vscode.env.clipboard.writeText(text);
       void vscode.window.setStatusBarMessage("Colcoor: message copied to clipboard.", 2500);
     },
-    async refreshConversationTree(): Promise<void> {
+    async refreshConversationTree(opts?: { quiet?: boolean }): Promise<void> {
       if (!conversationId) {
         void vscode.window.showWarningMessage(
           "Colcoor: open a conversation (Colcoor: Open conversation) first.",
@@ -1667,7 +1667,9 @@ export function createConversationPanelController(
         return;
       }
       await loadTreeAndPush(false, null);
-      void vscode.window.setStatusBarMessage("Colcoor: conversation tree refreshed.", 2500);
+      if (!opts?.quiet) {
+        void vscode.window.setStatusBarMessage("Colcoor: conversation tree refreshed.", 2500);
+      }
     },
     async openInlineSideChat(): Promise<void> {
       inlineSideChatVisible = true;

@@ -111,6 +111,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     treeProvider.refresh();
   };
 
+  /**
+   * After a user turn started outside the conversation webview (e.g. new conversation + first
+   * message, or “Send message…”), sync the open panel so it does not stay on a pre-turn tree
+   * snapshot from the webview `ready` handler.
+   */
+  async function notifyUserTurnOutcomeAndSyncConversationPanel(result: UserTurnResult): Promise<void> {
+    await conversationPanel.refreshConversationTree({ quiet: true });
+    await notifyUserTurnOutcome(result);
+  }
+
   async function notifyUserTurnOutcome(result: UserTurnResult): Promise<void> {
     refreshTree();
     if (result.cancelled) {
@@ -322,7 +332,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             firstMessage,
             workspaceRoot,
           );
-          await notifyUserTurnOutcome(result);
+          await notifyUserTurnOutcomeAndSyncConversationPanel(result);
         } else {
           await vscode.window.showInformationMessage(
             `Colcoor: created "${conv.title ?? "(untitled)"}".`,
@@ -1342,7 +1352,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               ...(privateBranch ? { privateBranch: true } : {}),
             },
           );
-          await notifyUserTurnOutcome(result);
+          await notifyUserTurnOutcomeAndSyncConversationPanel(result);
         } catch (e) {
           await showColcoorApiFailure(e);
         }
