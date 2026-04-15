@@ -19,7 +19,6 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.sendMessage");
     expect(cmds).toContain("colcoor.openLegalPolicySettings");
     expect(cmds).toContain("colcoor.openSideChatSoundSettings");
-    expect(cmds).toContain("colcoor.openSideChatLayoutSettings");
   });
 
   it("documents jumpToLatestInConversation for default-branch navigation ([ui-features.md] §6)", () => {
@@ -169,7 +168,6 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).toContain("[Sign out](command:colcoor.signOut)");
     expect(contents).toContain("[Legal policy URLs…](command:colcoor.openLegalPolicySettings)");
     expect(contents).toContain("[Side chat sounds & notifications…](command:colcoor.openSideChatSoundSettings)");
-    expect(contents).toContain("[Side chat open location…](command:colcoor.openSideChatLayoutSettings)");
     expect(contents).toContain("[About](command:colcoor.openAbout)");
   });
 
@@ -194,16 +192,6 @@ describe("package.json Colcoor contributions", () => {
     expect(cmd?.description).toMatch(/sound|notification/i);
   });
 
-  it("documents openSideChatLayoutSettings for side-chat panel placement ([ui-features.md] §10)", () => {
-    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
-    };
-    const cmd = pkg.contributes?.commands?.find((c) => c.command === "colcoor.openSideChatLayoutSettings");
-    expect(cmd?.title).toBe("Colcoor: Open side chat open-location settings…");
-    expect(cmd?.description).toContain("§10");
-    expect(cmd?.description).toMatch(/sideChatOpenTarget|open target/i);
-  });
 
   it("links Toggle sidebar from the conversations welcome view ([ui-features.md] §4)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
@@ -290,16 +278,4 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).not.toContain("command:colcoor.deleteConversation");
   });
 
-  it("registers sideChatOpenTarget for side-chat panel placement ([ui-features.md] §10)", () => {
-    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: {
-        configuration?: { properties?: Record<string, { enum?: string[]; default?: string }> };
-      };
-    };
-    const prop = pkg.contributes?.configuration?.properties?.["colcoor.sideChatOpenTarget"];
-    expect(prop).toBeDefined();
-    expect(prop?.default).toBe("beside");
-    expect(prop?.enum).toEqual(["beside", "active"]);
-  });
 });

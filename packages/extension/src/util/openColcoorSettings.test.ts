@@ -31,12 +31,4 @@ describe("openColcoorSettings", () => {
     );
   });
 
-  it("supports sideChatOpenTarget narrowing used by colcoor.openSideChatLayoutSettings", async () => {
-    const exec = vi.fn().mockResolvedValue(undefined);
-    await openColcoorSettings(exec, { searchSuffix: "sideChatOpenTarget" });
-    expect(exec).toHaveBeenCalledWith(
-      OPEN_SETTINGS_COMMAND_ID,
-      `${COLOOR_EXTENSION_SETTINGS_QUERY} sideChatOpenTarget`,
-    );
-  });
 });

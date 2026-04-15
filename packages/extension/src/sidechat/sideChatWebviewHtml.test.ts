@@ -124,8 +124,6 @@ describe("getSideChatWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openLegalPolicySettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openSideChatSoundSettings" });');
-    expect(html).toContain('id="btnSideChatLayoutSettings"');
-    expect(html).toContain('vscode.postMessage({ type: "openSideChatLayoutSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
   });
 

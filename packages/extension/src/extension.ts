@@ -24,7 +24,6 @@ import {
 import { profilePatchFromInputs } from "./profile/profilePatchPlan";
 import { createConversationPanelController } from "./conversation/conversationPanel";
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
-import { openSideChatPanel } from "./sidechat/sideChatPanel";
 import {
   isPrivateBranchFromPrivacyPick,
   sendMessagePrivacyQuickPickItems,
@@ -350,11 +349,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         searchSuffix: "side chat",
       });
     }),
-    vscode.commands.registerCommand("colcoor.openSideChatLayoutSettings", async () => {
-      await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query), {
-        searchSuffix: "sideChatOpenTarget",
-      });
-    }),
     vscode.commands.registerCommand("colcoor.toggleConversationsSidebar", async () => {
       await toggleSidebarVisibility((cmd) => vscode.commands.executeCommand(cmd));
     }),
@@ -665,7 +659,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         convTitle = row.title;
       }
       try {
-        await openSideChatPanel(context, api, convId, convTitle ?? null);
+        await conversationPanel.reveal(convId, convTitle ?? null);
+        await conversationPanel.openInlineSideChat();
       } catch (e) {
         await showColcoorApiFailure(e);
       }
@@ -932,10 +927,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand("colcoor.openSideChatSoundSettings");
                 return;
               }
-              if (msg.type === "openSideChatLayoutSettings") {
-                await vscode.commands.executeCommand("colcoor.openSideChatLayoutSettings");
-                return;
-              }
               if (msg.type === "openAbout") {
                 await vscode.commands.executeCommand("colcoor.openAbout");
                 return;
@@ -1170,9 +1161,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       try {
-        await openSideChatPanel(context, api, ctx.conversationId, ctx.title ?? null, {
-          referencedEventId: ctx.selectedEventId,
-        });
+        await conversationPanel.reveal(ctx.conversationId, ctx.title ?? null);
+        await conversationPanel.openInlineSideChat();
       } catch (e) {
         await showColcoorApiFailure(e);
       }
@@ -1205,10 +1195,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (!pick) {
           return;
         }
-        await openSideChatPanel(context, api, ctx.conversationId, ctx.title ?? null, {
-          referencedEventId: ctx.selectedEventId,
-          referencedNoteId: pick.nid,
-        });
+        await conversationPanel.revealAtEvent(ctx.conversationId, ctx.title ?? null, ctx.selectedEventId);
+        await conversationPanel.openInlineSideChat();
       } catch (e) {
         await showColcoorApiFailure(e);
       }

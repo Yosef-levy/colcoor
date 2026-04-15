@@ -3,10 +3,6 @@ import { describe, expect, it } from "vitest";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import { TREE_EVENT_DISPLAY_TITLE_MAX, TREE_EVENT_SNIPPET_MAX } from "./treeNodeDisplay";
 import {
-  CONTEXT_REBUILD_COMPOSER_BANNER,
-  CONTEXT_REBUILD_SUBTITLE_SUFFIX,
-} from "./contextRebuildUserCopy";
-import {
   PRIVATE_BRANCH_DESCRIPTION,
   PRIVATE_BRANCH_LEAD,
 } from "./privateBranchComposerCopy";
@@ -98,6 +94,25 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("sideChatOpenButtonLabel");
     expect(html).toContain("sideChatOpenButtonTitle");
     expect(html).toContain("openSideChatBtn.textContent");
+  });
+
+  it("tree panel hint describes the bottom-right resize handle ([ui-features.md] §5)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain(
+      "Event tree — click a node to choose where the next reply attaches. Use the resize handle in the bottom-right corner of this panel to change width.",
+    );
+  });
+
+  it("lays out tree, main thread column, and side chat as three horizontal columns ([ui-features.md] §10)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('class="col-tree"');
+    expect(html).toContain('class="col-center"');
+    expect(html).toContain('id="colSideChat"');
+    expect(html).toContain("sideChatColumnWidthPx: null");
+    expect(html).toContain("function applySideChatColumnWidth()");
+    expect(html).toContain("function wireSideChatResize()");
+    expect(html).toContain("sideChatColumnWidthPx: sw");
+    expect(html).toContain("resize handle in the bottom-right corner");
   });
 
   it("posts treeContextMenu on tree node contextmenu ([tree-ui-contract.md] §5.2)", () => {
@@ -240,31 +255,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="btnSettings"');
     expect(html).toContain('id="btnLegalPolicySettings"');
     expect(html).toContain('id="btnSideChatSoundSettings"');
-    expect(html).toContain('id="btnSideChatLayoutSettings"');
     expect(html).toContain('id="btnAbout"');
     expect(html).toContain("if (profileBtn) profileBtn.disabled = state.busy;");
     expect(html).toContain("if (settingsBtn) settingsBtn.disabled = state.busy;");
     expect(html).toContain("if (legalPolicySettingsBtn) legalPolicySettingsBtn.disabled = state.busy;");
     expect(html).toContain("if (sideChatSoundSettingsBtn) sideChatSoundSettingsBtn.disabled = state.busy;");
-    expect(html).toContain("if (sideChatLayoutSettingsBtn) sideChatLayoutSettingsBtn.disabled = state.busy;");
     expect(html).toContain("if (aboutBtn) aboutBtn.disabled = state.busy;");
     expect(html).toContain('vscode.postMessage({ type: "openProfile" });');
     expect(html).toContain('vscode.postMessage({ type: "openSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openLegalPolicySettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openSideChatSoundSettings" });');
-    expect(html).toContain('vscode.postMessage({ type: "openSideChatLayoutSettings" });');
     expect(html).toContain('vscode.postMessage({ type: "openAbout" });');
   });
 
-  it("embeds context-rebuild copy, banner region, and render wiring", () => {
-    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="contextRebuildHint"');
-    expect(html).toContain("CONTEXT_REBUILD_SUBTITLE_SUFFIX");
-    expect(html).toContain("CONTEXT_REBUILD_COMPOSER_BANNER");
-    expect(html).toContain(JSON.stringify(CONTEXT_REBUILD_SUBTITLE_SUFFIX));
-    expect(html).toContain(JSON.stringify(CONTEXT_REBUILD_COMPOSER_BANNER));
-    expect(html).toContain("subBase += CONTEXT_REBUILD_SUBTITLE_SUFFIX");
-    expect(html).toContain('getElementById("contextRebuildHint")');
-    expect(html).toContain("state.needsContextRebuild && !state.busy");
-  });
 });

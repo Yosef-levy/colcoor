@@ -106,7 +106,6 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - **Resend** — new assistant sibling under an existing **user** message (detail bar button; Command Palette **Colcoor: Resend assistant** when the conversation panel is open).
 - **Add NOTE** and **Add message title** (modal or inline).
 - **NOTES (attached)** with edit/delete and **Reference in side chat** on notes.
-- **Context / rebuild** messaging when `needs_context_rebuild` is true ([domain-model.md](domain-model.md) §4) — user-facing wording only.
 - **Reference in side chat** for the selected **message**; short note that **notes are not tree nodes**.
 
 ---
@@ -123,7 +122,8 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 ## 10. Side chat
 
-- Open/close, **unread** badge, **dock**, **resizable** width.
+- Open/close in the **same conversation tab**: **three columns** (event tree · main thread and composer · side chat), each with a **horizontally resizable** width where the webview supports it; widths persist in workspace state.
+- **Unread** badge on the open control.
 - **List**, **send**, **edit**, **delete** (per permissions).
 - **@mentions** and notifications (aligned with §1 sounds).
 - **Reference** main-thread **message** or **note** for the next post.

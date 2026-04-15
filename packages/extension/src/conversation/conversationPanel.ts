@@ -1,6 +1,12 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
-import type { ColcoorApiClient, ConversationSummary, GraphEventNode, NoteOut } from "../api/client";
+import type {
+  ColcoorApiClient,
+  ConversationSummary,
+  GraphEventNode,
+  NoteOut,
+  SideChatMessageOut,
+} from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import {
@@ -42,8 +48,12 @@ import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
 import { buildUserMediaContentJson, parseDataUrlToBytes } from "./userEventMedia";
 import type { ColcoorUserMediaImageRef } from "./userEventMedia";
+import { buildUserImageDataUrlsByOwnerId } from "./conversationImageDataUrls";
+import { buildSideChatSendPayload } from "../sidechat/sideChatSendPayload";
+import { toSideChatRenderMessages, type SideChatRenderMessage } from "../sidechat/sideChatRenderMessages";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
+const SIDE_CHAT_COLUMN_WIDTH_STATE_KEY = "colcoor.conversation.sideChatColumnWidthPx";
 /** `conversation_id` → event ids whose branches are collapsed in the webview tree ([tree-ui-contract.md]). */
 const TREE_COLLAPSED_BY_CONV_KEY = "colcoor.treeCollapsedByConversation";
 const colcoorNotesChannel = vscode.window.createOutputChannel("Colcoor notes");
@@ -60,6 +70,8 @@ type WebviewStateMessage = {
   threadPlainText: string;
   /** Workspace-persisted tree column width (px), when set. */
   treeWidthPx: number | null;
+  /** Workspace-persisted side-chat column width (px), when set. */
+  sideChatColumnWidthPx: number | null;
   /** Workspace-persisted composer textarea height (px), when set. */
   composerTextareaHeightPx: number | null;
   /** Collapsed branch roots for this conversation (pruned to current `events`). */
@@ -77,6 +89,9 @@ type WebviewStateMessage = {
   sideChatOpenButtonTitle: string;
   /** In-flight send: sanitized markdown for the user line before the server persists it ([ui-features.md] §7). */
   pendingUserHtml: string | null;
+  /** Inline side-chat drawer in the same conversation tab. */
+  sideChatVisible: boolean;
+  sideChatMessages: SideChatRenderMessage[];
 };
 
 type FromWebview =
@@ -97,7 +112,12 @@ type FromWebview =
   | { type: "resend" }
   | { type: "copy"; text: string }
   | { type: "copyThread"; text: string }
-  | { type: "layout"; treeWidthPx?: number; composerTextareaHeightPx?: number }
+  | {
+      type: "layout";
+      treeWidthPx?: number;
+      composerTextareaHeightPx?: number;
+      sideChatColumnWidthPx?: number;
+    }
   | { type: "continueFromHere" }
   | { type: "referenceInSideChat" }
   | { type: "referenceNoteInSideChat" }
@@ -106,6 +126,9 @@ type FromWebview =
   | { type: "changeMemberRole" }
   | { type: "removeMember" }
   | { type: "openSideChat" }
+  | { type: "closeSideChat" }
+  | { type: "refreshSideChat" }
+  | { type: "sendSideChat"; text: string; images?: { dataUrl: string }[] }
   | { type: "setupCursorCli" }
   | { type: "setCursorAgentApiKey" }
   | { type: "deleteConversation" }
@@ -113,7 +136,6 @@ type FromWebview =
   | { type: "openProfile" }
   | { type: "openSettings" }
   | { type: "openLegalPolicySettings" }
-  | { type: "openSideChatLayoutSettings" }
   | { type: "openSideChatSoundSettings" }
   | { type: "openAbout" }
   | { type: "openLegalPolicyUrl"; url: string }
@@ -177,6 +199,8 @@ export function createConversationPanelController(
   copySelectedMessage: () => Promise<void>;
   /** Reload tree + thread from the API (same as webview “Refresh conversation tree”). */
   refreshConversationTree: () => Promise<void>;
+  /** Show inline side-chat drawer in this conversation tab. */
+  openInlineSideChat: () => Promise<void>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -222,6 +246,10 @@ export function createConversationPanelController(
   let pendingSendUserMarkdown: string | undefined;
   /** Data URLs for `user_input` rows with `colcoor_user_media`, built on each tree refresh for thread HTML. */
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
+  /** Inline side-chat rows + rendered rows for same-tab drawer. */
+  let inlineSideChatRows: SideChatMessageOut[] = [];
+  let inlineSideChatRendered: SideChatRenderMessage[] = [];
+  let inlineSideChatVisible = false;
   /**
    * Serialize tree fetches + postMessage so overlapping refreshes (e.g. tree click during send)
    * cannot apply an older GET /tree after a newer one and leave the UI stuck on a root-only snapshot.
@@ -257,6 +285,27 @@ export function createConversationPanelController(
       conversationTitle = row.title;
       applySideChatUnreadFromListRow(row);
     }
+  }
+
+  async function refreshInlineSideChat(): Promise<void> {
+    if (!conversationId) {
+      inlineSideChatRows = [];
+      inlineSideChatRendered = [];
+      return;
+    }
+    const rows = await api.listSideChatMessages(conversationId, 0);
+    inlineSideChatRows = rows;
+    let urlsByMessageId = new Map<string, string[]>();
+    try {
+      urlsByMessageId = await buildUserImageDataUrlsByOwnerId(
+        api,
+        conversationId,
+        rows.filter((m) => m.kind === "user"),
+      );
+    } catch {
+      urlsByMessageId = new Map();
+    }
+    inlineSideChatRendered = toSideChatRenderMessages(rows, undefined, urlsByMessageId);
   }
 
   function syncActiveToBackend(
@@ -341,6 +390,11 @@ export function createConversationPanelController(
         typeof treeW === "number" && Number.isFinite(treeW) && treeW >= 140 && treeW < 8000
           ? Math.floor(treeW)
           : null;
+      const sideChatW = context.workspaceState.get<number>(SIDE_CHAT_COLUMN_WIDTH_STATE_KEY);
+      const sideChatColumnWidthPx =
+        typeof sideChatW === "number" && Number.isFinite(sideChatW) && sideChatW >= 160 && sideChatW < 8000
+          ? Math.floor(sideChatW)
+          : null;
       const composerTextareaHeightPx = clampComposerTextareaHeightPx(
         context.workspaceState.get<number>(COMPOSER_TEXTAREA_HEIGHT_STATE_KEY),
       );
@@ -365,6 +419,7 @@ export function createConversationPanelController(
           pendingSendUserMarkdown,
         ),
         treeWidthPx,
+        sideChatColumnWidthPx,
         composerTextareaHeightPx,
         treeCollapsedEventIds: prunedCollapsedEventIds(events),
         agentTraceOpen,
@@ -377,6 +432,8 @@ export function createConversationPanelController(
         sideChatOpenButtonLabel: sideChatBtn.label,
         sideChatOpenButtonTitle: sideChatBtn.title,
         pendingUserHtml,
+        sideChatVisible: inlineSideChatVisible,
+        sideChatMessages: inlineSideChatRendered,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -388,6 +445,11 @@ export function createConversationPanelController(
         const treeWidthPx =
           typeof treeW === "number" && Number.isFinite(treeW) && treeW >= 140 && treeW < 8000
             ? Math.floor(treeW)
+            : null;
+        const sideChatW = context.workspaceState.get<number>(SIDE_CHAT_COLUMN_WIDTH_STATE_KEY);
+        const sideChatColumnWidthPx =
+          typeof sideChatW === "number" && Number.isFinite(sideChatW) && sideChatW >= 160 && sideChatW < 8000
+            ? Math.floor(sideChatW)
             : null;
         const composerTextareaHeightPx = clampComposerTextareaHeightPx(
           context.workspaceState.get<number>(COMPOSER_TEXTAREA_HEIGHT_STATE_KEY),
@@ -408,6 +470,7 @@ export function createConversationPanelController(
           threadSegments: [],
           threadPlainText: appendPendingPlainThreadFragment("", busy, pendingSendUserMarkdown),
           treeWidthPx,
+          sideChatColumnWidthPx,
           composerTextareaHeightPx,
           treeCollapsedEventIds: [],
           agentTraceOpen,
@@ -422,6 +485,8 @@ export function createConversationPanelController(
           sideChatOpenButtonLabel: sideChatBtnFb.label,
           sideChatOpenButtonTitle: sideChatBtnFb.title,
           pendingUserHtml: null,
+          sideChatVisible: inlineSideChatVisible,
+          sideChatMessages: inlineSideChatRendered,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -531,6 +596,14 @@ export function createConversationPanelController(
           } catch {
             lastUserImageDataUrlsByEventId = new Map();
           }
+          if (inlineSideChatVisible) {
+            try {
+              await refreshInlineSideChat();
+            } catch {
+              inlineSideChatRows = [];
+              inlineSideChatRendered = [];
+            }
+          }
           postState(events, busy, lastError);
           return;
         } catch (e) {
@@ -541,6 +614,8 @@ export function createConversationPanelController(
           lastNotes = [];
           lastNeedsContextRebuild = false;
           lastUserImageDataUrlsByEventId = new Map();
+          inlineSideChatRows = [];
+          inlineSideChatRendered = [];
           postState([], busy, msg);
           return;
         }
@@ -567,24 +642,23 @@ export function createConversationPanelController(
     syncConversationReplyInProgressContext();
     const signal = sendAbort.signal;
     await loadTreeAndPush(true, null);
-    const refs: ColcoorUserMediaImageRef[] = [];
-    for (const row of pastedImages ?? []) {
-      const parsed = parseDataUrlToBytes(row.dataUrl);
-      if (!parsed) {
-        continue;
-      }
-      const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
-      refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
-    }
-    if (!trimmed && refs.length === 0) {
-      sendAbort = undefined;
-      syncConversationReplyInProgressContext();
-      pendingSendUserMarkdown = undefined;
-      return;
-    }
-    const userMediaContentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
     try {
+      const refs: ColcoorUserMediaImageRef[] = [];
+      for (const row of pastedImages ?? []) {
+        const parsed = parseDataUrlToBytes(row.dataUrl);
+        if (!parsed) {
+          continue;
+        }
+        const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
+        refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
+      }
+      if (!trimmed && refs.length === 0) {
+        stream.dispose();
+        await loadTreeAndPush(false, null);
+        return;
+      }
+      const userMediaContentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
       const result = await runColcoorUserTurn(
         api,
         agent,
@@ -866,6 +940,12 @@ export function createConversationPanelController(
             void context.workspaceState.update(TREE_WIDTH_STATE_KEY, w);
           }
         }
+        if (typeof msg.sideChatColumnWidthPx === "number") {
+          const sw = Math.floor(msg.sideChatColumnWidthPx);
+          if (sw >= 160 && sw < 8000) {
+            void context.workspaceState.update(SIDE_CHAT_COLUMN_WIDTH_STATE_KEY, sw);
+          }
+        }
         if (typeof msg.composerTextareaHeightPx === "number") {
           const h = clampComposerTextareaHeightPx(msg.composerTextareaHeightPx);
           if (h != null) {
@@ -996,13 +1076,71 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "openSideChat") {
+        inlineSideChatVisible = true;
+        try {
+          await refreshInlineSideChat();
+          await refreshConversationMeta();
+        } catch (e) {
+          if (isPlanLimitColcoorApiError(e)) {
+            void showColcoorApiFailure(e);
+          }
+        }
+        postState(lastTreeEvents, sendAbort != null, null);
+        return;
+      }
+      if (msg.type === "closeSideChat") {
+        inlineSideChatVisible = false;
+        postState(lastTreeEvents, sendAbort != null, null);
+        return;
+      }
+      if (msg.type === "refreshSideChat") {
         if (!conversationId) {
           return;
         }
-        await vscode.commands.executeCommand("colcoor.openSideChat", {
-          conv: { id: conversationId, title: conversationTitle ?? null },
-        });
-        await refreshConversationMeta();
+        try {
+          await refreshInlineSideChat();
+          await refreshConversationMeta();
+        } catch (e) {
+          if (isPlanLimitColcoorApiError(e)) {
+            void showColcoorApiFailure(e);
+          }
+        }
+        postState(lastTreeEvents, sendAbort != null, null);
+        return;
+      }
+      if (msg.type === "sendSideChat") {
+        if (!conversationId) {
+          return;
+        }
+        try {
+          const refs: ColcoorUserMediaImageRef[] = [];
+          for (const row of msg.images ?? []) {
+            const parsed = parseDataUrlToBytes(typeof row?.dataUrl === "string" ? row.dataUrl : "");
+            if (!parsed) {
+              continue;
+            }
+            const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
+            refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
+          }
+          const contentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
+          const payload = buildSideChatSendPayload(
+            msg.text,
+            null,
+            null,
+            null,
+            inlineSideChatRows,
+            contentJson,
+          );
+          if (!payload) {
+            void vscode.window.showWarningMessage("Colcoor: side chat message is empty.");
+            return;
+          }
+          await api.postSideChatMessage(conversationId, payload);
+          await refreshInlineSideChat();
+          await refreshConversationMeta();
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
         postState(lastTreeEvents, sendAbort != null, null);
         return;
       }
@@ -1042,10 +1180,6 @@ export function createConversationPanelController(
       }
       if (msg.type === "openLegalPolicySettings") {
         await vscode.commands.executeCommand("colcoor.openLegalPolicySettings");
-        return;
-      }
-      if (msg.type === "openSideChatLayoutSettings") {
-        await vscode.commands.executeCommand("colcoor.openSideChatLayoutSettings");
         return;
       }
       if (msg.type === "openSideChatSoundSettings") {
@@ -1145,6 +1279,9 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       lastNotes = [];
       lastNeedsContextRebuild = false;
+      inlineSideChatVisible = false;
+      inlineSideChatRows = [];
+      inlineSideChatRendered = [];
       syncConversationPanelOpenContext();
     });
 
@@ -1255,6 +1392,9 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
+      inlineSideChatVisible = false;
+      inlineSideChatRows = [];
+      inlineSideChatRendered = [];
       await refreshConversationMeta();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
@@ -1280,6 +1420,9 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
+      inlineSideChatVisible = false;
+      inlineSideChatRows = [];
+      inlineSideChatRendered = [];
       await refreshConversationMeta();
       try {
         await api.setConversationActive(cid, {
@@ -1420,6 +1563,18 @@ export function createConversationPanelController(
       }
       await loadTreeAndPush(false, null);
       void vscode.window.setStatusBarMessage("Colcoor: conversation tree refreshed.", 2500);
+    },
+    async openInlineSideChat(): Promise<void> {
+      inlineSideChatVisible = true;
+      try {
+        await refreshInlineSideChat();
+        await refreshConversationMeta();
+      } catch (e) {
+        if (isPlanLimitColcoorApiError(e)) {
+          void showColcoorApiFailure(e);
+        }
+      }
+      postState(lastTreeEvents, Boolean(sendAbort), null);
     },
     dispose: () => {
       subscription.dispose();

@@ -1,10 +1,6 @@
 /** HTML document for the Colcoor conversation webview (tree + thread + composer). */
 
 import {
-  CONTEXT_REBUILD_COMPOSER_BANNER,
-  CONTEXT_REBUILD_SUBTITLE_SUFFIX,
-} from "./contextRebuildUserCopy";
-import {
   PRIVATE_BRANCH_DESCRIPTION,
   PRIVATE_BRANCH_LABEL_TITLE,
   PRIVATE_BRANCH_LEAD,
@@ -69,9 +65,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
     .col-tree {
       flex: 0 0 auto;
-      width: 38%;
+      width: 28%;
       min-width: 140px;
-      max-width: 80%;
+      max-width: 70%;
       resize: horizontal;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
@@ -88,13 +84,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow-y: auto;
       overflow-x: hidden;
     }
-    .col-main {
+    .col-center {
       flex: 1;
       display: flex;
       flex-direction: column;
       min-width: 0;
       min-height: 0;
       gap: 10px;
+      overflow: hidden;
+    }
+    .col-sidechat {
+      flex: 0 0 auto;
+      width: 30%;
+      min-width: 160px;
+      max-width: 55%;
+      resize: horizontal;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      padding: 8px;
+      display: none;
+      flex-direction: column;
+      min-height: 0;
       overflow: hidden;
     }
     .detail-bar {
@@ -138,6 +148,33 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
+    }
+    .inline-sidechat {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .inline-sidechat-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      padding: 6px;
+    }
+    .inline-sidechat-msg { margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
+    .inline-sidechat-msg:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .inline-sidechat-meta { font-size: 0.82em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .inline-sidechat .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .inline-sidechat-composer { display: flex; gap: 8px; align-items: center; }
+    .inline-sidechat-composer textarea {
+      flex: 1;
+      min-height: 54px;
+      resize: vertical;
+      font-family: var(--vscode-editor-font-family);
+      font-size: var(--vscode-editor-font-size);
     }
     .composer {
       flex-shrink: 0;
@@ -685,17 +722,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
     }
-    .context-rebuild-hint {
-      flex-shrink: 0;
-      margin: 0;
-      padding: 8px 10px;
-      border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-editorWarning-foreground));
-      border-radius: 4px;
-      background: var(--vscode-inputValidation-warningBackground, var(--vscode-editorWarning-background));
-      color: var(--vscode-inputValidation-warningForeground, var(--vscode-editorWarning-foreground));
-      font-size: 0.92em;
-      line-height: 1.4;
-    }
     .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
     .legal-policy-strip {
       display: none;
@@ -723,12 +749,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   ></div>
   <div class="layout">
     <div class="col-tree">
-      <div class="hint tree-panel-hint">Event tree — click a node to choose where the next reply attaches. Drag the right edge of this panel to resize.</div>
+      <div class="hint tree-panel-hint">Event tree — click a node to choose where the next reply attaches. Use the resize handle in the bottom-right corner of this panel to change width.</div>
       <div class="tree-scroll">
         <div id="tree" class="tree"></div>
       </div>
     </div>
-    <div class="col-main">
+    <div class="col-center">
       <div class="detail-bar">
         <div id="breadcrumb" class="crumb hint"></div>
         <div class="detail-actions">
@@ -748,7 +774,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnSettings" class="btn-secondary" title="Open Colcoor extension settings">Settings</button>
           <button type="button" id="btnLegalPolicySettings" class="btn-secondary" title="Open Colcoor Terms, Privacy, and Refund URL settings">Legal URLs…</button>
           <button type="button" id="btnSideChatSoundSettings" class="btn-secondary" title="Open side chat notification and sound settings (Colcoor: Open side chat sound &amp; notification settings…)">Side chat sounds…</button>
-          <button type="button" id="btnSideChatLayoutSettings" class="btn-secondary" title="Open Settings for where new side-chat panels open (Colcoor: Open side chat open-location settings…)">Side chat opens…</button>
           <button type="button" id="btnAbout" class="btn-secondary" title="About Colcoor">About</button>
           <button type="button" id="btnRename" class="btn-secondary">Rename…</button>
           <button type="button" id="btnPin" class="btn-secondary">Pin</button>
@@ -772,13 +797,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <div id="thread"></div>
         </div>
       </div>
-      <div
-        id="contextRebuildHint"
-        class="context-rebuild-hint"
-        style="display:none"
-        role="status"
-        aria-live="polite"
-      ></div>
       <div class="composer">
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
         <div id="pendingConversationImages" class="composer-pending-images" style="display:none"></div>
@@ -810,11 +828,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </div>
       </div>
     </div>
+    <div id="colSideChat" class="col-sidechat" style="display:none" aria-hidden="true">
+      <div class="hint sidechat-panel-hint" style="flex-shrink:0;margin-bottom:4px;">
+        Side chat — use the resize handle in the bottom-right corner of this panel to change width.
+      </div>
+      <div id="inlineSideChat" class="inline-sidechat">
+        <div class="row" style="flex-shrink:0;margin:0;">
+          <div class="hint" style="margin:0;">Same tab</div>
+          <button type="button" id="btnCloseSideChat" class="btn-secondary">Close side chat</button>
+          <button type="button" id="btnRefreshSideChat" class="btn-secondary">Refresh</button>
+        </div>
+        <div id="inlineSideChatList" class="inline-sidechat-list"></div>
+        <div class="inline-sidechat-composer" style="flex-shrink:0;">
+          <textarea id="inlineSideChatInput" dir="auto" placeholder="Side chat message…"></textarea>
+          <button type="button" id="btnInlineSideChatSend" class="btn-secondary">Send</button>
+        </div>
+      </div>
+    </div>
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    const CONTEXT_REBUILD_SUBTITLE_SUFFIX = ${JSON.stringify(CONTEXT_REBUILD_SUBTITLE_SUFFIX)};
-    const CONTEXT_REBUILD_COMPOSER_BANNER = ${JSON.stringify(CONTEXT_REBUILD_COMPOSER_BANNER)};
     let hasReceivedState = false;
     var pendingSendImages = [];
     function renderPendingConversationImages() {
@@ -861,6 +894,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       threadSegments: [],
       threadPlainText: "",
       treeWidthPx: null,
+      sideChatColumnWidthPx: null,
       /** Host workspace persistence; bounds match composerLayoutPersistence.ts (72–800). */
       composerTextareaHeightPx: null,
       agentTraceOpen: true,
@@ -870,6 +904,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       legalPolicyLinks: [],
       sideChatOpenButtonLabel: "Open side chat",
       sideChatOpenButtonTitle: "Open side chat for this conversation",
+      sideChatVisible: false,
+      sideChatMessages: [],
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
       pendingUserHtml: null,
@@ -890,11 +926,34 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (w != null && w >= 140) el.style.width = w + "px";
     }
 
+    function applySideChatColumnWidth() {
+      var el = document.getElementById("colSideChat");
+      if (!el || el.style.display === "none") return;
+      var sw = null;
+      if (typeof state.sideChatColumnWidthPx === "number" && state.sideChatColumnWidthPx >= 160) {
+        sw = state.sideChatColumnWidthPx;
+      }
+      if (sw == null) {
+        try {
+          sw = parseInt(localStorage.getItem("colcoor.sideChatColumnWidthPx"), 10);
+        } catch (e2) {}
+      }
+      if (sw != null && sw >= 160) el.style.width = sw + "px";
+    }
+
     (function applySavedTreeWidthColdStart() {
       try {
         var w = parseInt(localStorage.getItem("colcoor.treeWidthPx"), 10);
         var el = document.querySelector(".col-tree");
         if (el && w >= 140) el.style.width = w + "px";
+      } catch (e) {}
+    })();
+
+    (function applySavedSideChatColumnWidthColdStart() {
+      try {
+        var sw = parseInt(localStorage.getItem("colcoor.sideChatColumnWidthPx"), 10);
+        var el = document.getElementById("colSideChat");
+        if (el && sw >= 160) el.style.width = sw + "px";
       } catch (e) {}
     })();
 
@@ -1093,7 +1152,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const settingsBtn = document.getElementById("btnSettings");
       const legalPolicySettingsBtn = document.getElementById("btnLegalPolicySettings");
       const sideChatSoundSettingsBtn = document.getElementById("btnSideChatSoundSettings");
-      const sideChatLayoutSettingsBtn = document.getElementById("btnSideChatLayoutSettings");
       const aboutBtn = document.getElementById("btnAbout");
       const resendBtn = document.getElementById("btnResend");
       if (
@@ -1134,7 +1192,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (settingsBtn) settingsBtn.disabled = state.busy;
       if (legalPolicySettingsBtn) legalPolicySettingsBtn.disabled = state.busy;
       if (sideChatSoundSettingsBtn) sideChatSoundSettingsBtn.disabled = state.busy;
-      if (sideChatLayoutSettingsBtn) sideChatLayoutSettingsBtn.disabled = state.busy;
       if (aboutBtn) aboutBtn.disabled = state.busy;
       const sel = state.selectedEventId;
       const evs = state.events || [];
@@ -1254,6 +1311,31 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }, 250);
       });
       treeResizeObserver.observe(el);
+    }
+
+    var sideChatResizeObserver = null;
+    function wireSideChatResize() {
+      var el = document.getElementById("colSideChat");
+      if (sideChatResizeObserver) {
+        sideChatResizeObserver.disconnect();
+        sideChatResizeObserver = null;
+      }
+      if (!el || typeof ResizeObserver === "undefined") return;
+      if (el.style.display === "none") return;
+      var tid = null;
+      sideChatResizeObserver = new ResizeObserver(function () {
+        if (tid) clearTimeout(tid);
+        tid = setTimeout(function () {
+          try {
+            var sw = el.offsetWidth;
+            if (sw >= 160) {
+              localStorage.setItem("colcoor.sideChatColumnWidthPx", String(sw));
+              vscode.postMessage({ type: "layout", sideChatColumnWidthPx: sw });
+            }
+          } catch (e) {}
+        }, 250);
+      });
+      sideChatResizeObserver.observe(el);
     }
 
     var composerResizeObserver = null;
@@ -1451,6 +1533,46 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
     }
 
+    function renderInlineSideChat() {
+      var col = document.getElementById("colSideChat");
+      var wrap = document.getElementById("inlineSideChat");
+      var list = document.getElementById("inlineSideChatList");
+      if (!col || !wrap || !list) return;
+      if (!state.sideChatVisible) {
+        col.style.display = "none";
+        col.setAttribute("aria-hidden", "true");
+        list.textContent = "";
+        if (sideChatResizeObserver) {
+          sideChatResizeObserver.disconnect();
+          sideChatResizeObserver = null;
+        }
+        return;
+      }
+      col.style.display = "flex";
+      col.setAttribute("aria-hidden", "false");
+      var rows = Array.isArray(state.sideChatMessages) ? state.sideChatMessages : [];
+      if (!rows.length) {
+        list.innerHTML = '<p class="empty">No side-chat messages yet.</p>';
+        return;
+      }
+      var html = "";
+      for (var i = 0; i < rows.length; i++) {
+        var m = rows[i] || {};
+        var bodyHtml = typeof m.rendered_body_html === "string" ? m.rendered_body_html : esc(String(m.body || ""));
+        html +=
+          '<div class="inline-sidechat-msg">' +
+          '<div class="inline-sidechat-meta">#' +
+          esc(String(m.seq || i + 1)) +
+          " · " +
+          esc(String(m.kind || "user")) +
+          "</div>" +
+          '<div class="body md" dir="auto">' +
+          bodyHtml +
+          "</div></div>";
+      }
+      list.innerHTML = html;
+    }
+
     function updateComposerSendEnabled() {
       var sendBtn = document.getElementById("send");
       var ta = document.getElementById("input");
@@ -1538,22 +1660,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           var subBase =
             state.events.length +
             " event(s) — reply attaches under the selected tree node.";
-          if (state.needsContextRebuild) {
-            subBase += CONTEXT_REBUILD_SUBTITLE_SUFFIX;
-          }
           subEl.textContent = subBase;
         }
         updateLegalPolicyStrip();
-        var crHint = document.getElementById("contextRebuildHint");
-        if (crHint) {
-          if (state.needsContextRebuild && !state.busy) {
-            crHint.style.display = "block";
-            crHint.textContent = CONTEXT_REBUILD_COMPOSER_BANNER;
-          } else {
-            crHint.style.display = "none";
-            crHint.textContent = "";
-          }
-        }
         if (sendBtn) {
           sendBtn.textContent = state.busy ? "Sending…" : "Send";
           if (state.busy) {
@@ -1592,9 +1701,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         renderTree();
         renderThread();
+        renderInlineSideChat();
         renderDetailBar();
         applyTreeWidth();
+        applySideChatColumnWidth();
         wireTreeResize();
+        wireSideChatResize();
         wireComposerResize();
       } catch (e) {
         const msg = e && e.message ? String(e.message) : String(e);
@@ -1787,6 +1899,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("btnOpenSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "openSideChat" });
     });
+    document.getElementById("btnCloseSideChat").addEventListener("click", () => {
+      vscode.postMessage({ type: "closeSideChat" });
+    });
+    document.getElementById("btnRefreshSideChat").addEventListener("click", () => {
+      vscode.postMessage({ type: "refreshSideChat" });
+    });
+    document.getElementById("btnInlineSideChatSend").addEventListener("click", () => {
+      var ta = document.getElementById("inlineSideChatInput");
+      var text = ta && ta.value ? String(ta.value) : "";
+      vscode.postMessage({ type: "sendSideChat", text: text.trimEnd() });
+      if (ta) ta.value = "";
+    });
     document.getElementById("btnSetupCursorCli").addEventListener("click", () => {
       vscode.postMessage({ type: "setupCursorCli" });
     });
@@ -1810,9 +1934,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
     document.getElementById("btnSideChatSoundSettings").addEventListener("click", () => {
       vscode.postMessage({ type: "openSideChatSoundSettings" });
-    });
-    document.getElementById("btnSideChatLayoutSettings").addEventListener("click", () => {
-      vscode.postMessage({ type: "openSideChatLayoutSettings" });
     });
     document.getElementById("btnAbout").addEventListener("click", () => {
       vscode.postMessage({ type: "openAbout" });
