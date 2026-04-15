@@ -487,6 +487,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
     .msg.assistant { background: var(--vscode-textBlockQuote-background); }
     .msg.assistant.streaming { box-shadow: inset 0 0 0 1px var(--vscode-focusBorder, var(--vscode-panel-border)); }
+    .msg.assistant.assistant-waiting {
+      opacity: 0.95;
+      border-left-style: dashed;
+    }
+    .msg.assistant.assistant-waiting .pending-hint {
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      margin: 0 0 6px 0;
+    }
     .agent-trace {
       margin-top: 10px;
       border: 1px solid var(--vscode-focusBorder, var(--vscode-panel-border));
@@ -948,6 +957,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     const vscode = acquireVsCodeApi();
     let hasReceivedState = false;
     var pendingSendImages = [];
+    /** After local inline side-chat send: scroll list when host state catches up; do not scroll on passive refresh. */
+    var pendingInlineSideChatScrollAfterSend = false;
+    var inlineSideChatRowCountWhenSent = 0;
+    var inlineSideChatScrollAfterSendTimer = null;
+    var prevSideChatPanelOpen = false;
     function renderPendingConversationImages() {
       var el = document.getElementById("pendingConversationImages");
       if (!el) return;
@@ -1002,6 +1016,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       legalPolicyLinks: [],
       sideChatOpenButtonLabel: "Open side chat",
       sideChatOpenButtonTitle: "Open side chat for this conversation",
+      sideChatUnreadCount: 0,
       sideChatVisible: false,
       sideChatMessages: [],
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
@@ -1691,7 +1706,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const el = document.getElementById("thread");
       if (!el) return;
       const segs = visibleThreadSegmentsForUi();
-      if (!segs.length && !state.pendingUserHtml && !state.streamingHtml) {
+      if (!segs.length && !state.pendingUserHtml && !state.streamingHtml && !state.busy) {
         el.innerHTML = '<p class="empty">Select an event in the tree.</p>';
         scrollThreadToBottom();
         return;
@@ -1764,6 +1779,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           '<div class="msg assistant streaming"><div class="role">Assistant</div><div class="body md" dir="auto">' +
           state.streamingHtml +
           "</div></div>";
+      } else if (state.busy) {
+        html +=
+          '<div class="msg assistant assistant-waiting">' +
+          '<div class="role">Assistant</div>' +
+          '<p class="pending-hint">Preparing reply…</p>' +
+          "</div>";
       }
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
       scrollThreadToBottom();
@@ -1778,6 +1799,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         col.style.display = "none";
         col.setAttribute("aria-hidden", "true");
         list.textContent = "";
+        pendingInlineSideChatScrollAfterSend = false;
+        if (inlineSideChatScrollAfterSendTimer) {
+          clearTimeout(inlineSideChatScrollAfterSendTimer);
+          inlineSideChatScrollAfterSendTimer = null;
+        }
         if (sideChatResizeObserver) {
           sideChatResizeObserver.disconnect();
           sideChatResizeObserver = null;
@@ -1789,6 +1815,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var rows = Array.isArray(state.sideChatMessages) ? state.sideChatMessages : [];
       if (!rows.length) {
         list.innerHTML = '<p class="empty">No side-chat messages yet.</p>';
+        maybeScrollInlineSideChatAfterLocalSend();
         return;
       }
       var html = "";
@@ -1807,6 +1834,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           "</div></div>";
       }
       list.innerHTML = html;
+      maybeScrollInlineSideChatAfterLocalSend();
     }
 
     function updateComposerSendEnabled() {
@@ -1863,6 +1891,77 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         requestAnimationFrame(run);
       } catch (e) {
         setTimeout(run, 0);
+      }
+    }
+
+    function scrollInlineSideChatListToBottom() {
+      var list = document.getElementById("inlineSideChatList");
+      if (!list) return;
+      var run = function () {
+        try {
+          list.scrollTop = list.scrollHeight;
+        } catch (e) {}
+      };
+      try {
+        requestAnimationFrame(run);
+      } catch (e) {
+        setTimeout(run, 0);
+      }
+    }
+
+    /**
+     * On open: scroll so the first unread row is at the top of the list (unread = contiguous tail by seq).
+     * With zero unread count, scroll to the latest message.
+     */
+    function scrollInlineSideChatToFirstUnread() {
+      var list = document.getElementById("inlineSideChatList");
+      if (!list) return;
+      var rows = list.querySelectorAll(".inline-sidechat-msg");
+      var n = rows.length;
+      if (!n) return;
+      var uRaw = state.sideChatUnreadCount;
+      var u =
+        typeof uRaw === "number" && Number.isFinite(uRaw) && uRaw > 0
+          ? Math.min(Math.floor(uRaw), n)
+          : 0;
+      var idx = u > 0 ? n - u : n - 1;
+      var target = rows[idx];
+      if (!target) return;
+      var run = function () {
+        try {
+          list.scrollTop = Math.max(0, target.offsetTop - 6);
+        } catch (e) {}
+      };
+      try {
+        requestAnimationFrame(run);
+      } catch (e) {
+        setTimeout(run, 0);
+      }
+    }
+
+    function markInlineSideChatScrollAfterLocalSend() {
+      pendingInlineSideChatScrollAfterSend = true;
+      inlineSideChatRowCountWhenSent = Array.isArray(state.sideChatMessages) ? state.sideChatMessages.length : 0;
+      if (inlineSideChatScrollAfterSendTimer) {
+        clearTimeout(inlineSideChatScrollAfterSendTimer);
+        inlineSideChatScrollAfterSendTimer = null;
+      }
+      inlineSideChatScrollAfterSendTimer = setTimeout(function () {
+        pendingInlineSideChatScrollAfterSend = false;
+        inlineSideChatScrollAfterSendTimer = null;
+      }, 8000);
+    }
+
+    function maybeScrollInlineSideChatAfterLocalSend() {
+      if (!pendingInlineSideChatScrollAfterSend || !state.sideChatVisible) return;
+      scrollInlineSideChatListToBottom();
+      var n = Array.isArray(state.sideChatMessages) ? state.sideChatMessages.length : 0;
+      if (n > inlineSideChatRowCountWhenSent) {
+        pendingInlineSideChatScrollAfterSend = false;
+        if (inlineSideChatScrollAfterSendTimer) {
+          clearTimeout(inlineSideChatScrollAfterSendTimer);
+          inlineSideChatScrollAfterSendTimer = null;
+        }
       }
     }
 
@@ -1968,6 +2067,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         wireTreeResize();
         wireSideChatResize();
         wireComposerResize();
+        var nowSideOpen = !!state.sideChatVisible;
+        if (!prevSideChatPanelOpen && nowSideOpen) {
+          scrollInlineSideChatToFirstUnread();
+        }
+        prevSideChatPanelOpen = nowSideOpen;
       } catch (e) {
         const msg = e && e.message ? String(e.message) : String(e);
         const errEl = document.getElementById("err");
@@ -2048,6 +2152,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           streamingHtml: null,
           treeCollapsedIds: collapsedFromHost,
           legalPolicyLinks: Array.isArray(m.legalPolicyLinks) ? m.legalPolicyLinks : [],
+          sideChatUnreadCount:
+            typeof m.sideChatUnreadCount === "number" && Number.isFinite(m.sideChatUnreadCount)
+              ? Math.max(0, Math.floor(m.sideChatUnreadCount))
+              : 0,
         };
         render();
         return;
@@ -2177,6 +2285,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var text = ta && ta.value ? String(ta.value) : "";
       var trimmed = text.trimEnd();
       if (!String(trimmed).trim()) return;
+      markInlineSideChatScrollAfterLocalSend();
       vscode.postMessage({ type: "sendSideChat", text: trimmed });
       if (ta) ta.value = "";
       scheduleComposerFocus(ta);

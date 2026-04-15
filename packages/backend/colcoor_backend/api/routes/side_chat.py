@@ -40,6 +40,7 @@ async def side_chat_event_stream(
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     factory = getattr(request.app.state, "session_factory", None)
+    engine = getattr(request.app.state, "db_engine", None)
     if factory is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -48,6 +49,7 @@ async def side_chat_event_stream(
     return StreamingResponse(
         iter_side_chat_sse(
             factory,
+            engine=engine,
             conversation_id=conversation_id,
             user_id=user_id,
             after_seq=after_seq,

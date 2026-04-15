@@ -4,6 +4,7 @@ import type {
   ColcoorApiClient,
   ConversationSummary,
   GraphEventNode,
+  MeOut,
   NoteOut,
   SideChatMessageOut,
 } from "../api/client";
@@ -46,9 +47,19 @@ import {
 } from "../util/colcoorApiFailureActions";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import { sideChatOpenButtonCopy } from "./sideChatOpenButtonLabel";
-import { buildUserMediaContentJson, parseDataUrlToBytes } from "./userEventMedia";
+import {
+  buildUserMediaContentJson,
+  parseDataUrlToBytes,
+  parseUserMediaImages,
+} from "./userEventMedia";
 import type { ColcoorUserMediaImageRef } from "./userEventMedia";
 import { buildUserImageDataUrlsByOwnerId } from "./conversationImageDataUrls";
+import { mergeSideChatMessage } from "../sidechat/mergeSideChatMessage";
+import {
+  buildOptimisticSideChatUserMessage,
+  newOptimisticSideChatMessageId,
+} from "../sidechat/optimisticSideChatUserMessage";
+import { maxSideChatSeq } from "../sidechat/sideChatReadCursor";
 import { buildSideChatSendPayload } from "../sidechat/sideChatSendPayload";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "../sidechat/sideChatRenderMessages";
 import { listConversationsCached } from "../conversations/conversationsListCache";
@@ -94,6 +105,8 @@ type WebviewStateMessage = {
   /** Side-chat unread (from GET /conversations) for the Open side chat button ([ui-features.md] §10). */
   sideChatOpenButtonLabel: string;
   sideChatOpenButtonTitle: string;
+  /** Unread row count for inline side-chat scroll-to-first-unread on open (same source as button badge). */
+  sideChatUnreadCount: number;
   /** In-flight send: sanitized markdown for the user line before the server persists it ([ui-features.md] §7). */
   pendingUserHtml: string | null;
   /** Inline side-chat drawer in the same conversation tab. */
@@ -272,8 +285,14 @@ export function createConversationPanelController(
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
   /** Inline side-chat rows + rendered rows for same-tab drawer. */
   let inlineSideChatRows: SideChatMessageOut[] = [];
+  /** Image data URLs keyed by side-chat message id (aligned with `sideChatPanel` incremental image mode). */
+  let inlineSideChatUrlsByMessageId = new Map<string, string[]>();
   let inlineSideChatRendered: SideChatRenderMessage[] = [];
   let inlineSideChatVisible = false;
+  /** Prevents overlapping inline side-chat sends while optimistic + POST are in flight. */
+  let inlineSideChatSendInFlight = false;
+  /** Cached GET /me for optimistic side-chat author line (primed on first inline send). */
+  let myProfileForSideChat: MeOut | null | undefined = undefined;
   /** Last state flags sent to webview; reused for lightweight local selection refreshes. */
   let lastPostedBusy = false;
   let lastPostedError: string | null = null;
@@ -349,9 +368,30 @@ export function createConversationPanelController(
     }
   }
 
+  function rebuildInlineSideChatRendered(): void {
+    inlineSideChatRendered = toSideChatRenderMessages(
+      inlineSideChatRows,
+      undefined,
+      inlineSideChatUrlsByMessageId,
+    );
+  }
+
+  async function ensureMeForSideChat(): Promise<MeOut | null> {
+    if (myProfileForSideChat !== undefined) {
+      return myProfileForSideChat;
+    }
+    try {
+      myProfileForSideChat = await api.getMe();
+    } catch {
+      myProfileForSideChat = null;
+    }
+    return myProfileForSideChat;
+  }
+
   async function refreshInlineSideChat(): Promise<void> {
     if (!conversationId) {
       inlineSideChatRows = [];
+      inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
       return;
     }
@@ -367,7 +407,8 @@ export function createConversationPanelController(
     } catch {
       urlsByMessageId = new Map();
     }
-    inlineSideChatRendered = toSideChatRenderMessages(rows, undefined, urlsByMessageId);
+    inlineSideChatUrlsByMessageId = urlsByMessageId;
+    rebuildInlineSideChatRendered();
   }
 
   function syncActiveToBackend(
@@ -413,6 +454,9 @@ export function createConversationPanelController(
     lastUserImageDataUrlsByEventId = new Map();
     sideChatUnreadCount = 0;
     sideChatHasUnread = false;
+    inlineSideChatUrlsByMessageId = new Map();
+    inlineSideChatSendInFlight = false;
+    myProfileForSideChat = undefined;
   }
 
   function readCollapsedByConversation(): Record<string, string[]> {
@@ -495,6 +539,7 @@ export function createConversationPanelController(
         ),
         sideChatOpenButtonLabel: sideChatBtn.label,
         sideChatOpenButtonTitle: sideChatBtn.title,
+        sideChatUnreadCount,
         pendingUserHtml,
         sideChatVisible: inlineSideChatVisible,
         sideChatMessages: inlineSideChatRendered,
@@ -548,6 +593,7 @@ export function createConversationPanelController(
           ),
           sideChatOpenButtonLabel: sideChatBtnFb.label,
           sideChatOpenButtonTitle: sideChatBtnFb.title,
+          sideChatUnreadCount,
           pendingUserHtml: null,
           sideChatVisible: inlineSideChatVisible,
           sideChatMessages: inlineSideChatRendered,
@@ -689,6 +735,7 @@ export function createConversationPanelController(
               await refreshInlineSideChat();
             } catch {
               inlineSideChatRows = [];
+              inlineSideChatUrlsByMessageId = new Map();
               inlineSideChatRendered = [];
             }
           }
@@ -703,6 +750,7 @@ export function createConversationPanelController(
           lastNeedsContextRebuild = false;
           lastUserImageDataUrlsByEventId = new Map();
           inlineSideChatRows = [];
+          inlineSideChatUrlsByMessageId = new Map();
           inlineSideChatRendered = [];
           postState([], busy, msg);
           return;
@@ -1164,6 +1212,7 @@ export function createConversationPanelController(
       if (msg.type === "openSideChat") {
         inlineSideChatVisible = true;
         try {
+          await refreshConversationMeta();
           await refreshInlineSideChat();
         } catch (e) {
           if (isPlanLimitColcoorApiError(e)) {
@@ -1196,36 +1245,98 @@ export function createConversationPanelController(
         if (!conversationId) {
           return;
         }
-        try {
-          const refs: ColcoorUserMediaImageRef[] = [];
-          for (const row of msg.images ?? []) {
-            const parsed = parseDataUrlToBytes(typeof row?.dataUrl === "string" ? row.dataUrl : "");
-            if (!parsed) {
-              continue;
-            }
+        const refs: ColcoorUserMediaImageRef[] = [];
+        const pastedDataUrlsForOptimistic: string[] = [];
+        for (const row of msg.images ?? []) {
+          const parsed = parseDataUrlToBytes(typeof row?.dataUrl === "string" ? row.dataUrl : "");
+          if (!parsed) {
+            continue;
+          }
+          try {
             const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
             refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
-          }
-          const contentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
-          const payload = buildSideChatSendPayload(
-            msg.text,
-            null,
-            null,
-            null,
-            inlineSideChatRows,
-            contentJson,
-          );
-          if (!payload) {
-            void vscode.window.showWarningMessage("Colcoor: side chat message is empty.");
+            pastedDataUrlsForOptimistic.push(
+              typeof row?.dataUrl === "string" ? row.dataUrl : "",
+            );
+          } catch (e) {
+            await showColcoorApiFailure(e);
             return;
           }
-          await api.postSideChatMessage(conversationId, payload);
-          await refreshInlineSideChat();
+        }
+        const contentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
+        const payload = buildSideChatSendPayload(
+          msg.text,
+          null,
+          null,
+          null,
+          inlineSideChatRows,
+          contentJson,
+        );
+        if (!payload) {
+          void vscode.window.showWarningMessage("Colcoor: side chat message is empty.");
+          return;
+        }
+        if (inlineSideChatSendInFlight) {
+          void vscode.window.showWarningMessage("Colcoor: still sending the previous side chat message.");
+          return;
+        }
+        inlineSideChatSendInFlight = true;
+        let optimisticId: string | undefined;
+        try {
+          const me = await ensureMeForSideChat();
+          const tempId = newOptimisticSideChatMessageId();
+          optimisticId = tempId;
+          const provisionalSeq = maxSideChatSeq(inlineSideChatRows) + 1;
+          const optimistic = buildOptimisticSideChatUserMessage({
+            conversationId,
+            tempId,
+            seq: provisionalSeq,
+            me,
+            body: payload.body ?? "",
+            contentJson: payload.content_json ?? null,
+            referencedEventId: payload.referenced_event_id ?? null,
+            referencedNoteId: payload.referenced_note_id ?? null,
+            referencedSideChatMessageId: payload.referenced_side_chat_message_id ?? null,
+          });
+          inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, optimistic);
+          if (pastedDataUrlsForOptimistic.length > 0) {
+            inlineSideChatUrlsByMessageId.set(tempId, [...pastedDataUrlsForOptimistic]);
+          } else {
+            inlineSideChatUrlsByMessageId.delete(tempId);
+          }
+          rebuildInlineSideChatRendered();
+          postState(lastTreeEvents, sendAbort != null, null);
+
+          const created = await api.postSideChatMessage(conversationId, payload);
+          inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== tempId);
+          inlineSideChatUrlsByMessageId.delete(tempId);
+          inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, created);
+          if (created.kind === "user" && parseUserMediaImages(created.content_json ?? undefined).length > 0) {
+            try {
+              const partial = await buildUserImageDataUrlsByOwnerId(api, conversationId, [created]);
+              for (const [id, urls] of partial) {
+                inlineSideChatUrlsByMessageId.set(id, [...urls]);
+              }
+            } catch {
+              /* keep pasted preview until next full refresh if signed URLs fail */
+            }
+          } else if (created.kind === "user") {
+            inlineSideChatUrlsByMessageId.delete(created.id);
+          }
+          rebuildInlineSideChatRendered();
+          postState(lastTreeEvents, sendAbort != null, null);
           await refreshConversationMeta();
         } catch (e) {
+          if (optimisticId) {
+            inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== optimisticId);
+            inlineSideChatUrlsByMessageId.delete(optimisticId);
+            rebuildInlineSideChatRendered();
+            postState(lastTreeEvents, sendAbort != null, null);
+          }
           await showColcoorApiFailure(e);
+        } finally {
+          inlineSideChatSendInFlight = false;
         }
-        postState(lastTreeEvents, sendAbort != null, null);
         return;
       }
       if (msg.type === "deleteConversation") {
@@ -1351,6 +1462,7 @@ export function createConversationPanelController(
       lastNeedsContextRebuild = false;
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
+      inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
       syncConversationPanelOpenContext();
     });
@@ -1488,6 +1600,7 @@ export function createConversationPanelController(
       sideChatHasUnread = false;
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
+      inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
@@ -1520,6 +1633,7 @@ export function createConversationPanelController(
       sideChatHasUnread = false;
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
+      inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
       try {
         await api.setConversationActive(cid, {
@@ -1674,6 +1788,7 @@ export function createConversationPanelController(
     async openInlineSideChat(): Promise<void> {
       inlineSideChatVisible = true;
       try {
+        await refreshConversationMeta();
         await refreshInlineSideChat();
       } catch (e) {
         if (isPlanLimitColcoorApiError(e)) {

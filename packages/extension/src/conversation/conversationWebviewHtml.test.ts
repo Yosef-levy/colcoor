@@ -67,6 +67,31 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*if \(state\.streamingHtml\)/);
   });
 
+  it("shows an assistant placeholder while busy before stream chunks arrive", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("assistant-waiting");
+    expect(html).toContain("Preparing reply");
+    expect(html).toContain("} else if (state.busy) {");
+  });
+
+  it("scrolls inline side-chat after a local send (not on passive refresh)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function markInlineSideChatScrollAfterLocalSend()");
+    expect(html).toContain("function scrollInlineSideChatListToBottom()");
+    expect(html).toContain("function maybeScrollInlineSideChatAfterLocalSend()");
+    expect(html).toContain("markInlineSideChatScrollAfterLocalSend();");
+    expect(html).toContain("maybeScrollInlineSideChatAfterLocalSend();");
+  });
+
+  it("scrolls inline side-chat to first unread on open using sideChatUnreadCount", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("sideChatUnreadCount: 0");
+    expect(html).toContain("function scrollInlineSideChatToFirstUnread()");
+    expect(html).toContain("prevSideChatPanelOpen");
+    expect(html).toContain("scrollInlineSideChatToFirstUnread();");
+    expect(html).toContain("m.sideChatUnreadCount");
+  });
+
   it("includes optional composer checkpoint label field and send wiring ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="checkpointLabel"');

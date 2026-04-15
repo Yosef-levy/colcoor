@@ -18,6 +18,7 @@ import { buildUserImageDataUrlsByOwnerId } from "../conversation/conversationIma
 import {
   buildUserMediaContentJson,
   parseDataUrlToBytes,
+  parseUserMediaImages,
   type ColcoorUserMediaImageRef,
 } from "../conversation/userEventMedia";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "./sideChatRenderMessages";
@@ -42,6 +43,10 @@ import {
   clampSideChatComposerTextareaHeightPx,
 } from "./sideChatComposerLayoutPersistence";
 import { shouldDisposeSideChatPanelAfterDelete } from "./sideChatDisposeAfterConversationDelete";
+import {
+  buildOptimisticSideChatUserMessage,
+  newOptimisticSideChatMessageId,
+} from "./optimisticSideChatUserMessage";
 
 function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -185,6 +190,10 @@ export async function openSideChatPanel(
   let memberDisplayByUserId: Record<string, string> = {};
   /** After first full transcript load, member roster is loaded once; later only on `system_join`. */
   let memberRosterHydrated = false;
+  /** Prevents overlapping sends while an optimistic row + POST is in flight. */
+  let sideChatSendInFlight = false;
+  /** Data URLs for side-chat user rows with media; full rebuild on `pushState`, incremental on single-row updates. */
+  let sideChatImageDataUrlsByMessageId = new Map<string, string[]>();
   async function postWebviewErrorSafe(text: string): Promise<void> {
     try {
       await panel.webview.postMessage({ type: "error", text } satisfies ErrorMessage);
@@ -252,19 +261,54 @@ export async function openSideChatPanel(
       });
   }
 
-  async function postState(): Promise<void> {
+  type PostStateImageMode =
+    | { kind: "full" }
+    | { kind: "incremental"; owners: readonly SideChatMessageOut[] }
+    | { kind: "reuse_cached" };
+
+  async function postState(imageMode: PostStateImageMode = { kind: "full" }): Promise<void> {
     const me = await ensureMyProfile();
     const viewerUserId = me?.id ?? null;
-    let sideChatImageDataUrlsByMessageId = new Map<string, string[]>();
-    try {
-      sideChatImageDataUrlsByMessageId = await buildUserImageDataUrlsByOwnerId(
-        api,
-        conversationId,
-        cached.filter((m) => m.kind === "user"),
-      );
-    } catch {
-      sideChatImageDataUrlsByMessageId = new Map();
+    const cachedIds = new Set(cached.map((m) => m.id));
+    for (const k of sideChatImageDataUrlsByMessageId.keys()) {
+      if (!cachedIds.has(k)) {
+        sideChatImageDataUrlsByMessageId.delete(k);
+      }
     }
+    if (imageMode.kind === "full") {
+      try {
+        sideChatImageDataUrlsByMessageId = await buildUserImageDataUrlsByOwnerId(
+          api,
+          conversationId,
+          cached.filter((m) => m.kind === "user"),
+        );
+      } catch {
+        sideChatImageDataUrlsByMessageId = new Map();
+      }
+    } else if (imageMode.kind === "incremental") {
+      for (const m of imageMode.owners) {
+        if (m.kind !== "user") {
+          continue;
+        }
+        if (parseUserMediaImages(m.content_json ?? undefined).length === 0) {
+          sideChatImageDataUrlsByMessageId.delete(m.id);
+        }
+      }
+      const withMedia = imageMode.owners.filter(
+        (m) => m.kind === "user" && parseUserMediaImages(m.content_json ?? undefined).length > 0,
+      );
+      if (withMedia.length > 0) {
+        try {
+          const partial = await buildUserImageDataUrlsByOwnerId(api, conversationId, withMedia);
+          for (const [id, urls] of partial) {
+            sideChatImageDataUrlsByMessageId.set(id, [...urls]);
+          }
+        } catch {
+          /* keep previous URLs for these ids */
+        }
+      }
+    }
+    /* reuse_cached: prune only; image map unchanged */
     try {
       await panel.webview.postMessage({
         type: "state",
@@ -284,10 +328,13 @@ export async function openSideChatPanel(
    * Merge one server row into `cached`, optionally refresh graph/note lookups for reference chips,
    * then push to the webview. Used for own POST/PATCH/DELETE responses and for other users’ rows
    * from SSE (no full transcript reload).
+   *
+   * `skipReferenceLookupRefresh`: own send from the composer — caller already picked refs in-app;
+   * do not `getTree`/`listNotes` for this row.
    */
   async function incorporateSideChatMessage(
     inc: SideChatMessageOut,
-    opts?: { forceReferenceLookupRefresh?: boolean },
+    opts?: { forceReferenceLookupRefresh?: boolean; skipReferenceLookupRefresh?: boolean },
   ): Promise<void> {
     const incRefsUnknown = sideChatMessageHasUnknownReferenceLookups(
       inc,
@@ -297,13 +344,12 @@ export async function openSideChatPanel(
     cached = mergeSideChatMessage(cached, inc);
     lastStreamSeq = Math.max(lastStreamSeq, inc.seq);
     if (
-      opts?.forceReferenceLookupRefresh ||
-      incRefsUnknown ||
-      needsReferenceLookupRefresh(cached, lastPatchedReadSeq, eventLabelsById, noteLabelsById)
+      !opts?.skipReferenceLookupRefresh &&
+      (opts?.forceReferenceLookupRefresh || incRefsUnknown)
     ) {
       await refreshReferenceLookups();
     }
-    await postState();
+    await postState({ kind: "incremental", owners: [inc] });
     scheduleMarkRead();
   }
 
@@ -316,17 +362,17 @@ export async function openSideChatPanel(
         notifiedMessageIds.add(m.id);
       }
       const forceLookups = Boolean(opts?.forceReferenceLookupRefresh);
-      const refLookupsP =
+      if (
         forceLookups ||
         needsReferenceLookupRefresh(cached, lastPatchedReadSeq, eventLabelsById, noteLabelsById)
-          ? refreshReferenceLookups()
-          : Promise.resolve();
-      await refLookupsP;
+      ) {
+        await refreshReferenceLookups();
+      }
       if (!memberRosterHydrated) {
         await refreshMemberDisplayNames();
         memberRosterHydrated = true;
       }
-      await postState();
+      await postState({ kind: "full" });
       scheduleMarkRead();
     } catch (e) {
       await reportApiErrorToSideChat(e);
@@ -435,7 +481,7 @@ export async function openSideChatPanel(
             await incorporateSideChatMessage(inc);
             if (inc.kind === "system_join") {
               await refreshMemberDisplayNames();
-              await postState();
+              await postState({ kind: "reuse_cached" });
             }
           }
         } catch {
@@ -648,14 +694,54 @@ export async function openSideChatPanel(
         } satisfies ErrorMessage);
         return;
       }
+      if (sideChatSendInFlight) {
+        void postWebviewErrorSafe("Still sending the previous message.");
+        return;
+      }
+      sideChatSendInFlight = true;
+      let optimisticId: string | undefined;
       try {
+        const me = await ensureMyProfile();
+        const tempId = newOptimisticSideChatMessageId();
+        optimisticId = tempId;
+        const provisionalSeq = Math.max(lastStreamSeq, maxSideChatSeq(cached)) + 1;
+        const optimistic = buildOptimisticSideChatUserMessage({
+          conversationId,
+          tempId,
+          seq: provisionalSeq,
+          me,
+          body: payload.body ?? "",
+          contentJson: payload.content_json ?? null,
+          referencedEventId: payload.referenced_event_id ?? null,
+          referencedNoteId: payload.referenced_note_id ?? null,
+          referencedSideChatMessageId: payload.referenced_side_chat_message_id ?? null,
+        });
+        cached = mergeSideChatMessage(cached, optimistic);
+        notifiedMessageIds.add(tempId);
+        lastStreamSeq = Math.max(lastStreamSeq, provisionalSeq);
+        await postState({ kind: "incremental", owners: [optimistic] });
+
         const created = await api.postSideChatMessage(conversationId, payload);
+
+        cached = cached.filter((m) => m.id !== tempId);
+        notifiedMessageIds.delete(tempId);
+        sideChatImageDataUrlsByMessageId.delete(tempId);
+        lastStreamSeq = maxSideChatSeq(cached);
         composerReferencedEventId = null;
         composerReferencedNoteId = null;
         notifiedMessageIds.add(created.id);
-        await incorporateSideChatMessage(created);
+        await incorporateSideChatMessage(created, { skipReferenceLookupRefresh: true });
       } catch (e) {
+        if (optimisticId) {
+          cached = cached.filter((m) => m.id !== optimisticId);
+          notifiedMessageIds.delete(optimisticId);
+          sideChatImageDataUrlsByMessageId.delete(optimisticId);
+          lastStreamSeq = maxSideChatSeq(cached);
+          await postState({ kind: "reuse_cached" });
+        }
         await reportApiErrorToSideChat(e);
+      } finally {
+        sideChatSendInFlight = false;
       }
       return;
     }
