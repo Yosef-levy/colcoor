@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
@@ -202,7 +203,7 @@ async def post_conversation_image(
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()],
 ) -> ConversationImageUploadOut:
     """Upload image bytes for later reference from a ``user_input`` or side-chat ``content_json``."""
     try:
