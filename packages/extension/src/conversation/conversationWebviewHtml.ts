@@ -503,14 +503,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       list-style: none;
     }
     .agent-trace > summary.trace-summary::-webkit-details-marker { display: none; }
-    .agent-trace-missing {
-      margin-top: 8px;
-      padding: 8px 10px;
-      border-radius: 4px;
-      border: 1px dashed var(--vscode-panel-border);
-      font-size: 0.9em;
-      line-height: 1.45;
-    }
     .trace-entry { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid var(--vscode-panel-border); }
     .trace-entry:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
     .trace-meta { font-size: 0.85em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
@@ -1743,27 +1735,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
           html += "</div>";
         }
-        if (s.role === "assistant") {
-          if (s.traceEntries && s.traceEntries.length) {
-            var traceOpen = state.agentTraceOpen !== false;
-            html +=
-              "<details" +
-              (traceOpen ? " open" : "") +
-              ' class="agent-trace"><summary class="trace-summary">CLI trace — ' +
-              s.traceEntries.length +
-              " step(s) · reads, edits, shell (collapse)</summary>";
-            for (let i = 0; i < s.traceEntries.length; i++) {
-              html += formatTraceEntryHtml(s.traceEntries[i], i);
-            }
-            html += "</details>";
-          } else {
-            html +=
-              '<p class="agent-trace-missing hint">' +
-              esc(
-                "No CLI trace for this reply. Use stream-json or stream-json-partial (not text/stub) and send again. Saved steps are short summaries: read ranges, edit diffs, shell commands — not the full transcript.",
-              ) +
-              "</p>";
+        if (s.role === "assistant" && s.traceEntries && s.traceEntries.length) {
+          var traceOpen = state.agentTraceOpen !== false;
+          html +=
+            "<details" +
+            (traceOpen ? " open" : "") +
+            ' class="agent-trace"><summary class="trace-summary">CLI trace — ' +
+            s.traceEntries.length +
+            " step(s) · reads, edits, shell (collapse)</summary>";
+          for (let i = 0; i < s.traceEntries.length; i++) {
+            html += formatTraceEntryHtml(s.traceEntries[i], i);
           }
+          html += "</details>";
         }
         html += "</div>";
       }
