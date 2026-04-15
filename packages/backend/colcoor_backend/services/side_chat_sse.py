@@ -40,10 +40,10 @@ async def iter_side_chat_sse(
     """
     Poll for new rows with ``seq > last`` and emit SSE ``data:`` frames.
 
-    ``COLCOOR_SIDE_CHAT_SSE_POLL_SEC`` — seconds between polls (default ``2``).
+    ``COLCOOR_SIDE_CHAT_SSE_POLL_SEC`` — seconds between polls (default ``0.5``).
     ``COLCOOR_SIDE_CHAT_SSE_MAX_SECONDS`` — if ``> 0``, stop after this wall time (tests only).
     """
-    poll = float(os.environ.get("COLCOOR_SIDE_CHAT_SSE_POLL_SEC", "2") or "2")
+    poll = float(os.environ.get("COLCOOR_SIDE_CHAT_SSE_POLL_SEC", "0.5") or "0.5")
     max_sec = float(os.environ.get("COLCOOR_SIDE_CHAT_SSE_MAX_SECONDS", "0") or "0")
     last = after_seq
     t0 = time.monotonic()

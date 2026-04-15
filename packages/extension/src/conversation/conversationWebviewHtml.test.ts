@@ -131,6 +131,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("resize handle in the bottom-right corner");
   });
 
+  it("scrolls the thread scroll region after renderThread (selection or new messages)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function scrollThreadToBottom()");
+    expect(html).toContain('.closest(".thread-scroll")');
+    expect(html).toContain("wrap.scrollTop = wrap.scrollHeight");
+    expect(html).toContain("scrollThreadToBottom();");
+  });
+
   it("posts treeContextMenu on tree node contextmenu ([tree-ui-contract.md] §5.2)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('vscode.postMessage({ type: "treeContextMenu", id: nid });');

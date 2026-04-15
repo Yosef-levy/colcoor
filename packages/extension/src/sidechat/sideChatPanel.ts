@@ -11,7 +11,6 @@ import { shouldNotifyForIncomingSideChatMessage } from "./sideChatNotifyDedup";
 import { shouldEmitSideChatNotificationNow } from "./sideChatNotificationRateLimit";
 import { decideSideChatNotification } from "./sideChatNotifications";
 import { sideChatPresenceSummary } from "./sideChatPresence";
-import { shouldStartSideChatPresenceMemberRefresh } from "./sideChatPresenceMemberRefreshPolicy";
 import { decideSideChatSoundKind } from "./sideChatSoundDecision";
 import { maxSideChatSeq } from "./sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "./sideChatReadPatchPlan";
@@ -184,9 +183,8 @@ export async function openSideChatPanel(
   let noteLabelsById: Record<string, string> = {};
   /** From `listConversationMembers` — display name or email when present; drives richer presence subtitle. */
   let memberDisplayByUserId: Record<string, string> = {};
-  /** Throttle member-list refetch after join/leave SSE so presence labels can update without spamming the API. */
-  let presenceMemberRefreshLastStartMs: number | null = null;
-  let presenceMemberRefreshInFlight = false;
+  /** After first full transcript load, member roster is loaded once; later only on `system_join`. */
+  let memberRosterHydrated = false;
   async function postWebviewErrorSafe(text: string): Promise<void> {
     try {
       await panel.webview.postMessage({ type: "error", text } satisfies ErrorMessage);
@@ -282,6 +280,34 @@ export async function openSideChatPanel(
     }
   }
 
+  /**
+   * Merge one server row into `cached`, optionally refresh graph/note lookups for reference chips,
+   * then push to the webview. Used for own POST/PATCH/DELETE responses and for other users’ rows
+   * from SSE (no full transcript reload).
+   */
+  async function incorporateSideChatMessage(
+    inc: SideChatMessageOut,
+    opts?: { forceReferenceLookupRefresh?: boolean },
+  ): Promise<void> {
+    const incRefsUnknown = sideChatMessageHasUnknownReferenceLookups(
+      inc,
+      eventLabelsById,
+      noteLabelsById,
+    );
+    cached = mergeSideChatMessage(cached, inc);
+    lastStreamSeq = Math.max(lastStreamSeq, inc.seq);
+    if (
+      opts?.forceReferenceLookupRefresh ||
+      incRefsUnknown ||
+      needsReferenceLookupRefresh(cached, lastPatchedReadSeq, eventLabelsById, noteLabelsById)
+    ) {
+      await refreshReferenceLookups();
+    }
+    await postState();
+    scheduleMarkRead();
+  }
+
+  /** Full transcript reload (initial load, explicit refresh). Does not refetch members unless roster never hydrated. */
   async function pushState(opts?: { forceReferenceLookupRefresh?: boolean }): Promise<void> {
     try {
       cached = await api.listSideChatMessages(conversationId, 0);
@@ -295,7 +321,11 @@ export async function openSideChatPanel(
         needsReferenceLookupRefresh(cached, lastPatchedReadSeq, eventLabelsById, noteLabelsById)
           ? refreshReferenceLookups()
           : Promise.resolve();
-      await Promise.all([refLookupsP, refreshMemberDisplayNames()]);
+      await refLookupsP;
+      if (!memberRosterHydrated) {
+        await refreshMemberDisplayNames();
+        memberRosterHydrated = true;
+      }
       await postState();
       scheduleMarkRead();
     } catch (e) {
@@ -402,39 +432,11 @@ export async function openSideChatPanel(
             }
             notifiedMessageIds.add(o.message.id);
             const inc = o.message;
-            const incRefsUnknown = sideChatMessageHasUnknownReferenceLookups(
-              inc,
-              eventLabelsById,
-              noteLabelsById,
-            );
-            cached = mergeSideChatMessage(cached, inc);
-            lastStreamSeq = Math.max(lastStreamSeq, inc.seq);
-            if (
-              incRefsUnknown ||
-              needsReferenceLookupRefresh(cached, lastPatchedReadSeq, eventLabelsById, noteLabelsById)
-            ) {
-              await refreshReferenceLookups();
+            await incorporateSideChatMessage(inc);
+            if (inc.kind === "system_join") {
+              await refreshMemberDisplayNames();
+              await postState();
             }
-            if (o.message.kind === "system_join" || o.message.kind === "system_leave") {
-              const nowMs = Date.now();
-              if (
-                shouldStartSideChatPresenceMemberRefresh({
-                  nowMs,
-                  lastStartMs: presenceMemberRefreshLastStartMs,
-                  inFlight: presenceMemberRefreshInFlight,
-                })
-              ) {
-                presenceMemberRefreshLastStartMs = nowMs;
-                presenceMemberRefreshInFlight = true;
-                try {
-                  await refreshMemberDisplayNames();
-                } finally {
-                  presenceMemberRefreshInFlight = false;
-                }
-              }
-            }
-            await postState();
-            scheduleMarkRead();
           }
         } catch {
           /* aborted, fetch error, or stream read failure */
@@ -647,10 +649,11 @@ export async function openSideChatPanel(
         return;
       }
       try {
-        await api.postSideChatMessage(conversationId, payload);
+        const created = await api.postSideChatMessage(conversationId, payload);
         composerReferencedEventId = null;
         composerReferencedNoteId = null;
-        await pushState();
+        notifiedMessageIds.add(created.id);
+        await incorporateSideChatMessage(created);
       } catch (e) {
         await reportApiErrorToSideChat(e);
       }
@@ -679,8 +682,8 @@ export async function openSideChatPanel(
         return;
       }
       try {
-        await api.patchSideChatMessage(conversationId, mid, { body });
-        await pushState({ forceReferenceLookupRefresh: true });
+        const updated = await api.patchSideChatMessage(conversationId, mid, { body });
+        await incorporateSideChatMessage(updated);
       } catch (e) {
         await reportApiErrorToSideChat(e);
       }
@@ -701,8 +704,8 @@ export async function openSideChatPanel(
         return;
       }
       try {
-        await api.deleteSideChatMessage(conversationId, mid);
-        await pushState();
+        const tombstone = await api.deleteSideChatMessage(conversationId, mid);
+        await incorporateSideChatMessage(tombstone);
       } catch (e) {
         await reportApiErrorToSideChat(e);
       }

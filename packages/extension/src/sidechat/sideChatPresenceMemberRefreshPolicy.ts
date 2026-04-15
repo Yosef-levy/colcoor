@@ -3,7 +3,7 @@ export const SIDECHAT_PRESENCE_MEMBER_REFRESH_MIN_INTERVAL_MS = 8000;
 
 /**
  * Whether a new `listConversationMembers` fetch may start for presence-driven updates.
- * Full `pushState` loads are separate and do not use this gate.
+ * (Side chat panel now refetches members on `system_join` only; this helper remains for tests / reuse.)
  */
 export function shouldStartSideChatPresenceMemberRefresh(args: {
   nowMs: number;

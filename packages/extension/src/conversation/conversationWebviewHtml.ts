@@ -1693,6 +1693,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const segs = visibleThreadSegmentsForUi();
       if (!segs.length && !state.pendingUserHtml && !state.streamingHtml) {
         el.innerHTML = '<p class="empty">Select an event in the tree.</p>';
+        scrollThreadToBottom();
         return;
       }
       let html = "";
@@ -1765,6 +1766,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           "</div></div>";
       }
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
+      scrollThreadToBottom();
     }
 
     function renderInlineSideChat() {
@@ -1837,6 +1839,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var run = function () {
         try {
           el.focus();
+        } catch (e) {}
+      };
+      try {
+        requestAnimationFrame(run);
+      } catch (e) {
+        setTimeout(run, 0);
+      }
+    }
+
+    /** Scroll the thread panel so the latest messages are visible (root → selected reads bottom-up). */
+    function scrollThreadToBottom() {
+      var threadEl = document.getElementById("thread");
+      if (!threadEl) return;
+      var wrap = threadEl.closest(".thread-scroll");
+      if (!wrap) return;
+      var run = function () {
+        try {
+          wrap.scrollTop = wrap.scrollHeight;
         } catch (e) {}
       };
       try {
