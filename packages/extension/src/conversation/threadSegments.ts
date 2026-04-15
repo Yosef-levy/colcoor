@@ -37,6 +37,8 @@ export type ThreadSegment = {
   /** Host graph event id (for diagnostics; notes are keyed to this row). */
   eventId: string;
   html: string;
+  /** True when `visible_to` is set on this event (private draft visible only to that user). */
+  privateScope?: boolean;
   /** When the API set `checkpoint_label` on this event, show in thread + plain copy ([ui-features.md] §8). */
   checkpointLabel?: string;
   /** Notes attached to this message on the active path. */
@@ -98,6 +100,8 @@ export function buildThreadSegments(
   const out: ThreadSegment[] = [];
   for (let i = 0; i < path.length; i++) {
     const ev = path[i];
+    const privateScope =
+      ev.visible_to != null && String(ev.visible_to).trim() !== "";
     const text = ev.content_text ?? "";
     const rawNotes = notesByEvent.get(ev.id);
     const noteBlocks: ThreadNoteBlock[] | undefined =
@@ -120,6 +124,7 @@ export function buildThreadSegments(
         role: "user",
         eventId: ev.id,
         html: bodyHtml,
+        ...(privateScope ? { privateScope: true } : {}),
         ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),
         notes: noteBlocks,
       });
@@ -129,6 +134,7 @@ export function buildThreadSegments(
         role: "assistant",
         eventId: ev.id,
         html: bodyHtmlFromMarkdown(text),
+        ...(privateScope ? { privateScope: true } : {}),
         ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),
         notes: noteBlocks,
         traceEntries: rawTrace ? enrichTraceEntriesForWebview(rawTrace) : undefined,

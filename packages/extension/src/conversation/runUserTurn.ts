@@ -1,6 +1,6 @@
 import type { AgentRunner, AssistantStubKind } from "../agent/agentRunner";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
-import type { ColcoorApiClient } from "../api/client";
+import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
@@ -32,6 +32,12 @@ function normalizeOptionalCheckpointLabel(raw: string | undefined): string | und
   return t.length > CHECKPOINT_LABEL_MAX_LEN ? t.slice(0, CHECKPOINT_LABEL_MAX_LEN) : t;
 }
 
+/** Caller snapshot to skip `getTree` + `listNotes`; must match server state before `appendEvent`. */
+export type PrefetchedConversationGraph = {
+  events: GraphEventNode[];
+  notes: NoteOut[];
+};
+
 export type RunUserTurnOptions = {
   /**
    * Event id to attach the new `user_input` under (and build transcript root → this node).
@@ -53,6 +59,8 @@ export type RunUserTurnOptions = {
    * When set with empty `userMessage`, creates an image-only `user_input`.
    */
   userMediaContentJson?: Record<string, unknown> | null;
+  /** When set (e.g. from the conversation panel), skips the initial tree + notes round-trip. */
+  prefetchedGraph?: PrefetchedConversationGraph;
 };
 
 export type UserTurnResult = {
@@ -84,10 +92,19 @@ export async function runColcoorUserTurn(
     throw new Error("message is empty");
   }
 
-  const [{ events }, notes] = await Promise.all([
-    api.getTree(conversationId),
-    api.listNotes(conversationId),
-  ]);
+  let events: GraphEventNode[];
+  let notes: NoteOut[];
+  if (options?.prefetchedGraph) {
+    events = options.prefetchedGraph.events;
+    notes = options.prefetchedGraph.notes;
+  } else {
+    const [tree, notesFetched] = await Promise.all([
+      api.getTree(conversationId),
+      api.listNotes(conversationId),
+    ]);
+    events = tree.events;
+    notes = notesFetched;
+  }
   if (events.length === 0) {
     throw new Error("conversation has no events");
   }

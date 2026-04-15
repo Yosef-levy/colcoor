@@ -191,6 +191,58 @@ def test_append_assistant_rejects_non_user_parent(session_factory) -> None:
     asyncio.run(run())
 
 
+def test_assistant_output_inherits_visible_to_from_private_user(session_factory) -> None:
+    """Assistant rows under a private draft share the same user-only scope as the parent user line."""
+
+    async def run() -> None:
+        async with session_factory() as s:
+            u = User(
+                cursor_sub=f"sub-{uuid.uuid4()}",
+                email="pvt@pvt.c",
+                display_name="t",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            s.add(u)
+            await s.flush()
+            await s.refresh(u)
+            uid = u.id
+            conv, _ = await create_conversation_with_owner(s, user_id=uid, title="priv")
+            await s.commit()
+
+        async with session_factory() as s:
+            evs = await list_events_for_tree(s, conv.id, uid)
+            tip = evs[-1]
+            u_priv = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="user_input",
+                parent_event_id=tip.id,
+                content="draft",
+                private_branch=True,
+            )
+            assert u_priv.visible_to == uid
+            a_ev = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="assistant_output",
+                parent_event_id=u_priv.id,
+                content="assistant reply",
+                private_branch=False,
+            )
+            assert a_ev.visible_to == uid
+            await s.commit()
+
+        async with session_factory() as s:
+            tree = await list_events_for_tree(s, conv.id, uid)
+            by_id = {e.id: e for e in tree}
+            assert by_id[u_priv.id].visible_to == uid
+            assert by_id[a_ev.id].visible_to == uid
+
+    asyncio.run(run())
+
+
 def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
     secret = "x" * 40
     monkeypatch.setenv("DATABASE_URL", postgres_url)

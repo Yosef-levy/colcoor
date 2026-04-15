@@ -75,12 +75,28 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('cpEl.disabled = state.busy');
   });
 
+  it("renders Private badge in thread rows when segment has privateScope", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("s.privateScope === true");
+    expect(html).toContain('<span class="badge-pvt">Private</span>');
+  });
+
   it("renders expanded private-draft composer help", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(`>${PRIVATE_BRANCH_LEAD}<`);
     expect(html).toContain(PRIVATE_BRANCH_DESCRIPTION);
     expect(html).toContain('id="privateBranchHelp"');
     expect(html).toContain('aria-describedby="privateBranchHelp"');
+  });
+
+  it("hides private graph rows in the tree when the Private draft checkbox is unchecked", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function graphEventIsPrivate(e)");
+    expect(html).toContain("function showPrivateDraftSubtreeInUi()");
+    expect(html).toContain("function effectiveTreeParentKey(e, byId, shownIds, showPrivate)");
+    expect(html).toContain("function clampSelectionIfPrivateHidden()");
+    expect(html).toContain("wirePrivateBranchUiFilter");
+    expect(html).toContain("visibleThreadSegmentsForUi()");
   });
 
   it("marks tree snippets with dir=auto and unicode-bidi for mixed-direction labels", () => {

@@ -78,6 +78,27 @@ describe("runResendAssistant", () => {
     ).rejects.toThrow("conversation has no events");
   });
 
+  it("skips getTree and listNotes when prefetchedGraph is provided", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "new", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValue({ id: "asst-new" });
+    const getTree = vi.fn();
+    const listNotes = vi.fn();
+    const api = {
+      getTree,
+      listNotes,
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runResendAssistant(api, agent, "conv1", "T", "user1", "/tmp/ws", {
+      prefetchedGraph: { events: defaultTree("hi"), notes: [] },
+    });
+
+    expect(getTree).not.toHaveBeenCalled();
+    expect(listNotes).not.toHaveBeenCalled();
+    expect(appendEvent).toHaveBeenCalled();
+  });
+
   it("throws when userEventId is blank after normalization", async () => {
     const getTree = vi.fn();
     const api = {

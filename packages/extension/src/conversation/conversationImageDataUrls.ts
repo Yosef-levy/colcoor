@@ -1,4 +1,5 @@
 import type { ColcoorApiClient, GraphEventNode } from "../api/client";
+import { getConversationImageRawCached } from "./conversationImageBytesCache";
 import { parseUserMediaImages } from "./userEventMedia";
 
 const MAX_IMAGE_FETCH_BYTES = 6 * 1024 * 1024;
@@ -36,7 +37,7 @@ export async function buildUserImageDataUrlsByOwnerId(
         break;
       }
       try {
-        const { mimeType, arrayBuffer } = await api.getConversationImageRaw(conversationId, im.id);
+        const { mimeType, arrayBuffer } = await getConversationImageRawCached(api, conversationId, im.id);
         if (arrayBuffer.byteLength > MAX_IMAGE_FETCH_BYTES) {
           continue;
         }

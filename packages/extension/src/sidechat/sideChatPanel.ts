@@ -31,6 +31,10 @@ import { getSideChatWebviewHtml } from "./sideChatWebviewHtml";
 import { sideChatSseReconnectDelayMs } from "./sideChatSseReconnectDelay";
 import { readSideChatCueSettings } from "./sideChatWorkspaceSettings";
 import { normalizeSideChatReferenceId } from "./normalizeSideChatReferenceId";
+import {
+  needsReferenceLookupRefresh,
+  sideChatMessageHasUnknownReferenceLookups,
+} from "./sideChatReferenceLookupPolicy";
 import { trimmedSideChatSendBody } from "./trimSendBody";
 import { reportSideChatPanelApiError } from "./reportSideChatPanelApiError";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
@@ -278,14 +282,20 @@ export async function openSideChatPanel(
     }
   }
 
-  async function pushState(): Promise<void> {
+  async function pushState(opts?: { forceReferenceLookupRefresh?: boolean }): Promise<void> {
     try {
       cached = await api.listSideChatMessages(conversationId, 0);
       lastStreamSeq = maxSideChatSeq(cached);
       for (const m of cached) {
         notifiedMessageIds.add(m.id);
       }
-      await Promise.all([refreshReferenceLookups(), refreshMemberDisplayNames()]);
+      const forceLookups = Boolean(opts?.forceReferenceLookupRefresh);
+      const refLookupsP =
+        forceLookups ||
+        needsReferenceLookupRefresh(cached, lastPatchedReadSeq, eventLabelsById, noteLabelsById)
+          ? refreshReferenceLookups()
+          : Promise.resolve();
+      await Promise.all([refLookupsP, refreshMemberDisplayNames()]);
       await postState();
       scheduleMarkRead();
     } catch (e) {
@@ -391,8 +401,20 @@ export async function openSideChatPanel(
               }
             }
             notifiedMessageIds.add(o.message.id);
-            cached = mergeSideChatMessage(cached, o.message);
-            lastStreamSeq = Math.max(lastStreamSeq, o.message.seq);
+            const inc = o.message;
+            const incRefsUnknown = sideChatMessageHasUnknownReferenceLookups(
+              inc,
+              eventLabelsById,
+              noteLabelsById,
+            );
+            cached = mergeSideChatMessage(cached, inc);
+            lastStreamSeq = Math.max(lastStreamSeq, inc.seq);
+            if (
+              incRefsUnknown ||
+              needsReferenceLookupRefresh(cached, lastPatchedReadSeq, eventLabelsById, noteLabelsById)
+            ) {
+              await refreshReferenceLookups();
+            }
             if (o.message.kind === "system_join" || o.message.kind === "system_leave") {
               const nowMs = Date.now();
               if (
@@ -455,7 +477,7 @@ export async function openSideChatPanel(
       return;
     }
     if (msg.type === "refresh") {
-      await pushState();
+      await pushState({ forceReferenceLookupRefresh: true });
       return;
     }
     if (msg.type === "stopGeneration") {
@@ -658,7 +680,7 @@ export async function openSideChatPanel(
       }
       try {
         await api.patchSideChatMessage(conversationId, mid, { body });
-        await pushState();
+        await pushState({ forceReferenceLookupRefresh: true });
       } catch (e) {
         await reportApiErrorToSideChat(e);
       }

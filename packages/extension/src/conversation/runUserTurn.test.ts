@@ -78,6 +78,27 @@ describe("runColcoorUserTurn", () => {
     ).rejects.toThrow("conversation has no events");
   });
 
+  it("skips getTree and listNotes when prefetchedGraph is provided", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValueOnce({ id: "u-new" }).mockResolvedValueOnce({ id: "a-new" });
+    const getTree = vi.fn();
+    const listNotes = vi.fn();
+    const api = {
+      getTree,
+      listNotes,
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runColcoorUserTurn(api, agent, "conv1", null, "hello", "", {
+      prefetchedGraph: { events: linearTree(), notes: [] },
+    });
+
+    expect(getTree).not.toHaveBeenCalled();
+    expect(listNotes).not.toHaveBeenCalled();
+    expect(appendEvent).toHaveBeenCalled();
+  });
+
   it("throws when replyParentEventId is not in the tree", async () => {
     const api = {
       getTree: vi.fn().mockResolvedValue({ events: linearTree() }),

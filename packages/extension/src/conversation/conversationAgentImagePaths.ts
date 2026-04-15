@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import type { ColcoorApiClient } from "../api/client";
+import { getConversationImageRawCached } from "./conversationImageBytesCache";
 import { parseUserMediaImages } from "./userEventMedia";
 
 export async function writeUserMediaToTempFiles(
@@ -13,7 +14,7 @@ export async function writeUserMediaToTempFiles(
   const imgs = parseUserMediaImages(contentJson);
   const paths: string[] = [];
   for (const im of imgs) {
-    const { arrayBuffer } = await api.getConversationImageRaw(conversationId, im.id);
+    const { arrayBuffer } = await getConversationImageRawCached(api, conversationId, im.id);
     const ext =
       im.mime_type === "image/png"
         ? "png"

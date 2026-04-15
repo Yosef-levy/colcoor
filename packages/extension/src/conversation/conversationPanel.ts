@@ -51,12 +51,19 @@ import type { ColcoorUserMediaImageRef } from "./userEventMedia";
 import { buildUserImageDataUrlsByOwnerId } from "./conversationImageDataUrls";
 import { buildSideChatSendPayload } from "../sidechat/sideChatSendPayload";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "../sidechat/sideChatRenderMessages";
+import { listConversationsCached } from "../conversations/conversationsListCache";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
 const SIDE_CHAT_COLUMN_WIDTH_STATE_KEY = "colcoor.conversation.sideChatColumnWidthPx";
 /** `conversation_id` → event ids whose branches are collapsed in the webview tree ([tree-ui-contract.md]). */
 const TREE_COLLAPSED_BY_CONV_KEY = "colcoor.treeCollapsedByConversation";
 const colcoorNotesChannel = vscode.window.createOutputChannel("Colcoor notes");
+
+/** Optional server snapshots for `revealAtEvent` to skip redundant GETs after a palette/drawer fetch. */
+export type RevealAtEventPrefetchOptions = {
+  prefetchedTreeEvents?: GraphEventNode[];
+  prefetchedNotes?: NoteOut[];
+};
 
 type WebviewStateMessage = {
   type: "state";
@@ -182,7 +189,12 @@ export function createConversationPanelController(
 ): {
   reveal: (conversationId: string, title: string | null) => Promise<void>;
   /** Open conversation and select a specific tree event (e.g. jump from a TODO note). */
-  revealAtEvent: (conversationId: string, title: string | null, eventId: string) => Promise<void>;
+  revealAtEvent: (
+    conversationId: string,
+    title: string | null,
+    eventId: string,
+    prefetch?: RevealAtEventPrefetchOptions,
+  ) => Promise<void>;
   /** Close the webview panel if it is showing this conversation (e.g. after delete). */
   closeIfShowingConversation: (conversationId: string) => void;
   /** Star or unstar the selected tree node via API (command palette). */
@@ -192,7 +204,13 @@ export function createConversationPanelController(
   /** List notes for the selected event in the “Colcoor notes” output channel. */
   showNotesOnSelectedMessage: () => Promise<void>;
   /** Current conversation + selected event (for cross-panel actions like side-chat references). */
-  getSelectedMessageContext: () => { conversationId: string; selectedEventId: string; title: string | null } | null;
+  getSelectedMessageContext: () => {
+    conversationId: string;
+    selectedEventId: string;
+    title: string | null;
+    /** When the main tree is loaded; reuse to avoid duplicate `listNotes` in reference flows. */
+    cachedNotesForConversation?: readonly NoteOut[];
+  } | null;
   /** Abort in-flight send/resend in this panel (same as the webview Stop button). No-op if idle. */
   cancelInFlightGeneration: () => void;
   /** Persist active node to the selected tree message (same as detail bar “Continue from here”). */
@@ -375,7 +393,7 @@ export function createConversationPanelController(
       return;
     }
     try {
-      const rows = await api.listConversations();
+      const rows = await listConversationsCached(api);
       applyConversationMetaFromListRow(rows.find((r) => r.id === conversationId));
     } catch {
       /* keep previous meta */
@@ -544,25 +562,40 @@ export function createConversationPanelController(
   async function loadTreeAndPush(
     busy: boolean,
     lastError: string | null,
-    opts?: { finalizeToDefaultBranchTip?: boolean; skipConversationsList?: boolean },
+    opts?: {
+      finalizeToDefaultBranchTip?: boolean;
+      skipConversationsList?: boolean;
+      prefetchedTreeEvents?: GraphEventNode[];
+      prefetchedNotes?: NoteOut[];
+      skipInlineSideChatRefresh?: boolean;
+    },
   ): Promise<void> {
     await withTreeRefreshLock(async () => {
       if (!conversationId) {
         return;
       }
       const skipConversationsList = Boolean(opts?.skipConversationsList);
+      const skipInlineSideChatRefresh = Boolean(opts?.skipInlineSideChatRefresh);
       let finalizeToDefaultBranchTip = Boolean(opts?.finalizeToDefaultBranchTip);
+      let treePrefetch: GraphEventNode[] | undefined = opts?.prefetchedTreeEvents;
+      let notesPrefetch: NoteOut[] | undefined = opts?.prefetchedNotes;
       for (;;) {
         try {
           const previousSelectedEventId = selectedEventId;
           const previousEventIds = new Set(lastTreeEvents.map((e) => e.id));
+          const treeP =
+            treePrefetch !== undefined
+              ? Promise.resolve({ events: treePrefetch })
+              : api.getTree(conversationId);
+          const notesP =
+            notesPrefetch !== undefined ? Promise.resolve(notesPrefetch) : api.listNotes(conversationId);
           const [{ events }, notes, caller, listRows] = await Promise.all([
-            api.getTree(conversationId),
-            api.listNotes(conversationId),
+            treeP,
+            notesP,
             api.getConversationCallerState(conversationId).catch((): null => null),
             skipConversationsList
               ? Promise.resolve([] as ConversationSummary[])
-              : api.listConversations().catch((): ConversationSummary[] => []),
+              : listConversationsCached(api).catch((): ConversationSummary[] => []),
           ]);
           if (!skipConversationsList) {
             applyConversationMetaFromListRow(listRows.find((r) => r.id === conversationId));
@@ -618,6 +651,8 @@ export function createConversationPanelController(
             );
             if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
               finalizeToDefaultBranchTip = false;
+              treePrefetch = undefined;
+              notesPrefetch = undefined;
               continue;
             }
           } else if (!busy && growthFingerprint) {
@@ -628,6 +663,8 @@ export function createConversationPanelController(
             );
             if (choice === COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION) {
               finalizeToDefaultBranchTip = false;
+              treePrefetch = undefined;
+              notesPrefetch = undefined;
               continue;
             }
           }
@@ -647,7 +684,7 @@ export function createConversationPanelController(
           } catch {
             lastUserImageDataUrlsByEventId = new Map();
           }
-          if (inlineSideChatVisible) {
+          if (inlineSideChatVisible && !skipInlineSideChatRefresh) {
             try {
               await refreshInlineSideChat();
             } catch {
@@ -723,11 +760,17 @@ export function createConversationPanelController(
           checkpointLabel,
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
+          ...(lastTreeEvents.length > 0
+            ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
+            : {}),
           ...(userMediaContentJson ? { userMediaContentJson } : {}),
           onUserMessagePersisted: async ({ userEventId }) => {
             pendingSendUserMarkdown = undefined;
             selectedEventId = userEventId;
-            await loadTreeAndPush(true, null, { skipConversationsList: true });
+            await loadTreeAndPush(true, null, {
+              skipConversationsList: true,
+              skipInlineSideChatRefresh: true,
+            });
           },
         },
       );
@@ -773,7 +816,13 @@ export function createConversationPanelController(
         conversationTitle,
         selectedEventId,
         ws,
-        { signal, onAssistantTextDelta: (t) => stream.pushDelta(t) },
+        {
+          signal,
+          onAssistantTextDelta: (t) => stream.pushDelta(t),
+          ...(lastTreeEvents.length > 0
+            ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
+            : {}),
+        },
       );
       stream.dispose();
       await loadTreeAndPush(false, null, { finalizeToDefaultBranchTip: true });
@@ -1412,6 +1461,19 @@ export function createConversationPanelController(
       if (cid === undefined) {
         return;
       }
+      const sameConversationAlreadyLoaded =
+        panel != null &&
+        webviewReady &&
+        conversationId === cid &&
+        lastTreeEvents.length > 0;
+      if (sameConversationAlreadyLoaded) {
+        conversationTitle = title;
+        const p = ensurePanel();
+        p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        p.reveal(vscode.ViewColumn.One, false);
+        return;
+      }
       conversationId = cid;
       conversationTitle = title;
       conversationPinned = false;
@@ -1434,7 +1496,12 @@ export function createConversationPanelController(
       }
       p.reveal(vscode.ViewColumn.One, false);
     },
-    async revealAtEvent(convId: string, title: string | null, eventId: string): Promise<void> {
+    async revealAtEvent(
+      convId: string,
+      title: string | null,
+      eventId: string,
+      prefetch?: RevealAtEventPrefetchOptions,
+    ): Promise<void> {
       const cid = normalizeOptionalGraphEventId(convId);
       const eid = normalizeOptionalGraphEventId(eventId);
       if (cid === undefined || eid === undefined) {
@@ -1467,7 +1534,10 @@ export function createConversationPanelController(
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
       if (webviewReady) {
-        await loadTreeAndPush(false, null);
+        await loadTreeAndPush(false, null, {
+          prefetchedTreeEvents: prefetch?.prefetchedTreeEvents,
+          prefetchedNotes: prefetch?.prefetchedNotes,
+        });
       }
       p.reveal(vscode.ViewColumn.One, false);
     },
@@ -1484,7 +1554,12 @@ export function createConversationPanelController(
       if (!conversationId || !selectedEventId) {
         return null;
       }
-      return { conversationId, selectedEventId, title: conversationTitle ?? null };
+      return {
+        conversationId,
+        selectedEventId,
+        title: conversationTitle ?? null,
+        ...(lastTreeEvents.length > 0 ? { cachedNotesForConversation: lastNotes } : {}),
+      };
     },
     cancelInFlightGeneration: () => {
       sendAbort?.abort();

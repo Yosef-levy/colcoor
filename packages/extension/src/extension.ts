@@ -1,5 +1,10 @@
 import * as vscode from "vscode";
-import { ColcoorApiClient, type ConversationMember, type ConversationSummary } from "./api/client";
+import {
+  ColcoorApiClient,
+  type ConversationMember,
+  type ConversationSummary,
+  type NoteOut,
+} from "./api/client";
 import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
@@ -22,7 +27,14 @@ import {
   shouldCloseDrawersAfterConversationDelete,
 } from "./conversation/drawersChromeTitle";
 import { profilePatchFromInputs } from "./profile/profilePatchPlan";
-import { createConversationPanelController } from "./conversation/conversationPanel";
+import {
+  createConversationPanelController,
+  type RevealAtEventPrefetchOptions,
+} from "./conversation/conversationPanel";
+import {
+  invalidateConversationListCache,
+  listConversationsCached,
+} from "./conversations/conversationsListCache";
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import {
   isPrivateBranchFromPrivacyPick,
@@ -95,6 +107,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     Boolean(await session.getBackendAccessToken()),
   );
   const refreshTree = (): void => {
+    invalidateConversationListCache();
     treeProvider.refresh();
   };
 
@@ -146,7 +159,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const [{ events }, notes, rows] = await Promise.all([
       api.getTree(drawersConversationId),
       api.listNotes(drawersConversationId),
-      api.listConversations().catch((): ConversationSummary[] => []),
+      listConversationsCached(api).catch((): ConversationSummary[] => []),
     ]);
     const model = buildConversationDrawersModel(events, notes);
     const row = rows.find((r) => r.id === drawersConversationId);
@@ -181,29 +194,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   async function pickConversationInteractively(): Promise<
-    { id: string; title: string | null } | undefined
+    { id: string; title: string | null; pinned: boolean } | undefined
   > {
     try {
-      const rows = await api.listConversations();
+      const rows = await listConversationsCached(api);
       if (rows.length === 0) {
         await vscode.window.showWarningMessage("Colcoor: no conversations — create one first.");
         return undefined;
       }
       const picked = await vscode.window.showQuickPick<
-        vscode.QuickPickItem & { cid: string; ctitle: string | null }
+        vscode.QuickPickItem & { cid: string; ctitle: string | null; cpinned: boolean }
       >(
         rows.map((r) => ({
           label: r.title?.trim() ? r.title : "(untitled)",
           description: r.id,
           cid: r.id,
           ctitle: r.title,
+          cpinned: Boolean(r.pinned),
         })),
         { title: "Colcoor — pick conversation", placeHolder: "Choose a conversation" },
       );
       if (!picked) {
         return undefined;
       }
-      return { id: picked.cid, title: normalizedConversationTitle(picked.ctitle ?? "") };
+      return {
+        id: picked.cid,
+        title: normalizedConversationTitle(picked.ctitle ?? ""),
+        pinned: picked.cpinned,
+      };
     } catch (e) {
       await showColcoorApiFailure(e);
       return undefined;
@@ -644,15 +662,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           }
           convId = row.id;
           convTitle = row.title;
-          try {
-            const rows = await api.listConversations();
-            currentPinned = rows.find((r) => r.id === convId)?.pinned;
-          } catch {
-            currentPinned = false;
-          }
+          currentPinned = row.pinned;
         } else if (currentPinned === undefined) {
           try {
-            const rows = await api.listConversations();
+            const rows = await listConversationsCached(api);
             currentPinned = rows.find((r) => r.id === convId)?.pinned;
           } catch {
             currentPinned = false;
@@ -772,7 +785,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           convTitle = row.title;
         }
         try {
-          const notes = await api.listNotes(convId);
+          const [{ events }, notes] = await Promise.all([api.getTree(convId), api.listNotes(convId)]);
           const todos = filterTodoNotes(notes);
           if (todos.length === 0) {
             await vscode.window.showInformationMessage(
@@ -800,7 +813,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           if (!picked) {
             return;
           }
-          await conversationPanel.revealAtEvent(convId, convTitle ?? null, picked.eventId);
+          const prefetch: RevealAtEventPrefetchOptions = {
+            prefetchedTreeEvents: events,
+            prefetchedNotes: notes,
+          };
+          await conversationPanel.revealAtEvent(convId, convTitle ?? null, picked.eventId, prefetch);
         } catch (e) {
           await showColcoorApiFailure(e);
         }
@@ -854,7 +871,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           if (!picked) {
             return;
           }
-          await conversationPanel.revealAtEvent(convId, convTitle ?? null, picked.eventId);
+          await conversationPanel.revealAtEvent(convId, convTitle ?? null, picked.eventId, {
+            prefetchedTreeEvents: events,
+          });
         } catch (e) {
           await showColcoorApiFailure(e);
         }
@@ -885,7 +904,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           const [{ events }, notes, rows] = await Promise.all([
             api.getTree(convId),
             api.listNotes(convId),
-            api.listConversations().catch((): ConversationSummary[] => []),
+            listConversationsCached(api).catch((): ConversationSummary[] => []),
           ]);
           const model = buildConversationDrawersModel(events, notes);
           const row = rows.find((r) => r.id === convId);
@@ -1181,8 +1200,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       try {
-        const notes = await api.listNotes(ctx.conversationId);
-        const forSelected = notes.filter((n) => n.event_id === ctx.selectedEventId);
+        let notesForPick: NoteOut[];
+        if (ctx.cachedNotesForConversation !== undefined) {
+          notesForPick = [...ctx.cachedNotesForConversation];
+        } else {
+          notesForPick = await api.listNotes(ctx.conversationId);
+        }
+        const forSelected = notesForPick.filter((n) => n.event_id === ctx.selectedEventId);
         if (forSelected.length === 0) {
           await vscode.window.showWarningMessage(
             "Colcoor: selected message has no notes to reference.",
@@ -1200,7 +1224,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (!pick) {
           return;
         }
-        await conversationPanel.revealAtEvent(ctx.conversationId, ctx.title ?? null, ctx.selectedEventId);
+        await conversationPanel.revealAtEvent(ctx.conversationId, ctx.title ?? null, ctx.selectedEventId, {
+          prefetchedNotes: notesForPick,
+        });
         await conversationPanel.openInlineSideChat();
       } catch (e) {
         await showColcoorApiFailure(e);

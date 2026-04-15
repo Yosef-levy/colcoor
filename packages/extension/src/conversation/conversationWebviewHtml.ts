@@ -407,7 +407,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-badge-background);
       border-color: var(--vscode-panel-border);
     }
-    .node .badge-pvt {
+    .badge-pvt {
       display: inline-block;
       padding: 1px 7px;
       border-radius: 999px;
@@ -418,6 +418,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-inputValidation-infoForeground);
       background: var(--vscode-inputValidation-infoBackground);
       border: 1px solid var(--vscode-inputValidation-infoBorder);
+    }
+    .msg .role .badge-pvt {
+      margin-left: 8px;
+      vertical-align: middle;
     }
     .node .when {
       font-size: 0.76em;
@@ -1210,6 +1214,91 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return chain.reverse();
     }
 
+    function graphEventIsPrivate(e) {
+      return !!(e && e.visible_to != null && String(e.visible_to).trim() !== "");
+    }
+
+    function showPrivateDraftSubtreeInUi() {
+      var priv = document.getElementById("privateBranch");
+      return !!(priv && priv.checked);
+    }
+
+    /** Breadcrumb path: omit private nodes when the checkbox hides them. */
+    function pathChainForCrumb(events, selectedId) {
+      const full = pathChain(events, selectedId);
+      if (showPrivateDraftSubtreeInUi()) return full;
+      return full.filter(function (ev) {
+        return !graphEventIsPrivate(ev);
+      });
+    }
+
+    function effectiveTreeParentKey(e, byId, shownIds, showPrivate) {
+      if (showPrivate) {
+        return e.parent_event_id == null ? "__root__" : String(e.parent_event_id);
+      }
+      var p = e.parent_event_id;
+      while (p != null) {
+        if (shownIds.has(p)) return String(p);
+        var par = byId[p];
+        if (!par) return "__root__";
+        p = par.parent_event_id;
+      }
+      return "__root__";
+    }
+
+    function clampSelectionIfPrivateHidden() {
+      if (showPrivateDraftSubtreeInUi()) return;
+      var evs = state.events || [];
+      var sid = state.selectedEventId;
+      if (!sid) return;
+      var byId = Object.fromEntries(evs.map(function (x) {
+        return [x.id, x];
+      }));
+      var cur = byId[sid];
+      if (!cur || !graphEventIsPrivate(cur)) return;
+      while (cur && graphEventIsPrivate(cur)) {
+        var pid = cur.parent_event_id;
+        if (pid == null) {
+          vscode.postMessage({ type: "selectTip" });
+          return;
+        }
+        cur = byId[pid];
+        if (!cur) {
+          vscode.postMessage({ type: "selectTip" });
+          return;
+        }
+      }
+      if (cur && cur.id) vscode.postMessage({ type: "select", id: cur.id });
+    }
+
+    function visibleThreadSegmentsForUi() {
+      var segs = state.threadSegments || [];
+      if (showPrivateDraftSubtreeInUi()) return segs;
+      return segs.filter(function (s) {
+        return s.privateScope !== true;
+      });
+    }
+
+    function threadPlainTextForCopy() {
+      if (showPrivateDraftSubtreeInUi()) return state.threadPlainText || "";
+      var el = document.getElementById("thread");
+      if (el) {
+        var t = (el.innerText || "").trim();
+        if (t.length) return el.innerText || "";
+      }
+      return "";
+    }
+
+    function threadHasCopyablePlainText() {
+      if (showPrivateDraftSubtreeInUi()) {
+        return String(state.threadPlainText || "").trim().length > 0;
+      }
+      var segs = visibleThreadSegmentsForUi();
+      if (segs.length) return true;
+      if (state.pendingUserHtml || state.streamingHtml) return true;
+      return String(threadPlainTextForCopy()).trim().length > 0;
+    }
+
     function traceSummaryLineLegacy(ev) {
       if (!ev || typeof ev !== "object") return "Event";
       const t = ev.type;
@@ -1365,8 +1454,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (menuHelp) menuHelp.disabled = state.busy;
       const sel = state.selectedEventId;
       const evs = state.events || [];
-      const path = pathChain(evs, sel);
-      if (!path.length) {
+      const path = pathChainForCrumb(evs, sel);
+      const bySel = Object.fromEntries(evs.map((e) => [e.id, e]));
+      const last = bySel[sel] || (path.length ? path[path.length - 1] : null);
+      if (!path.length || !last) {
         crumb.innerHTML = '<span class="empty">No selection</span>';
         copyBtn.disabled = true;
         toggleStarBtn.disabled = true;
@@ -1401,7 +1492,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         );
       });
       crumb.innerHTML = parts.join(' <span class="crumb-sep">→</span> ');
-      const last = path[path.length - 1];
       copyBtn.disabled = state.busy;
       toggleStarBtn.disabled = state.busy;
       toggleStarBtn.textContent = last.starred === true ? "Unstar" : "Star";
@@ -1425,7 +1515,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       refNoteSideChatBtn.title = state.busy
         ? "Wait for the current operation to finish."
         : "Open side chat and pick a note from the selected message.";
-      const canCopyThread = String(state.threadPlainText || "").trim().length > 0;
+      const canCopyThread = threadHasCopyablePlainText();
       if (copyThreadBtn) {
         copyThreadBtn.disabled = state.busy || !canCopyThread;
         copyThreadBtn.title = canCopyThread
@@ -1433,7 +1523,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           : "Nothing to copy on this path yet.";
       }
       const canResend =
-        last.kind === "user_input" && String(last.content_text || "").trim().length > 0;
+        last &&
+        last.kind === "user_input" &&
+        String(last.content_text || "").trim().length > 0;
       resendBtn.disabled = state.busy || !canResend;
       resendBtn.title = canResend
         ? "New assistant reply for this user message (same user row; transcript per docs)."
@@ -1519,9 +1611,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         root.innerHTML = '<p class="empty">No events yet.</p>';
         return;
       }
+      const showPrivate = showPrivateDraftSubtreeInUi();
+      const byId = Object.fromEntries(evs.map((e) => [e.id, e]));
+      const treeEvents = showPrivate ? evs : evs.filter((e) => !graphEventIsPrivate(e));
+      const shownIds = new Set(treeEvents.map((e) => e.id));
       const byParent = new Map();
-      for (const e of evs) {
-        const k = e.parent_event_id == null ? "__root__" : e.parent_event_id;
+      for (const e of treeEvents) {
+        const k = effectiveTreeParentKey(e, byId, shownIds, showPrivate);
         if (!byParent.has(k)) byParent.set(k, []);
         byParent.get(k).push(e);
       }
@@ -1535,7 +1631,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         for (const e of kids) {
           const sel = e.id === state.selectedEventId ? " selected" : "";
           const roleC = treeRoleClass(e.kind);
-          const isPriv = e.visible_to != null && String(e.visible_to).trim() !== "";
+          const isPriv = graphEventIsPrivate(e);
           const badge = isPriv ? '<span class="badge-pvt">Private</span>' : "";
           const when = eventTimeLabel(e.created_at);
           const whenSpan = when ? '<span class="when">' + esc(when) + "</span>" : "";
@@ -1602,8 +1698,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function renderThread() {
       const el = document.getElementById("thread");
       if (!el) return;
-      const segs = state.threadSegments || [];
-      if (!segs.length) {
+      const segs = visibleThreadSegmentsForUi();
+      if (!segs.length && !state.pendingUserHtml && !state.streamingHtml) {
         el.innerHTML = '<p class="empty">Select an event in the tree.</p>';
         return;
       }
@@ -1611,11 +1707,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       for (const s of segs) {
         const cls = s.role === "user" ? "user" : "assistant";
         const role = s.role === "user" ? "User" : "Assistant";
+        const privBadge =
+          s.privateScope === true ? '<span class="badge-pvt">Private</span>' : "";
         html +=
           '<div class="msg ' +
           cls +
           '"><div class="role">' +
           role +
+          privBadge +
           "</div>" +
           (s.checkpointLabel
             ? '<div class="thread-checkpoint">' + esc("Checkpoint: " + String(s.checkpointLabel)) + "</div>"
@@ -1842,6 +1941,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
           if (compH != null) ta.style.height = compH + "px";
         }
+        clampSelectionIfPrivateHidden();
         renderTree();
         renderThread();
         renderInlineSideChat();
@@ -1990,6 +2090,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vscode.postMessage({ type: "refresh" });
     });
 
+    (function wirePrivateBranchUiFilter() {
+      var priv = document.getElementById("privateBranch");
+      if (!priv) return;
+      priv.addEventListener("change", function () {
+        clampSelectionIfPrivateHidden();
+        render();
+      });
+    })();
+
     document.getElementById("btnCopy").addEventListener("click", () => {
       const ev = (state.events || []).find((e) => e.id === state.selectedEventId);
       if (!ev) return;
@@ -2009,9 +2118,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
 
     document.getElementById("btnCopyThread").addEventListener("click", () => {
-      const t = String(state.threadPlainText || "").trim();
+      var text = threadPlainTextForCopy();
+      const t = String(text || "").trim();
       if (!t) return;
-      vscode.postMessage({ type: "copyThread", text: state.threadPlainText || "" });
+      vscode.postMessage({ type: "copyThread", text: text });
     });
 
     document.getElementById("btnResend").addEventListener("click", () => {

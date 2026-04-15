@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { ColcoorApiClient, ConversationSummary } from "../api/client";
+import { listConversationsCached } from "./conversationsListCache";
 import { formatConversationUpdatedAtForTooltip } from "./conversationListUpdatedAt";
 import { conversationUnreadBadgeInfo } from "./conversationUnreadBadge";
 import { formatRelativeTime } from "../util/formatRelativeTime";
@@ -56,7 +57,7 @@ export class ConversationsTreeProvider implements vscode.TreeDataProvider<Conver
       return [];
     }
     try {
-      const rows = await this.api.listConversations();
+      const rows = await listConversationsCached(this.api);
       const sorted = [...rows].sort((a, b) => {
         if (a.pinned !== b.pinned) {
           return a.pinned ? -1 : 1;

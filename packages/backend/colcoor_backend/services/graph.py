@@ -207,7 +207,9 @@ async def append_graph_event(
     if kind == "assistant_output":
         if parent.kind != "user_input":
             raise ValueError("assistant_output must attach to user_input")
-        visible_to = None
+        # Inherit private draft scope so assistant replies stay user-only with the user line
+        # (shared children can still attach under private nodes via separate user_input rows).
+        visible_to = parent.visible_to
         actor_type = "assistant"
         actor_user_id = None
         final_text = content

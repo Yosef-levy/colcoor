@@ -97,6 +97,40 @@ describe("buildThreadSegments", () => {
     expect(segs[1]!.notes).toBeUndefined();
   });
 
+  it("sets privateScope on user and assistant when visible_to marks a private draft", () => {
+    const uid = "11111111-1111-4111-8111-111111111111";
+    const events: GraphEventNode[] = [
+      ev({
+        id: "r",
+        parent_event_id: null,
+        kind: "user_input",
+        created_at: "2020-01-01T00:00:00Z",
+        content_text: "",
+      }),
+      ev({
+        id: "u1",
+        parent_event_id: "r",
+        kind: "user_input",
+        created_at: "2020-01-01T00:01:00Z",
+        content_text: "Secret",
+        visible_to: uid,
+      }),
+      ev({
+        id: "a1",
+        parent_event_id: "u1",
+        kind: "assistant_output",
+        created_at: "2020-01-01T00:02:00Z",
+        content_text: "Reply",
+        actor_type: "assistant",
+        visible_to: uid,
+      }),
+    ];
+    const segs = buildThreadSegments(events, "a1", []);
+    expect(segs).toHaveLength(2);
+    expect(segs[0]!.privateScope).toBe(true);
+    expect(segs[1]!.privateScope).toBe(true);
+  });
+
   it("includes checkpointLabel on segments when the API sets checkpoint_label", () => {
     const events: GraphEventNode[] = [
       ev({

@@ -1,6 +1,6 @@
 import type { AgentRunner } from "../agent/agentRunner";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
-import type { ColcoorApiClient } from "../api/client";
+import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
@@ -18,11 +18,13 @@ import {
   pathFromRootToTip,
 } from "./treeEvents";
 import { hasUserMediaImages } from "./userEventMedia";
-import type { UserTurnResult } from "./runUserTurn";
+import type { PrefetchedConversationGraph, UserTurnResult } from "./runUserTurn";
 
 export type RunResendAssistantOptions = {
   signal?: AbortSignal;
   onAssistantTextDelta?: (textSoFar: string) => void;
+  /** When set (e.g. from the conversation panel), skips the initial tree + notes round-trip. */
+  prefetchedGraph?: PrefetchedConversationGraph;
 };
 
 /**
@@ -46,10 +48,19 @@ export async function runResendAssistant(
     throw new Error("event not found");
   }
 
-  const [{ events }, notes] = await Promise.all([
-    api.getTree(conversationId),
-    api.listNotes(conversationId),
-  ]);
+  let events: GraphEventNode[];
+  let notes: NoteOut[];
+  if (options?.prefetchedGraph) {
+    events = options.prefetchedGraph.events;
+    notes = options.prefetchedGraph.notes;
+  } else {
+    const [tree, notesFetched] = await Promise.all([
+      api.getTree(conversationId),
+      api.listNotes(conversationId),
+    ]);
+    events = tree.events;
+    notes = notesFetched;
+  }
   if (events.length === 0) {
     throw new Error("conversation has no events");
   }
