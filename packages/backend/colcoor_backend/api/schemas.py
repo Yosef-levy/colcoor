@@ -179,6 +179,8 @@ class ConversationUserStateOut(BaseModel):
     active_event_id: UUID
     needs_context_rebuild: bool
     last_seen_at: datetime
+    # Per-user side-chat read cursor; 0 when never set (see UserSideChatState.last_read_seq).
+    side_chat_last_read_seq: int = 0
 
 
 class NoteOut(BaseModel):

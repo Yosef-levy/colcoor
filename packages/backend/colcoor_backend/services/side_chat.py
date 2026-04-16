@@ -297,6 +297,18 @@ async def soft_delete_side_chat_message(
     return msg
 
 
+async def get_user_side_chat_last_read_seq(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> int:
+    """Caller’s persisted side-chat read cursor, or 0 when no row exists."""
+    row = await session.get(UserSideChatState, (conversation_id, user_id))
+    if row is None:
+        return 0
+    return int(row.last_read_seq)
+
+
 async def patch_side_chat_read_cursor(
     session: AsyncSession,
     conversation_id: uuid.UUID,

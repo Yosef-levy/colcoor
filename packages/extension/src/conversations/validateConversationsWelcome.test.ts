@@ -50,28 +50,54 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
     expect(colcoorCommandsMissingFromConversationsWelcome(pkg)).toEqual([]);
   });
 
-  it("documents welcome exclusions (destructive, copy-id, menu-covered settings, continue palette anchor)", () => {
+  it("documents welcome exclusions (minimal logged-out welcome; other commands via menu / UI)", () => {
     expect([...CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS].sort()).toEqual([
+      "colcoor.addConversationMember",
+      "colcoor.addNoteToSelectedMessage",
+      "colcoor.changeMemberRole",
       "colcoor.continueFromHere",
       "colcoor.copyConversationId",
+      "colcoor.copySelectedMessage",
       "colcoor.deleteConversation",
       "colcoor.editProfile",
+      "colcoor.jumpToLatestInConversation",
+      "colcoor.listConversationMembers",
+      "colcoor.listStarredMessagesInConversation",
+      "colcoor.listTodoNotesInConversation",
+      "colcoor.newConversation",
+      "colcoor.openConversation",
+      "colcoor.openConversationDrawers",
       "colcoor.openLegalPolicySettings",
       "colcoor.openSettings",
+      "colcoor.openSideChat",
       "colcoor.openSideChatSoundSettings",
+      "colcoor.referenceSelectedMessageInSideChat",
+      "colcoor.referenceSelectedNoteInSideChat",
+      "colcoor.refreshConversationDrawers",
+      "colcoor.refreshConversationTree",
+      "colcoor.refreshConversations",
+      "colcoor.removeMemberFromConversation",
+      "colcoor.renameConversation",
+      "colcoor.resendAssistant",
+      "colcoor.sendMessage",
       "colcoor.setCursorAgentApiKey",
       "colcoor.setupCursorCli",
+      "colcoor.showNotesOnSelectedMessage",
+      "colcoor.signOut",
+      "colcoor.stopGeneration",
+      "colcoor.togglePinnedConversation",
+      "colcoor.toggleStarSelectedMessage",
     ]);
   });
 
   it("flags commands absent from welcome when not excluded", () => {
     const missing = colcoorCommandsMissingFromConversationsWelcome({
       contributes: {
-        commands: [{ command: "colcoor.signIn" }, { command: "colcoor.signOut" }],
+        commands: [{ command: "colcoor.signIn" }, { command: "colcoor.testMissingFromWelcome" }],
         viewsWelcome: [{ view: "colcoor.conversations", contents: "[in](command:colcoor.signIn)" }],
       },
     });
-    expect(missing).toEqual(["colcoor.signOut"]);
+    expect(missing).toEqual(["colcoor.testMissingFromWelcome"]);
   });
 
   it("does not require excluded commands to appear in welcome", () => {

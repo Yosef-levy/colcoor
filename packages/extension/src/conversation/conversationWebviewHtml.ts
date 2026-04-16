@@ -243,6 +243,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .inline-sidechat-msg { margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
     .inline-sidechat-msg:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
     .inline-sidechat-meta { font-size: 0.82em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .inline-sidechat-msg-unread .inline-sidechat-meta { color: var(--vscode-charts-yellow); }
+    .inline-sidechat-unread {
+      display: inline-block;
+      margin-left: 6px;
+      color: var(--vscode-charts-yellow);
+      font-size: 0.75em;
+      line-height: 1;
+      vertical-align: middle;
+    }
     .inline-sidechat .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .inline-sidechat-composer { display: flex; gap: 8px; align-items: center; }
     .inline-sidechat-composer textarea {
@@ -815,6 +824,140 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .legal-policy-strip .policy-lead {
       margin-right: 2px;
     }
+    .search-drawer-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      background: rgba(0, 0, 0, 0.35);
+    }
+    .search-drawer-backdrop.open {
+      display: block;
+    }
+    .search-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(420px, 100vw);
+      max-width: 100%;
+      z-index: 121;
+      background: var(--vscode-sideBar-background);
+      color: var(--vscode-sideBar-foreground);
+      border-left: 1px solid var(--vscode-panel-border);
+      box-shadow: -4px 0 18px rgba(0, 0, 0, 0.18);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.18s ease;
+    }
+    .search-drawer.open {
+      transform: translateX(0);
+    }
+    .search-drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      font-weight: 600;
+    }
+    .search-drawer-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+      flex: 1;
+    }
+    .search-drawer-scopes {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.92em;
+    }
+    .search-drawer-scopes label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .search-drawer-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 0.95em;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+    }
+    .search-drawer-results {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-editor-background);
+      color: var(--vscode-editor-foreground);
+    }
+    .search-drawer-results ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .search-drawer-results li {
+      margin: 0;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--vscode-panel-border);
+      cursor: pointer;
+    }
+    .search-drawer-results li:last-child {
+      border-bottom: none;
+    }
+    .search-drawer-results li:hover,
+    .search-drawer-results li:focus {
+      background: var(--vscode-list-hoverBackground);
+      outline: none;
+    }
+    .search-drawer-results .hit-kind {
+      font-size: 0.78em;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 4px;
+    }
+    .search-drawer-results .hit-title {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .search-drawer-results .hit-snippet {
+      font-size: 0.88em;
+      color: var(--vscode-descriptionForeground);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lists-drawer-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .lists-drawer-tabs .lists-tab {
+      font-family: inherit;
+      font-size: 0.92em;
+      padding: 4px 10px;
+      cursor: pointer;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .lists-drawer-tabs .lists-tab[aria-selected="true"] {
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
   </style>
 </head>
 <body>
@@ -838,7 +981,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <div class="menu-panel" id="menuPanelMessage" role="menu" hidden>
             <button type="button" class="menu-item" role="menuitem" id="btnCopy">Copy message</button>
             <button type="button" class="menu-item" role="menuitem" id="btnToggleStar" title="Star or unstar the selected message">Star</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnStarredDrawer" title="Starred messages in this conversation (slide-in drawer)">Starred</button>
             <button type="button" class="menu-item" role="menuitem" id="btnCopyThread" title="Copy root → selected path as plain text">Copy thread</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnReferenceSideChat" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
             <button type="button" class="menu-item" role="menuitem" id="btnResend">Resend assistant</button>
             <button type="button" class="menu-item" role="menuitem" id="btnJumpTip" title="Select the newest leaf on the default branch">Jump to latest</button>
           </div>
@@ -855,10 +1000,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div class="menu-root">
           <button type="button" class="menu-root-btn" id="menuBtnView" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelView">View</button>
           <div class="menu-panel" id="menuPanelView" role="menu" hidden>
-            <button type="button" class="menu-item" role="menuitem" id="btnStarredDrawer" title="List starred messages in this conversation">Starred</button>
-            <button type="button" class="menu-item" role="menuitem" id="btnDrawers" title="Open the Starred/TODO drawers panel">Drawers</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnOpenSearch" title="Search this conversation, notes, and side chat (also − outside fields)">Search…</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnStarredTodoDrawer" title="Starred messages and TODO notes (slide-in drawer; remembers last tab)">Starred &amp; TODO</button>
             <button type="button" class="menu-item" role="menuitem" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
-            <button type="button" class="menu-item" role="menuitem" id="btnReferenceSideChat" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
           </div>
         </div>
         <div class="menu-root">
@@ -871,6 +1015,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <hr class="menu-sep" role="separator" />
             <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.setupCursorCli">Cursor CLI (agent) setup…</button>
             <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.setCursorAgentApiKey">Cursor API key for agent…</button>
+            <hr class="menu-sep" role="separator" />
+            <button type="button" class="menu-item" role="menuitem" data-colcoor-command="colcoor.signOut">Sign out</button>
           </div>
         </div>
         <div class="menu-root">
@@ -880,6 +1026,67 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           </div>
         </div>
       </div>
+  <div id="searchDrawerBackdrop" class="search-drawer-backdrop" aria-hidden="true"></div>
+  <div
+    id="searchDrawer"
+    class="search-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="searchDrawerTitle"
+    aria-hidden="true"
+  >
+    <div class="search-drawer-header">
+      <span id="searchDrawerTitle">Search</span>
+      <button type="button" id="searchDrawerClose" class="btn-secondary">Close</button>
+    </div>
+    <div class="search-drawer-body">
+      <div class="search-drawer-scopes">
+        <label
+          ><input type="checkbox" id="searchScopeConv" checked /> Conversation (titles &amp; content)</label
+        >
+        <label><input type="checkbox" id="searchScopeNotes" checked /> Notes</label>
+        <label><input type="checkbox" id="searchScopeSidechat" checked /> Side chat</label>
+      </div>
+      <input
+        type="search"
+        id="searchDrawerQuery"
+        class="search-drawer-input"
+        placeholder="Search…"
+        autocomplete="off"
+        aria-label="Search query"
+      />
+      <div class="search-drawer-results" id="searchDrawerResultsWrap">
+        <ul id="searchDrawerResultsList"></ul>
+      </div>
+    </div>
+  </div>
+  <div id="listsDrawerBackdrop" class="search-drawer-backdrop" aria-hidden="true"></div>
+  <div
+    id="listsDrawer"
+    class="search-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="listsDrawerTitle"
+    aria-hidden="true"
+  >
+    <div class="search-drawer-header">
+      <span id="listsDrawerTitle">Starred &amp; TODO</span>
+      <button type="button" id="listsDrawerClose" class="btn-secondary">Close</button>
+    </div>
+    <div class="search-drawer-body">
+      <div class="lists-drawer-tabs">
+        <button type="button" class="lists-tab" id="listsTabStarred" aria-selected="true">Starred</button>
+        <button type="button" class="lists-tab" id="listsTabTodo" aria-selected="false">TODO</button>
+        <button type="button" id="listsDrawerRefresh" class="btn-secondary" title="Reload conversation tree from server">
+          Refresh
+        </button>
+      </div>
+      <div class="search-drawer-results" id="listsDrawerResultsWrap">
+        <ul id="listsDrawerStarredList"></ul>
+        <ul id="listsDrawerTodoList" style="display: none"></ul>
+      </div>
+    </div>
+  </div>
   <div
     id="legalPolicyStrip"
     class="legal-policy-strip hint"
@@ -948,6 +1155,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div id="inlineSideChatList" class="inline-sidechat-list"></div>
         <div class="inline-sidechat-composer" style="flex-shrink:0;">
           <textarea id="inlineSideChatInput" dir="auto" placeholder="Side chat… Shift+Enter for newline, Enter to send."></textarea>
+          <div id="pendingInlineSideChatImages" class="composer-pending-images" style="display:none"></div>
           <button type="button" id="btnInlineSideChatSend" class="btn-secondary">Send</button>
         </div>
       </div>
@@ -957,11 +1165,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     const vscode = acquireVsCodeApi();
     let hasReceivedState = false;
     var pendingSendImages = [];
+    var pendingInlineSideChatImages = [];
     /** After local inline side-chat send: scroll list when host state catches up; do not scroll on passive refresh. */
     var pendingInlineSideChatScrollAfterSend = false;
     var inlineSideChatRowCountWhenSent = 0;
     var inlineSideChatScrollAfterSendTimer = null;
     var prevSideChatPanelOpen = false;
+    var prevConversationIdForSideChatScroll = "";
     function renderPendingConversationImages() {
       var el = document.getElementById("pendingConversationImages");
       if (!el) return;
@@ -997,6 +1207,42 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         el.appendChild(wrap);
       });
     }
+
+    function renderPendingInlineSideChatImages() {
+      var el = document.getElementById("pendingInlineSideChatImages");
+      if (!el) return;
+      el.replaceChildren();
+      if (!pendingInlineSideChatImages.length) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "flex";
+      pendingInlineSideChatImages.forEach(function (item) {
+        var url = item && item.dataUrl ? String(item.dataUrl) : "";
+        if (!url) return;
+        var wrap = document.createElement("div");
+        wrap.className = "pending-thumb-wrap";
+        var im = document.createElement("img");
+        im.className = "pending-thumb";
+        im.alt = "";
+        im.src = url;
+        var rm = document.createElement("button");
+        rm.type = "button";
+        rm.className = "btn-secondary remove-pending";
+        rm.textContent = "×";
+        rm.title = "Remove image";
+        rm.addEventListener("click", function () {
+          pendingInlineSideChatImages = pendingInlineSideChatImages.filter(function (x) {
+            return !x || String(x.dataUrl || "") !== url;
+          });
+          renderPendingInlineSideChatImages();
+          updateInlineSideChatSendEnabled();
+        });
+        wrap.appendChild(im);
+        wrap.appendChild(rm);
+        el.appendChild(wrap);
+      });
+    }
     let state = {
       conversationId: "",
       title: null,
@@ -1017,6 +1263,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       sideChatOpenButtonLabel: "Open side chat",
       sideChatOpenButtonTitle: "Open side chat for this conversation",
       sideChatUnreadCount: 0,
+      sideChatLastReadSeq: 0,
+      viewerUserId: null,
       sideChatVisible: false,
       sideChatMessages: [],
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
@@ -1024,7 +1272,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       pendingUserHtml: null,
       /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
       treeCollapsedIds: {},
+      conversationNotes: [],
+      drawersStarred: [],
+      drawersTodos: [],
     };
+
+    var openColcoorListsDrawer = function (tab) {
+      void tab;
+    };
+    var refreshListsDrawerIfOpen = function () {};
 
     var menubarOpenId = null;
     function closeAllMenus() {
@@ -1424,9 +1680,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
       const addNoteBtn = document.getElementById("btnAddNote");
       const listNotesOnSelectionBtn = document.getElementById("btnListNotesOnSelection");
+      const openSearchBtn = document.getElementById("btnOpenSearch");
       const starredDrawerBtn = document.getElementById("btnStarredDrawer");
       const todoDrawerBtn = document.getElementById("btnTodoDrawer");
-      const drawersBtn = document.getElementById("btnDrawers");
+      const starredTodoDrawerBtn = document.getElementById("btnStarredTodoDrawer");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
       const resendBtn = document.getElementById("btnResend");
       if (
@@ -1440,9 +1697,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         !listNotesOnSelectionBtn
       )
         return;
+      if (openSearchBtn) openSearchBtn.disabled = state.busy;
       if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
       if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
-      if (drawersBtn) drawersBtn.disabled = state.busy;
+      if (starredTodoDrawerBtn) starredTodoDrawerBtn.disabled = state.busy;
       if (openSideChatBtn) {
         openSideChatBtn.disabled = state.busy;
         openSideChatBtn.textContent =
@@ -1790,6 +2048,34 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       scrollThreadToBottom();
     }
 
+    function inlineSideChatAuthorLabel(m) {
+      var k = m && m.kind ? String(m.kind) : "user";
+      if (k === "system_join") return "System · join";
+      if (k === "system_leave") return "System · leave";
+      if (k === "user") {
+        var dn = m.author_display_name && String(m.author_display_name).trim();
+        return dn ? dn : "Member";
+      }
+      return k;
+    }
+
+    /** Unread dot is for others’ messages only — own user rows are never unread for the viewer. */
+    function inlineSideChatMessageUnreadForViewer(m, seqNum, lr) {
+      if (!(typeof seqNum === "number" && seqNum > lr)) return false;
+      var k = m && m.kind ? String(m.kind) : "user";
+      if (k !== "user") return true;
+      var vid =
+        state.viewerUserId && String(state.viewerUserId).trim()
+          ? String(state.viewerUserId).trim()
+          : "";
+      var aid =
+        m.author_user_id && String(m.author_user_id).trim()
+          ? String(m.author_user_id).trim()
+          : "";
+      if (vid && aid && aid === vid) return false;
+      return true;
+    }
+
     function renderInlineSideChat() {
       var col = document.getElementById("colSideChat");
       var wrap = document.getElementById("inlineSideChat");
@@ -1818,16 +2104,28 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         maybeScrollInlineSideChatAfterLocalSend();
         return;
       }
+      var lrRaw = state.sideChatLastReadSeq;
+      var lr =
+        typeof lrRaw === "number" && Number.isFinite(lrRaw) ? Math.max(0, Math.floor(lrRaw)) : 0;
       var html = "";
       for (var i = 0; i < rows.length; i++) {
         var m = rows[i] || {};
         var bodyHtml = typeof m.rendered_body_html === "string" ? m.rendered_body_html : esc(String(m.body || ""));
+        var seqNum = typeof m.seq === "number" && Number.isFinite(m.seq) ? m.seq : i + 1;
+        var unread = inlineSideChatMessageUnreadForViewer(m, seqNum, lr);
         html +=
-          '<div class="inline-sidechat-msg">' +
+          '<div class="inline-sidechat-msg' +
+          (unread ? " inline-sidechat-msg-unread" : "") +
+          '" data-sidechat-seq="' +
+          esc(String(seqNum)) +
+          '" tabindex="-1">' +
           '<div class="inline-sidechat-meta">#' +
-          esc(String(m.seq || i + 1)) +
+          esc(String(seqNum)) +
           " · " +
-          esc(String(m.kind || "user")) +
+          esc(inlineSideChatAuthorLabel(m)) +
+          (unread
+            ? '<span class="inline-sidechat-unread" title="Unread">●</span>'
+            : "") +
           "</div>" +
           '<div class="body md" dir="auto">' +
           bodyHtml +
@@ -1835,6 +2133,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       list.innerHTML = html;
       maybeScrollInlineSideChatAfterLocalSend();
+    }
+
+    function scrollInlineSideChatToSeq(seq) {
+      var n = typeof seq === "number" && Number.isFinite(seq) ? Math.floor(seq) : 0;
+      if (n <= 0) return;
+      var list = document.getElementById("inlineSideChatList");
+      if (!list) return;
+      var row = list.querySelector('[data-sidechat-seq="' + String(n) + '"]');
+      if (row && row.scrollIntoView) {
+        try {
+          row.scrollIntoView({ block: "nearest" });
+        } catch (e1) {
+          row.scrollIntoView();
+        }
+      }
     }
 
     function updateComposerSendEnabled() {
@@ -1849,6 +2162,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       var hasText = ta && String(ta.value || "").trim().length > 0;
       var has = hasText || pendingSendImages.length > 0;
+      sendBtn.disabled = !has;
+      sendBtn.title = has
+        ? ""
+        : "Type a message or paste an image. Shift+Enter for newline, Enter to send.";
+    }
+
+    function updateInlineSideChatSendEnabled() {
+      var sendBtn = document.getElementById("btnInlineSideChatSend");
+      var ta = document.getElementById("inlineSideChatInput");
+      if (!sendBtn) return;
+      var hasText = ta && String(ta.value || "").trim().length > 0;
+      var has = hasText || pendingInlineSideChatImages.length > 0;
       sendBtn.disabled = !has;
       sendBtn.title = has
         ? ""
@@ -2030,6 +2355,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             updateComposerSendEnabled();
           }
         }
+        updateInlineSideChatSendEnabled();
         if (stopBtn) {
           stopBtn.disabled = !state.busy;
           stopBtn.title = state.busy ? "Cancel the in-progress assistant reply." : "";
@@ -2058,6 +2384,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           if (compH != null) ta.style.height = compH + "px";
         }
         clampSelectionIfPrivateHidden();
+        var cidScroll = typeof state.conversationId === "string" ? state.conversationId : "";
+        if (cidScroll !== prevConversationIdForSideChatScroll) {
+          prevConversationIdForSideChatScroll = cidScroll;
+          prevSideChatPanelOpen = false;
+        }
         renderTree();
         renderThread();
         renderInlineSideChat();
@@ -2072,6 +2403,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           scrollInlineSideChatToFirstUnread();
         }
         prevSideChatPanelOpen = nowSideOpen;
+        try {
+          refreshListsDrawerIfOpen();
+        } catch (eR) {}
       } catch (e) {
         const msg = e && e.message ? String(e.message) : String(e);
         const errEl = document.getElementById("err");
@@ -2139,8 +2473,416 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       });
     })();
 
+    (function wireSearchDrawer() {
+      var backdrop = document.getElementById("searchDrawerBackdrop");
+      var drawer = document.getElementById("searchDrawer");
+      var closeBtn = document.getElementById("searchDrawerClose");
+      var queryEl = document.getElementById("searchDrawerQuery");
+      var listEl = document.getElementById("searchDrawerResultsList");
+      var scopeConv = document.getElementById("searchScopeConv");
+      var scopeNotes = document.getElementById("searchScopeNotes");
+      var scopeSc = document.getElementById("searchScopeSidechat");
+      var openBtn = document.getElementById("btnOpenSearch");
+      if (!backdrop || !drawer || !closeBtn || !queryEl || !listEl || !scopeConv || !scopeNotes || !scopeSc) {
+        return;
+      }
+      var LS_CONV = "colcoor.search.scope.conversation";
+      var LS_NOTES = "colcoor.search.scope.notes";
+      var LS_SC = "colcoor.search.scope.sidechat";
+      var searchOpen = false;
+      var searchTimer = null;
+      var maxHits = 80;
+
+      function readBool(lsKey, defVal) {
+        try {
+          var v = localStorage.getItem(lsKey);
+          if (v === null) return defVal;
+          return v === "1" || v === "true";
+        } catch (e0) {
+          return defVal;
+        }
+      }
+      function writeBool(lsKey, b) {
+        try {
+          localStorage.setItem(lsKey, b ? "1" : "0");
+        } catch (e1) {}
+      }
+      function loadScopes() {
+        scopeConv.checked = readBool(LS_CONV, true);
+        scopeNotes.checked = readBool(LS_NOTES, true);
+        scopeSc.checked = readBool(LS_SC, true);
+      }
+      function stripHtml(s) {
+        return String(s || "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\\s+/g, " ")
+          .trim();
+      }
+      function openSearch() {
+        try {
+          document.dispatchEvent(new Event("colcoor-close-lists-drawer"));
+        } catch (eL) {}
+        searchOpen = true;
+        backdrop.classList.add("open");
+        drawer.classList.add("open");
+        backdrop.setAttribute("aria-hidden", "false");
+        drawer.setAttribute("aria-hidden", "false");
+        closeAllMenus();
+        loadScopes();
+        scheduleSearch();
+        setTimeout(function () {
+          try {
+            queryEl.focus();
+            queryEl.select();
+          } catch (e2) {}
+        }, 0);
+      }
+      function closeSearch() {
+        searchOpen = false;
+        backdrop.classList.remove("open");
+        drawer.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+        drawer.setAttribute("aria-hidden", "true");
+        listEl.replaceChildren();
+      }
+      function appendHint(text) {
+        var li = document.createElement("li");
+        li.className = "empty";
+        li.textContent = text;
+        listEl.appendChild(li);
+      }
+      function appendHit(kindLabel, title, snippet, attrs) {
+        var li = document.createElement("li");
+        li.setAttribute("role", "button");
+        li.setAttribute("tabindex", "0");
+        for (var ak in attrs) {
+          if (Object.prototype.hasOwnProperty.call(attrs, ak)) {
+            li.setAttribute(ak, attrs[ak]);
+          }
+        }
+        li.innerHTML =
+          '<div class="hit-kind">' +
+          esc(kindLabel) +
+          "</div>" +
+          '<div class="hit-title">' +
+          esc(title) +
+          "</div>" +
+          '<div class="hit-snippet">' +
+          esc(snippet) +
+          "</div>";
+        listEl.appendChild(li);
+      }
+      function runSearch() {
+        listEl.replaceChildren();
+        var raw = String(queryEl.value || "").trim();
+        if (!raw) {
+          appendHint("Type to search, or adjust scopes above.");
+          return;
+        }
+        var q = raw.toLowerCase();
+        var count = 0;
+        var anyScope =
+          (scopeConv.checked ? 1 : 0) + (scopeNotes.checked ? 1 : 0) + (scopeSc.checked ? 1 : 0);
+        if (!anyScope) {
+          appendHint("Enable at least one search scope.");
+          return;
+        }
+        if (scopeConv.checked) {
+          var evs = state.events || [];
+          for (var i = 0; i < evs.length && count < maxHits; i++) {
+            var ev = evs[i] || {};
+            var eid = ev.id && String(ev.id).trim();
+            if (!eid) continue;
+            var dispTitle = eventDisplayTitle(ev);
+            var cp =
+              ev.checkpoint_label && String(ev.checkpoint_label).trim()
+                ? String(ev.checkpoint_label).trim()
+                : "";
+            var ct = (ev.content_text && String(ev.content_text)) || "";
+            var hay = (dispTitle + " " + cp + " " + ct).toLowerCase();
+            if (hay.indexOf(q) === -1) continue;
+            var sn = snippet(ev);
+            var hitTitle = dispTitle || cp || treeKindLabel(ev.kind) + " · " + sn;
+            appendHit("Conversation", hitTitle, sn, {
+              "data-hit-kind": "tree",
+              "data-event-id": eid,
+            });
+            count++;
+          }
+        }
+        if (scopeNotes.checked) {
+          var notes = state.conversationNotes || [];
+          for (var j = 0; j < notes.length && count < maxHits; j++) {
+            var n = notes[j] || {};
+            var nid = n.id && String(n.id).trim();
+            var neid = n.event_id && String(n.event_id).trim();
+            if (!nid || !neid) continue;
+            var nc = (n.content && String(n.content)) || "";
+            if (nc.toLowerCase().indexOf(q) === -1) continue;
+            var nSnippet = nc.length > 120 ? nc.slice(0, 120) + "…" : nc;
+            appendHit("Note", "Note on message " + neid.slice(0, 8) + "…", nSnippet, {
+              "data-hit-kind": "note",
+              "data-event-id": neid,
+              "data-note-id": nid,
+            });
+            count++;
+          }
+        }
+        if (scopeSc.checked) {
+          var rows = state.sideChatMessages || [];
+          for (var k = 0; k < rows.length && count < maxHits; k++) {
+            var m = rows[k] || {};
+            var seqNum = typeof m.seq === "number" && Number.isFinite(m.seq) ? m.seq : k + 1;
+            var bodyPlain = (m.body && String(m.body)) || "";
+            var rend = typeof m.rendered_body_html === "string" ? m.rendered_body_html : "";
+            var author = (m.author_display_name && String(m.author_display_name).trim()) || "";
+            var haySc = (bodyPlain + " " + stripHtml(rend) + " " + author).toLowerCase();
+            if (haySc.indexOf(q) === -1) continue;
+            var snSc = bodyPlain.trim() ? bodyPlain.trim().replace(/\\s+/g, " ") : stripHtml(rend);
+            if (snSc.length > 120) snSc = snSc.slice(0, 120) + "…";
+            appendHit("Side chat", "#" + String(seqNum) + " · " + (author || inlineSideChatAuthorLabel(m)), snSc, {
+              "data-hit-kind": "sidechat",
+              "data-seq": String(seqNum),
+            });
+            count++;
+          }
+        }
+        if (!count) {
+          appendHint("No matches.");
+        }
+      }
+      function scheduleSearch() {
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(function () {
+          searchTimer = null;
+          runSearch();
+        }, 120);
+      }
+      loadScopes();
+      scopeConv.addEventListener("change", function () {
+        writeBool(LS_CONV, scopeConv.checked);
+        scheduleSearch();
+      });
+      scopeNotes.addEventListener("change", function () {
+        writeBool(LS_NOTES, scopeNotes.checked);
+        scheduleSearch();
+      });
+      scopeSc.addEventListener("change", function () {
+        writeBool(LS_SC, scopeSc.checked);
+        scheduleSearch();
+      });
+      queryEl.addEventListener("input", scheduleSearch);
+      closeBtn.addEventListener("click", function () {
+        closeSearch();
+      });
+      backdrop.addEventListener("click", function () {
+        closeSearch();
+      });
+      document.addEventListener(
+        "keydown",
+        function (ev) {
+          if (!searchOpen) return;
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            closeSearch();
+          }
+        },
+        true,
+      );
+      document.addEventListener(
+        "keydown",
+        function (ev) {
+          if (searchOpen) return;
+          if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+          if (ev.key !== "-" && ev.code !== "Minus") return;
+          var t = ev.target;
+          if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+          ev.preventDefault();
+          openSearch();
+        },
+        true,
+      );
+      listEl.addEventListener("click", function (ev) {
+        var li = ev.target.closest && ev.target.closest("li[data-hit-kind]");
+        if (!li) return;
+        var hk = li.getAttribute("data-hit-kind");
+        if (hk === "tree") {
+          var tid = li.getAttribute("data-event-id");
+          if (tid) vscode.postMessage({ type: "searchHit", target: { kind: "tree", eventId: tid } });
+        } else if (hk === "note") {
+          var ne = li.getAttribute("data-event-id");
+          var nn = li.getAttribute("data-note-id");
+          if (ne && nn) {
+            vscode.postMessage({ type: "searchHit", target: { kind: "note", eventId: ne, noteId: nn } });
+          }
+        } else if (hk === "sidechat") {
+          var sq = parseInt(li.getAttribute("data-seq"), 10);
+          if (sq > 0) {
+            vscode.postMessage({ type: "searchHit", target: { kind: "sidechat", seq: sq } });
+          }
+        }
+        closeSearch();
+      });
+      if (openBtn) {
+        openBtn.addEventListener("click", function () {
+          openSearch();
+        });
+      }
+      document.addEventListener(
+        "colcoor-close-search-drawer",
+        function () {
+          if (searchOpen) closeSearch();
+        },
+        false,
+      );
+    })();
+
+    (function wireListsDrawer() {
+      var backdrop = document.getElementById("listsDrawerBackdrop");
+      var drawer = document.getElementById("listsDrawer");
+      var closeBtn = document.getElementById("listsDrawerClose");
+      var tabStarred = document.getElementById("listsTabStarred");
+      var tabTodo = document.getElementById("listsTabTodo");
+      var btnRefresh = document.getElementById("listsDrawerRefresh");
+      var ulStarred = document.getElementById("listsDrawerStarredList");
+      var ulTodo = document.getElementById("listsDrawerTodoList");
+      if (!backdrop || !drawer || !closeBtn || !tabStarred || !tabTodo || !ulStarred || !ulTodo) {
+        return;
+      }
+      var LS_TAB = "colcoor.listsDrawer.tab";
+      var listsOpen = false;
+      var listsTab = "starred";
+
+      function showListsTab(which) {
+        listsTab = which === "todo" ? "todo" : "starred";
+        try {
+          localStorage.setItem(LS_TAB, listsTab);
+        } catch (e0) {}
+        tabStarred.setAttribute("aria-selected", listsTab === "starred" ? "true" : "false");
+        tabTodo.setAttribute("aria-selected", listsTab === "todo" ? "true" : "false");
+        ulStarred.style.display = listsTab === "starred" ? "block" : "none";
+        ulTodo.style.display = listsTab === "todo" ? "block" : "none";
+      }
+
+      function renderListsRows() {
+        ulStarred.replaceChildren();
+        ulTodo.replaceChildren();
+        var star = state.drawersStarred || [];
+        var todos = state.drawersTodos || [];
+        function fill(ul, rows, emptyHint) {
+          if (!rows.length) {
+            var li0 = document.createElement("li");
+            li0.className = "empty";
+            li0.textContent = emptyHint;
+            ul.appendChild(li0);
+            return;
+          }
+          for (var i = 0; i < rows.length; i++) {
+            var r = rows[i] || {};
+            var eid = r.eventId != null ? String(r.eventId).trim() : "";
+            if (!eid) continue;
+            var lab = r.label != null ? String(r.label) : "";
+            var li = document.createElement("li");
+            li.setAttribute("role", "button");
+            li.setAttribute("tabindex", "0");
+            li.setAttribute("data-event-id", eid);
+            li.innerHTML = '<div class="hit-title">' + esc(lab) + "</div>";
+            ul.appendChild(li);
+          }
+        }
+        fill(ulStarred, star, "(no starred messages)");
+        fill(ulTodo, todos, "(no TODO notes)");
+      }
+
+      function closeLists() {
+        listsOpen = false;
+        backdrop.classList.remove("open");
+        drawer.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+        drawer.setAttribute("aria-hidden", "true");
+      }
+
+      function openLists(tab) {
+        try {
+          document.dispatchEvent(new Event("colcoor-close-search-drawer"));
+        } catch (eS) {}
+        listsOpen = true;
+        backdrop.classList.add("open");
+        drawer.classList.add("open");
+        backdrop.setAttribute("aria-hidden", "false");
+        drawer.setAttribute("aria-hidden", "false");
+        closeAllMenus();
+        showListsTab(tab === "todo" ? "todo" : "starred");
+        renderListsRows();
+      }
+
+      openColcoorListsDrawer = function (t) {
+        openLists(t);
+      };
+      refreshListsDrawerIfOpen = function () {
+        if (!listsOpen) return;
+        renderListsRows();
+      };
+
+      document.addEventListener(
+        "colcoor-close-lists-drawer",
+        function () {
+          if (listsOpen) closeLists();
+        },
+        false,
+      );
+
+      closeBtn.addEventListener("click", closeLists);
+      backdrop.addEventListener("click", closeLists);
+      tabStarred.addEventListener("click", function () {
+        if (!listsOpen) return;
+        showListsTab("starred");
+      });
+      tabTodo.addEventListener("click", function () {
+        if (!listsOpen) return;
+        showListsTab("todo");
+      });
+      if (btnRefresh) {
+        btnRefresh.addEventListener("click", function () {
+          vscode.postMessage({ type: "refresh" });
+        });
+      }
+
+      function onListClick(ev) {
+        var li = ev.target.closest && ev.target.closest("li[data-event-id]");
+        if (!li || li.classList.contains("empty")) return;
+        var eid = li.getAttribute("data-event-id");
+        if (!eid) return;
+        closeLists();
+        vscode.postMessage({ type: "searchHit", target: { kind: "tree", eventId: eid } });
+      }
+      ulStarred.addEventListener("click", onListClick);
+      ulTodo.addEventListener("click", onListClick);
+
+      document.addEventListener(
+        "keydown",
+        function (ev) {
+          if (!listsOpen) return;
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            closeLists();
+          }
+        },
+        true,
+      );
+    })();
+
     window.addEventListener("message", (event) => {
       const m = event.data;
+      if (m && m.type === "focusSideChatSeq") {
+        var fs = typeof m.seq === "number" && Number.isFinite(m.seq) ? Math.floor(m.seq) : 0;
+        if (fs > 0) {
+          setTimeout(function () {
+            scrollInlineSideChatToSeq(fs);
+          }, 0);
+        }
+        return;
+      }
       if (m && m.type === "state") {
         hasReceivedState = true;
         var collapsedFromHost = {};
@@ -2151,11 +2893,20 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           ...m,
           streamingHtml: null,
           treeCollapsedIds: collapsedFromHost,
+          conversationNotes: Array.isArray(m.conversationNotes) ? m.conversationNotes : [],
+          drawersStarred: Array.isArray(m.drawersStarred) ? m.drawersStarred : [],
+          drawersTodos: Array.isArray(m.drawersTodos) ? m.drawersTodos : [],
           legalPolicyLinks: Array.isArray(m.legalPolicyLinks) ? m.legalPolicyLinks : [],
           sideChatUnreadCount:
             typeof m.sideChatUnreadCount === "number" && Number.isFinite(m.sideChatUnreadCount)
               ? Math.max(0, Math.floor(m.sideChatUnreadCount))
               : 0,
+          sideChatLastReadSeq:
+            typeof m.sideChatLastReadSeq === "number" && Number.isFinite(m.sideChatLastReadSeq)
+              ? Math.max(0, Math.floor(m.sideChatLastReadSeq))
+              : 0,
+          viewerUserId:
+            typeof m.viewerUserId === "string" && m.viewerUserId.trim() ? m.viewerUserId.trim() : null,
         };
         render();
         return;
@@ -2263,13 +3014,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
 
     document.getElementById("btnStarredDrawer").addEventListener("click", () => {
-      vscode.postMessage({ type: "openStarredDrawer" });
+      closeAllMenus();
+      openColcoorListsDrawer("starred");
     });
     document.getElementById("btnTodoDrawer").addEventListener("click", () => {
-      vscode.postMessage({ type: "openTodoDrawer" });
+      closeAllMenus();
+      openColcoorListsDrawer("todo");
     });
-    document.getElementById("btnDrawers").addEventListener("click", () => {
-      vscode.postMessage({ type: "openDrawers" });
+    document.getElementById("btnStarredTodoDrawer").addEventListener("click", () => {
+      closeAllMenus();
+      var pref = "starred";
+      try {
+        var v = localStorage.getItem("colcoor.listsDrawer.tab");
+        if (v === "todo" || v === "starred") pref = v;
+      } catch (eT) {}
+      openColcoorListsDrawer(pref);
     });
     document.getElementById("btnOpenSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "openSideChat" });
@@ -2284,10 +3043,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var ta = document.getElementById("inlineSideChatInput");
       var text = ta && ta.value ? String(ta.value) : "";
       var trimmed = text.trimEnd();
-      if (!String(trimmed).trim()) return;
+      var imgs = pendingInlineSideChatImages.slice();
+      if (!String(trimmed).trim() && !imgs.length) return;
       markInlineSideChatScrollAfterLocalSend();
-      vscode.postMessage({ type: "sendSideChat", text: trimmed });
+      var payload = { type: "sendSideChat", text: trimmed };
+      if (imgs.length) payload.images = imgs;
+      vscode.postMessage(payload);
       if (ta) ta.value = "";
+      pendingInlineSideChatImages = [];
+      renderPendingInlineSideChatImages();
+      updateInlineSideChatSendEnabled();
       scheduleComposerFocus(ta);
     });
     wireMenubar();
@@ -2376,11 +3141,53 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (sb) sb.click();
     });
 
+    document.getElementById("inlineSideChatInput").addEventListener("input", function () {
+      updateInlineSideChatSendEnabled();
+    });
+
+    document.getElementById("inlineSideChatInput").addEventListener("paste", function (ev) {
+      var cd = ev.clipboardData;
+      if (!cd || !cd.items || !cd.items.length) return;
+      var files = [];
+      for (var i = 0; i < cd.items.length; i++) {
+        var it = cd.items[i];
+        if (it.kind === "file" && String(it.type || "").indexOf("image/") === 0) {
+          var f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (!files.length) return;
+      ev.preventDefault();
+      var ta = document.getElementById("inlineSideChatInput");
+      var plain = cd.getData("text/plain") || "";
+      if (plain && ta) {
+        var start = typeof ta.selectionStart === "number" ? ta.selectionStart : (ta.value || "").length;
+        var end = typeof ta.selectionEnd === "number" ? ta.selectionEnd : start;
+        var v = ta.value || "";
+        ta.value = v.slice(0, start) + plain + v.slice(end);
+        var pos = start + plain.length;
+        try {
+          ta.setSelectionRange(pos, pos);
+        } catch {}
+      }
+      files.forEach(function (blob) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          if (typeof fr.result === "string") {
+            pendingInlineSideChatImages.push({ dataUrl: fr.result });
+            renderPendingInlineSideChatImages();
+            updateInlineSideChatSendEnabled();
+          }
+        };
+        fr.readAsDataURL(blob);
+      });
+    });
+
     document.getElementById("inlineSideChatInput").addEventListener("keydown", function (e) {
       if (!shouldSendOnEnter(e)) return;
       var ta = document.getElementById("inlineSideChatInput");
       var raw = ta && ta.value ? String(ta.value) : "";
-      if (!String(raw).trim()) return;
+      if (!String(raw).trim() && !pendingInlineSideChatImages.length) return;
       e.preventDefault();
       var sb = document.getElementById("btnInlineSideChatSend");
       if (sb) sb.click();

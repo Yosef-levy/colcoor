@@ -156,16 +156,17 @@ describe("package.json Colcoor contributions", () => {
     expect(new Set(cmds).size).toBe(cmds.length);
   });
 
-  it("includes Sign out, Colcoor menu, and Help links for discoverability", () => {
+  it("uses a minimal logged-out conversations welcome (sign in, menu, help, toggle)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
     };
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Sign out](command:colcoor.signOut)");
+    expect(contents).toContain("[Sign in](command:colcoor.signIn)");
     expect(contents).toContain("[Colcoor menu…](command:colcoor.showColcoorMenu)");
     expect(contents).toContain("[Help…](command:colcoor.openAbout)");
+    expect(contents).not.toContain("[Sign out](command:colcoor.signOut)");
     expect(contents).not.toContain("command:colcoor.openLegalPolicySettings");
     expect(contents).not.toContain("command:colcoor.openSideChatSoundSettings");
     expect(contents).not.toContain("[About](command:colcoor.openAbout)");
@@ -201,46 +202,37 @@ describe("package.json Colcoor contributions", () => {
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
     expect(contents).toContain("[Toggle sidebar](command:colcoor.toggleConversationsSidebar)");
-    expect(contents).toContain("[Refresh conversation tree](command:colcoor.refreshConversationTree)");
+    expect(contents).not.toContain("command:colcoor.refreshConversationTree");
   });
 
-  it("links send message and stop generation from conversations welcome ([ui-features.md] §9)", () => {
+  it("does not duplicate palette-only conversation commands in the minimal welcome", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
     };
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Send message…](command:colcoor.sendMessage)");
-    expect(contents).toContain("[Stop assistant generation](command:colcoor.stopGeneration)");
-  });
-
-  it("links jump, resend, and copy selection from conversations welcome ([ui-features.md] §6–§9)", () => {
-    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Jump to latest…](command:colcoor.jumpToLatestInConversation)");
+    expect(contents).not.toContain("command:colcoor.sendMessage");
+    expect(contents).not.toContain("command:colcoor.stopGeneration");
+    expect(contents).not.toContain("command:colcoor.jumpToLatestInConversation");
     expect(contents).not.toContain("command:colcoor.continueFromHere");
-    expect(contents).toContain("[Resend assistant…](command:colcoor.resendAssistant)");
-    expect(contents).toContain("[Copy selected message…](command:colcoor.copySelectedMessage)");
+    expect(contents).not.toContain("command:colcoor.resendAssistant");
+    expect(contents).not.toContain("command:colcoor.copySelectedMessage");
   });
 
-  it("links rename, pin/unpin, and toggle star from conversations welcome ([ui-features.md] §4 §7 §12)", () => {
+  it("does not duplicate rename / pin / star welcome links (use Colcoor menu or open conversation)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
     };
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Rename conversation…](command:colcoor.renameConversation)");
-    expect(contents).toContain("[Pin / unpin conversation…](command:colcoor.togglePinnedConversation)");
-    expect(contents).toContain("[Toggle star on selected message…](command:colcoor.toggleStarSelectedMessage)");
+    expect(contents).not.toContain("command:colcoor.renameConversation");
+    expect(contents).not.toContain("command:colcoor.togglePinnedConversation");
+    expect(contents).not.toContain("command:colcoor.toggleStarSelectedMessage");
   });
 
-  it("links show members and refresh drawers from conversations welcome without copy ID ([ui-features.md] §11 §12)", () => {
+  it("does not duplicate members / drawers / notes / side-chat reference links in the welcome", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
@@ -248,33 +240,24 @@ describe("package.json Colcoor contributions", () => {
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
     expect(contents).not.toContain("command:colcoor.copyConversationId");
-    expect(contents).toContain("[Show members…](command:colcoor.listConversationMembers)");
-    expect(contents).toContain("[Refresh conversation drawers](command:colcoor.refreshConversationDrawers)");
+    expect(contents).not.toContain("command:colcoor.listConversationMembers");
+    expect(contents).not.toContain("command:colcoor.refreshConversationDrawers");
+    expect(contents).not.toContain("command:colcoor.addNoteToSelectedMessage");
+    expect(contents).not.toContain("command:colcoor.showNotesOnSelectedMessage");
+    expect(contents).not.toContain("command:colcoor.referenceSelectedMessageInSideChat");
+    expect(contents).not.toContain("command:colcoor.referenceSelectedNoteInSideChat");
   });
 
-  it("links notes and side-chat reference commands from conversations welcome ([ui-features.md] §8 §10)", () => {
+  it("does not link member mutations or delete from the minimal welcome", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as {
       contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
     };
     const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
     const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Add note…](command:colcoor.addNoteToSelectedMessage)");
-    expect(contents).toContain("[List notes on selection…](command:colcoor.showNotesOnSelectedMessage)");
-    expect(contents).toContain("[Reference message in side chat…](command:colcoor.referenceSelectedMessageInSideChat)");
-    expect(contents).toContain("[Reference note in side chat…](command:colcoor.referenceSelectedNoteInSideChat)");
-  });
-
-  it("links member mutation commands from conversations welcome but not delete ([ui-features.md] §12)", () => {
-    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Add member…](command:colcoor.addConversationMember)");
-    expect(contents).toContain("[Change member role…](command:colcoor.changeMemberRole)");
-    expect(contents).toContain("[Remove member…](command:colcoor.removeMemberFromConversation)");
+    expect(contents).not.toContain("command:colcoor.addConversationMember");
+    expect(contents).not.toContain("command:colcoor.changeMemberRole");
+    expect(contents).not.toContain("command:colcoor.removeMemberFromConversation");
     expect(contents).not.toContain("command:colcoor.deleteConversation");
   });
 

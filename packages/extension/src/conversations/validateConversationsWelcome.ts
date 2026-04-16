@@ -38,20 +38,46 @@ export function conversationsWelcomeContents(
 }
 
 /**
- * Contributed `colcoor.*` commands that must not appear as welcome `command:` links
- * (destructive actions, copy-id, palette-only anchors, or entries reachable from
- * {@link colcoor.showColcoorMenu} instead of duplicating links here).
+ * Contributed `colcoor.*` commands not linked from the minimal conversations `viewsWelcome`
+ * (logged-out strip: Sign in, Colcoor menu, Help, Toggle sidebar). Everything else is
+ * reachable from the Command Palette, conversation UI, row ⋯ menu, or **Colcoor menu…**.
  */
 export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
-  "colcoor.deleteConversation",
-  "colcoor.copyConversationId",
+  "colcoor.addConversationMember",
+  "colcoor.addNoteToSelectedMessage",
+  "colcoor.changeMemberRole",
   "colcoor.continueFromHere",
+  "colcoor.copyConversationId",
+  "colcoor.copySelectedMessage",
+  "colcoor.deleteConversation",
   "colcoor.editProfile",
-  "colcoor.openSettings",
+  "colcoor.jumpToLatestInConversation",
+  "colcoor.listConversationMembers",
+  "colcoor.listStarredMessagesInConversation",
+  "colcoor.listTodoNotesInConversation",
+  "colcoor.newConversation",
+  "colcoor.openConversation",
+  "colcoor.openConversationDrawers",
   "colcoor.openLegalPolicySettings",
+  "colcoor.openSettings",
+  "colcoor.openSideChat",
   "colcoor.openSideChatSoundSettings",
-  "colcoor.setupCursorCli",
+  "colcoor.referenceSelectedMessageInSideChat",
+  "colcoor.referenceSelectedNoteInSideChat",
+  "colcoor.refreshConversationDrawers",
+  "colcoor.refreshConversationTree",
+  "colcoor.refreshConversations",
+  "colcoor.removeMemberFromConversation",
+  "colcoor.renameConversation",
+  "colcoor.resendAssistant",
+  "colcoor.sendMessage",
   "colcoor.setCursorAgentApiKey",
+  "colcoor.setupCursorCli",
+  "colcoor.showNotesOnSelectedMessage",
+  "colcoor.signOut",
+  "colcoor.stopGeneration",
+  "colcoor.togglePinnedConversation",
+  "colcoor.toggleStarSelectedMessage",
 ]);
 
 /**

@@ -83,6 +83,16 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("maybeScrollInlineSideChatAfterLocalSend();");
   });
 
+  it("supports paste-image send flow in inline side-chat composer", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="pendingInlineSideChatImages"');
+    expect(html).toContain("pendingInlineSideChatImages = [];");
+    expect(html).toContain("function renderPendingInlineSideChatImages()");
+    expect(html).toContain("function updateInlineSideChatSendEnabled()");
+    expect(html).toContain('getElementById("inlineSideChatInput").addEventListener("paste"');
+    expect(html).toContain("if (imgs.length) payload.images = imgs;");
+  });
+
   it("scrolls inline side-chat to first unread on open using sideChatUnreadCount", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("sideChatUnreadCount: 0");
@@ -90,6 +100,33 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("prevSideChatPanelOpen");
     expect(html).toContain("scrollInlineSideChatToFirstUnread();");
     expect(html).toContain("m.sideChatUnreadCount");
+  });
+
+  it("labels inline side-chat rows with author display name and unread marker vs sideChatLastReadSeq", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function inlineSideChatAuthorLabel(m)");
+    expect(html).toContain("function inlineSideChatMessageUnreadForViewer(m, seqNum, lr)");
+    expect(html).toContain("inline-sidechat-msg-unread");
+    expect(html).toContain("inline-sidechat-unread");
+    expect(html).toContain("sideChatLastReadSeq: 0");
+    expect(html).toContain("viewerUserId: null");
+    expect(html).toContain("m.sideChatLastReadSeq");
+    expect(html).toContain("m.viewerUserId");
+    expect(html).toContain("prevConversationIdForSideChatScroll");
+  });
+
+  it("exposes conversation search drawer, scopes, and side-chat row seq for scroll-to-hit", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnOpenSearch"');
+    expect(html).toContain("Search…");
+    expect(html).toContain('id="searchDrawer"');
+    expect(html).toContain("wireSearchDrawer");
+    expect(html).toContain("conversationNotes: []");
+    expect(html).toContain("conversationNotes: Array.isArray(m.conversationNotes)");
+    expect(html).toContain("data-sidechat-seq=");
+    expect(html).toContain("function scrollInlineSideChatToSeq(seq)");
+    expect(html).toContain('m.type === "focusSideChatSeq"');
+    expect(html).toContain('type: "searchHit"');
   });
 
   it("includes optional composer checkpoint label field and send wiring ([ui-features.md] §8)", () => {
@@ -222,6 +259,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="menuBtnAccount"');
     expect(html).toContain('id="menuBtnHelp"');
     expect(html).toContain('data-colcoor-command="colcoor.editProfile"');
+    expect(html).toContain('data-colcoor-command="colcoor.signOut"');
     expect(html).toContain('data-conv-action="openMembers"');
     expect(html).toContain('vscode.postMessage({ type: "executeColcoorCommand", command: cmd });');
     expect(html).toContain('vscode.postMessage({ type: "openHelp" });');
@@ -244,9 +282,11 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("listNotesOnSelectionBtn.disabled = true");
   });
 
-  it("includes Reference in side chat detail action wiring", () => {
+  it("includes Reference in side chat under the Message menu (not View)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnReferenceSideChat"');
+    expect(html).toMatch(/id="menuPanelMessage"[\s\S]*?id="btnReferenceSideChat"/);
+    expect(html).not.toMatch(/id="menuPanelView"[\s\S]*?id="btnReferenceSideChat"/);
     expect(html).toContain('refSideChatBtn.disabled = state.busy;');
     expect(html).toContain('vscode.postMessage({ type: "referenceInSideChat" });');
   });
@@ -258,17 +298,25 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "referenceNoteInSideChat" });');
   });
 
-  it("includes Starred, TODO, and general Drawers quick actions", () => {
+  it("places Starred under Message, TODO notes under Note, Starred & TODO under View (slide-in lists drawer)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnStarredDrawer"');
+    expect(html).toMatch(/id="menuPanelMessage"[\s\S]*?id="btnStarredDrawer"/);
+    expect(html).not.toMatch(/id="menuPanelView"[\s\S]*?id="btnStarredDrawer"/);
     expect(html).toContain('id="btnTodoDrawer"');
-    expect(html).toContain('id="btnDrawers"');
+    expect(html).toMatch(/id="menuPanelNote"[\s\S]*?id="btnTodoDrawer"/);
+    expect(html).toContain('id="btnStarredTodoDrawer"');
+    expect(html).toMatch(/id="menuPanelView"[\s\S]*?id="btnStarredTodoDrawer"/);
+    expect(html).toContain("Starred &amp; TODO");
     expect(html).toContain("if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;");
     expect(html).toContain("if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;");
-    expect(html).toContain("if (drawersBtn) drawersBtn.disabled = state.busy;");
-    expect(html).toContain('vscode.postMessage({ type: "openStarredDrawer" });');
-    expect(html).toContain('vscode.postMessage({ type: "openTodoDrawer" });');
-    expect(html).toContain('vscode.postMessage({ type: "openDrawers" });');
+    expect(html).toContain("if (starredTodoDrawerBtn) starredTodoDrawerBtn.disabled = state.busy;");
+    expect(html).toContain('id="listsDrawer"');
+    expect(html).toContain("wireListsDrawer");
+    expect(html).toContain('openColcoorListsDrawer("starred")');
+    expect(html).toContain('openColcoorListsDrawer("todo")');
+    expect(html).toContain("drawersStarred: []");
+    expect(html).toContain("drawersTodos: []");
   });
 
   it("includes Members and Add member under Conversation menu (data-conv-action)", () => {

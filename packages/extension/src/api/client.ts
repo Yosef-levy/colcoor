@@ -71,6 +71,8 @@ export type ConversationUserStateOut = {
   active_event_id: string;
   needs_context_rebuild: boolean;
   last_seen_at: string;
+  /** Caller’s side-chat read cursor from GET …/caller-state (0 when unset). */
+  side_chat_last_read_seq?: number;
 };
 
 export type AppendEventBody = {

@@ -7,6 +7,7 @@ import type {
   MeOut,
   NoteOut,
   SideChatMessageOut,
+  SideChatPostBody,
 } from "../api/client";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
@@ -16,6 +17,7 @@ import {
 } from "./colcoorContextKeys";
 import { isSafeHttpUrlForWebview, listLegalPolicyLinksFromColcoorWorkspaceSection } from "./legalPolicySection";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
+import { buildConversationDrawersModel, type TodoDrawerRow, type StarredDrawerRow } from "./drawersModel";
 import { runResendAssistant } from "./resendAssistant";
 import {
   normalizeOptionalGraphEventId,
@@ -57,9 +59,11 @@ import { buildUserImageDataUrlsByOwnerId } from "./conversationImageDataUrls";
 import { mergeSideChatMessage } from "../sidechat/mergeSideChatMessage";
 import {
   buildOptimisticSideChatUserMessage,
+  isOptimisticSideChatMessageId,
   newOptimisticSideChatMessageId,
 } from "../sidechat/optimisticSideChatUserMessage";
 import { maxSideChatSeq } from "../sidechat/sideChatReadCursor";
+import { nextSideChatReadSeqToPatch } from "../sidechat/sideChatReadPatchPlan";
 import { buildSideChatSendPayload } from "../sidechat/sideChatSendPayload";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "../sidechat/sideChatRenderMessages";
 import { listConversationsCached } from "../conversations/conversationsListCache";
@@ -112,6 +116,15 @@ type WebviewStateMessage = {
   /** Inline side-chat drawer in the same conversation tab. */
   sideChatVisible: boolean;
   sideChatMessages: SideChatRenderMessage[];
+  /** Server read cursor for inline side-chat unread markers (seq strictly greater than this). */
+  sideChatLastReadSeq: number;
+  /** Current user id for inline side-chat (caller-state `user_id` or profile); hides unread dot on own rows. */
+  viewerUserId: string | null;
+  /** Notes for this conversation (client-side search in the webview). */
+  conversationNotes: NoteOut[];
+  /** Starred / TODO rows for the in-tab lists drawer (same source as conversation drawers). */
+  drawersStarred: StarredDrawerRow[];
+  drawersTodos: TodoDrawerRow[];
 };
 
 type FromWebview =
@@ -155,9 +168,13 @@ type FromWebview =
   /** Account / settings commands invoked from the webview menu (allowlist only). */
   | { type: "executeColcoorCommand"; command: string }
   | { type: "openLegalPolicyUrl"; url: string }
-  | { type: "openStarredDrawer" }
-  | { type: "openTodoDrawer" }
-  | { type: "openDrawers" }
+  | {
+      type: "searchHit";
+      target:
+        | { kind: "tree"; eventId: string }
+        | { kind: "note"; eventId: string; noteId: string }
+        | { kind: "sidechat"; seq: number };
+    }
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "toggleStar" }
@@ -175,6 +192,7 @@ const WEBVIEW_ACCOUNT_COMMAND_ALLOWLIST = new Set<string>([
   "colcoor.openSideChatSoundSettings",
   "colcoor.setupCursorCli",
   "colcoor.setCursorAgentApiKey",
+  "colcoor.signOut",
 ]);
 
 function randomNonce(): string {
@@ -289,10 +307,16 @@ export function createConversationPanelController(
   let inlineSideChatUrlsByMessageId = new Map<string, string[]>();
   let inlineSideChatRendered: SideChatRenderMessage[] = [];
   let inlineSideChatVisible = false;
-  /** Prevents overlapping inline side-chat sends while optimistic + POST are in flight. */
-  let inlineSideChatSendInFlight = false;
+  /** From GET …/caller-state `side_chat_last_read_seq` (inline side-chat unread markers + read PATCH). */
+  let lastSideChatReadSeq = 0;
+  /** Conversations where the user closed inline side chat — skip auto-open for multi-member. */
+  const dismissedInlineSideChatByConversationId = new Set<string>();
+  /** Serializes inline side-chat POSTs; each user send appends an optimistic row then chains onto this. */
+  let inlineSideChatPostChain: Promise<void> = Promise.resolve();
   /** Cached GET /me for optimistic side-chat author line (primed on first inline send). */
   let myProfileForSideChat: MeOut | null | undefined = undefined;
+  /** From GET …/caller-state `user_id` for the open conversation (inline side-chat “own message” unread UI). */
+  let viewerUserIdForWebview: string | null = null;
   /** Last state flags sent to webview; reused for lightweight local selection refreshes. */
   let lastPostedBusy = false;
   let lastPostedError: string | null = null;
@@ -411,6 +435,79 @@ export function createConversationPanelController(
     rebuildInlineSideChatRendered();
   }
 
+  /**
+   * PATCH side-chat read cursor to the latest stable seq in `inlineSideChatRows`.
+   * When `onlyIfDrawerVisible`, skips if the user has collapsed inline side chat (tree refresh should not
+   * clear unread for a drawer they have not opened this session).
+   */
+  async function markInlineSideChatReadFromCache(onlyIfDrawerVisible: boolean): Promise<void> {
+    if (!conversationId || (onlyIfDrawerVisible && !inlineSideChatVisible) || inlineSideChatRows.length === 0) {
+      return;
+    }
+    const stableRows = inlineSideChatRows.filter((row) => !isOptimisticSideChatMessageId(row.id));
+    if (stableRows.length === 0) {
+      return;
+    }
+    const m = maxSideChatSeq(stableRows);
+    const nextRead = nextSideChatReadSeqToPatch(m, lastSideChatReadSeq, true);
+    if (nextRead == null) {
+      return;
+    }
+    try {
+      await api.patchSideChatRead(conversationId, nextRead);
+      lastSideChatReadSeq = nextRead;
+      await refreshConversationMeta();
+    } catch (e) {
+      if (isPlanLimitColcoorApiError(e)) {
+        void showColcoorApiFailure(e);
+      }
+    }
+  }
+
+  async function postOneInlineSideChatJob(job: {
+    conversationId: string;
+    tempId: string;
+    payload: SideChatPostBody;
+  }): Promise<void> {
+    if (conversationId !== job.conversationId) {
+      inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== job.tempId);
+      inlineSideChatUrlsByMessageId.delete(job.tempId);
+      rebuildInlineSideChatRendered();
+      if (panel && webviewReady) {
+        postState(lastTreeEvents, sendAbort != null, null);
+      }
+      return;
+    }
+    try {
+      const created = await api.postSideChatMessage(job.conversationId, job.payload);
+      inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== job.tempId);
+      inlineSideChatUrlsByMessageId.delete(job.tempId);
+      inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, created);
+      if (created.kind === "user" && parseUserMediaImages(created.content_json ?? undefined).length > 0) {
+        try {
+          const partial = await buildUserImageDataUrlsByOwnerId(api, job.conversationId, [created]);
+          for (const [id, urls] of partial) {
+            inlineSideChatUrlsByMessageId.set(id, [...urls]);
+          }
+        } catch {
+          /* keep pasted preview until next full refresh if signed URLs fail */
+        }
+      } else if (created.kind === "user") {
+        inlineSideChatUrlsByMessageId.delete(created.id);
+      }
+      rebuildInlineSideChatRendered();
+      postState(lastTreeEvents, sendAbort != null, null);
+      await markInlineSideChatReadFromCache(true);
+      await refreshConversationMeta();
+    } catch (e) {
+      inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== job.tempId);
+      inlineSideChatUrlsByMessageId.delete(job.tempId);
+      rebuildInlineSideChatRendered();
+      postState(lastTreeEvents, sendAbort != null, null);
+      await showColcoorApiFailure(e);
+    }
+  }
+
   function syncActiveToBackend(
     activeEventId: string | undefined,
     opts?: { needsContextRebuild?: boolean },
@@ -454,8 +551,10 @@ export function createConversationPanelController(
     lastUserImageDataUrlsByEventId = new Map();
     sideChatUnreadCount = 0;
     sideChatHasUnread = false;
+    lastSideChatReadSeq = 0;
+    viewerUserIdForWebview = null;
     inlineSideChatUrlsByMessageId = new Map();
-    inlineSideChatSendInFlight = false;
+    inlineSideChatPostChain = Promise.resolve();
     myProfileForSideChat = undefined;
   }
 
@@ -470,6 +569,28 @@ export function createConversationPanelController(
     const raw = readCollapsedByConversation()[conversationId] ?? [];
     const valid = new Set(events.map((e) => e.id));
     return raw.filter((id) => valid.has(id));
+  }
+
+  /**
+   * Read cursor sent to the webview for unread dots only. When GET …/caller-state omits or returns 0 for
+   * `side_chat_last_read_seq` but the conversation list says there are no unreads, infer at least max(seq)
+   * from the loaded inline rows so already-read messages are not all highlighted.
+   */
+  function effectiveSideChatLastReadSeqForWebview(): number {
+    const L = lastSideChatReadSeq;
+    if (!inlineSideChatVisible || inlineSideChatRows.length === 0) {
+      return L;
+    }
+    const maxS = maxSideChatSeq(inlineSideChatRows);
+    // Caller read seq missing or stuck at 0 while list says no unreads — treat as caught up for dots only.
+    if (L === 0 && sideChatUnreadCount === 0 && maxS > 0) {
+      return maxS;
+    }
+    if (L === 0 && sideChatUnreadCount > 0 && maxS > 0) {
+      const u = Math.min(sideChatUnreadCount, inlineSideChatRows.length);
+      return Math.max(0, maxS - u);
+    }
+    return L;
   }
 
   function postState(
@@ -513,6 +634,7 @@ export function createConversationPanelController(
         side_chat_unread_count: sideChatUnreadCount,
       });
       const pendingUserHtml = pendingUserHtmlForPanelState(busy, pendingSendUserMarkdown);
+      const drawersModel = buildConversationDrawersModel(events, lastNotes);
       const msg: WebviewStateMessage = {
         type: "state",
         conversationId,
@@ -543,6 +665,14 @@ export function createConversationPanelController(
         pendingUserHtml,
         sideChatVisible: inlineSideChatVisible,
         sideChatMessages: inlineSideChatRendered,
+        sideChatLastReadSeq: effectiveSideChatLastReadSeqForWebview(),
+        viewerUserId:
+          viewerUserIdForWebview ??
+          (typeof myProfileForSideChat?.id === "string" ? myProfileForSideChat.id : null) ??
+          (typeof viewerUserIdMemo === "string" ? viewerUserIdMemo : null),
+        conversationNotes: lastNotes,
+        drawersStarred: drawersModel.starred,
+        drawersTodos: drawersModel.todos,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -569,6 +699,7 @@ export function createConversationPanelController(
           side_chat_has_unread: sideChatHasUnread,
           side_chat_unread_count: sideChatUnreadCount,
         });
+        const drawersModelFb = buildConversationDrawersModel([], lastNotes);
         const fallback: WebviewStateMessage = {
           type: "state",
           conversationId,
@@ -597,6 +728,14 @@ export function createConversationPanelController(
           pendingUserHtml: null,
           sideChatVisible: inlineSideChatVisible,
           sideChatMessages: inlineSideChatRendered,
+          sideChatLastReadSeq: effectiveSideChatLastReadSeqForWebview(),
+          viewerUserId:
+            viewerUserIdForWebview ??
+            (typeof myProfileForSideChat?.id === "string" ? myProfileForSideChat.id : null) ??
+            (typeof viewerUserIdMemo === "string" ? viewerUserIdMemo : null),
+          conversationNotes: lastNotes,
+          drawersStarred: drawersModelFb.starred,
+          drawersTodos: drawersModelFb.todos,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -627,6 +766,7 @@ export function createConversationPanelController(
       let notesPrefetch: NoteOut[] | undefined = opts?.prefetchedNotes;
       for (;;) {
         try {
+          const hadInlineSideChatOpenAtTreeLoad = inlineSideChatVisible;
           const previousSelectedEventId = selectedEventId;
           const previousEventIds = new Set(lastTreeEvents.map((e) => e.id));
           const treeP =
@@ -679,12 +819,27 @@ export function createConversationPanelController(
           lastNotes = notes;
           if (caller) {
             lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
+            viewerUserIdForWebview =
+              typeof caller.user_id === "string" && caller.user_id.trim() ? caller.user_id.trim() : null;
+            const lr = caller.side_chat_last_read_seq;
+            lastSideChatReadSeq =
+              typeof lr === "number" && Number.isFinite(lr) ? Math.max(0, Math.floor(lr)) : 0;
             const aid = caller.active_event_id;
             if (events.some((e) => e.id === aid)) {
               selectedEventId = aid;
             }
           } else {
             lastNeedsContextRebuild = false;
+            lastSideChatReadSeq = 0;
+            viewerUserIdForWebview = null;
+          }
+          try {
+            const members = await api.listConversationMembers(conversationId);
+            if (members.length > 1 && !dismissedInlineSideChatByConversationId.has(conversationId)) {
+              inlineSideChatVisible = true;
+            }
+          } catch {
+            /* keep inline visibility */
           }
           if (selectedEventId && nextEventIds.has(selectedEventId)) {
             staleTreePromptedForEventId = null;
@@ -739,6 +894,9 @@ export function createConversationPanelController(
               inlineSideChatRendered = [];
             }
           }
+          if (hadInlineSideChatOpenAtTreeLoad && !skipInlineSideChatRefresh) {
+            await markInlineSideChatReadFromCache(true);
+          }
           postState(events, busy, lastError);
           return;
         } catch (e) {
@@ -748,10 +906,13 @@ export function createConversationPanelController(
           const msg = e instanceof Error ? e.message : String(e);
           lastNotes = [];
           lastNeedsContextRebuild = false;
+          lastSideChatReadSeq = 0;
+          viewerUserIdForWebview = null;
           lastUserImageDataUrlsByEventId = new Map();
           inlineSideChatRows = [];
           inlineSideChatUrlsByMessageId = new Map();
           inlineSideChatRendered = [];
+          inlineSideChatPostChain = Promise.resolve();
           postState([], busy, msg);
           return;
         }
@@ -1144,33 +1305,72 @@ export function createConversationPanelController(
         await vscode.commands.executeCommand("colcoor.referenceSelectedNoteInSideChat");
         return;
       }
-      if (msg.type === "openStarredDrawer") {
-        if (!conversationId) {
+      if (msg.type === "searchHit") {
+        if (!conversationId || !panel) {
           return;
         }
-        await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
-          conv: { id: conversationId, title: conversationTitle ?? null },
-          preferredTab: "starred",
-        });
-        return;
-      }
-      if (msg.type === "openTodoDrawer") {
-        if (!conversationId) {
+        const t = msg.target;
+        if (t.kind === "tree") {
+          const id = typeof t.eventId === "string" ? t.eventId.trim() : "";
+          if (!id || !lastTreeEvents.some((e) => e.id === id)) {
+            void vscode.window.showWarningMessage(
+              `Colcoor: that message is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+            );
+            return;
+          }
+          const prevSel = selectedEventId;
+          selectedEventId = id;
+          if (lastTreeEvents.some((e) => e.id === id)) {
+            postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          }
+          void syncActiveToBackend(id, {
+            needsContextRebuild: prevSel !== undefined && prevSel !== id,
+          });
           return;
         }
-        await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
-          conv: { id: conversationId, title: conversationTitle ?? null },
-          preferredTab: "todo",
-        });
-        return;
-      }
-      if (msg.type === "openDrawers") {
-        if (!conversationId) {
+        if (t.kind === "note") {
+          const eid = typeof t.eventId === "string" ? t.eventId.trim() : "";
+          if (!eid || !lastTreeEvents.some((e) => e.id === eid)) {
+            void vscode.window.showWarningMessage(
+              `Colcoor: that note’s message is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+            );
+            return;
+          }
+          const prevSel = selectedEventId;
+          selectedEventId = eid;
+          if (lastTreeEvents.some((e) => e.id === eid)) {
+            postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          }
+          void syncActiveToBackend(eid, {
+            needsContextRebuild: prevSel !== undefined && prevSel !== eid,
+          });
+          await showNotesOnSelectedMessage();
           return;
         }
-        await vscode.commands.executeCommand("colcoor.openConversationDrawers", {
-          conv: { id: conversationId, title: conversationTitle ?? null },
-        });
+        if (t.kind === "sidechat") {
+          const seq = typeof t.seq === "number" && Number.isFinite(t.seq) ? Math.floor(t.seq) : 0;
+          if (seq <= 0) {
+            return;
+          }
+          if (conversationId) {
+            dismissedInlineSideChatByConversationId.delete(conversationId);
+          }
+          inlineSideChatVisible = true;
+          try {
+            await refreshInlineSideChat();
+          } catch (e) {
+            if (isPlanLimitColcoorApiError(e)) {
+              void showColcoorApiFailure(e);
+            }
+          }
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          try {
+            await panel.webview.postMessage({ type: "focusSideChatSeq", seq });
+          } catch {
+            /* webview gone */
+          }
+          return;
+        }
         return;
       }
       if (msg.type === "openMembers") {
@@ -1210,10 +1410,14 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "openSideChat") {
+        if (conversationId) {
+          dismissedInlineSideChatByConversationId.delete(conversationId);
+        }
         inlineSideChatVisible = true;
         try {
           await refreshConversationMeta();
           await refreshInlineSideChat();
+          await markInlineSideChatReadFromCache(true);
         } catch (e) {
           if (isPlanLimitColcoorApiError(e)) {
             void showColcoorApiFailure(e);
@@ -1223,7 +1427,11 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "closeSideChat") {
+        await markInlineSideChatReadFromCache(false);
         inlineSideChatVisible = false;
+        if (conversationId) {
+          dismissedInlineSideChatByConversationId.add(conversationId);
+        }
         postState(lastTreeEvents, sendAbort != null, null);
         return;
       }
@@ -1233,6 +1441,7 @@ export function createConversationPanelController(
         }
         try {
           await refreshInlineSideChat();
+          await markInlineSideChatReadFromCache(true);
         } catch (e) {
           if (isPlanLimitColcoorApiError(e)) {
             void showColcoorApiFailure(e);
@@ -1276,67 +1485,41 @@ export function createConversationPanelController(
           void vscode.window.showWarningMessage("Colcoor: side chat message is empty.");
           return;
         }
-        if (inlineSideChatSendInFlight) {
-          void vscode.window.showWarningMessage("Colcoor: still sending the previous side chat message.");
-          return;
-        }
-        inlineSideChatSendInFlight = true;
-        let optimisticId: string | undefined;
-        try {
-          const me = await ensureMeForSideChat();
-          const tempId = newOptimisticSideChatMessageId();
-          optimisticId = tempId;
-          const provisionalSeq = maxSideChatSeq(inlineSideChatRows) + 1;
-          const optimistic = buildOptimisticSideChatUserMessage({
-            conversationId,
-            tempId,
-            seq: provisionalSeq,
-            me,
-            body: payload.body ?? "",
-            contentJson: payload.content_json ?? null,
-            referencedEventId: payload.referenced_event_id ?? null,
-            referencedNoteId: payload.referenced_note_id ?? null,
-            referencedSideChatMessageId: payload.referenced_side_chat_message_id ?? null,
-          });
-          inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, optimistic);
-          if (pastedDataUrlsForOptimistic.length > 0) {
-            inlineSideChatUrlsByMessageId.set(tempId, [...pastedDataUrlsForOptimistic]);
-          } else {
-            inlineSideChatUrlsByMessageId.delete(tempId);
-          }
-          rebuildInlineSideChatRendered();
-          postState(lastTreeEvents, sendAbort != null, null);
-
-          const created = await api.postSideChatMessage(conversationId, payload);
-          inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== tempId);
+        const me = await ensureMeForSideChat();
+        const tempId = newOptimisticSideChatMessageId();
+        const jobConversationId = conversationId;
+        const provisionalSeq = maxSideChatSeq(inlineSideChatRows) + 1;
+        const optimistic = buildOptimisticSideChatUserMessage({
+          conversationId: jobConversationId,
+          tempId,
+          seq: provisionalSeq,
+          me,
+          body: payload.body ?? "",
+          contentJson: payload.content_json ?? null,
+          referencedEventId: payload.referenced_event_id ?? null,
+          referencedNoteId: payload.referenced_note_id ?? null,
+          referencedSideChatMessageId: payload.referenced_side_chat_message_id ?? null,
+        });
+        inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, optimistic);
+        if (pastedDataUrlsForOptimistic.length > 0) {
+          inlineSideChatUrlsByMessageId.set(tempId, [...pastedDataUrlsForOptimistic]);
+        } else {
           inlineSideChatUrlsByMessageId.delete(tempId);
-          inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, created);
-          if (created.kind === "user" && parseUserMediaImages(created.content_json ?? undefined).length > 0) {
-            try {
-              const partial = await buildUserImageDataUrlsByOwnerId(api, conversationId, [created]);
-              for (const [id, urls] of partial) {
-                inlineSideChatUrlsByMessageId.set(id, [...urls]);
-              }
-            } catch {
-              /* keep pasted preview until next full refresh if signed URLs fail */
-            }
-          } else if (created.kind === "user") {
-            inlineSideChatUrlsByMessageId.delete(created.id);
-          }
-          rebuildInlineSideChatRendered();
-          postState(lastTreeEvents, sendAbort != null, null);
-          await refreshConversationMeta();
-        } catch (e) {
-          if (optimisticId) {
-            inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== optimisticId);
-            inlineSideChatUrlsByMessageId.delete(optimisticId);
-            rebuildInlineSideChatRendered();
-            postState(lastTreeEvents, sendAbort != null, null);
-          }
-          await showColcoorApiFailure(e);
-        } finally {
-          inlineSideChatSendInFlight = false;
         }
+        rebuildInlineSideChatRendered();
+        postState(lastTreeEvents, sendAbort != null, null);
+
+        inlineSideChatPostChain = inlineSideChatPostChain
+          .catch(() => {
+            /* keep the queue alive if a prior chained step rejected */
+          })
+          .then(() =>
+            postOneInlineSideChatJob({
+              conversationId: jobConversationId,
+              tempId,
+              payload,
+            }),
+          );
         return;
       }
       if (msg.type === "deleteConversation") {
@@ -1460,10 +1643,13 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       lastNotes = [];
       lastNeedsContextRebuild = false;
+      lastSideChatReadSeq = 0;
+      viewerUserIdForWebview = null;
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
       inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
+      inlineSideChatPostChain = Promise.resolve();
       syncConversationPanelOpenContext();
     });
 
@@ -1598,10 +1784,13 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
+      lastSideChatReadSeq = 0;
+      viewerUserIdForWebview = null;
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
       inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
+      inlineSideChatPostChain = Promise.resolve();
       const p = ensurePanel();
       p.title = `Colcoor — ${title?.trim() ? title : "(untitled)"}`;
       if (webviewReady) {
@@ -1631,10 +1820,13 @@ export function createConversationPanelController(
       lastTreeEvents = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
+      lastSideChatReadSeq = 0;
+      viewerUserIdForWebview = null;
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
       inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
+      inlineSideChatPostChain = Promise.resolve();
       try {
         await api.setConversationActive(cid, {
           active_event_id: eid,
@@ -1786,10 +1978,14 @@ export function createConversationPanelController(
       }
     },
     async openInlineSideChat(): Promise<void> {
+      if (conversationId) {
+        dismissedInlineSideChatByConversationId.delete(conversationId);
+      }
       inlineSideChatVisible = true;
       try {
         await refreshConversationMeta();
         await refreshInlineSideChat();
+        await markInlineSideChatReadFromCache(true);
       } catch (e) {
         if (isPlanLimitColcoorApiError(e)) {
           void showColcoorApiFailure(e);

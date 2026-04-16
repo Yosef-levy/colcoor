@@ -274,6 +274,7 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         cstate = r.json()
         assert cstate["active_event_id"] == root["id"]
         assert cstate["needs_context_rebuild"] is False
+        assert cstate.get("side_chat_last_read_seq", 0) == 0
 
         r = client.post(
             f"/api/v1/conversations/{cid}/active",
@@ -284,6 +285,7 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         act = r.json()
         assert act["active_event_id"] == root["id"]
         assert act["needs_context_rebuild"] is False
+        assert act.get("side_chat_last_read_seq", 0) == 0
 
         r = client.post(
             f"/api/v1/conversations/{cid}/active",

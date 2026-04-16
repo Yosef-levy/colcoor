@@ -48,7 +48,10 @@ from colcoor_backend.services.conversation_images import (
     load_conversation_image_bytes,
     store_conversation_image,
 )
-from colcoor_backend.services.side_chat import side_chat_unread_count_by_conversation_ids
+from colcoor_backend.services.side_chat import (
+    get_user_side_chat_last_read_seq,
+    side_chat_unread_count_by_conversation_ids,
+)
 
 router = APIRouter()
 
@@ -297,7 +300,9 @@ async def get_caller_conversation_state(
         st = await read_conversation_caller_state(session, conversation_id, user_id)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
-    return ConversationUserStateOut.model_validate(st)
+    out = ConversationUserStateOut.model_validate(st)
+    lr = await get_user_side_chat_last_read_seq(session, conversation_id, user_id)
+    return out.model_copy(update={"side_chat_last_read_seq": lr})
 
 
 @router.post("/{conversation_id}/active", response_model=ConversationUserStateOut)
@@ -320,7 +325,9 @@ async def post_conversation_active(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
-    return ConversationUserStateOut.model_validate(st)
+    out = ConversationUserStateOut.model_validate(st)
+    lr = await get_user_side_chat_last_read_seq(session, conversation_id, user_id)
+    return out.model_copy(update={"side_chat_last_read_seq": lr})
 
 
 @router.get("/{conversation_id}/members", response_model=list[MemberOut])
