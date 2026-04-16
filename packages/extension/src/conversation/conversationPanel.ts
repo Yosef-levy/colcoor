@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
 import type {
   ColcoorApiClient,
+  ConversationMember,
   ConversationSummary,
   GraphEventNode,
   MeOut,
@@ -775,13 +776,15 @@ export function createConversationPanelController(
               : api.getTree(conversationId);
           const notesP =
             notesPrefetch !== undefined ? Promise.resolve(notesPrefetch) : api.listNotes(conversationId);
-          const [{ events }, notes, caller, listRows] = await Promise.all([
+          const membersP = api.listConversationMembers(conversationId).catch((): ConversationMember[] => []);
+          const [{ events }, notes, caller, listRows, members] = await Promise.all([
             treeP,
             notesP,
             api.getConversationCallerState(conversationId).catch((): null => null),
             skipConversationsList
               ? Promise.resolve([] as ConversationSummary[])
               : listConversationsCached(api).catch((): ConversationSummary[] => []),
+            membersP,
           ]);
           if (!skipConversationsList) {
             applyConversationMetaFromListRow(listRows.find((r) => r.id === conversationId));
@@ -833,13 +836,8 @@ export function createConversationPanelController(
             lastSideChatReadSeq = 0;
             viewerUserIdForWebview = null;
           }
-          try {
-            const members = await api.listConversationMembers(conversationId);
-            if (members.length > 1 && !dismissedInlineSideChatByConversationId.has(conversationId)) {
-              inlineSideChatVisible = true;
-            }
-          } catch {
-            /* keep inline visibility */
+          if (members.length > 1 && !dismissedInlineSideChatByConversationId.has(conversationId)) {
+            inlineSideChatVisible = true;
           }
           if (selectedEventId && nextEventIds.has(selectedEventId)) {
             staleTreePromptedForEventId = null;
@@ -876,24 +874,19 @@ export function createConversationPanelController(
               selectedEventId = events.at(-1)?.id;
             }
           }
-          try {
-            lastUserImageDataUrlsByEventId = await buildUserImageDataUrlsByEventId(
-              api,
-              conversationId,
-              events,
-            );
-          } catch {
-            lastUserImageDataUrlsByEventId = new Map();
-          }
-          if (inlineSideChatVisible && !skipInlineSideChatRefresh) {
-            try {
-              await refreshInlineSideChat();
-            } catch {
-              inlineSideChatRows = [];
-              inlineSideChatUrlsByMessageId = new Map();
-              inlineSideChatRendered = [];
-            }
-          }
+          const imageFetchP = buildUserImageDataUrlsByEventId(api, conversationId, events).catch(
+            () => new Map<string, string[]>(),
+          );
+          const sideChatRefreshP =
+            inlineSideChatVisible && !skipInlineSideChatRefresh
+              ? refreshInlineSideChat().catch(() => {
+                  inlineSideChatRows = [];
+                  inlineSideChatUrlsByMessageId = new Map();
+                  inlineSideChatRendered = [];
+                })
+              : Promise.resolve();
+          const [imageMap] = await Promise.all([imageFetchP, sideChatRefreshP]);
+          lastUserImageDataUrlsByEventId = imageMap;
           if (hadInlineSideChatOpenAtTreeLoad && !skipInlineSideChatRefresh) {
             await markInlineSideChatReadFromCache(true);
           }
