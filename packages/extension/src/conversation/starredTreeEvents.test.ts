@@ -57,4 +57,15 @@ describe("shortStarredEventLabel", () => {
     });
     expect(shortStarredEventLabel(x)).toBe(`User: ${"z".repeat(64)}…`);
   });
+
+  it("prefixes checkpoint_label title when set", () => {
+    const x = ev({
+      id: "u3",
+      kind: "user_input",
+      created_at: "t",
+      content_text: "body",
+      checkpoint_label: "  My title  ",
+    });
+    expect(shortStarredEventLabel(x)).toBe("My title — User: body");
+  });
 });

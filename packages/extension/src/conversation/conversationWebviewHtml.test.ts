@@ -38,17 +38,18 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("legalPolicyLinks");
   });
 
-  it("detail bar breadcrumb supports optional checkpoint_label on tree nodes ([ui-features.md] §8)", () => {
+  it("omits detail breadcrumb strip; checkpoint_label still used in tree/thread/search ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("checkpoint_label");
-    expect(html).toContain("crumb-checkpoint");
+    expect(html).not.toContain('id="breadcrumb"');
+    expect(html).not.toContain("detail-bar");
   });
 
-  it("thread path shows optional checkpoint from segment.checkpointLabel ([ui-features.md] §8)", () => {
+  it("thread path shows optional message title from segment.checkpointLabel ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain(".thread .msg .thread-checkpoint");
-    expect(html).toContain('class="thread-checkpoint">');
-    expect(html).toContain('esc("Checkpoint: " + String(s.checkpointLabel))');
+    expect(html).toContain(".thread .msg .thread-msg-title");
+    expect(html).toContain('class="thread-msg-title">');
+    expect(html).toContain('esc("Title: " + String(s.checkpointLabel))');
   });
 
   it("uses dir=auto on the composer textarea for RTL-capable typing", () => {
@@ -119,6 +120,7 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenSearch"');
     expect(html).toContain("Search…");
+    expect(html).toContain('id="searchScopeTitles"');
     expect(html).toContain('id="searchDrawer"');
     expect(html).toContain("wireSearchDrawer");
     expect(html).toContain("conversationNotes: []");
@@ -129,12 +131,12 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('type: "searchHit"');
   });
 
-  it("includes optional composer checkpoint label field and send wiring ([ui-features.md] §8)", () => {
+  it("omits composer checkpoint field; Message menu posts editMessageTitle ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('id="checkpointLabel"');
-    expect(html).toContain('maxlength="256"');
-    expect(html).toContain("if (cpTrim.length) payload.checkpointLabel = cpTrim;");
-    expect(html).toContain('cpEl.disabled = state.busy');
+    expect(html).not.toContain('id="checkpointLabel"');
+    expect(html).toContain('id="btnEditMessageTitle"');
+    expect(html).toContain('vscode.postMessage({ type: "editMessageTitle" })');
+    expect(html).toContain("node-msg-title");
   });
 
   it("renders Private badge in thread rows when segment has privateScope", () => {

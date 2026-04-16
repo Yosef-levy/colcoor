@@ -358,6 +358,28 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         assert asst["content_json"]["colcoor_agent_trace"]["version"] == 1
         assert asst["content_json"]["colcoor_agent_trace"]["entries"][0]["type"] == "tool_call"
 
+        r = client.patch(
+            f"/api/v1/conversations/{cid}/events/{user_ev_id}/checkpoint-label",
+            headers=auth,
+            json={"checkpoint_label": "patched title"},
+        )
+        assert r.status_code == 204, r.text
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        user_ev = next(e for e in r.json()["events"] if e["id"] == user_ev_id)
+        assert user_ev.get("checkpoint_label") == "patched title"
+
+        r = client.patch(
+            f"/api/v1/conversations/{cid}/events/{user_ev_id}/checkpoint-label",
+            headers=auth,
+            json={"checkpoint_label": None},
+        )
+        assert r.status_code == 204, r.text
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        user_ev = next(e for e in r.json()["events"] if e["id"] == user_ev_id)
+        assert user_ev.get("checkpoint_label") is None
+
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
         assert r.status_code == 204, r.text
 

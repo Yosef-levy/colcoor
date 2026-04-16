@@ -565,6 +565,43 @@ async def delete_note_row(
     await _set_needs_context_rebuild_all_members(session, conversation_id)
 
 
+async def patch_event_checkpoint_label(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    event_id: uuid.UUID,
+    checkpoint_label: str | None,
+) -> Event:
+    """Set or clear ``events.checkpoint_label`` (display-only message title). Owner/editor only."""
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot edit message titles")
+    ev = await load_event(session, conversation_id, event_id)
+    if ev is None:
+        raise LookupError("event not found")
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise PermissionError("event not visible")
+    if ev.kind not in ("user_input", "assistant_output"):
+        raise ValueError("only user_input and assistant_output support titles")
+    now = datetime.now(tz=UTC)
+    if checkpoint_label is None:
+        normalized: str | None = None
+    else:
+        t = checkpoint_label.replace("\r\n", "\n").replace("\r", "\n").strip()
+        normalized = t[:256] if t else None
+    ev.checkpoint_label = normalized
+    ev.updated_at = now
+    conv_r = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = conv_r.scalar_one()
+    conv.updated_at = now
+    await session.flush()
+    await session.refresh(ev)
+    return ev
+
+
 async def put_event_star(
     session: AsyncSession,
     conversation_id: uuid.UUID,

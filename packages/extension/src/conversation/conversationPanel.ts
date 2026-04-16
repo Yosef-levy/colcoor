@@ -42,7 +42,7 @@ import {
 import { evaluateContinueFromHere } from "./continueFromHereGate";
 import { clipboardTextForSelectedTreeMessage } from "./selectedMessageClipboardText";
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
-import { findBranchTip } from "./treeEvents";
+import { findBranchTip, trimmedGraphCheckpointLabel } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import {
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
@@ -134,7 +134,6 @@ type FromWebview =
       type: "send";
       text: string;
       privateBranch?: boolean;
-      checkpointLabel?: string;
       /** Pasted images as data URLs (image/* only); host uploads then appends colcoor_user_media. */
       images?: { dataUrl: string }[];
     }
@@ -180,6 +179,7 @@ type FromWebview =
   | { type: "togglePin" }
   | { type: "toggleStar" }
   | { type: "addNote" }
+  | { type: "editMessageTitle" }
   | { type: "listNotesOnSelection" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
   | { type: "editNote"; noteId: string }
@@ -916,7 +916,6 @@ export function createConversationPanelController(
   async function handleSend(
     text: string,
     privateBranch: boolean,
-    checkpointLabel?: string,
     pastedImages?: { dataUrl: string }[],
   ): Promise<void> {
     const trimmed = normalizePersistedUserInputText(text);
@@ -959,7 +958,6 @@ export function createConversationPanelController(
         {
           replyParentEventId: selectedEventId,
           privateBranch,
-          checkpointLabel,
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           ...(lastTreeEvents.length > 0
@@ -1558,10 +1556,55 @@ export function createConversationPanelController(
         await showNotesOnSelectedMessage();
         return;
       }
+      if (msg.type === "editMessageTitle") {
+        if (!conversationId || !selectedEventId) {
+          void vscode.window.showWarningMessage(
+            "Colcoor: open a conversation and select a message in the tree.",
+          );
+          return;
+        }
+        const exists = lastTreeEvents.some((e) => e.id === selectedEventId);
+        if (!exists) {
+          void vscode.window.showWarningMessage(
+            `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+          );
+          return;
+        }
+        const ev = lastTreeEvents.find((e) => e.id === selectedEventId);
+        const current = ev ? trimmedGraphCheckpointLabel(ev) ?? "" : "";
+        const next = await vscode.window.showInputBox({
+          title: "Colcoor — message title",
+          value: current,
+          prompt:
+            "Optional title for this message (display-only). Leave empty to clear. Max 256 characters.",
+          ignoreFocusOut: true,
+          validateInput: (v) => {
+            const t = normalizePersistedUserInputText(v ?? "");
+            if (t.length > 256) {
+              return "Title must be at most 256 characters.";
+            }
+            return undefined;
+          },
+        });
+        if (next === undefined) {
+          return;
+        }
+        const trimmed = normalizePersistedUserInputText(next);
+        const payload = trimmed.length > 0 ? trimmed.slice(0, 256) : null;
+        try {
+          await api.patchEventCheckpointLabel(conversationId, selectedEventId, payload);
+          void vscode.window.setStatusBarMessage(
+            payload ? "Colcoor: title saved." : "Colcoor: title cleared.",
+            2500,
+          );
+          await loadTreeAndPush(false, null, { skipConversationsList: true });
+        } catch (e) {
+          void showColcoorApiFailure(e);
+        }
+        return;
+      }
       if (msg.type === "send" && typeof msg.text === "string") {
-        const checkpointLabel =
-          typeof msg.checkpointLabel === "string" ? msg.checkpointLabel : undefined;
-        await handleSend(msg.text, Boolean(msg.privateBranch), checkpointLabel, msg.images);
+        await handleSend(msg.text, Boolean(msg.privateBranch), msg.images);
         return;
       }
       if (msg.type === "deleteNote" && typeof msg.noteId === "string" && conversationId) {

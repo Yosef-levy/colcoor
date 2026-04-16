@@ -120,6 +120,28 @@ class EventNodeOut(BaseModel):
     checkpoint_label: str | None = None
 
 
+class EventCheckpointLabelPatchBody(BaseModel):
+    """PATCH …/events/{id}/checkpoint-label — set or clear display-only title on an existing event."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    checkpoint_label: str | None = Field(
+        default=None,
+        max_length=256,
+        description="New title text, or null/blank to clear ([ui-features.md] §8).",
+    )
+
+    @field_validator("checkpoint_label", mode="before")
+    @classmethod
+    def _normalize_event_title(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            return None
+        t = v.replace("\r\n", "\n").replace("\r", "\n").strip()
+        return t or None
+
+
 class TreeResponse(BaseModel):
     events: list[EventNodeOut]
 

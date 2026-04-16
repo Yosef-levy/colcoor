@@ -1,4 +1,5 @@
 import type { GraphEventNode } from "../api/client";
+import { trimmedGraphCheckpointLabel } from "./treeEvents";
 import { treeEventSnippet } from "./treeNodeDisplay";
 
 /** Tree rows the current user has starred (GET …/tree exposes `starred`). */
@@ -12,5 +13,7 @@ export function shortStarredEventLabel(ev: GraphEventNode): string {
     ev.kind === "user_input" ? "User" : ev.kind === "assistant_output" ? "Assistant" : ev.kind;
   const snip = treeEventSnippet(ev.content_text, 64);
   const head = snip === "(empty)" ? `(${role})` : snip;
-  return `${role}: ${head}`;
+  const base = `${role}: ${head}`;
+  const title = trimmedGraphCheckpointLabel(ev);
+  return title !== undefined ? `${title} — ${base}` : base;
 }

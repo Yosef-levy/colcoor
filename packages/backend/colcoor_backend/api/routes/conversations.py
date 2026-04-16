@@ -12,6 +12,7 @@ from colcoor_backend.api.schemas import (
     ConversationOut,
     ConversationPatch,
     ConversationUserStateOut,
+    EventCheckpointLabelPatchBody,
     EventKind,
     EventNodeOut,
     MemberAddBody,
@@ -36,6 +37,7 @@ from colcoor_backend.services.graph import (
     list_events_for_tree,
     list_notes_visible,
     patch_conversation_for_user,
+    patch_event_checkpoint_label,
     put_event_star,
     read_conversation_caller_state,
     remove_conversation_member,
@@ -539,6 +541,36 @@ async def delete_conversation_note(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch(
+    "/{conversation_id}/events/{event_id}/checkpoint-label",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def patch_event_title(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    event_id: UUID,
+    body: EventCheckpointLabelPatchBody,
+) -> Response:
+    """Set or clear display-only ``checkpoint_label`` (message title) on an existing graph event."""
+    try:
+        await patch_event_checkpoint_label(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            event_id=event_id,
+            checkpoint_label=body.checkpoint_label,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

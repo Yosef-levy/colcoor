@@ -98,25 +98,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       min-height: 0;
       overflow: hidden;
     }
-    .detail-bar {
-      flex-shrink: 0;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 8px 10px;
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 4px;
-      background: var(--vscode-sideBar-background);
-    }
-    .detail-bar .crumb {
-      flex: 1;
-      min-width: 140px;
-      line-height: 1.45;
-      font-size: 0.92em;
-    }
-    .detail-bar .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .menubar {
       flex-shrink: 0;
       flex-grow: 0;
@@ -200,9 +181,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border: none;
       background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, var(--vscode-panel-border)));
     }
-    .crumb-step strong { font-weight: 600; color: var(--vscode-foreground); }
-    .crumb-checkpoint { font-weight: 500; color: var(--vscode-descriptionForeground); font-size: 0.95em; }
-    .crumb-sep { color: var(--vscode-descriptionForeground); margin: 0 4px; }
     .thread {
       flex: 1;
       min-height: 0;
@@ -463,6 +441,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow: hidden;
       word-break: break-word;
     }
+    .node-msg-title {
+      font-size: 0.8em;
+      font-weight: 600;
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.35;
+      margin-bottom: 3px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+    }
+    .node-msg-title::before {
+      content: "Title: ";
+      font-weight: 600;
+      color: var(--vscode-foreground);
+    }
     .node-icons {
       display: inline-flex;
       align-items: center;
@@ -579,7 +574,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
     }
     .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
-    .thread .msg .thread-checkpoint {
+    .thread .msg .thread-msg-title {
       font-size: 0.92em;
       font-weight: 500;
       color: var(--vscode-descriptionForeground);
@@ -791,23 +786,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       font-size: 0.88em;
       color: var(--vscode-descriptionForeground);
     }
-    .composer .checkpoint-label-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin: 8px 0 0;
-      max-width: 52em;
-    }
-    .composer #checkpointLabel {
-      box-sizing: border-box;
-      width: 100%;
-      padding: 6px 8px;
-      font-family: inherit;
-      font-size: 0.95em;
-      color: var(--vscode-input-foreground);
-      background: var(--vscode-input-background);
-      border: 1px solid var(--vscode-input-border);
-    }
     .btn-secondary {
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
@@ -982,6 +960,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" id="btnCopy">Copy message</button>
             <button type="button" class="menu-item" role="menuitem" id="btnToggleStar" title="Star or unstar the selected message">Star</button>
             <button type="button" class="menu-item" role="menuitem" id="btnStarredDrawer" title="Starred messages in this conversation (slide-in drawer)">Starred</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnEditMessageTitle" title="Set or clear the display-only title for the selected message (owner/editor)">Add/edit title…</button>
             <button type="button" class="menu-item" role="menuitem" id="btnCopyThread" title="Copy root → selected path as plain text">Copy thread</button>
             <button type="button" class="menu-item" role="menuitem" id="btnReferenceSideChat" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
             <button type="button" class="menu-item" role="menuitem" id="btnResend">Resend assistant</button>
@@ -1041,9 +1020,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     </div>
     <div class="search-drawer-body">
       <div class="search-drawer-scopes">
-        <label
-          ><input type="checkbox" id="searchScopeConv" checked /> Conversation (titles &amp; content)</label
-        >
+        <label><input type="checkbox" id="searchScopeConv" checked /> Conversation (content)</label>
+        <label><input type="checkbox" id="searchScopeTitles" checked /> Message titles</label>
         <label><input type="checkbox" id="searchScopeNotes" checked /> Notes</label>
         <label><input type="checkbox" id="searchScopeSidechat" checked /> Side chat</label>
       </div>
@@ -1102,9 +1080,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       </div>
     </div>
     <div class="col-center">
-      <div class="detail-bar">
-        <div id="breadcrumb" class="crumb hint"></div>
-      </div>
       <div class="thread">
         <div class="hint thread-hint">Thread (root → selected)</div>
         <div class="thread-scroll">
@@ -1114,17 +1089,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <div class="composer">
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
         <div id="pendingConversationImages" class="composer-pending-images" style="display:none"></div>
-        <div class="checkpoint-label-wrap">
-          <label for="checkpointLabel" class="hint">Checkpoint label (optional)</label>
-          <input
-            type="text"
-            id="checkpointLabel"
-            maxlength="256"
-            dir="auto"
-            placeholder="Shown in the detail breadcrumb when set"
-            aria-label="Optional checkpoint label for this message"
-          />
-        </div>
         <label class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
           <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" aria-describedby="privateBranchHelp" />
           <span class="priv-body">
@@ -1672,10 +1636,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     function renderDetailBar() {
-      const crumb = document.getElementById("breadcrumb");
       const copyBtn = document.getElementById("btnCopy");
       const toggleStarBtn = document.getElementById("btnToggleStar");
       const copyThreadBtn = document.getElementById("btnCopyThread");
+      const editTitleBtn = document.getElementById("btnEditMessageTitle");
       const refSideChatBtn = document.getElementById("btnReferenceSideChat");
       const refNoteSideChatBtn = document.getElementById("btnReferenceNoteSideChat");
       const addNoteBtn = document.getElementById("btnAddNote");
@@ -1687,7 +1651,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
       const resendBtn = document.getElementById("btnResend");
       if (
-        !crumb ||
         !copyBtn ||
         !toggleStarBtn ||
         !resendBtn ||
@@ -1723,7 +1686,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const bySel = Object.fromEntries(evs.map((e) => [e.id, e]));
       const last = bySel[sel] || (path.length ? path[path.length - 1] : null);
       if (!path.length || !last) {
-        crumb.innerHTML = '<span class="empty">No selection</span>';
         copyBtn.disabled = true;
         toggleStarBtn.disabled = true;
         refSideChatBtn.disabled = true;
@@ -1736,27 +1698,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         listNotesOnSelectionBtn.title = "Select a message in the tree first.";
         toggleStarBtn.textContent = "Star";
         toggleStarBtn.title = "Select a message in the tree to star or unstar.";
+        if (editTitleBtn) {
+          editTitleBtn.disabled = true;
+          editTitleBtn.title = "Select a message in the tree first.";
+        }
         const jumpBtnEmpty = document.getElementById("btnJumpTip");
         if (jumpBtnEmpty) jumpBtnEmpty.disabled = state.busy;
       } else {
-      const parts = path.map((ev) => {
-        const lab = ev.kind === "user_input" ? "User" : "Assistant";
-        var cpRaw = ev && typeof ev.checkpoint_label === "string" ? ev.checkpoint_label.trim() : "";
-        var cpHtml = "";
-        if (cpRaw) {
-          cpHtml =
-            ' · <span class="crumb-checkpoint">' + esc("Checkpoint: " + cpRaw) + "</span>";
-        }
-        return (
-          '<span class="crumb-step"><strong>' +
-          esc(lab) +
-          "</strong> · " +
-          esc(snippet(ev)) +
-          cpHtml +
-          "</span>"
-        );
-      });
-      crumb.innerHTML = parts.join(' <span class="crumb-sep">→</span> ');
       copyBtn.disabled = state.busy;
       toggleStarBtn.disabled = state.busy;
       toggleStarBtn.textContent = last.starred === true ? "Unstar" : "Star";
@@ -1797,6 +1745,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         : "Pick a user message with text (not the empty root placeholder).";
       const jumpBtn = document.getElementById("btnJumpTip");
       if (jumpBtn) jumpBtn.disabled = state.busy;
+      if (editTitleBtn) {
+        const canTitle =
+          last.kind === "user_input" || last.kind === "assistant_output";
+        editTitleBtn.disabled = state.busy || !canTitle;
+        editTitleBtn.title = !canTitle
+          ? "Titles apply only to user or assistant messages."
+          : state.busy
+            ? "Wait for the current operation to finish."
+            : "Set or clear the display-only title for the selected message.";
+      }
       }
       syncConversationMenuPanel();
     }
@@ -1904,6 +1862,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           const snipCls = snip === "(empty)" ? " node-snippet-empty" : "";
           const title = eventDisplayTitle(e);
           const titleBlock = title ? '<div class="node-title">' + esc(title) + "</div>" : "";
+          const cpTree =
+            e.checkpoint_label && String(e.checkpoint_label).trim()
+              ? String(e.checkpoint_label).trim()
+              : "";
+          const msgTitleBlock = cpTree ? '<div class="node-msg-title">' + esc(cpTree) + "</div>" : "";
           const childList = byParent.get(e.id);
           const hasKids = !!(childList && childList.length);
           const collapsed = !!(hasKids && state.treeCollapsedIds && state.treeCollapsedIds[e.id]);
@@ -1944,6 +1907,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             iconsWrap +
             "</div>" +
             titleBlock +
+            msgTitleBlock +
             '<div class="node-snippet' +
             snipCls +
             '" dir="auto">' +
@@ -1983,7 +1947,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           privBadge +
           "</div>" +
           (s.checkpointLabel
-            ? '<div class="thread-checkpoint">' + esc("Checkpoint: " + String(s.checkpointLabel)) + "</div>"
+            ? '<div class="thread-msg-title">' + esc("Title: " + String(s.checkpointLabel)) + "</div>"
             : "") +
           '<div class="body md" dir="auto">' +
           s.html +
@@ -2363,8 +2327,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (refBtn) refBtn.disabled = state.busy;
         if (ta) ta.disabled = state.busy;
         if (priv) priv.disabled = state.busy;
-        var cpEl = document.getElementById("checkpointLabel");
-        if (cpEl) cpEl.disabled = state.busy;
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
           busyEl.textContent = state.busy ? "Sending… Press Stop to cancel." : "Working…";
@@ -2480,13 +2442,25 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var queryEl = document.getElementById("searchDrawerQuery");
       var listEl = document.getElementById("searchDrawerResultsList");
       var scopeConv = document.getElementById("searchScopeConv");
+      var scopeTitles = document.getElementById("searchScopeTitles");
       var scopeNotes = document.getElementById("searchScopeNotes");
       var scopeSc = document.getElementById("searchScopeSidechat");
       var openBtn = document.getElementById("btnOpenSearch");
-      if (!backdrop || !drawer || !closeBtn || !queryEl || !listEl || !scopeConv || !scopeNotes || !scopeSc) {
+      if (
+        !backdrop ||
+        !drawer ||
+        !closeBtn ||
+        !queryEl ||
+        !listEl ||
+        !scopeConv ||
+        !scopeTitles ||
+        !scopeNotes ||
+        !scopeSc
+      ) {
         return;
       }
       var LS_CONV = "colcoor.search.scope.conversation";
+      var LS_TITLES = "colcoor.search.scope.titles";
       var LS_NOTES = "colcoor.search.scope.notes";
       var LS_SC = "colcoor.search.scope.sidechat";
       var searchOpen = false;
@@ -2509,6 +2483,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       function loadScopes() {
         scopeConv.checked = readBool(LS_CONV, true);
+        scopeTitles.checked = readBool(LS_TITLES, true);
         scopeNotes.checked = readBool(LS_NOTES, true);
         scopeSc.checked = readBool(LS_SC, true);
       }
@@ -2582,7 +2557,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var q = raw.toLowerCase();
         var count = 0;
         var anyScope =
-          (scopeConv.checked ? 1 : 0) + (scopeNotes.checked ? 1 : 0) + (scopeSc.checked ? 1 : 0);
+          (scopeConv.checked ? 1 : 0) +
+          (scopeTitles.checked ? 1 : 0) +
+          (scopeNotes.checked ? 1 : 0) +
+          (scopeSc.checked ? 1 : 0);
         if (!anyScope) {
           appendHint("Enable at least one search scope.");
           return;
@@ -2594,18 +2572,37 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             var eid = ev.id && String(ev.id).trim();
             if (!eid) continue;
             var dispTitle = eventDisplayTitle(ev);
-            var cp =
+            var ct = (ev.content_text && String(ev.content_text)) || "";
+            var hay = (dispTitle + " " + ct).toLowerCase();
+            if (hay.indexOf(q) === -1) continue;
+            var sn = snippet(ev);
+            var cpHit =
               ev.checkpoint_label && String(ev.checkpoint_label).trim()
                 ? String(ev.checkpoint_label).trim()
                 : "";
-            var ct = (ev.content_text && String(ev.content_text)) || "";
-            var hay = (dispTitle + " " + cp + " " + ct).toLowerCase();
-            if (hay.indexOf(q) === -1) continue;
-            var sn = snippet(ev);
-            var hitTitle = dispTitle || cp || treeKindLabel(ev.kind) + " · " + sn;
+            var hitTitle = dispTitle || cpHit || treeKindLabel(ev.kind) + " · " + sn;
             appendHit("Conversation", hitTitle, sn, {
               "data-hit-kind": "tree",
               "data-event-id": eid,
+            });
+            count++;
+          }
+        }
+        if (scopeTitles.checked) {
+          var evsT = state.events || [];
+          for (var it = 0; it < evsT.length && count < maxHits; it++) {
+            var evT = evsT[it] || {};
+            var eidT = evT.id && String(evT.id).trim();
+            if (!eidT) continue;
+            var cpT =
+              evT.checkpoint_label && String(evT.checkpoint_label).trim()
+                ? String(evT.checkpoint_label).trim()
+                : "";
+            if (!cpT || cpT.toLowerCase().indexOf(q) === -1) continue;
+            var snT = snippet(evT);
+            appendHit("Title", cpT, snT, {
+              "data-hit-kind": "tree",
+              "data-event-id": eidT,
             });
             count++;
           }
@@ -2661,6 +2658,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       loadScopes();
       scopeConv.addEventListener("change", function () {
         writeBool(LS_CONV, scopeConv.checked);
+        scheduleSearch();
+      });
+      scopeTitles.addEventListener("change", function () {
+        writeBool(LS_TITLES, scopeTitles.checked);
         scheduleSearch();
       });
       scopeNotes.addEventListener("change", function () {
@@ -2944,15 +2945,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!text && !imgs.length) return;
       const priv = document.getElementById("privateBranch");
       const privateBranch = priv && priv.checked;
-      const cpEl = document.getElementById("checkpointLabel");
-      var cpRaw = cpEl && cpEl.value ? String(cpEl.value) : "";
-      var cpTrim = cpRaw.trimEnd();
       var payload = { type: "send", text: ta.value.trimEnd(), privateBranch };
-      if (cpTrim.length) payload.checkpointLabel = cpTrim;
       if (imgs.length) payload.images = imgs;
       vscode.postMessage(payload);
       ta.value = "";
-      if (cpEl) cpEl.value = "";
       pendingSendImages = [];
       renderPendingConversationImages();
       updateComposerSendEnabled();
@@ -2993,6 +2989,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("btnListNotesOnSelection").addEventListener("click", () => {
       vscode.postMessage({ type: "listNotesOnSelection" });
     });
+
+    var btnEditMsgTitle = document.getElementById("btnEditMessageTitle");
+    if (btnEditMsgTitle) {
+      btnEditMsgTitle.addEventListener("click", () => {
+        vscode.postMessage({ type: "editMessageTitle" });
+      });
+    }
 
     document.getElementById("btnCopyThread").addEventListener("click", () => {
       var text = threadPlainTextForCopy();

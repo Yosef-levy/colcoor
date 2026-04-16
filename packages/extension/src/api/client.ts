@@ -614,6 +614,24 @@ export class ColcoorApiClient {
     }
   }
 
+  /** PATCH …/events/{id}/checkpoint-label — display-only title on an existing message. */
+  async patchEventCheckpointLabel(
+    conversationId: string,
+    eventId: string,
+    checkpoint_label: string | null,
+  ): Promise<void> {
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/events/${encodeURIComponent(eventId)}/checkpoint-label`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checkpoint_label }),
+      },
+    );
+    const text = await res.text();
+    this.assertOkResponse(res, text, "patch event checkpoint label");
+  }
+
   async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {
     const payload: Record<string, unknown> = {
       kind: body.kind,

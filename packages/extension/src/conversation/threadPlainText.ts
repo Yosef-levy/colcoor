@@ -28,7 +28,7 @@ export function buildPlainThread(
       const userText = [text.trimEnd(), mediaFrag].filter(Boolean).join("\n");
       let userLine = `User: ${userText}`;
       if (cp !== undefined) {
-        userLine += `\nCheckpoint: ${cp}`;
+        userLine += `\nTitle: ${cp}`;
       }
       chunks.push(userLine);
       if (evNotes?.length) {
@@ -39,7 +39,7 @@ export function buildPlainThread(
     } else if (ev.kind === "assistant_output") {
       let asstLine = `Assistant: ${text.trimEnd()}`;
       if (cp !== undefined) {
-        asstLine += `\nCheckpoint: ${cp}`;
+        asstLine += `\nTitle: ${cp}`;
       }
       chunks.push(asstLine);
       if (evNotes?.length) {

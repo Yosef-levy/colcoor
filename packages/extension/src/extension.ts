@@ -1312,7 +1312,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             vscode.window.showInputBox({
               title: "Colcoor — message",
               prompt:
-                "Your message (attached under the branch tip, then Cursor agent per Settings → Colcoor → agent mode). Use the next steps for checkpoint and shared vs private.",
+                "Your message (attached under the branch tip, then Cursor agent per Settings → Colcoor → agent mode). Next step: shared vs private.",
               ignoreFocusOut: true,
             }),
           getMultilineFromEditor: () =>
@@ -1325,13 +1325,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (!normalized) {
           return;
         }
-        const checkpointRaw = await vscode.window.showInputBox({
-          title: "Colcoor — message",
-          prompt:
-            "Optional checkpoint label (breadcrumb on the new message). Leave empty to skip. Esc skips.",
-          ignoreFocusOut: true,
-        });
-        const checkpointNorm = normalizedOptionalFollowUpPrompt(checkpointRaw);
         const privacyPick = await vscode.window.showQuickPick(sendMessagePrivacyQuickPickItems(), {
           title: "Colcoor — send as",
           placeHolder: "Shared (default) or private draft under the branch tip",
@@ -1348,7 +1341,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             normalized,
             workspaceRoot,
             {
-              ...(checkpointNorm ? { checkpointLabel: checkpointNorm } : {}),
               ...(privateBranch ? { privateBranch: true } : {}),
             },
           );

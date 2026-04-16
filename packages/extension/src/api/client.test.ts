@@ -461,6 +461,31 @@ describe("ColcoorApiClient note mutations", () => {
     expect("checkpoint_label" in body).toBe(false);
   });
 
+  it("patchEventCheckpointLabel sends PATCH to checkpoint-label with JSON body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => "",
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.patchEventCheckpointLabel(
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "My title",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      "/api/v1/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/events/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/checkpoint-label",
+    );
+    expect(init.method).toBe("PATCH");
+    expect(init.body).toBe(JSON.stringify({ checkpoint_label: "My title" }));
+  });
+
   it("createConversation surfaces HTTP 402 as plan / usage wording", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,

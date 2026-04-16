@@ -154,7 +154,7 @@ describe("buildPlainThread", () => {
     expect(out).toContain("NOTE: TODO: follow up");
   });
 
-  it("includes Checkpoint lines when events have checkpoint_label ([ui-features.md] §8)", () => {
+  it("includes Title lines when events have checkpoint_label ([ui-features.md] §8)", () => {
     const events: GraphEventNode[] = [
       {
         id: "u0",
@@ -195,7 +195,7 @@ describe("buildPlainThread", () => {
       },
     ];
     const out = buildPlainThread(events, "a1");
-    expect(out).toContain("User: Q\nCheckpoint: Gate A");
+    expect(out).toContain("User: Q\nTitle: Gate A");
     expect(out).toContain("Assistant: A");
   });
 });
