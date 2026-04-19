@@ -245,7 +245,81 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-right: 3px solid var(--vscode-focusBorder);
       background: var(--vscode-textBlockQuote-background);
     }
-    .inline-sidechat-meta { font-size: 0.82em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .inline-sidechat-meta-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .inline-sidechat-meta-main {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.82em;
+      color: var(--vscode-descriptionForeground);
+    }
+    .inline-sidechat-msg-unread .inline-sidechat-meta-main {
+      color: var(--vscode-charts-yellow);
+    }
+    /* Ghost “more” control: no chip background — only the ellipsis reads as the affordance. */
+    button.inline-sidechat-msg-menu-btn {
+      flex-shrink: 0;
+      padding: 0 2px;
+      min-width: auto;
+      line-height: 1;
+      font-size: 1.2em;
+      letter-spacing: 0.12em;
+      background: transparent !important;
+      color: var(--vscode-descriptionForeground);
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      cursor: pointer;
+      opacity: 0.88;
+    }
+    button.inline-sidechat-msg-menu-btn:hover {
+      opacity: 1;
+      color: var(--vscode-foreground);
+      background: transparent !important;
+    }
+    button.inline-sidechat-msg-menu-btn:focus-visible {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: 2px;
+    }
+    .inline-sidechat-msg-menu {
+      position: fixed;
+      z-index: 20000;
+      min-width: 168px;
+      background: var(--vscode-menu-background);
+      color: var(--vscode-menu-foreground);
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 4px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      padding: 4px 0;
+    }
+    .inline-sidechat-msg-menu[hidden] {
+      display: none !important;
+    }
+    .inline-sidechat-msg-menu:not([hidden]) {
+      display: block;
+    }
+    .inline-sidechat-msg-menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 6px 14px;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+    .inline-sidechat-msg-menu button:hover {
+      background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+      color: var(--vscode-menu-selectionForeground, var(--vscode-list-hoverForeground));
+    }
     .inline-sidechat-refs { display: inline; margin-left: 6px; }
     .inline-sidechat-refs .ref-chip {
       display: inline-block;
@@ -260,7 +334,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       font-size: 0.78em;
       color: var(--vscode-textLink-foreground);
     }
-    .inline-sidechat-actions, .inline-sidechat-reply { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
     .inline-sidechat-reply-row { flex-shrink: 0; margin: 0; align-items: center; gap: 8px; }
     .inline-sidechat-reply-hint { margin: 0; font-size: 0.85em; color: var(--vscode-descriptionForeground); flex: 1; min-width: 0; }
     .inline-sidechat-msg .edit-ta {
@@ -270,7 +343,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       font-family: var(--vscode-editor-font-family);
       font-size: var(--vscode-editor-font-size);
     }
-    .inline-sidechat-msg-unread .inline-sidechat-meta { color: var(--vscode-charts-yellow); }
     .inline-sidechat-unread {
       display: inline-block;
       margin-left: 6px;
@@ -1235,6 +1307,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnRefreshSideChat" class="btn-secondary">Refresh</button>
         </div>
         <div id="inlineSideChatList" class="inline-sidechat-list"></div>
+        <div id="inlineSideChatMsgMenu" class="inline-sidechat-msg-menu" role="menu" hidden></div>
         <div id="inlineSideChatReplyRow" class="row inline-sidechat-reply-row" style="display:none">
           <span id="inlineSideChatReplyHint" class="inline-sidechat-reply-hint" role="status"></span>
           <button type="button" id="btnClearInlineSideChatReply" class="btn-secondary">Clear reply</button>
@@ -2217,6 +2290,144 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return true;
     }
 
+    function inlineSideChatGetMenuOpts(m) {
+      var role = state.sideChatViewerRole;
+      var vid =
+        state.viewerUserId && String(state.viewerUserId).trim()
+          ? String(state.viewerUserId).trim()
+          : "";
+      var mk = m && m.kind ? String(m.kind) : "user";
+      var aid =
+        m.author_user_id && String(m.author_user_id).trim()
+          ? String(m.author_user_id).trim()
+          : "";
+      var mid = m.id != null ? String(m.id) : "";
+      var delAt = m.deleted_at != null ? String(m.deleted_at) : "";
+      var canEdit = mk === "user" && !delAt && vid && aid && aid === vid;
+      var canDel =
+        !delAt &&
+        (role === "owner" || (mk === "user" && vid && aid && aid === vid));
+      var showReply = mk === "user" && !delAt && !!mid;
+      return { showReply: showReply, canEdit: canEdit, canDel: canDel, mid: mid };
+    }
+
+    function inlineSideChatCloseMsgMenu() {
+      var menu = document.getElementById("inlineSideChatMsgMenu");
+      if (!menu) return;
+      menu.hidden = true;
+      menu.replaceChildren();
+    }
+
+    function inlineSideChatPositionMsgMenu(menu, left, top) {
+      var pad = 6;
+      var vw = window.innerWidth || 800;
+      var vh = window.innerHeight || 600;
+      menu.style.left = pad + "px";
+      menu.style.top = pad + "px";
+      var w = menu.offsetWidth || 160;
+      var h = menu.offsetHeight || 40;
+      var x = Math.max(pad, Math.min(left, vw - w - pad));
+      var y = Math.max(pad, Math.min(top, vh - h - pad));
+      menu.style.left = x + "px";
+      menu.style.top = y + "px";
+    }
+
+    function inlineSideChatPopulateAndShowMenu(clientX, clientY, mid, o) {
+      var menu = document.getElementById("inlineSideChatMsgMenu");
+      if (!menu || !mid) return;
+      menu.replaceChildren();
+      if (o.showReply) {
+        var br = document.createElement("button");
+        br.type = "button";
+        br.setAttribute("data-inline-sc-reply", "1");
+        br.setAttribute("data-msg-id", mid);
+        br.setAttribute("role", "menuitem");
+        br.textContent = "Reply";
+        menu.appendChild(br);
+      }
+      if (o.canEdit) {
+        var be = document.createElement("button");
+        be.type = "button";
+        be.setAttribute("data-inline-sc-edit", "1");
+        be.setAttribute("data-msg-id", mid);
+        be.setAttribute("role", "menuitem");
+        be.textContent = "Edit";
+        menu.appendChild(be);
+      }
+      if (o.canDel) {
+        var bd = document.createElement("button");
+        bd.type = "button";
+        bd.setAttribute("data-inline-sc-del", "1");
+        bd.setAttribute("data-msg-id", mid);
+        bd.setAttribute("role", "menuitem");
+        bd.textContent = "Delete";
+        menu.appendChild(bd);
+      }
+      menu.hidden = false;
+      requestAnimationFrame(function () {
+        inlineSideChatPositionMsgMenu(menu, clientX, clientY);
+      });
+    }
+
+    function wireInlineSideChatMsgMenuOnce() {
+      var menu = document.getElementById("inlineSideChatMsgMenu");
+      if (!menu || menu.dataset.inlineScMenuWired === "1") return;
+      menu.dataset.inlineScMenuWired = "1";
+      menu.addEventListener("click", function (ev) {
+        var t = ev.target;
+        if (!t || !t.closest) return;
+        var del = t.closest("[data-inline-sc-del]");
+        if (del) {
+          var did = del.getAttribute("data-msg-id");
+          inlineSideChatCloseMsgMenu();
+          if (did) vscode.postMessage({ type: "deleteSideChat", messageId: did });
+          return;
+        }
+        var ed = t.closest("[data-inline-sc-edit]");
+        if (ed) {
+          var eid = ed.getAttribute("data-msg-id");
+          var listEl = document.getElementById("inlineSideChatList");
+          var row =
+            listEl && eid ? listEl.querySelector('.inline-sidechat-msg[data-sidechat-id="' + eid + '"]') : null;
+          inlineSideChatCloseMsgMenu();
+          if (eid && row) inlineSideChatBeginEdit(row, eid);
+          return;
+        }
+        var rp = t.closest("[data-inline-sc-reply]");
+        if (rp) {
+          var rid = rp.getAttribute("data-msg-id");
+          inlineSideChatCloseMsgMenu();
+          if (rid) {
+            inlineSideChatReplyTargetId = rid;
+            inlineSideChatUpdateReplyHint();
+            var taSc = document.getElementById("inlineSideChatInput");
+            scheduleComposerFocus(taSc);
+          }
+        }
+      });
+    }
+
+    function wireInlineSideChatMenuDismissOnce() {
+      if (document.documentElement.dataset.inlineScMenuDismissWired === "1") return;
+      document.documentElement.dataset.inlineScMenuDismissWired = "1";
+      document.addEventListener(
+        "mousedown",
+        function (ev) {
+          var menu = document.getElementById("inlineSideChatMsgMenu");
+          if (!menu || menu.hidden) return;
+          var t = ev.target;
+          if (t && menu.contains(t)) return;
+          if (t && t.closest && t.closest("[data-inline-sc-menu-btn]")) return;
+          inlineSideChatCloseMsgMenu();
+        },
+        true,
+      );
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        inlineSideChatCloseMsgMenu();
+      });
+    }
+
     function inlineSideChatUpdateReplyHint() {
       var row = document.getElementById("inlineSideChatReplyRow");
       var hint = document.getElementById("inlineSideChatReplyHint");
@@ -2283,30 +2494,50 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var list = document.getElementById("inlineSideChatList");
       if (!list || list.dataset.inlineScWired === "1") return;
       list.dataset.inlineScWired = "1";
+      wireInlineSideChatMsgMenuOnce();
+      wireInlineSideChatMenuDismissOnce();
+      list.addEventListener("scroll", function () {
+        inlineSideChatCloseMsgMenu();
+      });
+      list.addEventListener(
+        "contextmenu",
+        function (ev) {
+          var row = ev.target.closest(".inline-sidechat-msg");
+          if (!row) return;
+          if (row.dataset.editing === "1") return;
+          var mid = row.getAttribute("data-sidechat-id");
+          if (!mid) return;
+          var rows = Array.isArray(state.sideChatMessages) ? state.sideChatMessages : [];
+          var m = rows.find(function (x) {
+            return x && String(x.id) === String(mid);
+          });
+          if (!m) return;
+          var o = inlineSideChatGetMenuOpts(m);
+          if (!o.showReply && !o.canEdit && !o.canDel) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          inlineSideChatPopulateAndShowMenu(ev.clientX, ev.clientY, mid, o);
+        },
+        true,
+      );
       list.addEventListener("click", function (ev) {
         var t = ev.target;
         if (!t || !t.closest) return;
-        var del = t.closest("[data-inline-sc-del]");
-        if (del) {
-          var did = del.getAttribute("data-msg-id");
-          if (did) vscode.postMessage({ type: "deleteSideChat", messageId: did });
-          return;
-        }
-        var ed = t.closest("[data-inline-sc-edit]");
-        if (ed) {
-          var eid = ed.getAttribute("data-msg-id");
-          var row = ed.closest(".inline-sidechat-msg");
-          if (eid && row) inlineSideChatBeginEdit(row, eid);
-          return;
-        }
-        var rp = t.closest("[data-inline-sc-reply]");
-        if (rp) {
-          var rid = rp.getAttribute("data-msg-id");
-          if (rid) {
-            inlineSideChatReplyTargetId = rid;
-            inlineSideChatUpdateReplyHint();
-          }
-          return;
+        var mb = t.closest("[data-inline-sc-menu-btn]");
+        if (mb) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var mid = mb.getAttribute("data-msg-id");
+          if (!mid) return;
+          var rows = Array.isArray(state.sideChatMessages) ? state.sideChatMessages : [];
+          var m = rows.find(function (x) {
+            return x && String(x.id) === String(mid);
+          });
+          if (!m) return;
+          var o = inlineSideChatGetMenuOpts(m);
+          if (!o.showReply && !o.canEdit && !o.canDel) return;
+          var rect = mb.getBoundingClientRect();
+          inlineSideChatPopulateAndShowMenu(rect.left, rect.bottom + 2, mid, o);
         }
       });
     }
@@ -2319,6 +2550,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!state.sideChatVisible) {
         col.style.display = "none";
         col.setAttribute("aria-hidden", "true");
+        inlineSideChatCloseMsgMenu();
         list.textContent = "";
         pendingInlineSideChatScrollAfterSend = false;
         if (inlineSideChatScrollAfterSendTimer) {
@@ -2334,6 +2566,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       col.style.display = "flex";
       col.setAttribute("aria-hidden", "false");
       wireInlineSideChatListActions();
+      inlineSideChatCloseMsgMenu();
       var rows = Array.isArray(state.sideChatMessages) ? state.sideChatMessages : [];
       if (!rows.length) {
         list.innerHTML = '<p class="empty">No side-chat messages yet.</p>';
@@ -2344,7 +2577,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var lrRaw = state.sideChatLastReadSeq;
       var lr =
         typeof lrRaw === "number" && Number.isFinite(lrRaw) ? Math.max(0, Math.floor(lrRaw)) : 0;
-      var role = state.sideChatViewerRole;
       var html = "";
       for (var i = 0; i < rows.length; i++) {
         var m = rows[i] || {};
@@ -2365,12 +2597,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             : "";
         var ownSc = mk === "user" && vid && aid && aid === vid;
         var mid = m.id != null ? String(m.id) : "";
-        var delAt = m.deleted_at != null ? String(m.deleted_at) : "";
-        var canEdit = mk === "user" && !delAt && vid && aid && aid === vid;
-        var canDel =
-          !delAt &&
-          (role === "owner" || (mk === "user" && vid && aid && aid === vid));
-        var showReply = mk === "user" && !delAt;
+        var menuOpts = inlineSideChatGetMenuOpts(m);
+        var hasMsgMenu = menuOpts.showReply || menuOpts.canEdit || menuOpts.canDel;
         var mentionsHtml = "";
         if (Array.isArray(m.mentions) && m.mentions.length) {
           mentionsHtml =
@@ -2400,28 +2628,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             esc(String(m.referenced_side_chat_preview.text || "(empty)")) +
             "</div>";
         }
-        var replyRow = "";
-        if (showReply && mid) {
-          replyRow =
-            '<div class="inline-sidechat-reply"><button type="button" class="btn-secondary" data-inline-sc-reply="1" data-msg-id="' +
+        var menuBtn = "";
+        if (hasMsgMenu && mid) {
+          menuBtn =
+            '<button type="button" class="inline-sidechat-msg-menu-btn" data-inline-sc-menu-btn="1" data-msg-id="' +
             esc(mid) +
-            '">Reply</button></div>';
+            '" aria-haspopup="menu" aria-label="Side-chat message actions" title="Message actions (right-click message for same menu)">⋯</button>';
         }
-        var actions = "";
-        if (canEdit && mid) {
-          actions +=
-            '<button type="button" class="btn-secondary" data-inline-sc-edit="1" data-msg-id="' +
-            esc(mid) +
-            '">Edit</button>';
-        }
-        if (canDel && mid) {
-          actions +=
-            '<button type="button" class="btn-secondary" data-inline-sc-del="1" data-msg-id="' +
-            esc(mid) +
-            '">Delete</button>';
-        }
-        var actionsWrap =
-          actions.length > 0 ? '<div class="inline-sidechat-actions">' + actions + "</div>" : "";
         html +=
           '<div class="inline-sidechat-msg ' +
           (ownSc ? "inline-sidechat-msg-self" : "inline-sidechat-msg-peer") +
@@ -2430,8 +2643,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           esc(mid) +
           '" data-sidechat-seq="' +
           esc(String(seqNum)) +
-          '" data-editing="0" tabindex="-1">' +
-          '<div class="inline-sidechat-meta">' +
+          '" data-editing="0" tabindex="-1" title="Right-click for Reply, Edit, or Delete when available">' +
+          '<div class="inline-sidechat-meta-row">' +
+          '<div class="inline-sidechat-meta-main">' +
           esc(inlineSideChatAuthorLabel(m)) +
           (unread
             ? '<span class="inline-sidechat-unread" title="Unread">●</span>'
@@ -2439,12 +2653,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           mentionsHtml +
           refsHtml +
           "</div>" +
+          menuBtn +
+          "</div>" +
           refPreview +
           '<div class="body md" dir="auto">' +
           bodyHtml +
           "</div>" +
-          replyRow +
-          actionsWrap +
           "</div>";
       }
       list.innerHTML = html;

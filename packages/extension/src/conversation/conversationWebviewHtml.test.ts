@@ -106,17 +106,21 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("payload.referencedSideChatMessageId");
   });
 
-  it("inline side-chat supports reply target, edit/delete actions, sounds, and host role for owner delete", () => {
+  it("inline side-chat uses a message menu (⋯ + right-click), sounds, and host role for owner delete", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="inlineSideChatReplyRow"');
+    expect(html).toContain('id="inlineSideChatMsgMenu"');
     expect(html).toContain("function playInlineSideChatSound(kind)");
     expect(html).toContain('m.type === "playSound"');
     expect(html).toContain("sideChatViewerRole: null");
     expect(html).toContain("m.sideChatViewerRole");
-    expect(html).toContain("data-inline-sc-reply");
-    expect(html).toContain("data-inline-sc-edit");
-    expect(html).toContain("data-inline-sc-del");
+    expect(html).toContain("data-inline-sc-menu-btn");
+    expect(html).toContain("button.inline-sidechat-msg-menu-btn");
+    expect(html).toContain("background: transparent !important");
+    expect(html).toContain("contextmenu");
+    expect(html).toContain("function inlineSideChatPopulateAndShowMenu(");
     expect(html).toContain("function wireInlineSideChatListActions()");
+    expect(html).toContain("function wireInlineSideChatMsgMenuOnce()");
   });
 
   it("scrolls inline side-chat to first unread on open using sideChatUnreadCount", () => {
