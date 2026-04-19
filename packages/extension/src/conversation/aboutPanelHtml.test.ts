@@ -18,13 +18,17 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("<strong>Side chat sounds…</strong>");
     expect(html).toContain("Colcoor: Open side chat sound &amp; notification settings…");
     expect(html).toContain("drawers");
+    expect(html).toContain("<strong>Invite teammates</strong>");
+    expect(html).toContain("<strong>Conversation → Add member…</strong>");
+    expect(html).toContain("<strong>Colcoor: Add member…</strong>");
+    expect(html).toContain("<strong>@handle</strong>");
+    expect(html).toContain("<strong>Conversation → Members</strong>");
     expect(html).toContain("<strong>setup buttons</strong>");
     expect(html).toContain("<strong>message titles</strong>");
     expect(html).toContain("<strong>Message → Add/edit title…</strong>");
     expect(html).toContain("<strong>View → Search…</strong>");
     expect(html).toContain("<strong>−</strong>");
     expect(html).toContain("<strong>Copy ID</strong>");
-    expect(html).toContain("conversation identifier");
     expect(html).toContain("<strong>assistant in this workspace</strong>");
     expect(html).toContain("Command Palette");
     expect(html).toContain("<strong>Settings → Colcoor</strong>");
@@ -40,7 +44,7 @@ describe("getAboutPanelHtml", () => {
 
   it("points to side chat sound and notification settings ([ui-features.md] §1.1)", () => {
     const html = getAboutPanelHtml("");
-    expect(html).toContain("side chat sounds and notifications");
+    expect(html).toContain("Side chat sounds and notifications");
     expect(html).toContain("Conversations welcome list");
   });
 

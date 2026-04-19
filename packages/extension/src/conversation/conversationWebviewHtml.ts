@@ -357,13 +357,58 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vertical-align: middle;
     }
     .inline-sidechat .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .inline-sidechat-composer { display: flex; gap: 8px; align-items: center; }
-    .inline-sidechat-composer textarea {
+    .inline-sidechat-composer { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .inline-sidechat-composer-core {
       flex: 1;
+      min-width: 120px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .inline-sidechat-composer-core textarea {
+      flex: 1;
+      width: 100%;
       min-height: 54px;
       resize: vertical;
       font-family: var(--vscode-editor-font-family);
       font-size: var(--vscode-editor-font-size);
+    }
+    .inline-sidechat-mention-popup {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      margin-bottom: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 40;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+    .inline-sidechat-mention-option {
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 0.92em;
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+    .inline-sidechat-mention-option:last-child {
+      border-bottom: none;
+    }
+    .inline-sidechat-mention-option[aria-selected="true"] {
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
+    .inline-sidechat-mention-option .mention-opt-desc {
+      display: block;
+      font-size: 0.85em;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 2px;
+    }
+    .inline-sidechat-mention-option[aria-selected="true"] .mention-opt-desc {
+      color: inherit;
+      opacity: 0.85;
     }
     .composer {
       flex-shrink: 0;
@@ -1375,7 +1420,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnClearInlineSideChatReply" class="btn-secondary">Clear reply</button>
         </div>
         <div class="inline-sidechat-composer" style="flex-shrink:0;">
-          <textarea id="inlineSideChatInput" dir="auto" placeholder="Side chat… Shift+Enter for newline, Enter to send."></textarea>
+          <div class="inline-sidechat-composer-core">
+            <textarea id="inlineSideChatInput" dir="auto" placeholder="Side chat… Type @ to mention. Shift+Enter for newline, Enter to send."></textarea>
+            <div
+              id="inlineSideChatMentionPopup"
+              class="inline-sidechat-mention-popup"
+              hidden
+              role="listbox"
+              aria-label="Mention teammate"
+            ></div>
+          </div>
           <div id="pendingInlineSideChatImages" class="composer-pending-images" style="display:none"></div>
           <button type="button" id="btnInlineSideChatSend" class="btn-secondary">Send</button>
         </div>
@@ -1433,6 +1487,147 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     var inlineSideChatScrollAfterSendTimer = null;
     var prevSideChatPanelOpen = false;
     var prevConversationIdForSideChatScroll = "";
+    var inlineScMentionStart = -1;
+    var inlineScMentionSel = 0;
+    var inlineScMentionFiltered = [];
+
+    function inlineSideChatGetMentionPickList() {
+      return Array.isArray(state.sideChatMentionPickList) ? state.sideChatMentionPickList : [];
+    }
+
+    function inlineSideChatHideMentionPopup() {
+      var pop = document.getElementById("inlineSideChatMentionPopup");
+      if (pop) {
+        pop.hidden = true;
+        pop.replaceChildren();
+      }
+      inlineScMentionStart = -1;
+      inlineScMentionSel = 0;
+      inlineScMentionFiltered = [];
+    }
+
+    function inlineSideChatParseMentionAtCursor(ta) {
+      if (!ta || typeof ta.selectionStart !== "number") return null;
+      var pos = ta.selectionStart;
+      var v = String(ta.value || "");
+      var i = pos - 1;
+      while (i >= 0) {
+        var ch = v.charAt(i);
+        if (ch === "\n" || ch === " ") return null;
+        if (ch === "@") {
+          var prevOk = i === 0 || /[\s\n(]/.test(v.charAt(i - 1)));
+          if (!prevOk) return null;
+          return { at: i, end: pos, query: v.slice(i + 1, pos) };
+        }
+        i--;
+      }
+      return null;
+    }
+
+    function inlineSideChatFilterMentions(query) {
+      var all = inlineSideChatGetMentionPickList();
+      var q = String(query || "").toLowerCase();
+      if (!q) return all.slice(0, 12);
+      var out = [];
+      for (var j = 0; j < all.length; j++) {
+        var it = all[j];
+        if (!it || !it.insert) continue;
+        var hit = false;
+        var keys = Array.isArray(it.filterKeys) ? it.filterKeys : [];
+        for (var k = 0; k < keys.length; k++) {
+          var kk = String(keys[k] || "").toLowerCase();
+          if (kk.indexOf(q) === 0) {
+            hit = true;
+            break;
+          }
+        }
+        if (!hit && String(it.label || "").toLowerCase().indexOf(q) >= 0) hit = true;
+        if (!hit && String(it.insert || "").toLowerCase().indexOf(q) >= 0) hit = true;
+        if (hit) out.push(it);
+        if (out.length >= 12) break;
+      }
+      return out;
+    }
+
+    function inlineSideChatRenderMentionPopup() {
+      var pop = document.getElementById("inlineSideChatMentionPopup");
+      if (!pop) return;
+      pop.replaceChildren();
+      if (!inlineScMentionFiltered.length) {
+        pop.hidden = true;
+        return;
+      }
+      pop.hidden = false;
+      for (var i = 0; i < inlineScMentionFiltered.length; i++) {
+        var row = inlineScMentionFiltered[i];
+        var opt = document.createElement("div");
+        opt.className = "inline-sidechat-mention-option";
+        opt.setAttribute("role", "option");
+        opt.setAttribute("aria-selected", i === inlineScMentionSel ? "true" : "false");
+        var t1 = document.createElement("span");
+        t1.textContent = row.label || row.insert || "";
+        opt.appendChild(t1);
+        if (row.description) {
+          var t2 = document.createElement("span");
+          t2.className = "mention-opt-desc";
+          t2.textContent = row.description;
+          opt.appendChild(t2);
+        }
+        (function (idx) {
+          opt.addEventListener("mousedown", function (ev) {
+            ev.preventDefault();
+            inlineScMentionSel = idx;
+            inlineSideChatApplyMentionPick();
+          });
+        })(i);
+        pop.appendChild(opt);
+      }
+    }
+
+    function inlineSideChatApplyMentionPick() {
+      var ta = document.getElementById("inlineSideChatInput");
+      if (!ta || inlineScMentionStart < 0) {
+        inlineSideChatHideMentionPopup();
+        return;
+      }
+      var row = inlineScMentionFiltered[inlineScMentionSel];
+      if (!row || !row.insert) {
+        inlineSideChatHideMentionPopup();
+        return;
+      }
+      var end = typeof ta.selectionStart === "number" ? ta.selectionStart : (ta.value || "").length;
+      var v = String(ta.value || "");
+      var ins = String(row.insert);
+      if (ins.charAt(0) !== "@") ins = "@" + ins;
+      ta.value = v.slice(0, inlineScMentionStart) + ins + " " + v.slice(end);
+      var np = inlineScMentionStart + ins.length + 1;
+      try {
+        ta.setSelectionRange(np, np);
+      } catch (eSet) {}
+      inlineSideChatHideMentionPopup();
+      updateInlineSideChatSendEnabled();
+      try {
+        ta.focus();
+      } catch (eF) {}
+    }
+
+    function inlineSideChatUpdateMentionPopup() {
+      var ta = document.getElementById("inlineSideChatInput");
+      if (!ta || !state.sideChatVisible) {
+        inlineSideChatHideMentionPopup();
+        return;
+      }
+      var ctx = inlineSideChatParseMentionAtCursor(ta);
+      if (!ctx) {
+        inlineSideChatHideMentionPopup();
+        return;
+      }
+      inlineScMentionStart = ctx.at;
+      inlineScMentionFiltered = inlineSideChatFilterMentions(ctx.query);
+      inlineScMentionSel = 0;
+      inlineSideChatRenderMentionPopup();
+    }
+
     function renderPendingConversationImages() {
       var el = document.getElementById("pendingConversationImages");
       if (!el) return;
@@ -1542,6 +1737,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       selectionVisitCanGoForward: false,
       waitingForAssistant: false,
       queuedMainSendCount: 0,
+      sideChatMentionPickList: [],
     };
 
     var openColcoorListsDrawer = function (tab) {
@@ -2635,6 +2831,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!state.sideChatVisible) {
         col.style.display = "none";
         col.setAttribute("aria-hidden", "true");
+        inlineSideChatHideMentionPopup();
         inlineSideChatCloseMsgMenu();
         list.textContent = "";
         pendingInlineSideChatScrollAfterSend = false;
@@ -3070,6 +3267,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         renderTree();
         renderThread();
         renderInlineSideChat();
+        inlineSideChatUpdateMentionPopup();
         renderDetailBar();
         updateThreadVisitNav();
         applyTreeWidth();
@@ -3640,6 +3838,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             typeof m.queuedMainSendCount === "number" && Number.isFinite(m.queuedMainSendCount)
               ? Math.max(0, Math.floor(m.queuedMainSendCount))
               : 0,
+          sideChatMentionPickList: Array.isArray(m.sideChatMentionPickList) ? m.sideChatMentionPickList : [],
           conversationLoading: m.conversationLoading === true,
         };
         render();
@@ -3964,6 +4163,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("inlineSideChatInput").addEventListener("input", function () {
       updateInlineSideChatSendEnabled();
+      inlineSideChatUpdateMentionPopup();
     });
 
     document.getElementById("inlineSideChatInput").addEventListener("paste", function (ev) {
@@ -4002,9 +4202,44 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         };
         fr.readAsDataURL(blob);
       });
+      inlineSideChatUpdateMentionPopup();
     });
 
     document.getElementById("inlineSideChatInput").addEventListener("keydown", function (e) {
+      var pop = document.getElementById("inlineSideChatMentionPopup");
+      var popOpen = pop && !pop.hidden && inlineScMentionFiltered.length > 0;
+      if (popOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          inlineSideChatHideMentionPopup();
+          return;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          inlineScMentionSel = Math.min(
+            inlineScMentionFiltered.length - 1,
+            inlineScMentionSel + 1,
+          );
+          inlineSideChatRenderMentionPopup();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          inlineScMentionSel = Math.max(0, inlineScMentionSel - 1);
+          inlineSideChatRenderMentionPopup();
+          return;
+        }
+        if (e.key === "Tab") {
+          e.preventDefault();
+          inlineSideChatApplyMentionPick();
+          return;
+        }
+        if (shouldSendOnEnter(e)) {
+          e.preventDefault();
+          inlineSideChatApplyMentionPick();
+          return;
+        }
+      }
       if (!shouldSendOnEnter(e)) return;
       var ta = document.getElementById("inlineSideChatInput");
       var raw = ta && ta.value ? String(ta.value) : "";

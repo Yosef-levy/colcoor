@@ -48,10 +48,16 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
       back to highlights.
     </li>
     <li>
-      Tune <strong>side chat sounds and notifications</strong> with the <strong>Side chat sounds…</strong> button in the
-      conversation tab, the Command Palette entry
-      <strong>Colcoor: Open side chat sound &amp; notification settings…</strong>, or the matching link in the
+      <strong>Side chat sounds and notifications:</strong> use <strong>Side chat sounds…</strong> in the conversation tab,
+      <strong>Colcoor: Open side chat sound &amp; notification settings…</strong> in the Command Palette, or the link in the
       Conversations welcome list — Settings opens filtered to those Colcoor options.
+    </li>
+    <li>
+      <strong>Invite teammates</strong> who already use Colcoor: open <strong>Conversation → Add member…</strong> (or run
+      <strong>Colcoor: Add member…</strong> from the Command Palette). Enter their <strong>user id</strong> (UUID),
+      <strong>full email</strong> as stored on their account, or <strong>@handle</strong>. If several accounts share the
+      same email, pick the right person from the list (photo, display name, handle, last signed in), then choose
+      <strong>Editor</strong> or <strong>Viewer</strong>. Use <strong>Conversation → Members</strong> to list who is in the thread.
     </li>
     <li>
       Use the <strong>setup buttons</strong> in the conversation tab or drawers — or the
@@ -69,12 +75,13 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
       top of the drawer to narrow results.
     </li>
     <li>
-      Use <strong>Copy ID</strong> in the conversation tab or drawers when you need the conversation identifier on your clipboard (for example to share with a teammate or support).
+      Use <strong>Copy ID</strong> in the conversation tab or drawers to copy this conversation’s id (for support or
+      your own notes — teammates join via <strong>Add member…</strong>, not by id alone).
     </li>
     <li>Open <strong>Settings → Colcoor</strong> for the server address and how replies are produced.</li>
     <li>
       Optional <strong>Terms</strong>, <strong>Privacy</strong>, and <strong>Refund</strong> links: use the Command Palette
-      entry <strong>Colcoor: Open legal policy settings</strong> (or the Conversations welcome view) to jump straight to
+      entry <strong>Colcoor: Open legal policy settings</strong> (or the Conversations welcome list) to jump straight to
       those fields; when set, they also appear in the conversation panel.
     </li>
   </ul>

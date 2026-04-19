@@ -123,6 +123,19 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("payload.referencedSideChatMessageId");
   });
 
+  it("wires @ mention autocomplete in inline side-chat from host pick list", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonceScMention");
+    expect(html).toContain('id="inlineSideChatMentionPopup"');
+    expect(html).toContain("inline-sidechat-composer-core");
+    expect(html).toContain("sideChatMentionPickList: []");
+    expect(html).toContain("sideChatMentionPickList: Array.isArray(m.sideChatMentionPickList)");
+    expect(html).toContain("function inlineSideChatParseMentionAtCursor(ta)");
+    expect(html).toContain("function inlineSideChatUpdateMentionPopup()");
+    expect(html).toContain("function inlineSideChatHideMentionPopup()");
+    expect(html).toContain("inlineSideChatUpdateMentionPopup();");
+    expect(html).toContain("Type @ to mention");
+  });
+
   it("inline side-chat uses a message menu (⋯ + right-click), sounds, and host role for owner delete", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="inlineSideChatReplyRow"');

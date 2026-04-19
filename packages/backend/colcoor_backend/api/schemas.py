@@ -163,6 +163,7 @@ class MemberOut(BaseModel):
     role: Literal["owner", "editor", "viewer"]
     email: str | None = None
     display_name: str | None = None
+    handle: str | None = None
 
 
 class MemberInviteCandidateOut(BaseModel):
@@ -251,11 +252,15 @@ class MePatchBody(BaseModel):
 
     display_name: str | None = None
     avatar_url: str | None = None
+    handle: str | None = Field(
+        default=None,
+        description="Public @handle for mentions; null clears. Letters, digits, ._- only; unique when set.",
+    )
 
     @model_validator(mode="after")
     def _at_least_one_field(self) -> MePatchBody:
         if not self.model_fields_set:
-            raise ValueError("at least one of display_name, avatar_url is required")
+            raise ValueError("at least one of display_name, avatar_url, handle is required")
         return self
 
 
@@ -268,6 +273,7 @@ class MeOut(BaseModel):
     email: str
     display_name: str
     avatar_url: str | None
+    handle: str | None = None
     access_token: str | None = Field(
         default=None,
         description="Omitted unless the server refreshes JWT claims (not used on simple profile patch).",

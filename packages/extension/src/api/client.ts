@@ -67,6 +67,7 @@ export type ConversationMember = {
   role: "owner" | "editor" | "viewer";
   email?: string | null;
   display_name?: string | null;
+  handle?: string | null;
 };
 
 /** Row from GET …/member-invite-search (api-contracts §4.1a). */
@@ -125,12 +126,15 @@ export type MeOut = {
   email: string;
   display_name: string;
   avatar_url: string | null;
+  /** Public @handle for side-chat mentions; null when unset. */
+  handle?: string | null;
   access_token?: string;
 };
 
 export type MePatchBody = {
   display_name?: string;
   avatar_url?: string | null;
+  handle?: string | null;
 };
 
 /** Side-chat row (api-contracts §10). */
