@@ -31,7 +31,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
     VIRTUAL_ENV=/opt/venv \
     WEB_CONCURRENCY=2 \
-    COLCOOR_LOG_LEVEL=INFO
+    COLCOOR_LOG_LEVEL=INFO \
+    COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED=true
 
 RUN groupadd --gid 10001 colcoor \
     && useradd --uid 10001 --gid colcoor --shell /usr/sbin/nologin --create-home --home-dir /var/lib/colcoor colcoor

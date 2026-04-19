@@ -46,6 +46,14 @@ There are **no** other main-thread event kinds in this product scope.
 - **`visible_to` equals a `users.id`:** the event is a **private draft** for that user only. Other members **MUST NOT** see it in shared tree responses. The owning user sees it when loading the tree in **private** mode or when the API includes private drafts for the caller.
 - **Private `user_input`** may have child **`assistant_output`** events that remain private until **committed** (promoted to **`visible_to = NULL`** per [permissions.md](permissions.md)).
 
+### 3.4 Soft delete (`deleted_at`)
+
+- When **`deleted_at`** is set on an **`events`** row, that row is **hidden** from tree and note-list APIs for members (same rules as other graph reads).
+- **Deleting a node** (product action) sets **`deleted_at`** on that node and **every descendant** in one operation. **Stars** on those events are removed for all users; **notes** on those events no longer appear in list endpoints.
+- **Appending** with **`parent_event_id`** pointing at a soft-deleted anchor **inherits** the parent’s **`deleted_at`** on the new row so **late or racing writes** still land in the hidden subtree.
+- The **conversation root** (the single **`parent_event_id IS NULL`** non-deleted row) **MUST NOT** be soft-deleted.
+- **Retention:** the server **may** permanently delete soft-deleted rows after a configurable age (default **24 hours**). Dependent rows with **`ON DELETE CASCADE`** (e.g. **notes**, **stars**) disappear with the event; **`active_event_id`** is repointed to the live root before hard delete.
+
 ---
 
 ## 4. Per-user conversation state

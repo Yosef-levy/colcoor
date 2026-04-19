@@ -42,6 +42,7 @@ from colcoor_backend.services.graph import (
     read_conversation_caller_state,
     remove_conversation_member,
     set_conversation_active_event,
+    soft_delete_event_subtree,
     tree_event_annotations,
     update_conversation_member_role,
     update_note_content,
@@ -541,6 +542,34 @@ async def delete_conversation_note(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/{conversation_id}/events/{event_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_event_subtree(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    event_id: UUID,
+) -> Response:
+    """Soft-delete ``event_id`` and all descendants (``events.deleted_at``); stars removed; notes hidden."""
+    try:
+        await soft_delete_event_subtree(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

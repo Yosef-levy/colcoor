@@ -771,6 +771,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.refreshConversationTree", async () => {
       await conversationPanel.refreshConversationTree();
     }),
+    vscode.commands.registerCommand("colcoor.deleteSelectedMessageSubtree", async () => {
+      await conversationPanel.deleteSelectedMessageSubtree();
+    }),
     vscode.commands.registerCommand("colcoor.addNoteToSelectedMessage", async () => {
       await conversationPanel.addNoteToSelectedMessage();
     }),
@@ -796,7 +799,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
         try {
           const [{ events }, notes] = await Promise.all([api.getTree(convId), api.listNotes(convId)]);
-          const todos = filterTodoNotes(notes);
+          const visibleEventIds = new Set(events.map((e) => e.id));
+          const todos = filterTodoNotes(notes).filter((n) => visibleEventIds.has(n.event_id));
           if (todos.length === 0) {
             await vscode.window.showInformationMessage(
               "Colcoor: no TODO notes in this conversation (first line must start with “TODO”).",

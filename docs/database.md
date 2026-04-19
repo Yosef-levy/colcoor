@@ -57,7 +57,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | content_json | jsonb null | Structured payload |
 | checkpoint_label | text null | Optional display-only label for checkpoint / breadcrumb UI ([ui-features.md] §8) |
 | visible_to | uuid FK null | **NULL** = shared (all members); **non-NULL** = private draft for that `users.id` only |
-| deleted_at | timestamptz null | Soft delete |
+| deleted_at | timestamptz null | Soft delete; the API may **hard-delete** the row after a retention window (see [production.md](production.md) `COLCOOR_EVENT_*`) |
 | created_at | timestamptz not null | Inserted |
 | updated_at | timestamptz not null | Last mutation |
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -13,6 +14,7 @@ from colcoor_backend.core.validation import validate_cors_origins_non_wildcard, 
 import colcoor_backend.db.models  # noqa: F401 — register ORM mappers
 from colcoor_backend.db.session import create_engine, create_session_factory
 from colcoor_backend.logging_config import configure_logging
+from colcoor_backend.services.event_purge import spawn_event_purge_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,16 @@ async def lifespan(app: FastAPI):
         app.state.db_engine = None
         app.state.session_factory = None
 
+    purge_task: asyncio.Task[None] | None = None
+    if app.state.session_factory is not None and settings.event_purge_scheduler_enabled:
+        purge_task = spawn_event_purge_scheduler(app.state.session_factory, settings)
+        if purge_task is not None:
+            logger.info(
+                "event purge scheduler enabled (interval=%ss retention=%sh)",
+                settings.event_purge_interval_seconds,
+                settings.event_soft_delete_retention_hours,
+            )
+
     logger.info(
         "startup complete env=%s database_configured=%s cors_origins=%s",
         settings.env,
@@ -40,6 +52,13 @@ async def lifespan(app: FastAPI):
     )
 
     yield
+
+    if purge_task is not None:
+        purge_task.cancel()
+        try:
+            await purge_task
+        except asyncio.CancelledError:
+            pass
 
     engine = getattr(app.state, "db_engine", None)
     if engine is not None:

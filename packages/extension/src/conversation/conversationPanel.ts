@@ -89,6 +89,11 @@ const SIDE_CHAT_COLUMN_WIDTH_STATE_KEY = "colcoor.conversation.sideChatColumnWid
 const TREE_COLLAPSED_BY_CONV_KEY = "colcoor.treeCollapsedByConversation";
 const colcoorNotesChannel = vscode.window.createOutputChannel("Colcoor notes");
 
+/** Staged main-thread sends while the assistant is still generating the reply to the active user line. */
+type QueuedMainSendItem =
+  | { kind: "after_assistant"; text: string; images?: { dataUrl: string }[] }
+  | { kind: "new_branch"; text: string; images?: { dataUrl: string }[]; privateBranch: boolean };
+
 /** Optional server snapshots for `revealAtEvent` to skip redundant GETs after a palette/drawer fetch. */
 export type RevealAtEventPrefetchOptions = {
   prefetchedTreeEvents?: GraphEventNode[];
@@ -145,6 +150,10 @@ type WebviewStateMessage = {
   /** Client-only visited selection stack (max ~20); thread ← / → controls. */
   selectionVisitCanGoBack: boolean;
   selectionVisitCanGoForward: boolean;
+  /** True after the in-flight user line is persisted and until the assistant run finishes ([ui-features.md] §7). */
+  waitingForAssistant: boolean;
+  /** Messages staged while {@link waitingForAssistant}; flushed after the current assistant reply. */
+  queuedMainSendCount: number;
 };
 
 type FromWebview =
@@ -155,6 +164,11 @@ type FromWebview =
       privateBranch?: boolean;
       /** Pasted images as data URLs (image/* only); host uploads then appends colcoor_user_media. */
       images?: { dataUrl: string }[];
+      /**
+       * When a main-thread reply is already generating: queue under the pending assistant reply,
+       * or start a sibling branch from the anchor of the in-flight send (`privateBranch` follows the composer checkbox).
+       */
+      busySendMode?: "queue" | "branch";
     }
   | { type: "select"; id: string }
   | { type: "selectionHistoryBack" }
@@ -283,6 +297,8 @@ export function createConversationPanelController(
   copySelectedMessage: () => Promise<void>;
   /** Reload tree + thread from the API (same as webview “Refresh conversation tree”). */
   refreshConversationTree: (opts?: { quiet?: boolean }) => Promise<void>;
+  /** Soft-delete the selected node and its subtree (owner/editor). */
+  deleteSelectedMessageSubtree: () => Promise<void>;
   /** Show inline side-chat drawer in this conversation tab. */
   openInlineSideChat: () => Promise<void>;
   dispose: () => void;
@@ -328,6 +344,9 @@ export function createConversationPanelController(
   let viewerUserIdMemo: string | undefined;
   /** Set while a main-thread send is in flight until the user message exists on the tree ([ui-features.md] §7). */
   let pendingSendUserMarkdown: string | undefined;
+  let pendingMainSendQueue: QueuedMainSendItem[] = [];
+  /** `selectedEventId` when the primary in-flight send started; used for queued “new branch” items. */
+  let busyAnchorParentEventId: string | undefined;
   /** Data URLs for `user_input` rows with `colcoor_user_media`, built on each tree refresh for thread HTML. */
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
   /** Inline side-chat rows + rendered rows for same-tab drawer. */
@@ -910,6 +929,7 @@ export function createConversationPanelController(
         side_chat_unread_count: sideChatUnreadCount,
       });
       const pendingUserHtml = pendingUserHtmlForPanelState(busy, pendingSendUserMarkdown);
+      const waitingForAssistant = Boolean(sendAbort && pendingSendUserMarkdown === undefined);
       const drawersModel = buildConversationDrawersModel(events, lastNotes);
       const msg: WebviewStateMessage = {
         type: "state",
@@ -952,6 +972,8 @@ export function createConversationPanelController(
         selectionVisitCanGoBack: nav.canGoBack,
         selectionVisitCanGoForward: nav.canGoForward,
         sideChatViewerRole: viewerConversationRole,
+        waitingForAssistant,
+        queuedMainSendCount: pendingMainSendQueue.length,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -1018,6 +1040,8 @@ export function createConversationPanelController(
           selectionVisitCanGoBack: false,
           selectionVisitCanGoForward: false,
           sideChatViewerRole: viewerConversationRole,
+          waitingForAssistant: Boolean(sendAbort && pendingSendUserMarkdown === undefined),
+          queuedMainSendCount: pendingMainSendQueue.length,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -1207,10 +1231,105 @@ export function createConversationPanelController(
     });
   }
 
+  function isWaitingForAssistant(): boolean {
+    return sendAbort != null && pendingSendUserMarkdown === undefined;
+  }
+
+  async function uploadPastedImagesForMainSend(
+    pastedImages: { dataUrl: string }[] | undefined,
+  ): Promise<ColcoorUserMediaImageRef[]> {
+    const refs: ColcoorUserMediaImageRef[] = [];
+    if (!conversationId) {
+      return refs;
+    }
+    for (const row of pastedImages ?? []) {
+      const parsed = parseDataUrlToBytes(row.dataUrl);
+      if (!parsed) {
+        continue;
+      }
+      const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
+      refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
+    }
+    return refs;
+  }
+
+  async function drainMainSendQueue(initialAssistantId: string | undefined): Promise<void> {
+    let mainAssistant = initialAssistantId;
+    const anchor = busyAnchorParentEventId;
+    if (!conversationId || !anchor) {
+      return;
+    }
+    const ws = getWorkspaceRoot();
+    const sig = sendAbort?.signal;
+    if (!sig) {
+      return;
+    }
+    while (pendingMainSendQueue.length > 0) {
+      const item = pendingMainSendQueue.shift()!;
+      const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
+      try {
+        const refs = await uploadPastedImagesForMainSend(item.images);
+        const trimmed = normalizePersistedUserInputText(item.text);
+        if (!trimmed && refs.length === 0) {
+          stream.dispose();
+          continue;
+        }
+        const userMediaContentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
+        const replyParent = item.kind === "after_assistant" ? mainAssistant ?? undefined : anchor;
+        if (item.kind === "after_assistant" && replyParent === undefined) {
+          stream.dispose();
+          void vscode.window.showWarningMessage(
+            "Colcoor: skipped a queued message — no assistant reply to attach under.",
+          );
+          continue;
+        }
+        const result = await runColcoorUserTurn(
+          api,
+          agent,
+          conversationId,
+          conversationTitle,
+          trimmed,
+          ws,
+          {
+            replyParentEventId: replyParent,
+            privateBranch: item.kind === "new_branch" ? item.privateBranch : false,
+            signal: sig,
+            onAssistantTextDelta: (t) => stream.pushDelta(t),
+            ...(userMediaContentJson ? { userMediaContentJson } : {}),
+            onUserMessagePersisted: async ({ userEventId }) => {
+              selectedEventId = userEventId;
+              await loadTreeAndPush(true, null, {
+                skipConversationsList: true,
+                skipInlineSideChatRefresh: true,
+              });
+            },
+          },
+        );
+        stream.dispose();
+        postState(lastTreeEvents, true, lastPostedError);
+        if (result.cancelled) {
+          break;
+        }
+        if (item.kind === "after_assistant" && result.assistantEventId) {
+          mainAssistant = result.assistantEventId;
+        }
+      } catch (e) {
+        stream.dispose();
+        if (isPlanLimitColcoorApiError(e)) {
+          void showColcoorApiFailure(e);
+        }
+        const msg = e instanceof Error ? e.message : String(e);
+        await loadTreeAndPush(false, msg);
+        break;
+      }
+    }
+  }
+
   async function handleSend(
     text: string,
     privateBranch: boolean,
     pastedImages?: { dataUrl: string }[],
+    busySendMode?: "queue" | "branch",
   ): Promise<void> {
     const trimmed = normalizePersistedUserInputText(text);
     const hasPasted =
@@ -1218,24 +1337,46 @@ export function createConversationPanelController(
     if ((!trimmed && !hasPasted) || !conversationId || !selectedEventId) {
       return;
     }
+
+    if (sendAbort != null) {
+      if (!busySendMode) {
+        void vscode.window.showInformationMessage(
+          "Colcoor: a reply is still generating. Use “Queue after reply” or “New branch”, or press Stop.",
+        );
+        return;
+      }
+      if (!isWaitingForAssistant()) {
+        void vscode.window.showWarningMessage(
+          "Colcoor: wait until your message appears in the thread, then you can queue or branch.",
+        );
+        return;
+      }
+      if (busySendMode === "queue") {
+        pendingMainSendQueue.push({ kind: "after_assistant", text: trimmed, images: pastedImages });
+      } else {
+        pendingMainSendQueue.push({
+          kind: "new_branch",
+          text: trimmed,
+          images: pastedImages,
+          privateBranch,
+        });
+      }
+      postState(lastTreeEvents, true, lastPostedError);
+      return;
+    }
+
+    pendingMainSendQueue = [];
+    busyAnchorParentEventId = selectedEventId;
+
     pendingSendUserMarkdown = trimmed || (hasPasted ? "_Image_…" : "");
     const ws = getWorkspaceRoot();
-    sendAbort?.abort();
     sendAbort = new AbortController();
     syncConversationReplyInProgressContext();
     const signal = sendAbort.signal;
     postState(lastTreeEvents, true, lastPostedError);
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
     try {
-      const refs: ColcoorUserMediaImageRef[] = [];
-      for (const row of pastedImages ?? []) {
-        const parsed = parseDataUrlToBytes(row.dataUrl);
-        if (!parsed) {
-          continue;
-        }
-        const up = await api.uploadConversationImage(conversationId, parsed.bytes, parsed.mimeType);
-        refs.push({ id: up.id, mime_type: up.mime_type, byte_size: up.byte_size });
-      }
+      const refs = await uploadPastedImagesForMainSend(pastedImages);
       if (!trimmed && refs.length === 0) {
         stream.dispose();
         postState(lastTreeEvents, false, lastPostedError);
@@ -1269,6 +1410,9 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
+      if (!result.cancelled) {
+        await drainMainSendQueue(result.assistantEventId);
+      }
       await loadTreeAndPush(false, null, { finalizeToDefaultBranchTip: true });
       if (result.cancelled) {
         void vscode.window.showInformationMessage(
@@ -1287,6 +1431,8 @@ export function createConversationPanelController(
     } finally {
       pendingSendUserMarkdown = undefined;
       sendAbort = undefined;
+      pendingMainSendQueue = [];
+      busyAnchorParentEventId = undefined;
       syncConversationReplyInProgressContext();
     }
   }
@@ -1295,6 +1441,8 @@ export function createConversationPanelController(
     if (!conversationId || !selectedEventId) {
       return;
     }
+    pendingMainSendQueue = [];
+    busyAnchorParentEventId = undefined;
     const ws = getWorkspaceRoot();
     sendAbort?.abort();
     sendAbort = new AbortController();
@@ -2024,7 +2172,7 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {
-        await handleSend(msg.text, Boolean(msg.privateBranch), msg.images);
+        await handleSend(msg.text, Boolean(msg.privateBranch), msg.images, msg.busySendMode);
         return;
       }
       if (msg.type === "deleteNote" && typeof msg.noteId === "string" && conversationId) {
@@ -2218,6 +2366,43 @@ export function createConversationPanelController(
     }
   }
 
+  async function deleteSelectedMessageSubtree(): Promise<void> {
+    if (!conversationId || !selectedEventId) {
+      void vscode.window.showWarningMessage("Colcoor: open a conversation and select a message in the tree.");
+      return;
+    }
+    if (!lastTreeEvents.some((e) => e.id === selectedEventId)) {
+      void vscode.window.showWarningMessage(
+        `Colcoor: selection not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+      );
+      return;
+    }
+    const rootEv = lastTreeEvents.find((e) => e.parent_event_id === null);
+    if (rootEv && selectedEventId === rootEv.id) {
+      void vscode.window.showWarningMessage("Colcoor: the conversation root cannot be deleted.");
+      return;
+    }
+    if (viewerConversationRole === "viewer") {
+      void vscode.window.showWarningMessage("Colcoor: viewers cannot delete a message branch.");
+      return;
+    }
+    const choice = await vscode.window.showWarningMessage(
+      "Colcoor: delete this message and every reply under it in the tree? (Hidden from the thread; stars and TODO lists update after refresh.)",
+      { modal: true },
+      "Delete branch",
+    );
+    if (choice !== "Delete branch") {
+      return;
+    }
+    try {
+      await api.deleteEventSubtree(conversationId, selectedEventId);
+      void vscode.window.setStatusBarMessage("Colcoor: message branch deleted.", 2500);
+      await loadTreeAndPush(false, null);
+    } catch (e) {
+      void showColcoorApiFailure(e);
+    }
+  }
+
   return {
     async reveal(convId: string, title: string | null): Promise<void> {
       const cid = normalizeOptionalGraphEventId(convId);
@@ -2241,6 +2426,12 @@ export function createConversationPanelController(
         stopInlineSideChatSse();
         inlineSideChatNotifiedMessageIds.clear();
         inlineSideChatLastNotificationAtMs = null;
+        sendAbort?.abort();
+        sendAbort = undefined;
+        pendingMainSendQueue = [];
+        busyAnchorParentEventId = undefined;
+        pendingSendUserMarkdown = undefined;
+        syncConversationReplyInProgressContext();
       }
       conversationId = cid;
       conversationTitle = title;
@@ -2284,6 +2475,12 @@ export function createConversationPanelController(
         stopInlineSideChatSse();
         inlineSideChatNotifiedMessageIds.clear();
         inlineSideChatLastNotificationAtMs = null;
+        sendAbort?.abort();
+        sendAbort = undefined;
+        pendingMainSendQueue = [];
+        busyAnchorParentEventId = undefined;
+        pendingSendUserMarkdown = undefined;
+        syncConversationReplyInProgressContext();
       }
       conversationId = cid;
       conversationTitle = title;
@@ -2333,6 +2530,7 @@ export function createConversationPanelController(
     toggleStarSelectedMessage,
     addNoteToSelectedMessage,
     showNotesOnSelectedMessage,
+    deleteSelectedMessageSubtree,
     getSelectedMessageContext: () => {
       if (!conversationId || !selectedEventId) {
         return null;

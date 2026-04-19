@@ -50,6 +50,7 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.copyConversationId",
   "colcoor.copySelectedMessage",
   "colcoor.deleteConversation",
+  "colcoor.deleteSelectedMessageSubtree",
   "colcoor.editProfile",
   "colcoor.jumpToLatestInConversation",
   "colcoor.listConversationMembers",

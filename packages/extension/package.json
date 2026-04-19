@@ -185,6 +185,11 @@
         "command": "colcoor.refreshConversationTree",
         "title": "Colcoor: Refresh conversation tree",
         "description": "Reload the open conversation tree and thread from the server (conversation panel must be open)."
+      },
+      {
+        "command": "colcoor.deleteSelectedMessageSubtree",
+        "title": "Colcoor: Delete selected message branch (soft)…",
+        "description": "Soft-delete the selected tree node and all replies under it (owner/editor; conversation panel must be open)."
       }
     ],
     "viewsContainers": {

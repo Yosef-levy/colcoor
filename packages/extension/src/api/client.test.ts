@@ -138,6 +138,22 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.method).toBe("DELETE");
   });
 
+  it("deleteEventSubtree sends DELETE to …/events/{id}", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => "" });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.deleteEventSubtree("cccccccc-cccc-4ccc-8ccc-cccccccccccc", "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      "/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/events/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    );
+    expect(init.method).toBe("DELETE");
+  });
+
   it("postConversationMember sends POST with user_id and role", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

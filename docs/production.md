@@ -105,6 +105,10 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `DOMAIN` | Optional | Reserved for future use / docs |
 | `CURSOR_AUTH_PROVIDER_ORDER` | Optional | Comma list: `github`, `microsoft`, `google` — order used when `provider_hint` is `auto` on **`POST /api/v1/auth/cursor`** (default `github,microsoft,google`) |
 | `CURSOR_AUTH_HTTP_TIMEOUT_SECONDS` | Optional | Timeout for upstream IdP HTTP calls (default **12**, min **2**, max **60**) |
+| `COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED` | Optional | When **`true`**, the backend runs a background task (per process) that **hard-deletes** main-thread **`events`** whose **`deleted_at`** is older than the retention window. Compose defaults this to **`true`** for production; use **`false`** if you run a separate purge job. Multiple Gunicorn workers coordinate with a **Postgres advisory lock** so only one worker purges at a time |
+| `COLCOOR_EVENT_SOFT_DELETE_RETENTION_HOURS` | Optional | Minimum age of **`deleted_at`** before a row is eligible for hard delete (default **24**, max **8760**) |
+| `COLCOOR_EVENT_PURGE_INTERVAL_SECONDS` | Optional | Sleep between purge runs (default **86400**; min **3600**) |
+| `COLCOOR_EVENT_PURGE_INITIAL_DELAY_SECONDS` | Optional | Delay before the first purge after startup (default **300**; avoids immediate load on boot / tests) |
 
 Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_URL` is missing, too short, or matches obvious placeholder patterns (see `colcoor_backend.core.validation`).
 

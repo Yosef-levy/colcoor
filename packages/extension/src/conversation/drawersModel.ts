@@ -36,7 +36,9 @@ export function buildConversationDrawersModel(
   events: readonly GraphEventNode[],
   notes: readonly NoteOut[],
 ): ConversationDrawersModel {
+  const visibleEventIds = new Set(events.map((e) => e.id));
   const starred = starredTreeEvents(events)
+    .filter((e) => visibleEventIds.has(e.id))
     .slice()
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     .map((e) => ({
@@ -45,7 +47,7 @@ export function buildConversationDrawersModel(
       createdAt: e.created_at,
     }));
   const todos = notes
-    .filter((n) => isTodoNoteContent(n.content))
+    .filter((n) => isTodoNoteContent(n.content) && visibleEventIds.has(n.event_id))
     .slice()
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     .map((n) => ({

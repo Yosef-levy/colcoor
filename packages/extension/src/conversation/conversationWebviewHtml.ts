@@ -384,6 +384,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       padding: 6px;
     }
     .composer .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .composer .composer-waiting-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
     button {
       font-family: var(--vscode-font-family);
       padding: 6px 14px;
@@ -1284,13 +1291,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <div class="composer">
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
         <div id="pendingConversationImages" class="composer-pending-images" style="display:none"></div>
-        <label class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
+        <label id="privateBranchLabel" class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
           <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" aria-describedby="privateBranchHelp" />
           <span class="priv-body">
             <span class="priv-lead">${PRIVATE_BRANCH_LEAD}</span>
             <span id="privateBranchHelp" class="priv-desc">${PRIVATE_BRANCH_DESCRIPTION}</span>
           </span>
         </label>
+        <div id="composerWhileWaitingRow" class="row composer-waiting-row" style="display:none">
+          <span class="hint" id="composerWhileWaitingHint">Assistant is replying — you can:</span>
+          <button type="button" id="btnQueueAfterReply" class="btn-secondary" disabled>
+            Queue after reply
+          </button>
+          <button type="button" id="btnNewBranchWhileBusy" class="btn-secondary" disabled>
+            New branch
+          </button>
+          <span class="hint" id="queuedSendBadge" style="display:none"></span>
+        </div>
         <div class="row">
           <button id="send" type="button" disabled>Send</button>
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
@@ -1482,6 +1499,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       drawersTodos: [],
       selectionVisitCanGoBack: false,
       selectionVisitCanGoForward: false,
+      waitingForAssistant: false,
+      queuedMainSendCount: 0,
     };
 
     var openColcoorListsDrawer = function (tab) {
@@ -2690,19 +2709,42 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function updateComposerSendEnabled() {
       var sendBtn = document.getElementById("send");
       var ta = document.getElementById("input");
+      var qBtn = document.getElementById("btnQueueAfterReply");
+      var bBtn = document.getElementById("btnNewBranchWhileBusy");
       if (!sendBtn) {
-        return;
-      }
-      if (state.busy) {
-        sendBtn.disabled = true;
         return;
       }
       var hasText = ta && String(ta.value || "").trim().length > 0;
       var has = hasText || pendingSendImages.length > 0;
+      var wf = state.waitingForAssistant === true;
+      if (state.busy && wf) {
+        sendBtn.disabled = true;
+        if (qBtn) {
+          qBtn.disabled = !has;
+          qBtn.title = has
+            ? "Queue this message: it will be sent as the next user line under the assistant reply that is generating."
+            : "Type a message or paste an image first.";
+        }
+        if (bBtn) {
+          bBtn.disabled = !has;
+          bBtn.title = has
+            ? "Send as a sibling branch from the message you replied to. Uses “Private (draft)” below — shared when unchecked, private when checked."
+            : "Type a message or paste an image first.";
+        }
+        return;
+      }
+      if (state.busy) {
+        sendBtn.disabled = true;
+        if (qBtn) qBtn.disabled = true;
+        if (bBtn) bBtn.disabled = true;
+        return;
+      }
       sendBtn.disabled = !has;
       sendBtn.title = has
         ? ""
         : "Type a message or paste an image. Shift+Enter for newline, Enter to send.";
+      if (qBtn) qBtn.disabled = true;
+      if (bBtn) bBtn.disabled = true;
     }
 
     function updateInlineSideChatSendEnabled() {
@@ -2883,13 +2925,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           errEl.textContent = "";
         }
         updateLegalPolicyStrip();
+        var wf = state.waitingForAssistant === true;
+        var waitRow = document.getElementById("composerWhileWaitingRow");
+        if (waitRow) {
+          waitRow.style.display = state.busy && wf ? "flex" : "none";
+        }
         if (sendBtn) {
-          sendBtn.textContent = state.busy ? "Sending…" : "Send";
-          if (state.busy) {
-            sendBtn.disabled = true;
-            sendBtn.title = "A reply is in progress. Use Stop to cancel.";
-          } else {
+          sendBtn.textContent = state.busy && !wf ? "Sending…" : "Send";
+          if (state.busy && wf) {
+            sendBtn.style.display = "none";
             updateComposerSendEnabled();
+          } else {
+            sendBtn.style.display = "";
+            if (state.busy) {
+              sendBtn.disabled = true;
+              sendBtn.title = "Your message is being sent…";
+            } else {
+              updateComposerSendEnabled();
+            }
           }
         }
         updateInlineSideChatSendEnabled();
@@ -2898,11 +2951,30 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           stopBtn.title = state.busy ? "Cancel the in-progress assistant reply." : "";
         }
         if (refBtn) refBtn.disabled = state.busy;
-        if (ta) ta.disabled = state.busy;
-        if (priv) priv.disabled = state.busy;
+        if (ta) ta.disabled = state.busy && !wf;
+        if (priv) priv.disabled = state.busy && !wf;
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
-          busyEl.textContent = state.busy ? "Sending… Press Stop to cancel." : "Working…";
+          busyEl.textContent =
+            state.busy && wf
+              ? "Assistant is replying… You can queue a follow-up or start a branch (see Private draft below)."
+              : state.busy
+                ? "Sending… Press Stop to cancel."
+                : "Working…";
+        }
+        var badge = document.getElementById("queuedSendBadge");
+        if (badge) {
+          var n =
+            typeof state.queuedMainSendCount === "number" && Number.isFinite(state.queuedMainSendCount)
+              ? Math.max(0, Math.floor(state.queuedMainSendCount))
+              : 0;
+          if (n > 0) {
+            badge.style.display = "inline";
+            badge.textContent = n === 1 ? "1 message queued." : String(n) + " messages queued.";
+          } else {
+            badge.style.display = "none";
+            badge.textContent = "";
+          }
         }
         if (ta) {
           var compH = null;
@@ -3492,6 +3564,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             m.sideChatViewerRole === "viewer"
               ? m.sideChatViewerRole
               : null,
+          waitingForAssistant: m.waitingForAssistant === true,
+          queuedMainSendCount:
+            typeof m.queuedMainSendCount === "number" && Number.isFinite(m.queuedMainSendCount)
+              ? Math.max(0, Math.floor(m.queuedMainSendCount))
+              : 0,
         };
         render();
         return;
@@ -3522,14 +3599,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         ".";
     }, 32000);
 
-    document.getElementById("send").addEventListener("click", () => {
+    function emitMainComposerSend(busySendMode) {
       const ta = document.getElementById("input");
-      const text = ta && ta.value ? ta.value.trim() : "";
+      if (!ta) return;
+      const text = ta.value ? ta.value.trim() : "";
       const imgs = pendingSendImages.slice();
       if (!text && !imgs.length) return;
-      const priv = document.getElementById("privateBranch");
-      const privateBranch = priv && priv.checked;
-      var payload = { type: "send", text: ta.value.trimEnd(), privateBranch };
+      var privEl = document.getElementById("privateBranch");
+      var payload = { type: "send", text: ta.value.trimEnd(), privateBranch: false };
+      if (busySendMode === "queue") {
+        payload.busySendMode = "queue";
+        payload.privateBranch = false;
+      } else if (busySendMode === "branch") {
+        payload.busySendMode = "branch";
+        payload.privateBranch = !!(privEl && privEl.checked);
+      } else {
+        payload.privateBranch = !!(privEl && privEl.checked);
+      }
       if (imgs.length) payload.images = imgs;
       vscode.postMessage(payload);
       ta.value = "";
@@ -3537,7 +3623,28 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       renderPendingConversationImages();
       updateComposerSendEnabled();
       scheduleComposerFocus(ta);
+    }
+
+    document.getElementById("send").addEventListener("click", () => {
+      emitMainComposerSend(undefined);
     });
+
+    (function wireComposerWhileWaitingButtons() {
+      var q = document.getElementById("btnQueueAfterReply");
+      var b = document.getElementById("btnNewBranchWhileBusy");
+      if (q) {
+        q.addEventListener("click", function () {
+          if (q.disabled) return;
+          emitMainComposerSend("queue");
+        });
+      }
+      if (b) {
+        b.addEventListener("click", function () {
+          if (b.disabled) return;
+          emitMainComposerSend("branch");
+        });
+      }
+    })();
 
     document.getElementById("stop").addEventListener("click", () => {
       vscode.postMessage({ type: "cancel" });
@@ -3761,6 +3868,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("input").addEventListener("keydown", (e) => {
       if (!shouldSendOnEnter(e)) return;
+      if (state.busy && state.waitingForAssistant) {
+        var qb = document.getElementById("btnQueueAfterReply");
+        if (qb && qb.disabled) return;
+        e.preventDefault();
+        emitMainComposerSend("queue");
+        return;
+      }
       var sb = document.getElementById("send");
       if (sb && sb.disabled) {
         return;

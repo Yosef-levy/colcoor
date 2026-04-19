@@ -218,6 +218,7 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).not.toContain("command:colcoor.continueFromHere");
     expect(contents).not.toContain("command:colcoor.resendAssistant");
     expect(contents).not.toContain("command:colcoor.copySelectedMessage");
+    expect(contents).not.toContain("command:colcoor.deleteSelectedMessageSubtree");
   });
 
   it("does not duplicate rename / pin / star welcome links (use Colcoor menu or open conversation)", () => {

@@ -34,4 +34,9 @@ export const TREE_NODE_CONTEXT_MENU_ENTRIES: readonly TreeNodeContextMenuEntry[]
     quickPickLabel: "Refresh conversation tree",
     quickPickDescription: "Reload tree and thread from the server",
   },
+  {
+    commandId: "colcoor.deleteSelectedMessageSubtree",
+    quickPickLabel: "Delete message branch (soft)…",
+    quickPickDescription: "Hide this message and everything under it in the tree",
+  },
 ];

@@ -419,6 +419,15 @@ export class ColcoorApiClient {
     this.assertOkResponse(res, text, "unstar message");
   }
 
+  /** Soft-delete this event and all descendants (`events.deleted_at`); idempotent if already deleted. */
+  async deleteEventSubtree(conversationId: string, eventId: string): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/events/${eventId}`, {
+      method: "DELETE",
+    });
+    const t = await res.text();
+    this.assertOkResponse(res, t, "delete event subtree");
+  }
+
   async listNotes(conversationId: string): Promise<NoteOut[]> {
     const res = await this.fetchApi(`/conversations/${conversationId}/notes`, { method: "GET" });
     const text = await res.text();

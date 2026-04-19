@@ -87,6 +87,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - **RTL** where applicable for message text.
 - **Notes** inline under messages with edit/delete when allowed.
 - **In-flight turn:** pending user line + updating assistant text until done or cancelled.
+- **While the assistant is generating** (after your user line is visible): composer can **queue** the next message so it attaches under that assistant reply when it finishes, or start a **new branch** from the same anchor you replied from (parallel sibling); **shared vs private** follows the composer **Private (draft)** checkbox, same as a normal send.
 - **Star** on messages.
 - **Copy** message content where the platform supports it.
 - **Optional CLI trace:** assistant messages may include a **collapsible** summary of local agent activity (reads, edits, shell) derived from Cursor CLI **stream-json** output. That block is separate chrome, not part of the message markdown body.
@@ -113,7 +114,8 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 ## 9. Composer (main thread)
 
 - Multiline input; **Enter** send, **Shift+Enter** newline (or idiomatic equivalent).
-- **Send** with disabled state and messaging while a reply is in progress.
+- **Send** disabled while your first line is still being posted; **Queue after reply** / **New branch** appear while the assistant is generating so you can stage the next send (branch uses the **Private (draft)** checkbox for shared vs private).
+- **Enter** during that phase queues after the pending reply (same as **Queue after reply**).
 - **Private (draft)** toggle + short help.
 - **Stop** — cancel in-flight generation ([data-flow-and-api.md](data-flow-and-api.md) §4).
 - **Optional milestone (checkpoint) label** on send — single-line field in the conversation panel composer, and an optional prompt after **Colcoor: Send message…** from the Command Palette; display-only in the detail breadcrumb when set (see §8).

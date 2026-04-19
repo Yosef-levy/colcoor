@@ -11,7 +11,7 @@ import json
 import os
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from colcoor_backend.app import create_app
@@ -19,13 +19,17 @@ from colcoor_backend.core.config import get_settings
 from colcoor_backend.core.jwt_tokens import create_access_token
 from colcoor_backend.db import models  # noqa: F401 — register mappers
 from colcoor_backend.db.base import Base
-from colcoor_backend.db.models import ConversationUserState, User
+from colcoor_backend.db.models import ConversationUserState, Event, User
+from colcoor_backend.services.event_purge import purge_soft_deleted_events
 from colcoor_backend.services.graph import (
     append_graph_event,
     create_conversation_with_owner,
+    create_note_on_event,
     list_events_for_tree,
+    soft_delete_event_subtree,
 )
 from fastapi.testclient import TestClient
+from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.skipif(
@@ -660,6 +664,214 @@ def test_transfer_ownership_via_patch_http(monkeypatch: pytest.MonkeyPatch, post
 
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth_b)
         assert r.status_code == 204, r.text
+
+    get_settings.cache_clear()
+
+
+def test_append_graph_event_inherits_deleted_at_from_deleted_parent(session_factory) -> None:
+    """Replies anchored under a soft-deleted row inherit ``deleted_at`` (hidden like the rest of the subtree)."""
+
+    async def run() -> None:
+        async with session_factory() as s:
+            u = User(
+                cursor_sub=f"sub-{uuid.uuid4()}",
+                email="delp@d.c",
+                display_name="t",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            s.add(u)
+            await s.flush()
+            await s.refresh(u)
+            uid = u.id
+            conv, _ = await create_conversation_with_owner(s, user_id=uid, title="inherit-del")
+            await s.commit()
+
+        async with session_factory() as s:
+            evs = await list_events_for_tree(s, conv.id, uid)
+            tip = evs[-1]
+            u_ev = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="user_input",
+                parent_event_id=tip.id,
+                content="to delete",
+                private_branch=False,
+            )
+            await soft_delete_event_subtree(s, conv.id, uid, u_ev.id)
+            parent_row = await s.get(Event, u_ev.id)
+            assert parent_row is not None and parent_row.deleted_at is not None
+            child = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="user_input",
+                parent_event_id=u_ev.id,
+                content="under deleted",
+                private_branch=False,
+            )
+            assert child.deleted_at is not None
+            assert child.deleted_at == parent_row.deleted_at
+            tree = await list_events_for_tree(s, conv.id, uid)
+            assert child.id not in {e.id for e in tree}
+            await s.commit()
+
+    asyncio.run(run())
+
+
+def test_purge_hard_deletes_soft_deleted_events_after_retention(session_factory) -> None:
+    """``purge_soft_deleted_events`` removes rows with ``deleted_at`` older than the retention window."""
+
+    async def run() -> None:
+        async with session_factory() as s:
+            u = User(
+                cursor_sub=f"sub-{uuid.uuid4()}",
+                email="purge@p.c",
+                display_name="t",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            s.add(u)
+            await s.flush()
+            await s.refresh(u)
+            uid = u.id
+            conv, _ = await create_conversation_with_owner(s, user_id=uid, title="purge-me")
+            await s.commit()
+
+        async with session_factory() as s:
+            evs = await list_events_for_tree(s, conv.id, uid)
+            tip = evs[-1]
+            u_ev = await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="user_input",
+                parent_event_id=tip.id,
+                content="to purge",
+                private_branch=False,
+            )
+            await append_graph_event(
+                s,
+                conversation_id=conv.id,
+                user_id=uid,
+                kind="assistant_output",
+                parent_event_id=u_ev.id,
+                content="assistant",
+                private_branch=False,
+            )
+            await create_note_on_event(s, conv.id, uid, u_ev.id, "note on branch")
+            await soft_delete_event_subtree(s, conv.id, uid, u_ev.id)
+            old = datetime.now(tz=UTC) - timedelta(days=2)
+            await s.execute(
+                update(Event)
+                .where(Event.conversation_id == conv.id, Event.deleted_at.isnot(None))
+                .values(deleted_at=old, updated_at=old),
+            )
+            n = await purge_soft_deleted_events(s, older_than=timedelta(hours=1))
+            assert n == 2
+            cnt = await s.scalar(select(func.count()).select_from(Event).where(Event.conversation_id == conv.id))
+            assert cnt == 1
+            await s.commit()
+
+        async with session_factory() as s:
+            cnt2 = await s.scalar(select(func.count()).select_from(Event).where(Event.conversation_id == conv.id))
+            assert cnt2 == 1
+
+    asyncio.run(run())
+
+
+def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """DELETE …/events/{id} soft-deletes subtree, clears stars, hides notes; root delete is rejected."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "subtree"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        root = next(e for e in r.json()["events"] if e["parent_event_id"] is None)
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/append-event",
+            headers=auth,
+            json={
+                "kind": "user_input",
+                "parent_event_id": root["id"],
+                "content": "branch head",
+                "author": "end_user",
+                "private_branch": False,
+            },
+        )
+        assert r.status_code == 200, r.text
+        head_id = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/append-event",
+            headers=auth,
+            json={
+                "kind": "assistant_output",
+                "parent_event_id": head_id,
+                "content": "reply",
+                "author": "cursor_agent",
+                "private_branch": False,
+            },
+        )
+        assert r.status_code == 200, r.text
+        asst_id = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/append-event",
+            headers=auth,
+            json={
+                "kind": "user_input",
+                "parent_event_id": root["id"],
+                "content": "sibling stays",
+                "author": "end_user",
+                "private_branch": False,
+            },
+        )
+        assert r.status_code == 200, r.text
+        sibling_id = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/notes",
+            headers=auth,
+            json={"event_id": head_id, "content": "TODO on branch"},
+        )
+        assert r.status_code == 200, r.text
+
+        r = client.put(f"/api/v1/conversations/{cid}/events/{head_id}/star", headers=auth)
+        assert r.status_code == 204, r.text
+
+        r = client.delete(f"/api/v1/conversations/{cid}/events/{head_id}", headers=auth)
+        assert r.status_code == 204, r.text
+
+        r = client.delete(f"/api/v1/conversations/{cid}/events/{head_id}", headers=auth)
+        assert r.status_code == 204, r.text
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        ids = {e["id"] for e in r.json()["events"]}
+        assert head_id not in ids
+        assert asst_id not in ids
+        assert root["id"] in ids
+        assert sibling_id in ids
+        for e in r.json()["events"]:
+            assert e.get("starred") is not True
+
+        r = client.get(f"/api/v1/conversations/{cid}/notes", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json() == []
+
+        r = client.delete(f"/api/v1/conversations/{cid}/events/{root['id']}", headers=auth)
+        assert r.status_code == 422, r.text
 
     get_settings.cache_clear()
 

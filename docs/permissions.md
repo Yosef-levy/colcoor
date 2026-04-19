@@ -32,6 +32,7 @@ The extension SHOULD enforce these rules in **central command handlers**, not in
 | Append **private** graph event (`visible_to` = self)      | Allow                 | Allow  | Allow  |
 | Commit private branch (promote private subtree to shared) | Allow                 | Allow  | Deny   |
 | Delete private draft subtree                              | Allow                 | Allow  | Allow  |
+| Soft-delete main-thread subtree (`DELETE …/events/{id}`)   | Allow                 | Allow  | Deny   |
 | Add note on visible event                                 | Allow                 | Allow  | Deny   |
 | Edit note                                                 | Allow                 | Allow  | Deny   |
 | Delete note                                               | Allow                 | Allow  | Deny   |

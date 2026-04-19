@@ -49,7 +49,11 @@ describe("buildConversationDrawersModel", () => {
 
   it("includes TODO notes only, sorted by created_at desc", () => {
     const out = buildConversationDrawersModel(
-      [],
+      [
+        ev({ id: "e1", kind: "user_input", created_at: "2024-01-01T00:00:00Z" }),
+        ev({ id: "e2", kind: "user_input", created_at: "2024-01-01T00:00:00Z" }),
+        ev({ id: "e3", kind: "user_input", created_at: "2024-01-01T00:00:00Z" }),
+      ],
       [
         note({ id: "n1", event_id: "e1", created_at: "2024-01-01T00:00:00Z", content: "TODO first" }),
         note({ id: "n2", event_id: "e2", created_at: "2024-01-03T00:00:00Z", content: "todo second" }),
@@ -62,7 +66,7 @@ describe("buildConversationDrawersModel", () => {
 
   it("uses the first line for TODO labels with collapsed whitespace and ellipsis when long", () => {
     const out = buildConversationDrawersModel(
-      [],
+      [ev({ id: "e1", kind: "user_input", created_at: "2024-01-01T00:00:00Z" })],
       [
         note({
           id: "n1",
@@ -76,7 +80,7 @@ describe("buildConversationDrawersModel", () => {
     expect(out.todos[0]?.label).toBe("TODO hello world");
     const longFirst = `TODO ${"x".repeat(95)}`;
     const out2 = buildConversationDrawersModel(
-      [],
+      [ev({ id: "e2", kind: "user_input", created_at: "2024-01-02T00:00:00Z" })],
       [
         note({
           id: "n2",
@@ -88,5 +92,13 @@ describe("buildConversationDrawersModel", () => {
     );
     expect(out2.todos[0]?.label.endsWith("…")).toBe(true);
     expect(out2.todos[0]?.label.length).toBe(91);
+  });
+
+  it("omits TODO notes when the host event is not in the visible tree (e.g. soft-deleted branch)", () => {
+    const out = buildConversationDrawersModel(
+      [ev({ id: "e1", kind: "user_input", created_at: "2024-01-01T00:00:00Z" })],
+      [note({ id: "n1", event_id: "gone", created_at: "2024-01-01T00:00:00Z", content: "TODO orphan" })],
+    );
+    expect(out.todos).toHaveLength(0);
   });
 });

@@ -58,6 +58,42 @@ class Settings(BaseSettings):
         ),
     )
 
+    #: When true, the API process runs a daily loop that **hard-deletes** events whose
+    #: ``deleted_at`` is older than ``event_soft_delete_retention_hours`` (Postgres advisory lock).
+    event_purge_scheduler_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED",
+        ),
+    )
+    event_purge_interval_seconds: int = Field(
+        default=86_400,
+        ge=3_600,
+        le=604_800,
+        validation_alias=AliasChoices(
+            "COLCOOR_EVENT_PURGE_INTERVAL_SECONDS",
+        ),
+        description="Sleep between purge runs when the scheduler is enabled (default 24h).",
+    )
+    event_purge_initial_delay_seconds: int = Field(
+        default=300,
+        ge=0,
+        le=86_400,
+        validation_alias=AliasChoices(
+            "COLCOOR_EVENT_PURGE_INITIAL_DELAY_SECONDS",
+        ),
+        description="Delay before the first purge after process start (stagger multi-worker / tests).",
+    )
+    event_soft_delete_retention_hours: int = Field(
+        default=24,
+        ge=1,
+        le=8760,
+        validation_alias=AliasChoices(
+            "COLCOOR_EVENT_SOFT_DELETE_RETENTION_HOURS",
+        ),
+        description="Events with non-null ``deleted_at`` older than this window are eligible for hard delete.",
+    )
+
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"
 

@@ -351,6 +351,15 @@ For `user_input`, `content` may be empty after trim when `content_json.colcoor_u
 | **204** | deleted |
 | **403** | same as patch |
 
+### 7.5 `DELETE /api/v1/conversations/{conversation_id}/events/{event_id}`
+
+**Purpose:** Soft-delete this **main-thread** event and **all descendants** by setting **`events.deleted_at`** (same timestamp for the whole affected set). Removes **all** **`event_stars`** rows for those **`event_id`** values. Members whose **`active_event_id`** pointed into the deleted set are moved to the **conversation root**. Idempotent when the target is already deleted (no-op, **204**).
+
+| **204** | accepted |
+| **403** | not a member, **viewer** role, or target not visible (`visible_to`) |
+| **404** | conversation/event missing |
+| **422** | cannot delete the **root** event |
+
 ---
 
 ## 8. Event stars

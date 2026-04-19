@@ -59,6 +59,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.copyConversationId",
       "colcoor.copySelectedMessage",
       "colcoor.deleteConversation",
+      "colcoor.deleteSelectedMessageSubtree",
       "colcoor.editProfile",
       "colcoor.jumpToLatestInConversation",
       "colcoor.listConversationMembers",

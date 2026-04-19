@@ -38,6 +38,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("legalPolicyLinks");
   });
 
+  it("composer exposes queue-after-reply and private-branch controls while the assistant is generating", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="composerWhileWaitingRow"');
+    expect(html).toContain('id="btnQueueAfterReply"');
+    expect(html).toContain('id="btnNewBranchWhileBusy"');
+    expect(html).toContain("waitingForAssistant");
+    expect(html).toContain("emitMainComposerSend");
+  });
+
   it("omits detail breadcrumb strip; checkpoint_label still used in tree/thread/search ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("checkpoint_label");
@@ -269,10 +278,11 @@ describe("getConversationWebviewHtml", () => {
 
   it("shows clearer busy/send/stop messaging while a reply is in progress", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('sendBtn.textContent = state.busy ? "Sending…" : "Send"');
-    expect(html).toContain('sendBtn.title = "A reply is in progress. Use Stop to cancel."');
+    expect(html).toContain('sendBtn.textContent = state.busy && !wf ? "Sending…" : "Send"');
+    expect(html).toContain('sendBtn.title = "Your message is being sent…"');
     expect(html).toContain('stopBtn.title = state.busy ? "Cancel the in-progress assistant reply." : ""');
-    expect(html).toContain('busyEl.textContent = state.busy ? "Sending… Press Stop to cancel." : "Working…"');
+    expect(html).toContain("Assistant is replying… You can queue a follow-up or start a branch (see Private draft below).");
+    expect(html).toContain("Sending… Press Stop to cancel.");
   });
 
   it("Stop posts cancel to the extension host (same signal as Colcoor: Stop assistant generation)", () => {

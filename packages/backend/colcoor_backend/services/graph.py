@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, exists, func, literal, or_, select, update
@@ -119,6 +120,99 @@ async def load_event(
     return res.scalar_one_or_none()
 
 
+async def load_event_row_any_status(
+    session: AsyncSession, conversation_id: uuid.UUID, event_id: uuid.UUID
+) -> Event | None:
+    """Return the event row if it exists in the conversation, including soft-deleted rows."""
+    res = await session.execute(
+        select(Event).where(Event.id == event_id, Event.conversation_id == conversation_id)
+    )
+    return res.scalar_one_or_none()
+
+
+async def _collect_non_deleted_subtree_event_ids(
+    session: AsyncSession, conversation_id: uuid.UUID, root_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """Depth-first reachable ids from ``root_id`` over ``parent_event_id`` among non-deleted events."""
+    res = await session.execute(
+        select(Event.id, Event.parent_event_id, Event.deleted_at).where(
+            Event.conversation_id == conversation_id
+        )
+    )
+    children: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+    alive: set[uuid.UUID] = set()
+    for eid, pid, d_at in res.all():
+        if d_at is not None:
+            continue
+        alive.add(eid)
+        if pid is not None:
+            children[pid].append(eid)
+    if root_id not in alive:
+        return []
+    out: list[uuid.UUID] = []
+    stack = [root_id]
+    seen: set[uuid.UUID] = set()
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        out.append(cur)
+        for c in children.get(cur, ()):
+            if c in alive:
+                stack.append(c)
+    return out
+
+
+async def soft_delete_event_subtree(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    event_id: uuid.UUID,
+) -> int:
+    """Set ``deleted_at`` on ``event_id`` and every non-deleted descendant in the same conversation.
+
+    Stars on those events are removed for all users. Members whose ``active_event_id`` was in the
+    subtree are moved to the conversation root. Returns the number of rows updated (0 if already gone).
+    """
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot delete graph subtrees")
+    ev = await load_event_row_any_status(session, conversation_id, event_id)
+    if ev is None:
+        raise LookupError("event not found")
+    if ev.deleted_at is not None:
+        return 0
+    if ev.visible_to is not None and ev.visible_to != user_id:
+        raise PermissionError("event not visible")
+    root_id = await _conversation_root_event_id(session, conversation_id)
+    if ev.id == root_id:
+        raise ValueError("cannot delete the conversation root")
+    ids = await _collect_non_deleted_subtree_event_ids(session, conversation_id, event_id)
+    if not ids:
+        return 0
+    now = datetime.now(tz=UTC)
+    await session.execute(update(Event).where(Event.id.in_(ids)).values(deleted_at=now, updated_at=now))
+    await session.execute(delete(EventStar).where(EventStar.event_id.in_(ids)))
+    st_r = await session.execute(
+        select(ConversationUserState).where(
+            ConversationUserState.conversation_id == conversation_id,
+            ConversationUserState.active_event_id.in_(ids),
+        )
+    )
+    for st in st_r.scalars().all():
+        st.active_event_id = root_id
+    conv_r = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = conv_r.scalar_one_or_none()
+    if conv is not None:
+        conv.updated_at = now
+    await _set_needs_context_rebuild_all_members(session, conversation_id)
+    await session.flush()
+    return len(ids)
+
+
 async def read_conversation_caller_state(
     session: AsyncSession,
     conversation_id: uuid.UUID,
@@ -200,9 +294,12 @@ async def append_graph_event(
     checkpoint_label: str | None = None,
 ) -> Event:
     await ensure_conversation_member(session, conversation_id, user_id)
-    parent = await load_event(session, conversation_id, parent_event_id)
+    parent = await load_event_row_any_status(session, conversation_id, parent_event_id)
     if parent is None:
         raise LookupError("parent_event_not_found")
+    if parent.visible_to is not None and parent.visible_to != user_id:
+        raise PermissionError("event not visible")
+    inherited_deleted_at = parent.deleted_at
     now = datetime.now(tz=UTC)
     if kind == "assistant_output":
         if parent.kind != "user_input":
@@ -242,7 +339,7 @@ async def append_graph_event(
         content_json=final_json,
         checkpoint_label=checkpoint_label,
         visible_to=visible_to,
-        deleted_at=None,
+        deleted_at=inherited_deleted_at,
         created_at=now,
         updated_at=now,
     )
@@ -252,26 +349,27 @@ async def append_graph_event(
     conv_r = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
     conv = conv_r.scalar_one()
     conv.updated_at = now
-    st_r = await session.execute(
-        select(ConversationUserState).where(
-            ConversationUserState.conversation_id == conversation_id,
-            ConversationUserState.user_id == user_id,
-        )
-    )
-    st = st_r.scalar_one_or_none()
-    if st:
-        st.active_event_id = ev.id
-        st.needs_context_rebuild = False
-    else:
-        session.add(
-            ConversationUserState(
-                conversation_id=conversation_id,
-                user_id=user_id,
-                active_event_id=ev.id,
-                last_seen_at=now,
-                needs_context_rebuild=False,
+    if inherited_deleted_at is None:
+        st_r = await session.execute(
+            select(ConversationUserState).where(
+                ConversationUserState.conversation_id == conversation_id,
+                ConversationUserState.user_id == user_id,
             )
         )
+        st = st_r.scalar_one_or_none()
+        if st:
+            st.active_event_id = ev.id
+            st.needs_context_rebuild = False
+        else:
+            session.add(
+                ConversationUserState(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    active_event_id=ev.id,
+                    last_seen_at=now,
+                    needs_context_rebuild=False,
+                )
+            )
     await session.flush()
     await session.refresh(ev)
     return ev
