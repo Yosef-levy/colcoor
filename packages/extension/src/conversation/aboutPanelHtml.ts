@@ -49,21 +49,27 @@ export function getAboutPanelHtml(policySectionHtml: string): string {
     </li>
     <li>
       Tune <strong>side chat sounds and notifications</strong> with the <strong>Side chat sounds…</strong> button in the
-      conversation or side chat panel, the Command Palette entry
+      conversation tab, the Command Palette entry
       <strong>Colcoor: Open side chat sound &amp; notification settings…</strong>, or the matching link in the
       Conversations welcome list — Settings opens filtered to those Colcoor options.
     </li>
     <li>
-      Use the <strong>setup buttons</strong> in the conversation panel, side chat, or drawers — or the
+      Use the <strong>setup buttons</strong> in the conversation tab or drawers — or the
       <strong>Command Palette</strong> — so Colcoor can run the <strong>assistant in this workspace</strong> on your
       computer when your team has turned that on.
     </li>
     <li>
-      You can add an optional <strong>milestone label</strong> when you send so the heading above the thread stays easy
-      to scan.
+      Optional <strong>message titles</strong> make long threads easier to scan: use
+      <strong>Message → Add/edit title…</strong> on a selected user or assistant message (the same text appears in the
+      tree and in the starred list).
     </li>
     <li>
-      Use <strong>Copy ID</strong> in the conversation panel, side chat, or drawers when you need the conversation identifier on your clipboard (for example to share with a teammate or support).
+      <strong>View → Search…</strong> (or press <strong>−</strong> when you are not in a text field) finds matches in
+      conversation content, <strong>message titles</strong>, notes, and side chat — use the scope checkboxes at the
+      top of the drawer to narrow results.
+    </li>
+    <li>
+      Use <strong>Copy ID</strong> in the conversation tab or drawers when you need the conversation identifier on your clipboard (for example to share with a teammate or support).
     </li>
     <li>Open <strong>Settings → Colcoor</strong> for the server address and how replies are produced.</li>
     <li>

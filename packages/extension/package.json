@@ -371,7 +371,7 @@
         "colcoor.sideChatNotificationsEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show VS Code notifications for new side-chat messages when the side-chat panel is not visible."
+          "description": "Show VS Code notifications for new side-chat messages when the conversation tab is hidden or the side-chat column is closed."
         },
         "colcoor.sideChatMentionNotificationsEnabled": {
           "type": "boolean",
@@ -381,7 +381,7 @@
         "colcoor.sideChatSoundEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Play a short sound cue in the side-chat panel for new incoming user messages while the panel is visible."
+          "description": "Play a short sound cue for new incoming side-chat messages while the conversation tab is visible and the side-chat column is open."
         },
         "colcoor.sideChatMentionSoundEnabled": {
           "type": "boolean",

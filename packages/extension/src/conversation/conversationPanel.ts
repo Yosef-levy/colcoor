@@ -68,6 +68,20 @@ import { nextSideChatReadSeqToPatch } from "../sidechat/sideChatReadPatchPlan";
 import { buildSideChatSendPayload } from "../sidechat/sideChatSendPayload";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "../sidechat/sideChatRenderMessages";
 import { listConversationsCached } from "../conversations/conversationsListCache";
+import { runInlineSideChatSseLoop } from "../sidechat/runInlineSideChatSseLoop";
+import { mentionTargetsForMe } from "../sidechat/sideChatMentionTargets";
+import { shouldNotifyForIncomingSideChatMessage } from "../sidechat/sideChatNotifyDedup";
+import { shouldEmitSideChatNotificationNow } from "../sidechat/sideChatNotificationRateLimit";
+import { decideSideChatNotification } from "../sidechat/sideChatNotifications";
+import { decideSideChatSoundKind } from "../sidechat/sideChatSoundDecision";
+import { readSideChatCueSettings } from "../sidechat/sideChatWorkspaceSettings";
+import { sideChatMessageHasUnknownReferenceLookups } from "../sidechat/sideChatReferenceLookupPolicy";
+import { trimmedSideChatSendBody } from "../sidechat/trimSendBody";
+import { normalizeSideChatReferenceId } from "../sidechat/normalizeSideChatReferenceId";
+import {
+  canDeleteSideChatMessage,
+  canMutateOwnSideChatUserMessage,
+} from "../sidechat/sideChatMessageActions";
 
 const TREE_WIDTH_STATE_KEY = "colcoor.conversation.treeWidthPx";
 const SIDE_CHAT_COLUMN_WIDTH_STATE_KEY = "colcoor.conversation.sideChatColumnWidthPx";
@@ -121,11 +135,16 @@ type WebviewStateMessage = {
   sideChatLastReadSeq: number;
   /** Current user id for inline side-chat (caller-state `user_id` or profile); hides unread dot on own rows. */
   viewerUserId: string | null;
+  /** Caller's role in this conversation (for owner-only side-chat delete). */
+  sideChatViewerRole: "owner" | "editor" | "viewer" | null;
   /** Notes for this conversation (client-side search in the webview). */
   conversationNotes: NoteOut[];
   /** Starred / TODO rows for the in-tab lists drawer (same source as conversation drawers). */
   drawersStarred: StarredDrawerRow[];
   drawersTodos: TodoDrawerRow[];
+  /** Client-only visited selection stack (max ~20); thread ← / → controls. */
+  selectionVisitCanGoBack: boolean;
+  selectionVisitCanGoForward: boolean;
 };
 
 type FromWebview =
@@ -138,6 +157,8 @@ type FromWebview =
       images?: { dataUrl: string }[];
     }
   | { type: "select"; id: string }
+  | { type: "selectionHistoryBack" }
+  | { type: "selectionHistoryForward" }
   | { type: "treeContextMenu"; id: string }
   | { type: "selectTip" }
   | { type: "refresh" }
@@ -160,7 +181,14 @@ type FromWebview =
   | { type: "openSideChat" }
   | { type: "closeSideChat" }
   | { type: "refreshSideChat" }
-  | { type: "sendSideChat"; text: string; images?: { dataUrl: string }[] }
+  | {
+      type: "sendSideChat";
+      text: string;
+      images?: { dataUrl: string }[];
+      referencedSideChatMessageId?: string | null;
+    }
+  | { type: "editSideChat"; messageId: string; text: string }
+  | { type: "deleteSideChat"; messageId: string }
   | { type: "deleteConversation" }
   | { type: "openColcoorHub" }
   /** Help panel (product info + policies); same as Colcoor: Help. */
@@ -304,7 +332,7 @@ export function createConversationPanelController(
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
   /** Inline side-chat rows + rendered rows for same-tab drawer. */
   let inlineSideChatRows: SideChatMessageOut[] = [];
-  /** Image data URLs keyed by side-chat message id (aligned with `sideChatPanel` incremental image mode). */
+  /** Image data URLs keyed by side-chat message id (incremental fetches per row). */
   let inlineSideChatUrlsByMessageId = new Map<string, string[]>();
   let inlineSideChatRendered: SideChatRenderMessage[] = [];
   let inlineSideChatVisible = false;
@@ -318,9 +346,61 @@ export function createConversationPanelController(
   let myProfileForSideChat: MeOut | null | undefined = undefined;
   /** From GET …/caller-state `user_id` for the open conversation (inline side-chat “own message” unread UI). */
   let viewerUserIdForWebview: string | null = null;
+  /** Caller's membership role for inline side-chat delete rules. */
+  let viewerConversationRole: ConversationMember["role"] | null = null;
+  /** Tree/note labels for side-chat reference chips (aligned with cached tree + notes). */
+  let sideChatEventLabelsById: Record<string, string> = {};
+  let sideChatNoteLabelsById: Record<string, string> = {};
+  let sideChatSseAbort: AbortController | undefined;
+  let inlineSideChatSseConversationId: string | undefined;
+  const inlineSideChatNotifiedMessageIds = new Set<string>();
+  let inlineSideChatLastNotificationAtMs: number | null = null;
+  let inlineSideChatListRefreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** Last state flags sent to webview; reused for lightweight local selection refreshes. */
   let lastPostedBusy = false;
   let lastPostedError: string | null = null;
+
+  /** Client-only stack of visited tree selections (not persisted; capped). */
+  const VISITED_SELECTION_MAX = 20;
+  let visitedSelectionStack: string[] = [];
+  let visitedSelectionIndex = -1;
+  let suppressVisitedSelectionRecording = false;
+
+  function resetVisitedSelectionHistory(): void {
+    visitedSelectionStack = [];
+    visitedSelectionIndex = -1;
+  }
+
+  function visitedSelectionNavFlags(): { canGoBack: boolean; canGoForward: boolean } {
+    return {
+      canGoBack: visitedSelectionIndex > 0,
+      canGoForward:
+        visitedSelectionIndex >= 0 && visitedSelectionIndex < visitedSelectionStack.length - 1,
+    };
+  }
+
+  /** Record a user-visible selection after `postState` has settled `sel` (skips duplicates and history replay). */
+  function maybeRecordVisitedSelectionAfterPost(finalSel: string): void {
+    if (suppressVisitedSelectionRecording) {
+      return;
+    }
+    const fid = String(finalSel || "").trim();
+    if (!fid) {
+      return;
+    }
+    if (visitedSelectionIndex >= 0 && visitedSelectionIndex < visitedSelectionStack.length - 1) {
+      visitedSelectionStack = visitedSelectionStack.slice(0, visitedSelectionIndex + 1);
+    }
+    const tail = visitedSelectionStack[visitedSelectionIndex];
+    if (tail === fid) {
+      return;
+    }
+    visitedSelectionStack.push(fid);
+    while (visitedSelectionStack.length > VISITED_SELECTION_MAX) {
+      visitedSelectionStack.shift();
+    }
+    visitedSelectionIndex = visitedSelectionStack.length - 1;
+  }
 
   function noteCountsByEventId(notes: readonly NoteOut[]): Map<string, number> {
     const out = new Map<string, number>();
@@ -393,10 +473,184 @@ export function createConversationPanelController(
     }
   }
 
+  function shortTreeEventLabelForSideChat(ev: GraphEventNode): string {
+    const t = (ev.content_text ?? "").replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, 32) : ev.kind;
+  }
+
+  function shortTreeNoteLabelForSideChat(n: NoteOut): string {
+    const t = n.content.replace(/\s+/g, " ").trim();
+    return t ? t.slice(0, 32) : "(empty note)";
+  }
+
+  function syncSideChatReferenceLabelMapsFromTree(events: GraphEventNode[], notes: NoteOut[]): void {
+    const e: Record<string, string> = {};
+    for (const ev of events) {
+      e[ev.id] = shortTreeEventLabelForSideChat(ev);
+    }
+    const n: Record<string, string> = {};
+    for (const note of notes) {
+      n[note.id] = shortTreeNoteLabelForSideChat(note);
+    }
+    sideChatEventLabelsById = e;
+    sideChatNoteLabelsById = n;
+  }
+
+  async function augmentSideChatLabelMapsFromApi(): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    try {
+      const [{ events }, notes] = await Promise.all([
+        api.getTree(conversationId),
+        api.listNotes(conversationId),
+      ]);
+      for (const ev of events) {
+        sideChatEventLabelsById[ev.id] = shortTreeEventLabelForSideChat(ev);
+      }
+      for (const note of notes) {
+        sideChatNoteLabelsById[note.id] = shortTreeNoteLabelForSideChat(note);
+      }
+    } catch {
+      /* keep previous maps */
+    }
+  }
+
+  function stopInlineSideChatSse(): void {
+    sideChatSseAbort?.abort();
+    sideChatSseAbort = undefined;
+    inlineSideChatSseConversationId = undefined;
+  }
+
+  function ensureInlineSideChatSseForConversation(): void {
+    if (!conversationId || !panel || !webviewReady) {
+      return;
+    }
+    if (
+      inlineSideChatSseConversationId === conversationId &&
+      sideChatSseAbort != null &&
+      !sideChatSseAbort.signal.aborted
+    ) {
+      return;
+    }
+    stopInlineSideChatSse();
+    const cid = conversationId;
+    const ac = new AbortController();
+    sideChatSseAbort = ac;
+    inlineSideChatSseConversationId = cid;
+
+    void runInlineSideChatSseLoop({
+      api,
+      conversationId: cid,
+      getAfterSeq: () => maxSideChatSeq(inlineSideChatRows),
+      signal: ac.signal,
+      stopped: () =>
+        inlineSideChatSseConversationId !== cid || conversationId !== cid || panel == null,
+      onJsonPayload: async (payload: unknown) => {
+        if (conversationId !== cid || panel == null) {
+          return;
+        }
+        const o = payload as { type?: string; message?: SideChatMessageOut };
+        if (o?.type !== "side_chat" || !o.message) {
+          return;
+        }
+        const incoming = o.message;
+        const watchingSideChat = Boolean(panel.visible && inlineSideChatVisible);
+        const me = await ensureMeForSideChat();
+        const cue = readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor"));
+        const soundKind = decideSideChatSoundKind({
+          panelVisible: watchingSideChat,
+          myUserId: me?.id ?? null,
+          myMentionTargets: mentionTargetsForMe(me),
+          incoming,
+          messageSoundEnabled: cue.messageSoundEnabled,
+          mentionSoundEnabled: cue.mentionSoundEnabled,
+        });
+        if (soundKind && webviewReady) {
+          try {
+            await panel.webview.postMessage({ type: "playSound", kind: soundKind });
+          } catch {
+            /* webview gone */
+          }
+        }
+        if (
+          shouldNotifyForIncomingSideChatMessage(inlineSideChatRows, incoming, inlineSideChatNotifiedMessageIds)
+        ) {
+          const notif = decideSideChatNotification({
+            panelVisible: watchingSideChat,
+            myUserId: me?.id ?? null,
+            myMentionTargets: mentionTargetsForMe(me),
+            incoming,
+            notificationsEnabled: cue.notificationsEnabled,
+            mentionNotificationsEnabled: cue.mentionNotificationsEnabled,
+          });
+          if (notif) {
+            const nowMs = Date.now();
+            if (
+              shouldEmitSideChatNotificationNow({
+                nowMs,
+                lastNotificationAtMs: inlineSideChatLastNotificationAtMs,
+                decision: notif,
+              })
+            ) {
+              inlineSideChatLastNotificationAtMs = nowMs;
+              void vscode.window.showInformationMessage(notif.title, {
+                detail: notif.detail,
+                modal: false,
+              });
+            }
+          }
+        }
+        inlineSideChatNotifiedMessageIds.add(incoming.id);
+        await incorporateInlineSideChatFromRemote(incoming);
+      },
+    });
+  }
+
+  async function incorporateInlineSideChatFromRemote(inc: SideChatMessageOut): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    const incRefsUnknown = sideChatMessageHasUnknownReferenceLookups(
+      inc,
+      sideChatEventLabelsById,
+      sideChatNoteLabelsById,
+    );
+    if (incRefsUnknown) {
+      await augmentSideChatLabelMapsFromApi();
+    }
+    inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, inc);
+    if (inc.kind === "user" && parseUserMediaImages(inc.content_json ?? undefined).length > 0) {
+      try {
+        const partial = await buildUserImageDataUrlsByOwnerId(api, conversationId, [inc]);
+        for (const [id, urls] of partial) {
+          inlineSideChatUrlsByMessageId.set(id, [...urls]);
+        }
+      } catch {
+        /* keep cached URLs */
+      }
+    } else if (inc.kind === "user") {
+      inlineSideChatUrlsByMessageId.delete(inc.id);
+    }
+    const cachedIds = new Set(inlineSideChatRows.map((m) => m.id));
+    for (const k of inlineSideChatUrlsByMessageId.keys()) {
+      if (!cachedIds.has(k)) {
+        inlineSideChatUrlsByMessageId.delete(k);
+      }
+    }
+    rebuildInlineSideChatRendered();
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+    await markInlineSideChatReadFromCache(true);
+    await refreshConversationMeta();
+    if (inc.kind === "system_join") {
+      void vscode.commands.executeCommand("colcoor.refreshConversations");
+    }
+  }
+
   function rebuildInlineSideChatRendered(): void {
     inlineSideChatRendered = toSideChatRenderMessages(
       inlineSideChatRows,
-      undefined,
+      { eventLabelsById: sideChatEventLabelsById, noteLabelsById: sideChatNoteLabelsById },
       inlineSideChatUrlsByMessageId,
     );
   }
@@ -434,6 +688,9 @@ export function createConversationPanelController(
     }
     inlineSideChatUrlsByMessageId = urlsByMessageId;
     rebuildInlineSideChatRendered();
+    for (const r of inlineSideChatRows) {
+      inlineSideChatNotifiedMessageIds.add(r.id);
+    }
   }
 
   /**
@@ -458,6 +715,13 @@ export function createConversationPanelController(
       await api.patchSideChatRead(conversationId, nextRead);
       lastSideChatReadSeq = nextRead;
       await refreshConversationMeta();
+      if (inlineSideChatListRefreshTimer !== undefined) {
+        clearTimeout(inlineSideChatListRefreshTimer);
+      }
+      inlineSideChatListRefreshTimer = setTimeout(() => {
+        inlineSideChatListRefreshTimer = undefined;
+        void vscode.commands.executeCommand("colcoor.refreshConversations");
+      }, 1500);
     } catch (e) {
       if (isPlanLimitColcoorApiError(e)) {
         void showColcoorApiFailure(e);
@@ -540,6 +804,13 @@ export function createConversationPanelController(
   }
 
   function disposePanel(): void {
+    stopInlineSideChatSse();
+    inlineSideChatNotifiedMessageIds.clear();
+    inlineSideChatLastNotificationAtMs = null;
+    if (inlineSideChatListRefreshTimer !== undefined) {
+      clearTimeout(inlineSideChatListRefreshTimer);
+      inlineSideChatListRefreshTimer = undefined;
+    }
     sendAbort?.abort();
     sendAbort = undefined;
     syncConversationReplyInProgressContext();
@@ -554,6 +825,7 @@ export function createConversationPanelController(
     sideChatHasUnread = false;
     lastSideChatReadSeq = 0;
     viewerUserIdForWebview = null;
+    viewerConversationRole = null;
     inlineSideChatUrlsByMessageId = new Map();
     inlineSideChatPostChain = Promise.resolve();
     myProfileForSideChat = undefined;
@@ -602,6 +874,7 @@ export function createConversationPanelController(
     if (!panel || !conversationId || !webviewReady) {
       return;
     }
+    syncSideChatReferenceLabelMapsFromTree(events, lastNotes);
     try {
       lastPostedBusy = busy;
       lastPostedError = lastError;
@@ -615,6 +888,8 @@ export function createConversationPanelController(
         }
         selectedEventId = sel;
       }
+      maybeRecordVisitedSelectionAfterPost(sel ?? "");
+      const nav = visitedSelectionNavFlags();
       const treeW = context.workspaceState.get<number>(TREE_WIDTH_STATE_KEY);
       const treeWidthPx =
         typeof treeW === "number" && Number.isFinite(treeW) && treeW >= 140 && treeW < 8000
@@ -674,6 +949,9 @@ export function createConversationPanelController(
         conversationNotes: lastNotes,
         drawersStarred: drawersModel.starred,
         drawersTodos: drawersModel.todos,
+        selectionVisitCanGoBack: nav.canGoBack,
+        selectionVisitCanGoForward: nav.canGoForward,
+        sideChatViewerRole: viewerConversationRole,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -737,6 +1015,9 @@ export function createConversationPanelController(
           conversationNotes: lastNotes,
           drawersStarred: drawersModelFb.starred,
           drawersTodos: drawersModelFb.todos,
+          selectionVisitCanGoBack: false,
+          selectionVisitCanGoForward: false,
+          sideChatViewerRole: viewerConversationRole,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -820,10 +1101,16 @@ export function createConversationPanelController(
             }
           }
           lastNotes = notes;
+          viewerConversationRole = null;
           if (caller) {
             lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
             viewerUserIdForWebview =
               typeof caller.user_id === "string" && caller.user_id.trim() ? caller.user_id.trim() : null;
+            const uid = viewerUserIdForWebview;
+            if (uid) {
+              const mem = members.find((m) => m.user_id === uid);
+              viewerConversationRole = mem?.role ?? null;
+            }
             const lr = caller.side_chat_last_read_seq;
             lastSideChatReadSeq =
               typeof lr === "number" && Number.isFinite(lr) ? Math.max(0, Math.floor(lr)) : 0;
@@ -835,6 +1122,7 @@ export function createConversationPanelController(
             lastNeedsContextRebuild = false;
             lastSideChatReadSeq = 0;
             viewerUserIdForWebview = null;
+            viewerConversationRole = null;
           }
           if (members.length > 1 && !dismissedInlineSideChatByConversationId.has(conversationId)) {
             inlineSideChatVisible = true;
@@ -891,6 +1179,11 @@ export function createConversationPanelController(
             await markInlineSideChatReadFromCache(true);
           }
           postState(events, busy, lastError);
+          if (members.length > 1) {
+            ensureInlineSideChatSseForConversation();
+          } else {
+            stopInlineSideChatSse();
+          }
           return;
         } catch (e) {
           if (isPlanLimitColcoorApiError(e)) {
@@ -901,6 +1194,7 @@ export function createConversationPanelController(
           lastNeedsContextRebuild = false;
           lastSideChatReadSeq = 0;
           viewerUserIdForWebview = null;
+          viewerConversationRole = null;
           lastUserImageDataUrlsByEventId = new Map();
           inlineSideChatRows = [];
           inlineSideChatUrlsByMessageId = new Map();
@@ -1170,6 +1464,52 @@ export function createConversationPanelController(
         void syncActiveToBackend(nextId, {
           needsContextRebuild: prevSel !== undefined && prevSel !== nextId,
         });
+        return;
+      }
+      if (msg.type === "selectionHistoryBack") {
+        if (!visitedSelectionNavFlags().canGoBack || visitedSelectionIndex <= 0) {
+          return;
+        }
+        const nextIdx = visitedSelectionIndex - 1;
+        const nextSel = visitedSelectionStack[nextIdx];
+        if (!nextSel || !lastTreeEvents.some((e) => e.id === nextSel)) {
+          return;
+        }
+        const prevSel = selectedEventId;
+        suppressVisitedSelectionRecording = true;
+        try {
+          visitedSelectionIndex = nextIdx;
+          selectedEventId = nextSel;
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          void syncActiveToBackend(nextSel, {
+            needsContextRebuild: prevSel !== undefined && prevSel !== nextSel,
+          });
+        } finally {
+          suppressVisitedSelectionRecording = false;
+        }
+        return;
+      }
+      if (msg.type === "selectionHistoryForward") {
+        if (!visitedSelectionNavFlags().canGoForward) {
+          return;
+        }
+        const nextIdx = visitedSelectionIndex + 1;
+        const nextSel = visitedSelectionStack[nextIdx];
+        if (!nextSel || !lastTreeEvents.some((e) => e.id === nextSel)) {
+          return;
+        }
+        const prevSel = selectedEventId;
+        suppressVisitedSelectionRecording = true;
+        try {
+          visitedSelectionIndex = nextIdx;
+          selectedEventId = nextSel;
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          void syncActiveToBackend(nextSel, {
+            needsContextRebuild: prevSel !== undefined && prevSel !== nextSel,
+          });
+        } finally {
+          suppressVisitedSelectionRecording = false;
+        }
         return;
       }
       if (msg.type === "treeContextMenu" && typeof msg.id === "string") {
@@ -1464,9 +1804,12 @@ export function createConversationPanelController(
           }
         }
         const contentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
+        const refSc = normalizeSideChatReferenceId(
+          typeof msg.referencedSideChatMessageId === "string" ? msg.referencedSideChatMessageId : undefined,
+        );
         const payload = buildSideChatSendPayload(
           msg.text,
-          null,
+          refSc,
           null,
           null,
           inlineSideChatRows,
@@ -1511,6 +1854,83 @@ export function createConversationPanelController(
               payload,
             }),
           );
+        return;
+      }
+      if (msg.type === "editSideChat") {
+        if (!conversationId) {
+          return;
+        }
+        const mid = normalizeSideChatReferenceId(
+          typeof msg.messageId === "string" ? msg.messageId : undefined,
+        );
+        if (!mid) {
+          return;
+        }
+        const uid =
+          viewerUserIdForWebview ??
+          (typeof myProfileForSideChat?.id === "string" ? myProfileForSideChat.id : null);
+        const row = inlineSideChatRows.find((m) => m.id === mid);
+        if (!row || !canMutateOwnSideChatUserMessage(row, uid)) {
+          void vscode.window.showWarningMessage("Colcoor: you can only edit your own side-chat messages.");
+          return;
+        }
+        const body = trimmedSideChatSendBody(msg.text);
+        if (!body) {
+          void vscode.window.showWarningMessage("Colcoor: side chat message is empty.");
+          return;
+        }
+        try {
+          const updated = await api.patchSideChatMessage(conversationId, mid, { body });
+          inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, updated);
+          rebuildInlineSideChatRendered();
+          postState(lastTreeEvents, sendAbort != null, null);
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
+        return;
+      }
+      if (msg.type === "deleteSideChat") {
+        if (!conversationId) {
+          return;
+        }
+        const mid = normalizeSideChatReferenceId(
+          typeof msg.messageId === "string" ? msg.messageId : undefined,
+        );
+        if (!mid) {
+          return;
+        }
+        const uid =
+          viewerUserIdForWebview ??
+          (typeof myProfileForSideChat?.id === "string" ? myProfileForSideChat.id : null);
+        const row = inlineSideChatRows.find((m) => m.id === mid);
+        if (!row || !canDeleteSideChatMessage(row, uid, viewerConversationRole)) {
+          void vscode.window.showWarningMessage("Colcoor: you cannot delete this side-chat message.");
+          return;
+        }
+        const isOwnerModeration =
+          viewerConversationRole === "owner" &&
+          uid != null &&
+          (row.kind !== "user" || row.author_user_id !== uid);
+        const choice = await vscode.window.showWarningMessage(
+          isOwnerModeration
+            ? "Delete this side-chat message as conversation owner?"
+            : "Delete this side-chat message?",
+          { modal: true, detail: mid ?? "" },
+          "Delete",
+        );
+        if (choice !== "Delete") {
+          return;
+        }
+        try {
+          const tombstone = await api.deleteSideChatMessage(conversationId, mid);
+          inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, tombstone);
+          inlineSideChatUrlsByMessageId.delete(tombstone.id);
+          rebuildInlineSideChatRendered();
+          postState(lastTreeEvents, sendAbort != null, null);
+          await refreshConversationMeta();
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
         return;
       }
       if (msg.type === "deleteConversation") {
@@ -1668,12 +2088,20 @@ export function createConversationPanelController(
     });
 
     p.onDidDispose(() => {
+      stopInlineSideChatSse();
+      inlineSideChatNotifiedMessageIds.clear();
+      inlineSideChatLastNotificationAtMs = null;
+      if (inlineSideChatListRefreshTimer !== undefined) {
+        clearTimeout(inlineSideChatListRefreshTimer);
+        inlineSideChatListRefreshTimer = undefined;
+      }
       sendAbort?.abort();
       sendAbort = undefined;
       syncConversationReplyInProgressContext();
       panel = undefined;
       webviewReady = false;
       conversationId = undefined;
+      resetVisitedSelectionHistory();
       selectedEventId = undefined;
       conversationPinned = false;
       lastTreeEvents = [];
@@ -1681,6 +2109,7 @@ export function createConversationPanelController(
       lastNeedsContextRebuild = false;
       lastSideChatReadSeq = 0;
       viewerUserIdForWebview = null;
+      viewerConversationRole = null;
       inlineSideChatVisible = false;
       inlineSideChatRows = [];
       inlineSideChatUrlsByMessageId = new Map();
@@ -1808,12 +2237,18 @@ export function createConversationPanelController(
         p.reveal(vscode.ViewColumn.One, false);
         return;
       }
+      if (conversationId !== cid) {
+        stopInlineSideChatSse();
+        inlineSideChatNotifiedMessageIds.clear();
+        inlineSideChatLastNotificationAtMs = null;
+      }
       conversationId = cid;
       conversationTitle = title;
       conversationPinned = false;
       staleTreePromptedForEventId = null;
       staleTreePromptedForGrowthFingerprint = null;
       viewerUserIdMemo = undefined;
+      resetVisitedSelectionHistory();
       selectedEventId = undefined;
       lastNotes = [];
       lastNeedsContextRebuild = false;
@@ -1845,12 +2280,18 @@ export function createConversationPanelController(
       if (cid === undefined || eid === undefined) {
         return;
       }
+      if (conversationId !== cid) {
+        stopInlineSideChatSse();
+        inlineSideChatNotifiedMessageIds.clear();
+        inlineSideChatLastNotificationAtMs = null;
+      }
       conversationId = cid;
       conversationTitle = title;
       conversationPinned = false;
       staleTreePromptedForEventId = null;
       staleTreePromptedForGrowthFingerprint = null;
       viewerUserIdMemo = undefined;
+      resetVisitedSelectionHistory();
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];

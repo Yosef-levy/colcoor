@@ -1,6 +1,6 @@
 /**
  * Side-chat webview helpers for safe avatar URLs and author labels ([ui-features.md] §1.1).
- * Inlined into `getSideChatWebviewHtml`; covered by `sideChatAuthorWebviewRuntime.test.ts`.
+ * Shared author/avatar helpers for side-chat webviews; covered by `sideChatAuthorWebviewRuntime.test.ts`.
  */
 export const SIDECHAT_AUTHOR_WEBVIEW_JS = `
 function sideChatHttpsAvatarUrl(url) {
@@ -15,7 +15,8 @@ function sideChatHttpsAvatarUrl(url) {
 }
 function sideChatMetaBase(m) {
   var del = m.deleted_at ? " · deleted" : "";
-  return "#" + m.seq + " · " + (m.kind || "") + del;
+  var k = m && m.kind ? String(m.kind) : "";
+  return k + del;
 }
 function sideChatAuthorSuffix(m) {
   if (typeof m.author_display_name === "string" && m.author_display_name.trim())

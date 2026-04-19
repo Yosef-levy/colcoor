@@ -23,7 +23,7 @@ describe("SIDECHAT_AUTHOR_WEBVIEW_JS", () => {
       var m = { seq: 3, kind: "user", deleted_at: null, author_display_name: "Pat", author_user_id: "u1" };
       return sideChatMetaBase(m) + sideChatAuthorSuffix(m);
     `;
-    expect(new Function(code)()).toBe("#3 · user · Pat");
+    expect(new Function(code)()).toBe("user · Pat");
   });
 
   it("uses Member fallback when display name missing but author id present", () => {

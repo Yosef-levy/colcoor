@@ -75,6 +75,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("} else if (state.busy) {");
   });
 
+  it("threads user rows with a left accent and assistant rows with a right accent", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain(
+      ".msg.user {\n      background: var(--vscode-editor-inactiveSelectionBackground);\n      border-left: 3px solid var(--vscode-focusBorder);",
+    );
+    expect(html).toContain(
+      ".msg.assistant {\n      background: var(--vscode-textBlockQuote-background);\n      border-right: 3px solid var(--vscode-focusBorder);",
+    );
+    expect(html).toContain("border-right-style: dashed");
+  });
+
   it("scrolls inline side-chat after a local send (not on passive refresh)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("function markInlineSideChatScrollAfterLocalSend()");
@@ -92,6 +103,20 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("function updateInlineSideChatSendEnabled()");
     expect(html).toContain('getElementById("inlineSideChatInput").addEventListener("paste"');
     expect(html).toContain("if (imgs.length) payload.images = imgs;");
+    expect(html).toContain("payload.referencedSideChatMessageId");
+  });
+
+  it("inline side-chat supports reply target, edit/delete actions, sounds, and host role for owner delete", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="inlineSideChatReplyRow"');
+    expect(html).toContain("function playInlineSideChatSound(kind)");
+    expect(html).toContain('m.type === "playSound"');
+    expect(html).toContain("sideChatViewerRole: null");
+    expect(html).toContain("m.sideChatViewerRole");
+    expect(html).toContain("data-inline-sc-reply");
+    expect(html).toContain("data-inline-sc-edit");
+    expect(html).toContain("data-inline-sc-del");
+    expect(html).toContain("function wireInlineSideChatListActions()");
   });
 
   it("scrolls inline side-chat to first unread on open using sideChatUnreadCount", () => {
@@ -107,6 +132,8 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("function inlineSideChatAuthorLabel(m)");
     expect(html).toContain("function inlineSideChatMessageUnreadForViewer(m, seqNum, lr)");
+    expect(html).toContain("inline-sidechat-msg-self");
+    expect(html).toContain("inline-sidechat-msg-peer");
     expect(html).toContain("inline-sidechat-msg-unread");
     expect(html).toContain("inline-sidechat-unread");
     expect(html).toContain("sideChatLastReadSeq: 0");
@@ -169,6 +196,16 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("unicode-bidi: plaintext");
   });
 
+  it("cycles tree indent guide color by nesting depth with one line style ([tree-ui-contract.md])", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("tree-nested");
+    expect(html).toContain("tree-guide-l0");
+    expect(html).toContain("tree-guide-l5");
+    expect(html).toContain("d % 6");
+    expect(html).toContain("walk(e.id, d + 1)");
+    expect(html).toContain('walk("__root__", 0)');
+  });
+
   it("drives Open side chat label and tooltip from host unread state ([ui-features.md] §10)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("sideChatOpenButtonLabel");
@@ -181,6 +218,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain(
       "Event tree — click a node to choose where the next reply attaches. Use the resize handle in the bottom-right corner of this panel to change width.",
     );
+  });
+
+  it("exposes thread visited-selection back/forward controls under the thread hint", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnSelectionHistoryBack"');
+    expect(html).toContain('id="btnSelectionHistoryForward"');
+    expect(html).toContain("thread-visit-nav");
+    expect(html).toContain('vscode.postMessage({ type: "selectionHistoryBack" })');
+    expect(html).toContain('vscode.postMessage({ type: "selectionHistoryForward" })');
+    expect(html).toContain("updateThreadVisitNav");
+    expect(html).toContain("selectionVisitCanGoBack");
   });
 
   it("lays out tree, main thread column, and side chat as three horizontal columns ([ui-features.md] §10)", () => {

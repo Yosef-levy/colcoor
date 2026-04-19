@@ -10,7 +10,7 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("not a play-by-play technical log");
   });
 
-  it("mentions conversation outline, resend, side chat, drawers, setup, milestone label, settings, and command palette", () => {
+  it("mentions conversation outline, resend, side chat, drawers, setup, message titles, search, settings, and command palette", () => {
     const html = getAboutPanelHtml("");
     expect(html).toContain("<strong>conversation outline</strong>");
     expect(html).toContain("<strong>Resend assistant</strong>");
@@ -19,7 +19,10 @@ describe("getAboutPanelHtml", () => {
     expect(html).toContain("Colcoor: Open side chat sound &amp; notification settings…");
     expect(html).toContain("drawers");
     expect(html).toContain("<strong>setup buttons</strong>");
-    expect(html).toContain("<strong>milestone label</strong>");
+    expect(html).toContain("<strong>message titles</strong>");
+    expect(html).toContain("<strong>Message → Add/edit title…</strong>");
+    expect(html).toContain("<strong>View → Search…</strong>");
+    expect(html).toContain("<strong>−</strong>");
     expect(html).toContain("<strong>Copy ID</strong>");
     expect(html).toContain("conversation identifier");
     expect(html).toContain("<strong>assistant in this workspace</strong>");
