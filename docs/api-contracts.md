@@ -159,6 +159,31 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `email` | string | no | snapshot for UI |
 | `display_name` | string | no | snapshot for UI |
 
+### 4.1a `GET /api/v1/conversations/{conversation_id}/member-invite-search`
+
+**Purpose:** Find existing Colcoor accounts to invite by **user id**, **full email** (case-insensitive exact match), or **handle** (leading `@` optional; case-insensitive). **Owner or editor** only ([permissions.md](permissions.md)). Excludes users who are already members of this conversation.
+
+| | |
+|--|--|
+| **Auth** | Bearer JWT |
+| **Query** | `q` — string, 1–320 chars, trimmed server-side |
+| **200** | JSON array of `MemberInviteCandidateOut` (may be empty) |
+| **401** / **403** / **404** | as for other conversation routes |
+| **422** | empty/oversized `q`, or handle-shaped `q` that fails handle character rules |
+
+**`MemberInviteCandidateOut`:**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `user_id` | uuid | yes |
+| `email` | string | yes |
+| `display_name` | string | no |
+| `handle` | string | no |
+| `avatar_url` | string | no |
+| `last_login_at` | string (ISO-8601) | yes |
+
+**Matching rules (in order):** if `q` parses as a UUID, match `users.id`; else if `q` contains `@`, match `lower(users.email) = lower(q)`; else match `lower(users.handle) = lower(trim_leading_@(q))` (handle must be non-null).
+
 ### 4.2 `POST /api/v1/conversations/{conversation_id}/members`
 
 **Purpose:** Add a member. **Owner or editor** ([permissions.md](permissions.md) add-member row).
@@ -171,7 +196,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `role` | string | yes | `editor` \| `viewer` only (cannot create second owner via this route) |
 
 | **200** | `MemberOut` |
-| **403** | not owner |
+| **403** | not owner or editor |
 | **404** | conversation not found |
 | **409** | user already a member |
 

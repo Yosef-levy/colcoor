@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeColcoorInviteUserId,
   validateColcoorInviteUserIdInput,
+  validateMemberInviteLookupQuery,
 } from "./conversationMemberInvite";
 
 describe("validateColcoorInviteUserIdInput", () => {
@@ -40,6 +41,20 @@ describe("validateColcoorInviteUserIdInput", () => {
     expect(validateColcoorInviteUserIdInput("99999999-9999-9999-a999-999999999999")).toBe(
       "Expected UUID format",
     );
+  });
+});
+
+describe("validateMemberInviteLookupQuery", () => {
+  it("allows UUIDs, emails, and handle-shaped strings", () => {
+    expect(validateMemberInviteLookupQuery("aaaaaaaa-bbbb-4ccc-8eee-eeeeeeeeeeee")).toBeUndefined();
+    expect(validateMemberInviteLookupQuery("user@example.com")).toBeUndefined();
+    expect(validateMemberInviteLookupQuery("@my_handle")).toBeUndefined();
+    expect(validateMemberInviteLookupQuery("handle_only")).toBeUndefined();
+  });
+
+  it("rejects empty and overlong input", () => {
+    expect(validateMemberInviteLookupQuery("")).toMatch(/Enter/);
+    expect(validateMemberInviteLookupQuery("x".repeat(321))).toMatch(/320/);
   });
 });
 

@@ -111,7 +111,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnListTodoNotesPicker" title="Pick a TODO note to jump to (Colcoor: List TODO notes in conversation)">List TODO notes…</button>
     <button type="button" id="btnListStarredPicker" title="Pick a starred message to jump to (Colcoor: List starred messages in conversation)">List starred…</button>
     <button type="button" id="btnListMembers" title="Show members of this conversation in the Colcoor output channel">Show members</button>
-    <button type="button" id="btnAddMember" title="Invite an existing Colcoor user to this conversation (Colcoor: Add member)">Add member…</button>
+    <button type="button" id="btnAddMember" title="Invite by user id, email, or @handle (Colcoor: Add member)">Add member…</button>
     <button type="button" id="btnRenameConversation" title="Rename this conversation (Colcoor: Rename conversation)">Rename…</button>
     <button type="button" id="btnTogglePinnedConversation" title="Pin or unpin this conversation in the sidebar list (Colcoor: Pin / unpin conversation)">Pin / unpin</button>
     <button type="button" id="btnChangeMemberRole" title="Change a member’s role in this conversation (Colcoor: Change member role)">Change member role…</button>

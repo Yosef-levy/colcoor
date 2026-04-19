@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
 
 from colcoor_backend.api.deps import CurrentUserId, DbSession
 from colcoor_backend.core.config import get_settings
@@ -18,6 +18,7 @@ from colcoor_backend.api.schemas import (
     EventKind,
     EventNodeOut,
     MemberAddBody,
+    MemberInviteCandidateOut,
     MemberOut,
     MemberRolePatchBody,
     NoteCreateBody,
@@ -48,6 +49,7 @@ from colcoor_backend.services.graph import (
     read_conversation_caller_state,
     remove_conversation_member,
     restore_soft_deleted_subtree,
+    search_conversation_member_invite_candidates,
     set_conversation_active_event,
     soft_delete_event_subtree,
     tree_event_annotations,
@@ -403,6 +405,50 @@ async def get_conversation_members(
                     "role": role,
                     "email": email or None,
                     "display_name": display_name or None,
+                }
+            )
+        )
+    return out
+
+
+@router.get(
+    "/{conversation_id}/member-invite-search",
+    response_model=list[MemberInviteCandidateOut],
+)
+async def get_member_invite_search(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    q: Annotated[str, Query(min_length=1, max_length=320)],
+) -> list[MemberInviteCandidateOut]:
+    """Search existing Colcoor users by UUID, full email (case-insensitive), or handle (``@`` optional)."""
+    try:
+        rows = await search_conversation_member_invite_candidates(
+            session,
+            conversation_id=conversation_id,
+            actor_user_id=user_id,
+            query=q,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        ) from None
+    out: list[MemberInviteCandidateOut] = []
+    for uid, em, dn, handle, avatar, last_at in rows:
+        out.append(
+            MemberInviteCandidateOut.model_validate(
+                {
+                    "user_id": uid,
+                    "email": em,
+                    "display_name": dn or None,
+                    "handle": handle,
+                    "avatar_url": avatar,
+                    "last_login_at": last_at,
                 }
             )
         )

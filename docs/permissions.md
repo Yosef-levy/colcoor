@@ -26,6 +26,7 @@ The extension SHOULD enforce these rules in **central command handlers**, not in
 | Rename conversation (`PATCH` title)                       | Allow                 | Allow  | Deny   |
 | Pin / unpin (updates caller’s `conversation_members.pinned` only) | Allow | Allow | Allow |
 | Add member                                                | Allow                 | Allow  | Deny   |
+| Search users to invite (`GET …/member-invite-search`)     | Allow                 | Allow  | Deny   |
 | Remove member                                             | Allow                 | Deny   | Deny   |
 | Change member role                                        | Allow                 | Deny   | Deny   |
 | Append **shared** graph event (`visible_to` null)         | Allow                 | Allow  | Deny   |

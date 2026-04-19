@@ -487,6 +487,138 @@ def test_conversation_membership_mutations_http(monkeypatch: pytest.MonkeyPatch,
     get_settings.cache_clear()
 
 
+async def _insert_user_row(postgres_url: str, **kwargs: object) -> uuid.UUID:
+    eng = create_async_engine(postgres_url)
+    factory = async_sessionmaker(eng, expire_on_commit=False)
+    async with factory() as s:
+        u = User(**kwargs)
+        s.add(u)
+        await s.commit()
+        await s.refresh(u)
+        uid = u.id
+    await eng.dispose()
+    return uid
+
+
+def test_member_invite_search_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """GET …/member-invite-search (api-contracts §4.1a)."""
+    from colcoor_backend.core.jwt_tokens import decode_access_token
+
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token_owner = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    token_viewer = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    settings = get_settings()
+    uid_viewer = decode_access_token(token_viewer, settings)
+    auth_owner = {"Authorization": f"Bearer {token_owner}"}
+    auth_viewer = {"Authorization": f"Bearer {token_viewer}"}
+
+    t_old = datetime.now(tz=UTC) - timedelta(days=10)
+    t_new = datetime.now(tz=UTC) - timedelta(days=1)
+    uid_dup_old = asyncio.run(
+        _insert_user_row(
+            postgres_url,
+            cursor_sub=f"dup-old-{uuid.uuid4()}",
+            email="dupinvite@example.com",
+            display_name="Older Dup",
+            handle="dup_old_handle",
+            avatar_url="https://example.invalid/a.png",
+            last_login_at=t_old,
+        )
+    )
+    uid_dup_new = asyncio.run(
+        _insert_user_row(
+            postgres_url,
+            cursor_sub=f"dup-new-{uuid.uuid4()}",
+            email="dupinvite@example.com",
+            display_name="Newer Dup",
+            handle="dup_new_handle",
+            avatar_url=None,
+            last_login_at=t_new,
+        )
+    )
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth_owner, json={"title": "invite-search"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/members",
+            headers=auth_owner,
+            json={"user_id": str(uid_viewer), "role": "viewer"},
+        )
+        assert r.status_code == 200, r.text
+
+        r = client.get(
+            f"/api/v1/conversations/{cid}/member-invite-search",
+            headers=auth_owner,
+            params={"q": "dupinvite@example.com"},
+        )
+        assert r.status_code == 200, r.text
+        rows = r.json()
+        assert len(rows) == 2
+        assert rows[0]["user_id"] == str(uid_dup_new)
+        assert rows[1]["user_id"] == str(uid_dup_old)
+        assert rows[0]["email"] == "dupinvite@example.com"
+        assert rows[0]["handle"] == "dup_new_handle"
+        assert rows[0]["display_name"] == "Newer Dup"
+        assert rows[0]["avatar_url"] is None
+        assert "last_login_at" in rows[0]
+
+        r = client.get(
+            f"/api/v1/conversations/{cid}/member-invite-search",
+            headers=auth_owner,
+            params={"q": "@dup_old_handle"},
+        )
+        assert r.status_code == 200, r.text
+        assert len(r.json()) == 1
+        assert r.json()[0]["user_id"] == str(uid_dup_old)
+
+        r = client.get(
+            f"/api/v1/conversations/{cid}/member-invite-search",
+            headers=auth_owner,
+            params={"q": str(uid_dup_new)},
+        )
+        assert r.status_code == 200, r.text
+        assert len(r.json()) == 1
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/members",
+            headers=auth_owner,
+            json={"user_id": str(uid_dup_new), "role": "editor"},
+        )
+        assert r.status_code == 200, r.text
+
+        r = client.get(
+            f"/api/v1/conversations/{cid}/member-invite-search",
+            headers=auth_owner,
+            params={"q": "dupinvite@example.com"},
+        )
+        assert r.status_code == 200, r.text
+        assert len(r.json()) == 1
+        assert r.json()[0]["user_id"] == str(uid_dup_old)
+
+        r = client.get(
+            f"/api/v1/conversations/{cid}/member-invite-search",
+            headers=auth_viewer,
+            params={"q": "dupinvite@example.com"},
+        )
+        assert r.status_code == 403, r.text
+
+        r = client.get(
+            f"/api/v1/conversations/{cid}/member-invite-search",
+            headers=auth_owner,
+            params={"q": "not-a-handle!!!"},
+        )
+        assert r.status_code == 422, r.text
+
+    get_settings.cache_clear()
+
+
 def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
     """GET/POST/PATCH/DELETE side-chat + PATCH read (api-contracts §10.1–10.5)."""
     secret = "x" * 40

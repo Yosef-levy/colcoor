@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
@@ -1028,6 +1029,82 @@ async def add_conversation_member(
     res_row = await session.execute(select(User.email, User.display_name).where(User.id == new_user_id))
     em, dn = res_row.one()
     return (new_user_id, role, em, dn or "")
+
+
+_MEMBER_INVITE_SEARCH_QUERY_MAX = 320
+# Handles stored in `users.handle` (public @handle); used for invite lookup only.
+_MEMBER_INVITE_HANDLE_RE = re.compile(r"^[a-zA-Z0-9_.-]{1,200}$")
+
+
+def _not_already_member_subquery(conversation_id: uuid.UUID):
+    return select(ConversationMember.user_id).where(ConversationMember.conversation_id == conversation_id)
+
+
+async def search_conversation_member_invite_candidates(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    query: str,
+) -> list[tuple[uuid.UUID, str, str, str | None, str | None, datetime]]:
+    """Match existing users by UUID, full email (case-insensitive), or handle (case-insensitive, optional ``@``).
+
+    **Owner or editor** only (same gate as :func:`add_conversation_member`). Excludes users who are
+    already members. Returns rows as ``(user_id, email, display_name, handle, avatar_url, last_login_at)``.
+    """
+    actor = await get_conversation_member(session, conversation_id, actor_user_id)
+    if actor is None:
+        raise LookupError("conversation not found")
+    if actor.role not in ("owner", "editor"):
+        raise PermissionError("forbidden")
+    await require_live_conversation(session, conversation_id)
+
+    q = (query or "").strip()
+    if not q or len(q) > _MEMBER_INVITE_SEARCH_QUERY_MAX:
+        raise ValueError("invalid query")
+
+    not_member = ~User.id.in_(_not_already_member_subquery(conversation_id))
+
+    users: list[User] = []
+    try:
+        parsed_uid = uuid.UUID(q)
+    except ValueError:
+        parsed_uid = None
+
+    if parsed_uid is not None:
+        res = await session.execute(select(User).where(User.id == parsed_uid, not_member))
+        users = list(res.scalars().all())
+    elif "@" in q:
+        email_lower = q.lower()
+        res = await session.execute(
+            select(User).where(not_member, func.lower(User.email) == email_lower).order_by(User.last_login_at.desc())
+        )
+        users = list(res.scalars().all())
+    else:
+        handle_part = q[1:].strip() if q.startswith("@") else q
+        if not handle_part or not _MEMBER_INVITE_HANDLE_RE.match(handle_part):
+            raise ValueError("invalid handle (use letters, digits, ._- or an email address)")
+        hl = handle_part.lower()
+        res = await session.execute(
+            select(User).where(not_member, User.handle.is_not(None), func.lower(User.handle) == hl).order_by(
+                User.last_login_at.desc()
+            )
+        )
+        users = list(res.scalars().all())
+
+    out: list[tuple[uuid.UUID, str, str, str | None, str | None, datetime]] = []
+    for u in users:
+        out.append(
+            (
+                u.id,
+                u.email,
+                u.display_name or "",
+                u.handle,
+                u.avatar_url,
+                u.last_login_at,
+            )
+        )
+    return out
 
 
 async def update_conversation_member_role(

@@ -24,3 +24,29 @@ export function validateColcoorInviteUserIdInput(raw: string | undefined): strin
 export function normalizeColcoorInviteUserId(raw: string): string {
   return normalizePersistedUserInputText(raw);
 }
+
+const MEMBER_INVITE_LOOKUP_MAX_LEN = 320;
+
+/**
+ * Validates input for “add member” lookup (UUID, full email, or @handle) before calling the API.
+ *
+ * @returns `undefined` when valid, otherwise a short message for `showInputBox.validateInput`.
+ */
+export function validateMemberInviteLookupQuery(raw: string | undefined): string | undefined {
+  const t = normalizePersistedUserInputText(String(raw ?? ""));
+  if (!t) {
+    return "Enter a user id, email, or @handle";
+  }
+  if (t.length > MEMBER_INVITE_LOOKUP_MAX_LEN) {
+    return `Use at most ${MEMBER_INVITE_LOOKUP_MAX_LEN} characters`;
+  }
+  if (t.includes("\n") || t.includes("\r")) {
+    return "Remove line breaks";
+  }
+  return undefined;
+}
+
+/** Trim and normalize line endings for the member-invite search query parameter. */
+export function normalizeMemberInviteLookupQuery(raw: string): string {
+  return normalizePersistedUserInputText(raw);
+}

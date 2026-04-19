@@ -62,10 +62,7 @@ import {
   formatMemberLogLine,
   formatMemberQuickPickLabel,
 } from "./conversations/conversationMemberDisplay";
-import {
-  normalizeColcoorInviteUserId,
-  validateColcoorInviteUserIdInput,
-} from "./conversations/conversationMemberInvite";
+import { runAddConversationMemberFlow } from "./conversations/conversationMemberInviteFlow";
 import { collectMultilineTextInUntitledEditor } from "./conversations/firstMessageMultilineEditor";
 import { normalizedOptionalFollowUpPrompt } from "./conversations/newConversationFirstMessage";
 import { normalizedConversationTitle } from "./conversations/renameConversationTitle";
@@ -478,39 +475,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
           return;
         }
-        const rawUserId = await vscode.window.showInputBox({
-          title: "Colcoor — add member",
-          prompt:
-            "Existing Colcoor user UUID to invite (they must have signed in once). Role: pick next.",
-          ignoreFocusOut: true,
-          validateInput: (v) => validateColcoorInviteUserIdInput(v),
-        });
-        if (rawUserId === undefined) {
-          return;
-        }
-        const userId = normalizeColcoorInviteUserId(rawUserId);
-        if (!userId) {
-          return;
-        }
-        const rolePick = await vscode.window.showQuickPick(
-          [
-            { label: "Editor", role: "editor" as const },
-            { label: "Viewer", role: "viewer" as const },
-          ],
-          { title: "Colcoor — member role", placeHolder: "Editor can post; viewer is read-only" },
-        );
-        if (!rolePick) {
-          return;
-        }
-        try {
-          await api.postConversationMember(id, { user_id: userId, role: rolePick.role });
-          refreshTree();
-          await vscode.window.showInformationMessage(
-            `Colcoor: added member (${rolePick.role}). They will see this conversation after refresh.`,
-          );
-        } catch (e) {
-          await showColcoorApiFailure(e);
-        }
+        await runAddConversationMemberFlow(api, id, refreshTree);
       },
     ),
     vscode.commands.registerCommand(

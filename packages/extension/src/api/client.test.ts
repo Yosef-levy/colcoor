@@ -166,6 +166,38 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.method).toBe("DELETE");
   });
 
+  it("searchConversationMemberInviteCandidates sends GET with encoded q", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify([
+          {
+            user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            email: "a@a.a",
+            display_name: "A",
+            handle: "ahandle",
+            avatar_url: null,
+            last_login_at: "2026-01-02T03:04:05.000Z",
+          },
+        ]),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const out = await api.searchConversationMemberInviteCandidates(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "dup@x.com",
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].handle).toBe("ahandle");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/member-invite-search?");
+    expect(url).toContain(encodeURIComponent("dup@x.com"));
+  });
+
   it("postConversationMember sends POST with user_id and role", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

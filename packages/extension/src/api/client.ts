@@ -69,6 +69,17 @@ export type ConversationMember = {
   display_name?: string | null;
 };
 
+/** Row from GET …/member-invite-search (api-contracts §4.1a). */
+export type MemberInviteSearchCandidate = {
+  user_id: string;
+  email: string;
+  display_name: string | null;
+  handle: string | null;
+  avatar_url: string | null;
+  /** ISO 8601 */
+  last_login_at: string;
+};
+
 export type SetConversationActiveBody = {
   active_event_id: string;
   needs_context_rebuild?: boolean;
@@ -340,6 +351,24 @@ export class ColcoorApiClient {
     const text = await res.text();
     this.assertOkResponse(res, text, "list members");
     return JSON.parse(text) as ConversationMember[];
+  }
+
+  /**
+   * Search users to invite by UUID, full email (case-insensitive), or handle (`@` optional).
+   * Caller must be conversation owner or editor.
+   */
+  async searchConversationMemberInviteCandidates(
+    conversationId: string,
+    q: string,
+  ): Promise<MemberInviteSearchCandidate[]> {
+    const qs = new URLSearchParams({ q });
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/member-invite-search?${qs.toString()}`,
+      { method: "GET" },
+    );
+    const text = await res.text();
+    this.assertOkResponse(res, text, "search member invite candidates");
+    return JSON.parse(text) as MemberInviteSearchCandidate[];
   }
 
   /** Add a member (owner or editor per server); 409 if already a member. */

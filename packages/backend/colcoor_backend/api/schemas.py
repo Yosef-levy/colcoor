@@ -165,6 +165,19 @@ class MemberOut(BaseModel):
     display_name: str | None = None
 
 
+class MemberInviteCandidateOut(BaseModel):
+    """One row in GET /conversations/{id}/member-invite-search (api-contracts §4.1a)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: UUID
+    email: str
+    display_name: str | None = None
+    handle: str | None = None
+    avatar_url: str | None = None
+    last_login_at: datetime
+
+
 class MemberAddBody(BaseModel):
     """POST …/members (api-contracts §4.2)."""
 
