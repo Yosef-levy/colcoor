@@ -17,6 +17,7 @@ Normative **conversation structure**, **visibility**, **main-thread events**, an
 - **`conversation_members`:** each member has **`role`** ∈ { **`owner`**, **`editor`**, **`viewer`** }.
 - **Exactly one `owner` per conversation** (product invariant). Enforced by a **partial unique index** on **`(conversation_id)`** where **`role = 'owner'`** and by **application logic** on every membership mutation ([database.md](database.md), [permissions.md](permissions.md)).
 - **Only members** may read or mutate that conversation’s data, subject to [permissions.md](permissions.md).
+- **Owner delete conversation** sets **`conversations.deleted_at`** and soft-deletes **every** live **`events`** row in one batch (**`deletion_group_id`** / **`deleted_by_user_id`**), same undo window and restore semantics as subtree delete ([api-contracts.md](api-contracts.md) §3.4–§3.5, §7.5–§7.7).
 
 ---
 
@@ -52,7 +53,8 @@ There are **no** other main-thread event kinds in this product scope.
 - **Deleting a node** (product action) sets **`deleted_at`** on that node and **every descendant** in one operation. **Stars** on those events are removed for all users; **notes** on those events no longer appear in list endpoints.
 - **Appending** with **`parent_event_id`** pointing at a soft-deleted anchor **inherits** the parent’s **`deleted_at`** on the new row so **late or racing writes** still land in the hidden subtree.
 - The **conversation root** (the single **`parent_event_id IS NULL`** non-deleted row) **MUST NOT** be soft-deleted.
-- **Retention:** the server **may** permanently delete soft-deleted rows after a configurable age (default **24 hours**). Dependent rows with **`ON DELETE CASCADE`** (e.g. **notes**, **stars**) disappear with the event; **`active_event_id`** is repointed to the live root before hard delete.
+- **Retention:** the server **may** permanently delete soft-deleted rows after a configurable age (default **14 days**). Dependent rows with **`ON DELETE CASCADE`** (e.g. **notes**, **stars**) disappear with the event; **`active_event_id`** is repointed to the live root before hard delete.
+- **Deletion batch:** each subtree delete assigns a shared **`deletion_group_id`** and records **`deleted_by_user_id`**. The same user may **undo** within a short window (default **5 minutes**) via the API. **Owner** and **editor** may **restore** later by **`POST …/events/{anchor}/restore-subtree`**, which clears soft-delete for every row still sharing that anchor’s **`deletion_group_id`**.
 
 ---
 

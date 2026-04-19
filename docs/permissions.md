@@ -22,7 +22,7 @@ The extension SHOULD enforce these rules in **central command handlers**, not in
 | Action                                                    | owner                 | editor | viewer |
 | --------------------------------------------------------- | --------------------- | ------ | ------ |
 | Create conversation (new top-level conversation)          | Allow                 | N/A    | N/A    |
-| Delete conversation                                       | Allow                 | Deny   | Deny   |
+| Delete conversation (owner soft-delete; undo / restore)   | Allow                 | Deny   | Deny   |
 | Rename conversation (`PATCH` title)                       | Allow                 | Allow  | Deny   |
 | Pin / unpin (updates caller’s `conversation_members.pinned` only) | Allow | Allow | Allow |
 | Add member                                                | Allow                 | Allow  | Deny   |
@@ -33,6 +33,9 @@ The extension SHOULD enforce these rules in **central command handlers**, not in
 | Commit private branch (promote private subtree to shared) | Allow                 | Allow  | Deny   |
 | Delete private draft subtree                              | Allow                 | Allow  | Allow  |
 | Soft-delete main-thread subtree (`DELETE …/events/{id}`)   | Allow                 | Allow  | Deny   |
+| Undo own recent subtree delete (`POST …/events/undo-delete`) | Own batch only      | Own batch only | Deny |
+| Restore soft-deleted subtree (`POST …/events/{id}/restore-subtree`) | Allow        | Allow  | Deny   |
+| Restore owner-deleted conversation (`POST …/restore-deleted`) | Allow             | Allow  | Deny   |
 | Add note on visible event                                 | Allow                 | Allow  | Deny   |
 | Edit note                                                 | Allow                 | Allow  | Deny   |
 | Delete note                                               | Allow                 | Allow  | Deny   |
@@ -54,6 +57,7 @@ The extension SHOULD enforce these rules in **central command handlers**, not in
 4. **Side chat edit:** only the `**author_user_id`** of the message may edit (**Own**). **System** lines (`kind` ≠ `user`) are not user-editable (**Deny** for all except server).
 5. **Side chat delete — owner:** may delete any message in that conversation’s side chat (moderation). **editor** / **viewer:** only **Own** user-authored lines.
 6. **Star:** each user may star or unstar only their own `**event_stars`** row; **viewer** may still star visible events.
+7. **Owner-soft-deleted conversation:** after **`DELETE …/conversations/{id}`** ([api-contracts.md](api-contracts.md) §3.4), tree / notes / side-chat / members **read** routes return **404** for all roles until **`POST …/events/undo-delete`** or **`POST …/restore-deleted`** (or **`POST …/events/{id}/restore-subtree`** on the graph root) clears the delete.
 
 ---
 

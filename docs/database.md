@@ -29,6 +29,9 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | title | text null | Display title (shared) |
 | created_at | timestamptz not null | Created |
 | updated_at | timestamptz not null | Last structural/content touch |
+| deleted_at | timestamptz null | Owner soft-delete; hidden from conversation list until undo / restore / purge |
+| deletion_group_id | uuid null | Same batch as all **`events`** rows when the whole conversation was soft-deleted (undo / restore) |
+| deleted_by_user_id | uuid FK null | User who performed the owner delete (undo eligibility) |
 
 ---
 
@@ -58,6 +61,8 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | checkpoint_label | text null | Optional display-only label for checkpoint / breadcrumb UI ([ui-features.md] §8) |
 | visible_to | uuid FK null | **NULL** = shared (all members); **non-NULL** = private draft for that `users.id` only |
 | deleted_at | timestamptz null | Soft delete; the API may **hard-delete** the row after a retention window (see [production.md](production.md) `COLCOOR_EVENT_*`) |
+| deletion_group_id | uuid null | Shared id for one subtree soft-delete (undo / restore) |
+| deleted_by_user_id | uuid FK null | User who performed the soft delete (undo eligibility) |
 | created_at | timestamptz not null | Inserted |
 | updated_at | timestamptz not null | Last mutation |
 
@@ -229,9 +234,14 @@ CREATE TABLE conversations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     title text,
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    deleted_at timestamptz,
+    deletion_group_id uuid,
+    deleted_by_user_id uuid REFERENCES users (id) ON DELETE SET NULL
 );
 CREATE INDEX idx_conversations_updated_at ON conversations (updated_at);
+CREATE INDEX idx_conversations_deleted_at ON conversations (deleted_at);
+CREATE INDEX idx_conversations_deletion_group_id ON conversations (deletion_group_id);
 
 -- 3. conversation_members
 CREATE TABLE conversation_members (
@@ -258,6 +268,8 @@ CREATE TABLE events (
     content_json jsonb,
     visible_to uuid REFERENCES users (id) ON DELETE SET NULL,
     deleted_at timestamptz,
+    deletion_group_id uuid,
+    deleted_by_user_id uuid REFERENCES users (id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_events_kind CHECK (kind IN ('user_input', 'assistant_output')),
@@ -270,6 +282,7 @@ CREATE INDEX idx_events_actor_type ON events (actor_type);
 CREATE INDEX idx_events_actor_user_id ON events (actor_user_id);
 CREATE INDEX idx_events_visible_to ON events (visible_to);
 CREATE INDEX idx_events_deleted_at ON events (deleted_at);
+CREATE INDEX idx_events_deletion_group_id ON events (deletion_group_id);
 CREATE INDEX idx_events_created_at ON events (created_at);
 CREATE INDEX idx_events_updated_at ON events (updated_at);
 CREATE INDEX idx_events_conversation_parent ON events (conversation_id, parent_event_id);

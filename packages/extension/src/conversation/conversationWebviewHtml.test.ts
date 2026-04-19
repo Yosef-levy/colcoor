@@ -9,6 +9,14 @@ import {
 import { COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL } from "../util/colcoorApiFailureActions";
 
 describe("getConversationWebviewHtml", () => {
+  it("shows a conversation tree loading strip (spinner) above the menubar while the host loads the tree", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="conversationLoading"');
+    expect(html).toContain("conversation-loading-spinner");
+    expect(html).toContain("Loading conversation…");
+    expect(html).toContain("conversationLoading: m.conversationLoading === true");
+  });
+
   it("names the tree reload control consistently with the refresh command ([ui-features.md] §6)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonceTreeReload");
     expect(html).toContain(`id="refresh"`);
@@ -353,6 +361,13 @@ describe("getConversationWebviewHtml", () => {
     expect(html).not.toMatch(/id="menuPanelView"[\s\S]*?id="btnReferenceSideChat"/);
     expect(html).toContain('refSideChatBtn.disabled = state.busy;');
     expect(html).toContain('vscode.postMessage({ type: "referenceInSideChat" });');
+  });
+
+  it("includes Delete message branch under the Message menu", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnDeleteMessageBranch"');
+    expect(html).toMatch(/id="menuPanelMessage"[\s\S]*?id="btnDeleteMessageBranch"/);
+    expect(html).toContain('vscode.postMessage({ type: "deleteMessageBranch" });');
   });
 
   it("includes Reference note in side chat detail action wiring", () => {

@@ -123,7 +123,7 @@ export function getConversationDrawersPanelHtml(
     <button type="button" id="btnReloadDrawersLists" title="Reload starred and TODO lists from the server (Colcoor: Refresh conversation drawers)">Refresh lists</button>
     <button type="button" id="btnToggleConversationsSidebar" title="Show or hide the Colcoor Conversations sidebar">Toggle sidebar</button>
     <button type="button" id="btnNewConversation" title="Create a new conversation">New conversation</button>
-    <button type="button" id="btnDeleteConversation" title="Permanently delete this conversation from Colcoor (Colcoor: Delete conversation)">Delete conversation…</button>
+    <button type="button" id="btnDeleteConversation" title="Soft-delete this conversation from Colcoor; undo available briefly (Colcoor: Delete conversation)">Delete conversation…</button>
   </div>
   ${policyBlock}
   <ul id="starredList" style="display:${showStarred}">${starredRows || "<li>(none)</li>"}</ul>

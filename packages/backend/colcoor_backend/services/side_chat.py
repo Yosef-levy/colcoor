@@ -17,6 +17,7 @@ from colcoor_backend.services.graph import (
     ensure_conversation_member,
     get_conversation_member,
     load_event,
+    require_live_conversation,
 )
 
 
@@ -108,6 +109,7 @@ async def list_side_chat_messages(
     incremental sync.
     """
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     cond = [
         SideChatMessage.conversation_id == conversation_id,
         SideChatMessage.seq > after_seq,
@@ -206,6 +208,7 @@ async def post_user_side_chat_message(
     referenced_side_chat_message_id: uuid.UUID | None,
 ) -> SideChatMessage:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     res = await session.execute(
         select(Conversation.id).where(Conversation.id == conversation_id).with_for_update()
     )
@@ -272,6 +275,7 @@ async def patch_side_chat_message_body(
     new_body: str,
 ) -> SideChatMessage:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     msg = await get_side_chat_message(session, conversation_id, message_id)
     if msg is None:
         raise LookupError("message not found")
@@ -297,6 +301,7 @@ async def soft_delete_side_chat_message(
     message_id: uuid.UUID,
 ) -> SideChatMessage:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise PermissionError("not a member")
@@ -340,6 +345,7 @@ async def patch_side_chat_read_cursor(
     last_read_seq: int,
 ) -> None:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     row = await session.get(UserSideChatState, (conversation_id, user_id))
     if row is None:
         session.add(

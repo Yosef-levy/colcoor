@@ -9,6 +9,7 @@ import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
 import { AgentRunner } from "./agent/agentRunner";
+import { SECRET_CURSOR_AGENT_API_KEY } from "./agent/cursorAgentApiKey";
 import {
   offerCursorAgentApiKeyAfterSignIn,
   promptStoreCursorAgentApiKey,
@@ -35,6 +36,7 @@ import {
   invalidateConversationListCache,
   listConversationsCached,
 } from "./conversations/conversationsListCache";
+import { syncConversationsWelcomeContextKeys } from "./conversations/conversationsWelcomeContext";
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import {
   isPrivateBranchFromPrivacyPick,
@@ -72,6 +74,7 @@ import { pinnedVerb, toggledPinnedState } from "./conversations/togglePinnedConv
 import { openColcoorSettings } from "./util/openColcoorSettings";
 import { showColcoorApiFailure } from "./util/showColcoorApiFailure";
 import { filterTodoNotes } from "./notes/todoNotesFilter";
+import { confirmDestructiveActionByTypingDelete } from "./conversation/destructiveDeleteConfirm";
 import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starredTreeEvents";
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
@@ -110,6 +113,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     invalidateConversationListCache();
     treeProvider.refresh();
   };
+
+  async function refreshConversationsWelcomeContext(): Promise<void> {
+    await syncConversationsWelcomeContextKeys(context.secrets, session);
+  }
+  void refreshConversationsWelcomeContext();
+  context.subscriptions.push(
+    context.secrets.onDidChange((e) => {
+      if (e.key === SECRET_CURSOR_AGENT_API_KEY) {
+        void refreshConversationsWelcomeContext();
+      }
+    }),
+  );
 
   /**
    * After a user turn started outside the conversation webview (e.g. new conversation + first
@@ -241,9 +256,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand("colcoor.setupCursorCli", async () => {
       await setupCursorCliInteractive();
+      await refreshConversationsWelcomeContext();
     }),
     vscode.commands.registerCommand("colcoor.setCursorAgentApiKey", async () => {
       await promptStoreCursorAgentApiKey(context.secrets);
+      await refreshConversationsWelcomeContext();
     }),
   );
   scheduleCursorCliPresenceCheck(context);
@@ -291,14 +308,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           provider_hint: pick.provider,
         });
         await session.setBackendAccessToken(backendJwt);
-        refreshTree();
         await offerCursorAgentApiKeyAfterSignIn(context.secrets);
+        await refreshConversationsWelcomeContext();
+        refreshTree();
       } catch (e) {
         await showColcoorApiFailure(e);
       }
     }),
     vscode.commands.registerCommand("colcoor.signOut", async () => {
       await session.clearBackendAccessToken();
+      await refreshConversationsWelcomeContext();
       refreshTree();
       await vscode.window.showInformationMessage("Colcoor: signed out.");
     }),
@@ -598,21 +617,53 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           return false;
         }
         const choice = await vscode.window.showWarningMessage(
-          `Delete conversation “${title}”? This removes the tree and messages from Colcoor and cannot be undone.`,
+          `Delete conversation “${title}”? The tree is hidden from Colcoor; you can undo for a few minutes (same as message branch delete).`,
           { modal: true, detail: id },
           "Delete",
         );
         if (choice !== "Delete") {
           return false;
         }
+        let liveMessageCount = 0;
         try {
-          await api.deleteConversation(id);
+          const tree = await api.getTree(id);
+          liveMessageCount = tree.events.length;
+        } catch {
+          /* still require typed confirm below */
+        }
+        const typedOk = await confirmDestructiveActionByTypingDelete({
+          title: "Colcoor — confirm conversation delete",
+          prompt:
+            liveMessageCount > 0
+              ? `This conversation has ${liveMessageCount} message(s) in the tree. Type DELETE to confirm.`
+              : "Type DELETE (case sensitive) to confirm deleting this conversation.",
+        });
+        if (!typedOk) {
+          return false;
+        }
+        try {
+          const out = await api.deleteConversation(id);
           conversationPanel.closeIfShowingConversation(id);
           if (drawersPanel && shouldCloseDrawersAfterConversationDelete(drawersConversationId, id)) {
             drawersPanel.dispose();
           }
           refreshTree();
-          await vscode.window.showInformationMessage("Colcoor: conversation deleted.");
+          void vscode.window.setStatusBarMessage("Colcoor: conversation deleted.", 2500);
+          if (out.deleted_count > 0 && out.deletion_group_id) {
+            const undoPick = await vscode.window.showInformationMessage(
+              "Colcoor: conversation deleted.",
+              "Undo",
+            );
+            if (undoPick === "Undo") {
+              try {
+                await api.undoEventDeletion(id, out.deletion_group_id);
+                void vscode.window.setStatusBarMessage("Colcoor: deletion undone.", 2500);
+                refreshTree();
+              } catch (undoErr) {
+                void showColcoorApiFailure(undoErr);
+              }
+            }
+          }
           return true;
         } catch (e) {
           await showColcoorApiFailure(e);
@@ -773,6 +824,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("colcoor.deleteSelectedMessageSubtree", async () => {
       await conversationPanel.deleteSelectedMessageSubtree();
+    }),
+    vscode.commands.registerCommand("colcoor.restoreMessageBranch", async () => {
+      await conversationPanel.restoreMessageBranchFromPalette();
     }),
     vscode.commands.registerCommand("colcoor.addNoteToSelectedMessage", async () => {
       await conversationPanel.addNoteToSelectedMessage();

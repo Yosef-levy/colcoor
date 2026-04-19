@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from colcoor_backend.db.models import ConversationImage
-from colcoor_backend.services.graph import ensure_conversation_member
+from colcoor_backend.services.graph import ensure_conversation_member, require_live_conversation
 
 COLOOR_USER_MEDIA_KEY = "colcoor_user_media"
 USER_MEDIA_VERSION = 1
@@ -38,6 +38,7 @@ async def store_conversation_image(
     data: bytes,
 ) -> ConversationImage:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     mt = mime_type.strip().lower()
     if mt not in ALLOWED_IMAGE_MIME:
         raise ValueError(f"unsupported image mime_type: {mime_type!r}")
@@ -69,6 +70,7 @@ async def load_conversation_image_bytes(
 ) -> tuple[bytes, str] | None:
     """Return (bytes, mime_type) if the row exists in this conversation and caller is a member."""
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     res = await session.execute(
         select(ConversationImage).where(
             ConversationImage.id == image_id,

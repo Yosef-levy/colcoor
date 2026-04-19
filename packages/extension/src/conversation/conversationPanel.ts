@@ -10,6 +10,8 @@ import type {
   SideChatMessageOut,
   SideChatPostBody,
 } from "../api/client";
+import { confirmDestructiveActionByTypingDelete } from "./destructiveDeleteConfirm";
+import { countSubtreeNodes, SUBTREE_TYPED_DELETE_THRESHOLD } from "./destructiveDeleteCount";
 import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import {
@@ -123,6 +125,8 @@ type WebviewStateMessage = {
   /** Server flag: next send should rebuild transcript from full path (domain-model §4). */
   needsContextRebuild: boolean;
   busy: boolean;
+  /** True while the host is fetching the conversation tree (open, switch, or refresh). */
+  conversationLoading: boolean;
   lastError: string | null;
   /** Terms / Privacy / Refund from workspace settings ([ui-features.md] §1.3). */
   legalPolicyLinks: { label: string; url: string }[];
@@ -223,6 +227,7 @@ type FromWebview =
   | { type: "addNote" }
   | { type: "editMessageTitle" }
   | { type: "listNotesOnSelection" }
+  | { type: "deleteMessageBranch" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
   | { type: "editNote"; noteId: string }
   | { type: "deleteNote"; noteId: string };
@@ -299,6 +304,10 @@ export function createConversationPanelController(
   refreshConversationTree: (opts?: { quiet?: boolean }) => Promise<void>;
   /** Soft-delete the selected node and its subtree (owner/editor). */
   deleteSelectedMessageSubtree: () => Promise<void>;
+  /** Conversation id when a conversation is open in the panel (selection optional). */
+  getLoadedConversationId: () => string | undefined;
+  /** Prompt for a soft-deleted event id and restore its subtree (owner/editor). */
+  restoreMessageBranchFromPalette: () => Promise<void>;
   /** Show inline side-chat drawer in this conversation tab. */
   openInlineSideChat: () => Promise<void>;
   dispose: () => void;
@@ -378,6 +387,8 @@ export function createConversationPanelController(
   /** Last state flags sent to webview; reused for lightweight local selection refreshes. */
   let lastPostedBusy = false;
   let lastPostedError: string | null = null;
+  /** True between the first `postState` of a tree load and the final snapshot (clears stale error UI). */
+  let conversationTreeLoading = false;
 
   /** Client-only stack of visited tree selections (not persisted; capped). */
   const VISITED_SELECTION_MAX = 20;
@@ -951,6 +962,7 @@ export function createConversationPanelController(
         agentTraceOpen,
         needsContextRebuild: lastNeedsContextRebuild,
         busy,
+        conversationLoading: conversationTreeLoading,
         lastError,
         legalPolicyLinks: listLegalPolicyLinksFromColcoorWorkspaceSection(
           vscode.workspace.getConfiguration("colcoor"),
@@ -1017,6 +1029,7 @@ export function createConversationPanelController(
           agentTraceOpen,
           needsContextRebuild: false,
           busy,
+          conversationLoading: false,
           lastError:
             lastError ??
             `Render failed: ${detail}. If the conversation is very large, try the API or a fresh thread.`,
@@ -1070,6 +1083,8 @@ export function createConversationPanelController(
       let finalizeToDefaultBranchTip = Boolean(opts?.finalizeToDefaultBranchTip);
       let treePrefetch: GraphEventNode[] | undefined = opts?.prefetchedTreeEvents;
       let notesPrefetch: NoteOut[] | undefined = opts?.prefetchedNotes;
+      conversationTreeLoading = true;
+      postState(lastTreeEvents, lastPostedBusy, null);
       for (;;) {
         try {
           const hadInlineSideChatOpenAtTreeLoad = inlineSideChatVisible;
@@ -1148,6 +1163,19 @@ export function createConversationPanelController(
             viewerUserIdForWebview = null;
             viewerConversationRole = null;
           }
+          if (selectedEventId && !events.some((e) => e.id === selectedEventId)) {
+            const aidRaw = caller?.active_event_id;
+            const aid =
+              typeof aidRaw === "string" && aidRaw.trim() && events.some((e) => e.id === aidRaw.trim())
+                ? aidRaw.trim()
+                : undefined;
+            if (aid) {
+              selectedEventId = aid;
+            } else {
+              const rootEv = events.find((e) => e.parent_event_id === null);
+              selectedEventId = rootEv?.id ?? events.at(-1)?.id;
+            }
+          }
           if (members.length > 1 && !dismissedInlineSideChatByConversationId.has(conversationId)) {
             inlineSideChatVisible = true;
           }
@@ -1202,6 +1230,7 @@ export function createConversationPanelController(
           if (hadInlineSideChatOpenAtTreeLoad && !skipInlineSideChatRefresh) {
             await markInlineSideChatReadFromCache(true);
           }
+          conversationTreeLoading = false;
           postState(events, busy, lastError);
           if (members.length > 1) {
             ensureInlineSideChatSseForConversation();
@@ -1224,6 +1253,7 @@ export function createConversationPanelController(
           inlineSideChatUrlsByMessageId = new Map();
           inlineSideChatRendered = [];
           inlineSideChatPostChain = Promise.resolve();
+          conversationTreeLoading = false;
           postState([], busy, msg);
           return;
         }
@@ -2124,6 +2154,10 @@ export function createConversationPanelController(
         await showNotesOnSelectedMessage();
         return;
       }
+      if (msg.type === "deleteMessageBranch") {
+        await deleteSelectedMessageSubtree();
+        return;
+      }
       if (msg.type === "editMessageTitle") {
         if (!conversationId || !selectedEventId) {
           void vscode.window.showWarningMessage(
@@ -2387,17 +2421,79 @@ export function createConversationPanelController(
       return;
     }
     const choice = await vscode.window.showWarningMessage(
-      "Colcoor: delete this message and every reply under it in the tree? (Hidden from the thread; stars and TODO lists update after refresh.)",
+      "Colcoor: delete this message and every reply under it on this branch?",
       { modal: true },
       "Delete branch",
     );
     if (choice !== "Delete branch") {
       return;
     }
+    const subtreeSize = countSubtreeNodes(lastTreeEvents, selectedEventId);
+    if (subtreeSize > SUBTREE_TYPED_DELETE_THRESHOLD) {
+      const typedOk = await confirmDestructiveActionByTypingDelete({
+        title: "Colcoor — confirm branch delete",
+        prompt: `This branch includes ${subtreeSize} message(s). Type DELETE to confirm.`,
+      });
+      if (!typedOk) {
+        return;
+      }
+    }
     try {
-      await api.deleteEventSubtree(conversationId, selectedEventId);
+      const out = await api.deleteEventSubtree(conversationId, selectedEventId);
       void vscode.window.setStatusBarMessage("Colcoor: message branch deleted.", 2500);
-      await loadTreeAndPush(false, null);
+      await loadTreeAndPush(false, null, { skipConversationsList: true });
+      if (out.deleted_count > 0 && out.deletion_group_id) {
+        const undoPick = await vscode.window.showInformationMessage(
+          "Colcoor: message branch deleted.",
+          "Undo",
+        );
+        if (undoPick === "Undo") {
+          try {
+            await api.undoEventDeletion(conversationId, out.deletion_group_id);
+            void vscode.window.setStatusBarMessage("Colcoor: deletion undone.", 2500);
+            await loadTreeAndPush(false, null, { skipConversationsList: true });
+          } catch (undoErr) {
+            void showColcoorApiFailure(undoErr);
+          }
+        }
+      }
+    } catch (e) {
+      void showColcoorApiFailure(e);
+    }
+  }
+
+  async function restoreMessageBranchFromPalette(): Promise<void> {
+    const cid = conversationId;
+    if (!cid) {
+      void vscode.window.showWarningMessage(
+        "Colcoor: open a conversation in the conversation panel first.",
+      );
+      return;
+    }
+    if (viewerConversationRole === "viewer") {
+      void vscode.window.showWarningMessage("Colcoor: viewers cannot restore a message branch.");
+      return;
+    }
+    const raw = await vscode.window.showInputBox({
+      title: "Colcoor — restore message branch",
+      prompt: "Paste the event id (UUID) of any message in the soft-deleted branch.",
+      ignoreFocusOut: true,
+    });
+    if (raw === undefined) {
+      return;
+    }
+    const eid = normalizeOptionalGraphEventId(raw.trim());
+    if (eid === undefined) {
+      void vscode.window.showWarningMessage("Colcoor: that is not a valid event id.");
+      return;
+    }
+    try {
+      const r = await api.restoreEventSubtree(cid, eid);
+      void vscode.window.setStatusBarMessage(
+        `Colcoor: restored ${r.restored_count} message(s).`,
+        3500,
+      );
+      await loadTreeAndPush(false, null, { skipConversationsList: true });
     } catch (e) {
       void showColcoorApiFailure(e);
     }
@@ -2531,6 +2627,8 @@ export function createConversationPanelController(
     addNoteToSelectedMessage,
     showNotesOnSelectedMessage,
     deleteSelectedMessageSubtree,
+    getLoadedConversationId: () => conversationId,
+    restoreMessageBranchFromPalette,
     getSelectedMessageContext: () => {
       if (!conversationId || !selectedEventId) {
         return null;

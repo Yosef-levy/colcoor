@@ -53,6 +53,15 @@ export type TreeResponseBody = {
   events: GraphEventNode[];
 };
 
+export type EventSubtreeSoftDeleteOut = {
+  deleted_count: number;
+  deletion_group_id: string | null;
+};
+
+export type RestoreSubtreeOut = {
+  restored_count: number;
+};
+
 export type ConversationMember = {
   user_id: string;
   role: "owner" | "editor" | "viewer";
@@ -420,12 +429,36 @@ export class ColcoorApiClient {
   }
 
   /** Soft-delete this event and all descendants (`events.deleted_at`); idempotent if already deleted. */
-  async deleteEventSubtree(conversationId: string, eventId: string): Promise<void> {
+  async deleteEventSubtree(conversationId: string, eventId: string): Promise<EventSubtreeSoftDeleteOut> {
     const res = await this.fetchApi(`/conversations/${conversationId}/events/${eventId}`, {
       method: "DELETE",
     });
     const t = await res.text();
     this.assertOkResponse(res, t, "delete event subtree");
+    return JSON.parse(t) as EventSubtreeSoftDeleteOut;
+  }
+
+  /** Undo a recent soft-delete (same user, within server undo window). */
+  async undoEventDeletion(conversationId: string, deletionGroupId: string): Promise<RestoreSubtreeOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/events/undo-delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deletion_group_id: deletionGroupId }),
+    });
+    const t = await res.text();
+    this.assertOkResponse(res, t, "undo event deletion");
+    return JSON.parse(t) as RestoreSubtreeOut;
+  }
+
+  /** Restore a soft-deleted subtree by anchor event id (owner/editor). */
+  async restoreEventSubtree(conversationId: string, eventId: string): Promise<RestoreSubtreeOut> {
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/events/${eventId}/restore-subtree`,
+      { method: "POST" },
+    );
+    const t = await res.text();
+    this.assertOkResponse(res, t, "restore event subtree");
+    return JSON.parse(t) as RestoreSubtreeOut;
   }
 
   async listNotes(conversationId: string): Promise<NoteOut[]> {
@@ -469,11 +502,22 @@ export class ColcoorApiClient {
     this.assertOkResponse(res, t, "delete note");
   }
 
-  /** Owner-only: delete conversation and cascaded data (DELETE /conversations/{id}). */
-  async deleteConversation(conversationId: string): Promise<void> {
+  /** Owner-only: soft-delete conversation and full graph (DELETE /conversations/{id}). */
+  async deleteConversation(conversationId: string): Promise<EventSubtreeSoftDeleteOut> {
     const res = await this.fetchApi(`/conversations/${conversationId}`, { method: "DELETE" });
     const text = await res.text();
     this.assertOkResponse(res, text, "delete conversation");
+    return JSON.parse(text) as EventSubtreeSoftDeleteOut;
+  }
+
+  /** Owner/editor: restore a conversation the owner soft-deleted (POST …/restore-deleted). */
+  async restoreDeletedConversation(conversationId: string): Promise<RestoreSubtreeOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/restore-deleted`, {
+      method: "POST",
+    });
+    const t = await res.text();
+    this.assertOkResponse(res, t, "restore deleted conversation");
+    return JSON.parse(t) as RestoreSubtreeOut;
   }
 
   /** GET …/side-chat/messages (`after_seq` defaults to 0). */

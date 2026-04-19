@@ -1,9 +1,11 @@
+from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 
 from colcoor_backend.api.deps import CurrentUserId, DbSession
+from colcoor_backend.core.config import get_settings
 from colcoor_backend.db.models import Conversation, ConversationMember
 from colcoor_backend.api.schemas import (
     AppendEventBody,
@@ -22,14 +24,18 @@ from colcoor_backend.api.schemas import (
     NoteOut,
     NotePatchBody,
     SetActiveBody,
+    EventSubtreeSoftDeleteOut,
+    RestoreSubtreeOut,
     TreeResponse,
+    UndoEventDeletionBody,
 )
 from colcoor_backend.services.graph import (
     add_conversation_member,
     append_graph_event,
     create_conversation_with_owner,
     create_note_on_event,
-    delete_conversation_for_owner,
+    restore_soft_deleted_conversation_graph,
+    soft_delete_conversation_for_owner,
     delete_event_star,
     delete_note_row,
     list_conversation_members,
@@ -41,9 +47,11 @@ from colcoor_backend.services.graph import (
     put_event_star,
     read_conversation_caller_state,
     remove_conversation_member,
+    restore_soft_deleted_subtree,
     set_conversation_active_event,
     soft_delete_event_subtree,
     tree_event_annotations,
+    undo_soft_delete_by_deletion_group,
     update_conversation_member_role,
     update_note_content,
 )
@@ -134,6 +142,8 @@ async def patch_conversation(
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
     conv, member = row
@@ -147,14 +157,14 @@ async def patch_conversation(
     )
 
 
-@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{conversation_id}", response_model=EventSubtreeSoftDeleteOut)
 async def delete_conversation(
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
-) -> Response:
+) -> EventSubtreeSoftDeleteOut:
     try:
-        await delete_conversation_for_owner(
+        result = await soft_delete_conversation_for_owner(
             session,
             conversation_id=conversation_id,
             user_id=user_id,
@@ -164,7 +174,36 @@ async def delete_conversation(
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     await session.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return EventSubtreeSoftDeleteOut(
+        deleted_count=result.deleted_count,
+        deletion_group_id=result.deletion_group_id,
+    )
+
+
+@router.post(
+    "/{conversation_id}/restore-deleted",
+    response_model=RestoreSubtreeOut,
+)
+async def restore_deleted_conversation(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+) -> RestoreSubtreeOut:
+    """Clear owner soft-delete for the whole conversation (owner/editor); same batch as ``DELETE`` this conversation."""
+    try:
+        n = await restore_soft_deleted_conversation_graph(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return RestoreSubtreeOut(restored_count=n)
 
 
 @router.post("/{conversation_id}/append-event")
@@ -224,6 +263,8 @@ async def post_conversation_image(
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
@@ -251,6 +292,8 @@ async def get_conversation_image(
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     if got is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
     data, mime = got
@@ -267,6 +310,8 @@ async def get_tree(
         events = await list_events_for_tree(session, conversation_id, user_id)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     ids = [e.id for e in events]
     starred_ids, note_counts = await tree_event_annotations(session, ids, user_id)
     out: list[EventNodeOut] = []
@@ -303,6 +348,8 @@ async def get_caller_conversation_state(
         st = await read_conversation_caller_state(session, conversation_id, user_id)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     out = ConversationUserStateOut.model_validate(st)
     lr = await get_user_side_chat_last_read_seq(session, conversation_id, user_id)
     return out.model_copy(update={"side_chat_last_read_seq": lr})
@@ -325,6 +372,8 @@ async def post_conversation_active(
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
@@ -343,6 +392,8 @@ async def get_conversation_members(
         rows = await list_conversation_members(session, conversation_id, user_id)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     out: list[MemberOut] = []
     for uid, role, email, display_name in rows:
         out.append(
@@ -475,6 +526,8 @@ async def get_conversation_notes(
         notes = await list_notes_visible(session, conversation_id, user_id)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     return [NoteOut.model_validate(n) for n in notes]
 
 
@@ -548,17 +601,17 @@ async def delete_conversation_note(
 
 @router.delete(
     "/{conversation_id}/events/{event_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=EventSubtreeSoftDeleteOut,
 )
 async def delete_event_subtree(
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
     event_id: UUID,
-) -> Response:
+) -> EventSubtreeSoftDeleteOut:
     """Soft-delete ``event_id`` and all descendants (``events.deleted_at``); stars removed; notes hidden."""
     try:
-        await soft_delete_event_subtree(
+        result = await soft_delete_event_subtree(
             session,
             conversation_id=conversation_id,
             user_id=user_id,
@@ -571,7 +624,67 @@ async def delete_event_subtree(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return EventSubtreeSoftDeleteOut(
+        deleted_count=result.deleted_count,
+        deletion_group_id=result.deletion_group_id,
+    )
+
+
+@router.post(
+    "/{conversation_id}/events/undo-delete",
+    response_model=RestoreSubtreeOut,
+)
+async def undo_event_deletion(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    body: UndoEventDeletionBody,
+) -> RestoreSubtreeOut:
+    """Undo a recent soft-delete by ``deletion_group_id`` (same user, within configured undo window)."""
+    settings = get_settings()
+    window = timedelta(minutes=settings.event_delete_undo_window_minutes)
+    try:
+        n = await undo_soft_delete_by_deletion_group(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            deletion_group_id=body.deletion_group_id,
+            undo_window=window,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return RestoreSubtreeOut(restored_count=n)
+
+
+@router.post(
+    "/{conversation_id}/events/{event_id}/restore-subtree",
+    response_model=RestoreSubtreeOut,
+)
+async def restore_event_subtree(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    event_id: UUID,
+) -> RestoreSubtreeOut:
+    """Clear soft-delete for a subtree (owner/editor); anchor must carry ``deletion_group_id``."""
+    try:
+        n = await restore_soft_deleted_subtree(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            event_id=event_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return RestoreSubtreeOut(restored_count=n)
 
 
 @router.patch(

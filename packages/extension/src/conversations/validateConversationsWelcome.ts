@@ -7,7 +7,7 @@
 export type PackageJsonContributesSubset = {
   contributes?: {
     commands?: Array<{ command?: string }>;
-    viewsWelcome?: Array<{ view?: string; contents?: string }>;
+    viewsWelcome?: Array<{ view?: string; when?: string; contents?: string }>;
   };
 };
 
@@ -30,16 +30,29 @@ export function extractMarkdownCommandLinks(contents: string): Array<{ label: st
   return out;
 }
 
+/** Every `viewsWelcome` row for `colcoor.conversations` (may use different `when` clauses). */
+export function allConversationsWelcomeViews(
+  pkg: PackageJsonContributesSubset,
+): Array<{ when?: string; contents?: string }> {
+  return pkg.contributes?.viewsWelcome?.filter((w) => w.view === "colcoor.conversations") ?? [];
+}
+
+/** Concatenated markdown for tests and link discovery (all welcome blocks for this view). */
 export function conversationsWelcomeContents(
   pkg: PackageJsonContributesSubset,
 ): string | undefined {
-  const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-  return welcome?.contents;
+  const parts = allConversationsWelcomeViews(pkg)
+    .map((w) => w.contents)
+    .filter((c): c is string => typeof c === "string" && c.length > 0);
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return parts.join("\n");
 }
 
 /**
  * Contributed `colcoor.*` commands not linked from the minimal conversations `viewsWelcome`
- * (logged-out strip: Sign in, Colcoor menu, Help, Toggle sidebar). Everything else is
+ * (logged-out strip, signed-in strip, and optional API-key strip). Everything else is
  * reachable from the Command Palette, conversation UI, row ⋯ menu, or **Colcoor menu…**.
  */
 export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
@@ -56,7 +69,6 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.listConversationMembers",
   "colcoor.listStarredMessagesInConversation",
   "colcoor.listTodoNotesInConversation",
-  "colcoor.newConversation",
   "colcoor.openConversation",
   "colcoor.openConversationDrawers",
   "colcoor.openLegalPolicySettings",
@@ -71,11 +83,9 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.removeMemberFromConversation",
   "colcoor.renameConversation",
   "colcoor.resendAssistant",
+  "colcoor.restoreMessageBranch",
   "colcoor.sendMessage",
-  "colcoor.setCursorAgentApiKey",
-  "colcoor.setupCursorCli",
   "colcoor.showNotesOnSelectedMessage",
-  "colcoor.signOut",
   "colcoor.stopGeneration",
   "colcoor.togglePinnedConversation",
   "colcoor.toggleStarSelectedMessage",
@@ -89,12 +99,14 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
 export function colcoorCommandsMissingFromConversationsWelcome(
   pkg: PackageJsonContributesSubset,
 ): string[] {
-  const contents = conversationsWelcomeContents(pkg) ?? "";
-  const linkedCommands = new Set(
-    extractMarkdownCommandLinks(contents)
-      .map((l) => l.command)
-      .filter((c) => c.startsWith("colcoor.")),
-  );
+  const linkedCommands = new Set<string>();
+  for (const w of allConversationsWelcomeViews(pkg)) {
+    for (const { command } of extractMarkdownCommandLinks(w.contents ?? "")) {
+      if (command.startsWith("colcoor.")) {
+        linkedCommands.add(command);
+      }
+    }
+  }
   const all = colcoorCommandIdsFromPackage(pkg);
   const out: string[] = [];
   for (const cmd of all) {
@@ -113,19 +125,22 @@ export function validateConversationsWelcomeCommands(pkg: PackageJsonContributes
   unknownColcoor: string[];
   nonColcoor: string[];
 } {
-  const contents = conversationsWelcomeContents(pkg) ?? "";
   const allowed = colcoorCommandIdsFromPackage(pkg);
-  const links = extractMarkdownCommandLinks(contents);
-  const unknownColcoor: string[] = [];
-  const nonColcoor: string[] = [];
-  for (const { command } of links) {
-    if (!command.startsWith("colcoor.")) {
-      nonColcoor.push(command);
-      continue;
-    }
-    if (!allowed.has(command)) {
-      unknownColcoor.push(command);
+  const unknownColcoor = new Set<string>();
+  const nonColcoor = new Set<string>();
+  for (const w of allConversationsWelcomeViews(pkg)) {
+    for (const { command } of extractMarkdownCommandLinks(w.contents ?? "")) {
+      if (!command.startsWith("colcoor.")) {
+        nonColcoor.add(command);
+        continue;
+      }
+      if (!allowed.has(command)) {
+        unknownColcoor.add(command);
+      }
     }
   }
-  return { unknownColcoor, nonColcoor };
+  return {
+    unknownColcoor: [...unknownColcoor].sort(),
+    nonColcoor: [...nonColcoor].sort(),
+  };
 }

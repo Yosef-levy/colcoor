@@ -36,7 +36,7 @@ export const TREE_NODE_CONTEXT_MENU_ENTRIES: readonly TreeNodeContextMenuEntry[]
   },
   {
     commandId: "colcoor.deleteSelectedMessageSubtree",
-    quickPickLabel: "Delete message branch (soft)…",
-    quickPickDescription: "Hide this message and everything under it in the tree",
+    quickPickLabel: "Delete message branch…",
+    quickPickDescription: "Remove this message and all replies under it in the tree",
   },
 ];

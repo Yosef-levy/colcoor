@@ -85,13 +85,22 @@ class Settings(BaseSettings):
         description="Delay before the first purge after process start (stagger multi-worker / tests).",
     )
     event_soft_delete_retention_hours: int = Field(
-        default=24,
+        default=336,
         ge=1,
         le=8760,
         validation_alias=AliasChoices(
             "COLCOOR_EVENT_SOFT_DELETE_RETENTION_HOURS",
         ),
-        description="Events with non-null ``deleted_at`` older than this window are eligible for hard delete.",
+        description="Events with non-null ``deleted_at`` older than this window are eligible for hard delete (default 336h = 14 days).",
+    )
+    event_delete_undo_window_minutes: int = Field(
+        default=5,
+        ge=1,
+        le=1440,
+        validation_alias=AliasChoices(
+            "COLCOOR_EVENT_DELETE_UNDO_WINDOW_MINUTES",
+        ),
+        description="Only the user who soft-deleted may undo within this window (same ``deletion_group_id``).",
     )
 
     def is_production(self) -> bool:

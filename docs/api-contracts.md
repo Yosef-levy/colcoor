@@ -117,15 +117,24 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 ### 3.4 `DELETE /api/v1/conversations/{conversation_id}`
 
-**Purpose:** Delete conversation and cascaded rows. **Owner only** ([permissions.md](permissions.md)).
+**Purpose:** Soft-delete the **entire** main-thread graph for this conversation (including the root) and mark the conversation row deleted. **Owner only** ([permissions.md](permissions.md)). Assigns one shared **`deletion_group_id`** on every affected **`events`** row and on **`conversations`**, with **`deleted_by_user_id`** set to the owner, mirroring §7.5. Stars on those events are removed; the conversation disappears from **`GET …/conversations`** until undo / restore; most other routes return **404** while it is deleted.
 
 | | |
 |--|--|
 | **Auth** | Bearer JWT |
-| **204** | deleted |
+| **200** | JSON `EventSubtreeSoftDeleteOut`: `deleted_count`, `deletion_group_id` (same semantics as §7.5; idempotent second delete → `deleted_count` **0**, `deletion_group_id` **null**) |
 | **401** | missing/invalid token |
 | **403** | not owner |
 | **404** | not found or not a member |
+
+### 3.5 `POST /api/v1/conversations/{conversation_id}/restore-deleted`
+
+**Purpose:** Clear soft-delete for the whole conversation graph (**owner** or **editor**) using the conversation’s **`deletion_group_id`** (after the undo window has expired). Same restored event set as **`POST …/events/{root}/restore-subtree`** when the delete was a full conversation delete.
+
+| **200** | JSON `{ "restored_count": <int> }` |
+| **403** | viewer |
+| **404** | not a member |
+| **422** | conversation is not deleted, or **`deletion_group_id`** is null |
 
 ---
 
@@ -353,12 +362,31 @@ For `user_input`, `content` may be empty after trim when `content_json.colcoor_u
 
 ### 7.5 `DELETE /api/v1/conversations/{conversation_id}/events/{event_id}`
 
-**Purpose:** Soft-delete this **main-thread** event and **all descendants** by setting **`events.deleted_at`** (same timestamp for the whole affected set). Removes **all** **`event_stars`** rows for those **`event_id`** values. Members whose **`active_event_id`** pointed into the deleted set are moved to the **conversation root**. Idempotent when the target is already deleted (no-op, **204**).
+**Purpose:** Soft-delete this **main-thread** event and **all descendants** by setting **`events.deleted_at`** (same timestamp for the whole affected set). Assigns a shared **`deletion_group_id`** and **`deleted_by_user_id`** on those rows for undo and restore. Removes **all** **`event_stars`** rows for those **`event_id`** values. Members whose **`active_event_id`** pointed into the deleted set are moved to the **conversation root**.
 
-| **204** | accepted |
+| **200** | JSON `EventSubtreeSoftDeleteOut`: `deleted_count` (int), `deletion_group_id` (uuid or null). When the target was already soft-deleted, `deleted_count` is **0** and `deletion_group_id` is **null**. |
 | **403** | not a member, **viewer** role, or target not visible (`visible_to`) |
 | **404** | conversation/event missing |
 | **422** | cannot delete the **root** event |
+
+### 7.6 `POST /api/v1/conversations/{conversation_id}/events/undo-delete`
+
+**Purpose:** Undo a soft-delete for all events sharing the given **`deletion_group_id`**, only if **`deleted_by_user_id`** is the caller and **`deleted_at`** is within the server undo window (default **5 minutes**). Also clears **`conversations.deleted_at`** when that batch was a **§3.4** whole-conversation delete (same **`deletion_group_id`** on the conversation row).
+
+**Request body:** `{ "deletion_group_id": "<uuid>" }`
+
+| **200** | JSON `{ "restored_count": <int> }` |
+| **403** | not a member |
+| **404** | group not found, wrong deleter, or undo window expired |
+
+### 7.7 `POST /api/v1/conversations/{conversation_id}/events/{event_id}/restore-subtree`
+
+**Purpose:** Clear soft-delete for a whole branch (**owner** or **editor**). The anchor row must have **`deletion_group_id`** set (same batch as **`DELETE …/events/{id}`** or **§3.4** **`DELETE …/conversations/{id}`** on the graph root); all events in the conversation with that group and a non-null **`deleted_at`** are restored, and the conversation row is cleared when it shares that group.
+
+| **200** | JSON `{ "restored_count": <int> }` |
+| **403** | viewer, or event not visible (`visible_to`) |
+| **404** | conversation/event missing |
+| **422** | anchor is not soft-deleted, or **`deletion_group_id`** is null |
 
 ---
 

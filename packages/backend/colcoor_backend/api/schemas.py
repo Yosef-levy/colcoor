@@ -338,3 +338,25 @@ class SideChatReadPatchBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     last_read_seq: int = Field(..., ge=0)
+
+
+class EventSubtreeSoftDeleteOut(BaseModel):
+    """Response for DELETE …/events/{event_id} (soft-delete subtree) and DELETE …/conversations/{id}."""
+
+    deleted_count: int = Field(..., ge=0)
+    deletion_group_id: UUID | None = Field(
+        default=None,
+        description="Present when ``deleted_count`` > 0; use with POST …/events/undo-delete within the undo window (conversation delete uses the same shape).",
+    )
+
+
+class UndoEventDeletionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    deletion_group_id: UUID
+
+
+class RestoreSubtreeOut(BaseModel):
+    """Response for undo-delete and restore-subtree."""
+
+    restored_count: int = Field(..., ge=0)

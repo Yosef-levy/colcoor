@@ -411,6 +411,33 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-radius: 4px;
       margin-bottom: 8px;
     }
+    .conversation-loading {
+      flex-shrink: 0;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.95em;
+    }
+    .conversation-loading-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--vscode-panel-border);
+      border-top-color: var(--vscode-focusBorder);
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: conversation-loading-spin 0.75s linear infinite;
+    }
+    @keyframes conversation-loading-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
     .tree-panel-hint {
       flex-shrink: 0;
       margin-bottom: 10px;
@@ -1120,6 +1147,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 </head>
 <body>
   <div id="err" class="err" style="display:none"></div>
+  <div
+    id="conversationLoading"
+    class="conversation-loading"
+    style="display: none"
+    role="status"
+    aria-live="polite"
+    aria-busy="false"
+  >
+    <span class="conversation-loading-spinner" aria-hidden="true"></span>
+    <span>Loading conversation…</span>
+  </div>
   <div class="menubar" role="menubar" aria-label="Colcoor">
         <div class="menu-root">
           <button type="button" class="menu-root-btn" id="menuBtnConversation" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelConversation">Conversation</button>
@@ -1145,6 +1183,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" id="btnReferenceSideChat" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
             <button type="button" class="menu-item" role="menuitem" id="btnResend">Resend assistant</button>
             <button type="button" class="menu-item" role="menuitem" id="btnJumpTip" title="Select the newest leaf on the default branch">Jump to latest</button>
+            <hr class="menu-sep" role="separator" />
+            <button type="button" class="menu-item" role="menuitem" id="btnDeleteMessageBranch" title="Delete the selected message and all replies under it (owner/editor)">Delete message branch…</button>
           </div>
         </div>
         <div class="menu-root">
@@ -1479,6 +1519,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       agentTraceOpen: true,
       needsContextRebuild: false,
       busy: false,
+      conversationLoading: false,
       lastError: null,
       legalPolicyLinks: [],
       sideChatOpenButtonLabel: "Open side chat",
@@ -1922,6 +1963,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const starredTodoDrawerBtn = document.getElementById("btnStarredTodoDrawer");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
       const resendBtn = document.getElementById("btnResend");
+      const deleteBranchBtn = document.getElementById("btnDeleteMessageBranch");
       if (
         !copyBtn ||
         !toggleStarBtn ||
@@ -1964,6 +2006,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         refNoteSideChatBtn.disabled = true;
         resendBtn.disabled = true;
         if (copyThreadBtn) copyThreadBtn.disabled = true;
+        if (deleteBranchBtn) {
+          deleteBranchBtn.disabled = true;
+          deleteBranchBtn.title = "Select a message in the tree first.";
+        }
         addNoteBtn.disabled = true;
         addNoteBtn.title = "Select a message in the tree first.";
         listNotesOnSelectionBtn.disabled = true;
@@ -2017,6 +2063,20 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         : "Pick a user message with text (not the empty root placeholder).";
       const jumpBtn = document.getElementById("btnJumpTip");
       if (jumpBtn) jumpBtn.disabled = state.busy;
+      if (deleteBranchBtn) {
+        const isRoot = last.parent_event_id == null;
+        const viewer = state.sideChatViewerRole === "viewer";
+        deleteBranchBtn.disabled = state.busy || isRoot || viewer;
+        if (viewer) {
+          deleteBranchBtn.title = "Viewers cannot delete a message branch.";
+        } else if (isRoot) {
+          deleteBranchBtn.title = "The conversation root cannot be deleted.";
+        } else if (state.busy) {
+          deleteBranchBtn.title = "Wait for the current operation to finish.";
+        } else {
+          deleteBranchBtn.title = "Delete the selected message and all replies under it (owner/editor).";
+        }
+      }
       if (editTitleBtn) {
         const canTitle =
           last.kind === "user_input" || last.kind === "assistant_output";
@@ -2911,15 +2971,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function render() {
       try {
         const errEl = document.getElementById("err");
+        const loadEl = document.getElementById("conversationLoading");
         const sendBtn = document.getElementById("send");
         const stopBtn = document.getElementById("stop");
         const refBtn = document.getElementById("refresh");
         const ta = document.getElementById("input");
         const priv = document.getElementById("privateBranch");
         const busyEl = document.getElementById("busy");
-        if (state.lastError && errEl) {
+        const errText = state.lastError != null && String(state.lastError).trim();
+        if (loadEl) {
+          if (state.conversationLoading === true) {
+            loadEl.style.display = "flex";
+            loadEl.setAttribute("aria-busy", "true");
+          } else {
+            loadEl.style.display = "none";
+            loadEl.setAttribute("aria-busy", "false");
+          }
+        }
+        if (errText && errEl) {
           errEl.style.display = "block";
-          errEl.textContent = state.lastError;
+          errEl.textContent = errText;
         } else if (errEl) {
           errEl.style.display = "none";
           errEl.textContent = "";
@@ -3569,6 +3640,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             typeof m.queuedMainSendCount === "number" && Number.isFinite(m.queuedMainSendCount)
               ? Math.max(0, Math.floor(m.queuedMainSendCount))
               : 0,
+          conversationLoading: m.conversationLoading === true,
         };
         render();
         return;
@@ -3704,6 +3776,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("btnToggleStar").addEventListener("click", () => {
       vscode.postMessage({ type: "toggleStar" });
     });
+
+    var btnDeleteMessageBranch = document.getElementById("btnDeleteMessageBranch");
+    if (btnDeleteMessageBranch) {
+      btnDeleteMessageBranch.addEventListener("click", () => {
+        vscode.postMessage({ type: "deleteMessageBranch" });
+      });
+    }
 
     document.getElementById("btnAddNote").addEventListener("click", () => {
       vscode.postMessage({ type: "addNote" });

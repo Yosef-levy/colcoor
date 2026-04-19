@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, exists, func, literal, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from colcoor_backend.db.models import (
     Conversation,
@@ -20,6 +20,12 @@ from colcoor_backend.db.models import (
     User,
 )
 from colcoor_backend.services.cursor_identity import VerifiedCursorIdentity
+
+
+@dataclass(frozen=True)
+class SoftDeleteSubtreeResult:
+    deleted_count: int
+    deletion_group_id: uuid.UUID | None
 
 
 async def upsert_user_from_verified_identity(
@@ -61,6 +67,16 @@ async def ensure_conversation_member(
     )
     if res.scalar_one_or_none() is None:
         raise PermissionError("not a member of this conversation")
+
+
+async def require_live_conversation(session: AsyncSession, conversation_id: uuid.UUID) -> None:
+    """Raise ``LookupError`` when the conversation row is missing or owner-soft-deleted."""
+    res = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = res.scalar_one_or_none()
+    if conv is None:
+        raise LookupError("conversation not found")
+    if conv.deleted_at is not None:
+        raise LookupError("conversation deleted")
 
 
 async def create_conversation_with_owner(
@@ -169,22 +185,24 @@ async def soft_delete_event_subtree(
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
     event_id: uuid.UUID,
-) -> int:
+) -> SoftDeleteSubtreeResult:
     """Set ``deleted_at`` on ``event_id`` and every non-deleted descendant in the same conversation.
 
     Stars on those events are removed for all users. Members whose ``active_event_id`` was in the
-    subtree are moved to the conversation root. Returns the number of rows updated (0 if already gone).
+    subtree are moved to the conversation root. All affected rows share a new ``deletion_group_id`` and
+    ``deleted_by_user_id`` for undo / restore.
     """
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise PermissionError("not a member")
     if member.role == "viewer":
         raise PermissionError("viewers cannot delete graph subtrees")
+    await require_live_conversation(session, conversation_id)
     ev = await load_event_row_any_status(session, conversation_id, event_id)
     if ev is None:
         raise LookupError("event not found")
     if ev.deleted_at is not None:
-        return 0
+        return SoftDeleteSubtreeResult(0, None)
     if ev.visible_to is not None and ev.visible_to != user_id:
         raise PermissionError("event not visible")
     root_id = await _conversation_root_event_id(session, conversation_id)
@@ -192,9 +210,19 @@ async def soft_delete_event_subtree(
         raise ValueError("cannot delete the conversation root")
     ids = await _collect_non_deleted_subtree_event_ids(session, conversation_id, event_id)
     if not ids:
-        return 0
+        return SoftDeleteSubtreeResult(0, None)
     now = datetime.now(tz=UTC)
-    await session.execute(update(Event).where(Event.id.in_(ids)).values(deleted_at=now, updated_at=now))
+    group_id = uuid.uuid4()
+    await session.execute(
+        update(Event)
+        .where(Event.id.in_(ids))
+        .values(
+            deleted_at=now,
+            updated_at=now,
+            deletion_group_id=group_id,
+            deleted_by_user_id=user_id,
+        )
+    )
     await session.execute(delete(EventStar).where(EventStar.event_id.in_(ids)))
     st_r = await session.execute(
         select(ConversationUserState).where(
@@ -210,7 +238,160 @@ async def soft_delete_event_subtree(
         conv.updated_at = now
     await _set_needs_context_rebuild_all_members(session, conversation_id)
     await session.flush()
+    return SoftDeleteSubtreeResult(len(ids), group_id)
+
+
+async def _restore_soft_deleted_graph_by_deletion_group(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    deletion_group_id: uuid.UUID,
+) -> int:
+    """Clear soft-delete on all events in ``deletion_group_id`` and matching ``conversations`` batch row."""
+    res = await session.execute(
+        select(Event.id).where(
+            Event.conversation_id == conversation_id,
+            Event.deletion_group_id == deletion_group_id,
+            Event.deleted_at.isnot(None),
+        )
+    )
+    ids = [row[0] for row in res.all()]
+    if not ids:
+        return 0
+    now = datetime.now(tz=UTC)
+    await session.execute(
+        update(Event)
+        .where(Event.id.in_(ids))
+        .values(
+            deleted_at=None,
+            deletion_group_id=None,
+            deleted_by_user_id=None,
+            updated_at=now,
+        )
+    )
+    await session.execute(
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.deletion_group_id == deletion_group_id,
+        )
+        .values(
+            deleted_at=None,
+            deletion_group_id=None,
+            deleted_by_user_id=None,
+            updated_at=now,
+        )
+    )
+    await _set_needs_context_rebuild_all_members(session, conversation_id)
+    await session.flush()
     return len(ids)
+
+
+async def undo_soft_delete_by_deletion_group(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    deletion_group_id: uuid.UUID,
+    *,
+    undo_window: timedelta,
+) -> int:
+    """Clear soft-delete for all events in ``deletion_group_id`` if the caller deleted them within ``undo_window``."""
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    cutoff = datetime.now(tz=UTC) - undo_window
+    res = await session.execute(
+        select(Event.id).where(
+            Event.conversation_id == conversation_id,
+            Event.deletion_group_id == deletion_group_id,
+            Event.deleted_by_user_id == user_id,
+            Event.deleted_at.isnot(None),
+            Event.deleted_at >= cutoff,
+        )
+    )
+    ids = [row[0] for row in res.all()]
+    if not ids:
+        raise LookupError("deletion group not found or undo window expired")
+    now = datetime.now(tz=UTC)
+    await session.execute(
+        update(Event)
+        .where(Event.id.in_(ids))
+        .values(
+            deleted_at=None,
+            deletion_group_id=None,
+            deleted_by_user_id=None,
+            updated_at=now,
+        )
+    )
+    await session.execute(
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.deletion_group_id == deletion_group_id,
+        )
+        .values(
+            deleted_at=None,
+            deletion_group_id=None,
+            deleted_by_user_id=None,
+            updated_at=now,
+        )
+    )
+    conv_r = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = conv_r.scalar_one_or_none()
+    if conv is not None:
+        conv.updated_at = now
+    await _set_needs_context_rebuild_all_members(session, conversation_id)
+    await session.flush()
+    return len(ids)
+
+
+async def restore_soft_deleted_subtree(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    event_id: uuid.UUID,
+) -> int:
+    """Clear soft-delete for all events sharing the anchor row’s ``deletion_group_id``."""
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot restore graph subtrees")
+    anchor = await load_event_row_any_status(session, conversation_id, event_id)
+    if anchor is None:
+        raise LookupError("event not found")
+    if anchor.deleted_at is None:
+        raise ValueError("event is not soft-deleted")
+    if anchor.visible_to is not None and anchor.visible_to != user_id:
+        raise PermissionError("event not visible")
+    if anchor.deletion_group_id is None:
+        raise ValueError("subtree has no deletion_group_id; cannot restore")
+    return await _restore_soft_deleted_graph_by_deletion_group(
+        session, conversation_id, anchor.deletion_group_id
+    )
+
+
+async def restore_soft_deleted_conversation_graph(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> int:
+    """Clear owner soft-delete for the whole conversation graph (same ``deletion_group_id`` on all rows)."""
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot restore deleted conversations")
+    res = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = res.scalar_one_or_none()
+    if conv is None:
+        raise LookupError("conversation not found")
+    if conv.deleted_at is None:
+        raise ValueError("conversation is not deleted")
+    if conv.deletion_group_id is None:
+        raise ValueError("conversation has no deletion_group_id; cannot restore")
+    return await _restore_soft_deleted_graph_by_deletion_group(
+        session, conversation_id, conv.deletion_group_id
+    )
 
 
 async def read_conversation_caller_state(
@@ -220,6 +401,7 @@ async def read_conversation_caller_state(
 ) -> ConversationUserState:
     """Return the caller’s ``conversation_user_state`` row, or a **non-persisted** default rooted at the graph root."""
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     st_r = await session.execute(
         select(ConversationUserState).where(
             ConversationUserState.conversation_id == conversation_id,
@@ -250,6 +432,7 @@ async def set_conversation_active_event(
 ) -> ConversationUserState:
     """Update ``conversation_user_state.active_event_id`` for the caller (permissions matrix)."""
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     ev = await load_event(session, conversation_id, active_event_id)
     if ev is None:
         raise ValueError("active_event_id not found in this conversation")
@@ -294,12 +477,15 @@ async def append_graph_event(
     checkpoint_label: str | None = None,
 ) -> Event:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     parent = await load_event_row_any_status(session, conversation_id, parent_event_id)
     if parent is None:
         raise LookupError("parent_event_not_found")
     if parent.visible_to is not None and parent.visible_to != user_id:
         raise PermissionError("event not visible")
     inherited_deleted_at = parent.deleted_at
+    inherited_deletion_group_id = parent.deletion_group_id if inherited_deleted_at is not None else None
+    inherited_deleted_by_user_id = parent.deleted_by_user_id if inherited_deleted_at is not None else None
     now = datetime.now(tz=UTC)
     if kind == "assistant_output":
         if parent.kind != "user_input":
@@ -340,6 +526,8 @@ async def append_graph_event(
         checkpoint_label=checkpoint_label,
         visible_to=visible_to,
         deleted_at=inherited_deleted_at,
+        deletion_group_id=inherited_deletion_group_id,
+        deleted_by_user_id=inherited_deleted_by_user_id,
         created_at=now,
         updated_at=now,
     )
@@ -381,7 +569,7 @@ async def list_conversations_for_user(
     stmt = (
         select(Conversation, ConversationMember)
         .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
-        .where(ConversationMember.user_id == user_id)
+        .where(ConversationMember.user_id == user_id, Conversation.deleted_at.is_(None))
         .order_by(ConversationMember.pinned.desc(), Conversation.updated_at.desc())
     )
     res = await session.execute(stmt)
@@ -411,6 +599,7 @@ async def patch_conversation_for_user(
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         return None
+    await require_live_conversation(session, conversation_id)
     res = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
     conv = res.scalar_one_or_none()
     if conv is None:
@@ -430,49 +619,68 @@ async def patch_conversation_for_user(
     return conv, member
 
 
-async def _delete_events_in_conversation(session: AsyncSession, conversation_id: uuid.UUID) -> None:
-    """Delete all events for a conversation (``parent_event_id`` uses ON DELETE RESTRICT)."""
-    child = aliased(Event)
-    while True:
-        has_child = exists(
-            select(literal(1)).select_from(child).where(
-                child.conversation_id == conversation_id,
-                child.parent_event_id == Event.id,
-            )
-        )
-        res = await session.execute(
-            select(Event.id).where(Event.conversation_id == conversation_id, ~has_child).limit(500)
-        )
-        batch = list(res.scalars().all())
-        if not batch:
-            return
-        await session.execute(delete(Event).where(Event.id.in_(batch)))
-        await session.flush()
-
-
-async def delete_conversation_for_owner(
+async def soft_delete_conversation_for_owner(
     session: AsyncSession,
     *,
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
-) -> None:
-    """Remove conversation and dependent rows. **Owner only**; raises ``LookupError`` / ``PermissionError``."""
+) -> SoftDeleteSubtreeResult:
+    """Soft-delete every live graph event and mark the conversation deleted. **Owner only**."""
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise LookupError("conversation not found")
     if member.role != "owner":
         raise PermissionError("only the conversation owner can delete it")
-    await session.execute(
-        delete(ConversationUserState).where(ConversationUserState.conversation_id == conversation_id)
-    )
-    await session.flush()
-    await _delete_events_in_conversation(session, conversation_id)
-    res = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
-    conv = res.scalar_one_or_none()
+    conv_r = await session.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conv = conv_r.scalar_one_or_none()
     if conv is None:
         raise LookupError("conversation not found")
-    await session.delete(conv)
+    if conv.deleted_at is not None:
+        return SoftDeleteSubtreeResult(0, None)
+    ev_res = await session.execute(
+        select(Event.id).where(
+            Event.conversation_id == conversation_id,
+            Event.deleted_at.is_(None),
+        )
+    )
+    ids = [row[0] for row in ev_res.all()]
+    if not ids:
+        return SoftDeleteSubtreeResult(0, None)
+    root_id = await _conversation_graph_root_event_id(session, conversation_id)
+    now = datetime.now(tz=UTC)
+    group_id = uuid.uuid4()
+    await session.execute(
+        update(Event)
+        .where(Event.id.in_(ids))
+        .values(
+            deleted_at=now,
+            updated_at=now,
+            deletion_group_id=group_id,
+            deleted_by_user_id=user_id,
+        )
+    )
+    await session.execute(
+        update(Conversation)
+        .where(Conversation.id == conversation_id)
+        .values(
+            deleted_at=now,
+            deletion_group_id=group_id,
+            deleted_by_user_id=user_id,
+            updated_at=now,
+        )
+    )
+    await session.execute(delete(EventStar).where(EventStar.event_id.in_(ids)))
+    st_r = await session.execute(
+        select(ConversationUserState).where(
+            ConversationUserState.conversation_id == conversation_id,
+            ConversationUserState.active_event_id.in_(ids),
+        )
+    )
+    for st in st_r.scalars().all():
+        st.active_event_id = root_id
+    await _set_needs_context_rebuild_all_members(session, conversation_id)
     await session.flush()
+    return SoftDeleteSubtreeResult(len(ids), group_id)
 
 
 async def list_conversation_members(
@@ -480,6 +688,7 @@ async def list_conversation_members(
 ) -> list[tuple[uuid.UUID, str, str, str]]:
     """Return ``(user_id, role, email, display_name)`` for each member; caller must be a member."""
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     stmt = (
         select(ConversationMember.user_id, ConversationMember.role, User.email, User.display_name)
         .join(User, User.id == ConversationMember.user_id)
@@ -494,6 +703,7 @@ async def list_events_for_tree(
     session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
 ) -> list[Event]:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     res = await session.execute(
         select(Event)
         .where(
@@ -545,6 +755,7 @@ async def list_notes_visible(
     session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
 ) -> list[Note]:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     stmt = (
         select(Note)
         .join(Event, Event.id == Note.event_id)
@@ -587,6 +798,7 @@ async def create_note_on_event(
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise PermissionError("not a member")
+    await require_live_conversation(session, conversation_id)
     if member.role == "viewer":
         raise PermissionError("viewers cannot add notes")
     ev = await load_event(session, conversation_id, event_id)
@@ -622,6 +834,7 @@ async def update_note_content(
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise PermissionError("not a member")
+    await require_live_conversation(session, conversation_id)
     if member.role == "viewer":
         raise PermissionError("viewers cannot edit notes")
     loaded = await load_note_in_conversation(session, conversation_id, note_id)
@@ -650,6 +863,7 @@ async def delete_note_row(
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise PermissionError("not a member")
+    await require_live_conversation(session, conversation_id)
     if member.role == "viewer":
         raise PermissionError("viewers cannot delete notes")
     loaded = await load_note_in_conversation(session, conversation_id, note_id)
@@ -675,6 +889,7 @@ async def patch_event_checkpoint_label(
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise PermissionError("not a member")
+    await require_live_conversation(session, conversation_id)
     if member.role == "viewer":
         raise PermissionError("viewers cannot edit message titles")
     ev = await load_event(session, conversation_id, event_id)
@@ -707,6 +922,7 @@ async def put_event_star(
     event_id: uuid.UUID,
 ) -> None:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     ev = await load_event(session, conversation_id, event_id)
     if ev is None:
         raise LookupError("event not found")
@@ -727,6 +943,7 @@ async def delete_event_star(
     event_id: uuid.UUID,
 ) -> None:
     await ensure_conversation_member(session, conversation_id, user_id)
+    await require_live_conversation(session, conversation_id)
     ev = await load_event(session, conversation_id, event_id)
     if ev is None:
         raise LookupError("event not found")
@@ -736,6 +953,20 @@ async def delete_event_star(
         delete(EventStar).where(EventStar.user_id == user_id, EventStar.event_id == event_id)
     )
     await session.flush()
+
+
+async def _conversation_graph_root_event_id(session: AsyncSession, conversation_id: uuid.UUID) -> uuid.UUID:
+    """The tree root row (``parent_event_id IS NULL``), including when it is soft-deleted."""
+    res = await session.execute(
+        select(Event.id).where(
+            Event.conversation_id == conversation_id,
+            Event.parent_event_id.is_(None),
+        )
+    )
+    rid = res.scalar_one_or_none()
+    if rid is None:
+        raise LookupError("no root event for conversation")
+    return rid
 
 
 async def _conversation_root_event_id(session: AsyncSession, conversation_id: uuid.UUID) -> uuid.UUID:
@@ -766,6 +997,7 @@ async def add_conversation_member(
         raise LookupError("conversation not found")
     if actor.role not in ("owner", "editor"):
         raise PermissionError("forbidden")
+    await require_live_conversation(session, conversation_id)
     if role not in ("editor", "viewer"):
         raise ValueError("role must be editor or viewer")
     res_u = await session.execute(select(User).where(User.id == new_user_id))
@@ -819,6 +1051,7 @@ async def update_conversation_member_role(
         raise LookupError("member not found")
     if target.role == "owner" and new_role != "owner":
         raise PermissionError("cannot demote the sole conversation owner")
+    await require_live_conversation(session, conversation_id)
     if new_role == "owner":
         await session.execute(
             update(ConversationMember)
@@ -849,6 +1082,7 @@ async def remove_conversation_member(
         raise LookupError("conversation not found")
     if actor.role != "owner":
         raise PermissionError("forbidden")
+    await require_live_conversation(session, conversation_id)
     target = await get_conversation_member(session, conversation_id, target_user_id)
     if target is None:
         raise LookupError("member not found")

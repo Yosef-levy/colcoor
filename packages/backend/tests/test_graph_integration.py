@@ -385,7 +385,10 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
         assert user_ev.get("checkpoint_label") is None
 
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
-        assert r.status_code == 204, r.text
+        assert r.status_code == 200, r.text
+        del_body = r.json()
+        assert del_body["deleted_count"] >= 1
+        assert del_body["deletion_group_id"]
 
         r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
         assert r.status_code == 404, r.text
@@ -478,7 +481,8 @@ def test_conversation_membership_mutations_http(monkeypatch: pytest.MonkeyPatch,
         assert r.json()["role"] == "editor"
 
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth_owner)
-        assert r.status_code == 204, r.text
+        assert r.status_code == 200, r.text
+        assert r.json()["deletion_group_id"]
 
     get_settings.cache_clear()
 
@@ -663,7 +667,68 @@ def test_transfer_ownership_via_patch_http(monkeypatch: pytest.MonkeyPatch, post
         assert by_uid[str(uid_a)] == "editor"
 
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth_b)
-        assert r.status_code == 204, r.text
+        assert r.status_code == 200, r.text
+        assert r.json()["deletion_group_id"]
+
+    get_settings.cache_clear()
+
+
+def test_soft_delete_conversation_undo_and_restore(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """DELETE conversation soft-deletes graph; undo-delete and restore-deleted recover (api-contracts §3.4)."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "delme"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["deleted_count"] >= 1
+        gid = body["deletion_group_id"]
+        assert gid
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid not in {row["id"] for row in r.json()}
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/events/undo-delete",
+            headers=auth,
+            json={"deletion_group_id": gid},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["restored_count"] >= 1
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid in {row["id"] for row in r.json()}
+
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
+        assert r.status_code == 200, r.text
+        gid2 = r.json()["deletion_group_id"]
+        assert gid2
+
+        r = client.post(f"/api/v1/conversations/{cid}/restore-deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json()["restored_count"] >= 1
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert cid in {row["id"] for row in r.json()}
+
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
+        assert r.status_code == 200, r.text
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json()["deleted_count"] == 0
+        assert r.json()["deletion_group_id"] is None
 
     get_settings.cache_clear()
 
@@ -712,6 +777,8 @@ def test_append_graph_event_inherits_deleted_at_from_deleted_parent(session_fact
             )
             assert child.deleted_at is not None
             assert child.deleted_at == parent_row.deleted_at
+            assert child.deletion_group_id == parent_row.deletion_group_id
+            assert child.deleted_by_user_id == parent_row.deleted_by_user_id
             tree = await list_events_for_tree(s, conv.id, uid)
             assert child.id not in {e.id for e in tree}
             await s.commit()
@@ -851,10 +918,15 @@ def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgre
         assert r.status_code == 204, r.text
 
         r = client.delete(f"/api/v1/conversations/{cid}/events/{head_id}", headers=auth)
-        assert r.status_code == 204, r.text
+        assert r.status_code == 200, r.text
+        del_out = r.json()
+        assert del_out["deleted_count"] == 2
+        assert del_out["deletion_group_id"]
 
         r = client.delete(f"/api/v1/conversations/{cid}/events/{head_id}", headers=auth)
-        assert r.status_code == 204, r.text
+        assert r.status_code == 200, r.text
+        assert r.json()["deleted_count"] == 0
+        assert r.json()["deletion_group_id"] is None
 
         r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
         assert r.status_code == 200, r.text
@@ -869,6 +941,37 @@ def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgre
         r = client.get(f"/api/v1/conversations/{cid}/notes", headers=auth)
         assert r.status_code == 200, r.text
         assert r.json() == []
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/events/undo-delete",
+            headers=auth,
+            json={"deletion_group_id": del_out["deletion_group_id"]},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["restored_count"] == 2
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        ids_after_undo = {e["id"] for e in r.json()["events"]}
+        assert head_id in ids_after_undo
+        assert asst_id in ids_after_undo
+
+        r = client.delete(f"/api/v1/conversations/{cid}/events/{head_id}", headers=auth)
+        assert r.status_code == 200, r.text
+        del_out2 = r.json()
+        assert del_out2["deleted_count"] == 2
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/events/{head_id}/restore-subtree",
+            headers=auth,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["restored_count"] == 2
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        ids_after_restore = {e["id"] for e in r.json()["events"]}
+        assert head_id in ids_after_restore
 
         r = client.delete(f"/api/v1/conversations/{cid}/events/{root['id']}", headers=auth)
         assert r.status_code == 422, r.text

@@ -11,7 +11,7 @@ from colcoor_backend.api.schemas import (
     SideChatPostBody,
     SideChatReadPatchBody,
 )
-from colcoor_backend.services.graph import ensure_conversation_member
+from colcoor_backend.services.graph import ensure_conversation_member, require_live_conversation
 from colcoor_backend.services.side_chat import (
     list_side_chat_messages,
     patch_side_chat_message_body,
@@ -37,8 +37,11 @@ async def side_chat_event_stream(
     """Server-Sent Events: JSON per ``data:`` line (api-contracts §10.6)."""
     try:
         await ensure_conversation_member(session, conversation_id, user_id)
+        await require_live_conversation(session, conversation_id)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     factory = getattr(request.app.state, "session_factory", None)
     engine = getattr(request.app.state, "db_engine", None)
     if factory is None:
@@ -80,6 +83,8 @@ async def get_side_chat_messages(
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     return SideChatMessagesResponse(messages=await side_chat_messages_to_outs(session, rows))
 
 
@@ -179,5 +184,7 @@ async def patch_side_chat_read_route(
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

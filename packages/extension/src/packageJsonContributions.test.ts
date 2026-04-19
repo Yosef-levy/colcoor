@@ -11,6 +11,14 @@ import {
   COLOOR_API_FAILURE_SIGN_IN_ACTION,
 } from "./util/colcoorApiFailureActions";
 
+type ViewsWelcomeRow = { view?: string; when?: string; contents?: string };
+
+function colcoorConversationWelcomes(pkg: {
+  contributes?: { viewsWelcome?: ViewsWelcomeRow[] };
+}): ViewsWelcomeRow[] {
+  return pkg.contributes?.viewsWelcome?.filter((w) => w.view === "colcoor.conversations") ?? [];
+}
+
 describe("package.json Colcoor contributions", () => {
   it("registers sendMessage (palette runs without a tree item; handler must tolerate undefined)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
@@ -158,11 +166,9 @@ describe("package.json Colcoor contributions", () => {
 
   it("uses a minimal logged-out conversations welcome (sign in, menu, help, toggle)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const loggedOut = colcoorConversationWelcomes(pkg).find((w) => w.when === "!colcoor.backendSignedIn");
+    const contents = loggedOut?.contents ?? "";
     expect(contents).toContain("[Sign in](command:colcoor.signIn)");
     expect(contents).toContain("[Colcoor menu…](command:colcoor.showColcoorMenu)");
     expect(contents).toContain("[Help…](command:colcoor.openAbout)");
@@ -170,6 +176,30 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).not.toContain("command:colcoor.openLegalPolicySettings");
     expect(contents).not.toContain("command:colcoor.openSideChatSoundSettings");
     expect(contents).not.toContain("[About](command:colcoor.openAbout)");
+  });
+
+  it("registers signed-in empty-list welcome (add conversation, sign out, menu, help, toggle)", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const signedIn = colcoorConversationWelcomes(pkg).find((w) => w.when === "colcoor.backendSignedIn");
+    const contents = signedIn?.contents ?? "";
+    expect(contents).toContain("[Add conversation](command:colcoor.newConversation)");
+    expect(contents).toContain("[Sign out](command:colcoor.signOut)");
+    expect(contents).not.toContain("command:colcoor.signIn");
+    expect(contents).toContain("[Colcoor menu…](command:colcoor.showColcoorMenu)");
+    expect(contents).toContain("[Toggle sidebar](command:colcoor.toggleConversationsSidebar)");
+  });
+
+  it("registers API-key hint welcome when signed in and key unset", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const api = colcoorConversationWelcomes(pkg).find((w) =>
+      String(w.when ?? "").includes("cursorAgentApiKeySet"),
+    );
+    const contents = api?.contents ?? "";
+    expect(api?.when).toContain("colcoor.backendSignedIn");
+    expect(contents).toContain("[Set Cursor API key…](command:colcoor.setCursorAgentApiKey)");
+    expect(contents).toContain("[Set up Cursor CLI (agent)…](command:colcoor.setupCursorCli)");
   });
 
   it("documents openLegalPolicySettings for Terms / Privacy / Refund URLs ([ui-features.md] §1.3)", () => {
@@ -196,22 +226,21 @@ describe("package.json Colcoor contributions", () => {
 
   it("links Toggle sidebar from the conversations welcome view ([ui-features.md] §4)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
-    expect(contents).toContain("[Toggle sidebar](command:colcoor.toggleConversationsSidebar)");
-    expect(contents).not.toContain("command:colcoor.refreshConversationTree");
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const joined = colcoorConversationWelcomes(pkg)
+      .map((w) => w.contents ?? "")
+      .join("\n");
+    expect(joined).toContain("[Toggle sidebar](command:colcoor.toggleConversationsSidebar)");
+    expect(joined).not.toContain("command:colcoor.refreshConversationTree");
   });
 
   it("does not duplicate palette-only conversation commands in the minimal welcome", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const contents = colcoorConversationWelcomes(pkg)
+      .filter((w) => !String(w.when ?? "").includes("cursorAgentApiKeySet"))
+      .map((w) => w.contents ?? "")
+      .join("\n");
     expect(contents).not.toContain("command:colcoor.sendMessage");
     expect(contents).not.toContain("command:colcoor.stopGeneration");
     expect(contents).not.toContain("command:colcoor.jumpToLatestInConversation");
@@ -219,15 +248,15 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).not.toContain("command:colcoor.resendAssistant");
     expect(contents).not.toContain("command:colcoor.copySelectedMessage");
     expect(contents).not.toContain("command:colcoor.deleteSelectedMessageSubtree");
+    expect(contents).not.toContain("command:colcoor.restoreMessageBranch");
   });
 
   it("does not duplicate rename / pin / star welcome links (use Colcoor menu or open conversation)", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const contents = colcoorConversationWelcomes(pkg)
+      .map((w) => w.contents ?? "")
+      .join("\n");
     expect(contents).not.toContain("command:colcoor.renameConversation");
     expect(contents).not.toContain("command:colcoor.togglePinnedConversation");
     expect(contents).not.toContain("command:colcoor.toggleStarSelectedMessage");
@@ -235,11 +264,10 @@ describe("package.json Colcoor contributions", () => {
 
   it("does not duplicate members / drawers / notes / side-chat reference links in the welcome", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const contents = colcoorConversationWelcomes(pkg)
+      .map((w) => w.contents ?? "")
+      .join("\n");
     expect(contents).not.toContain("command:colcoor.copyConversationId");
     expect(contents).not.toContain("command:colcoor.listConversationMembers");
     expect(contents).not.toContain("command:colcoor.refreshConversationDrawers");
@@ -251,11 +279,10 @@ describe("package.json Colcoor contributions", () => {
 
   it("does not link member mutations or delete from the minimal welcome", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
-    const pkg = JSON.parse(raw) as {
-      contributes?: { viewsWelcome?: Array<{ view?: string; contents?: string }> };
-    };
-    const welcome = pkg.contributes?.viewsWelcome?.find((w) => w.view === "colcoor.conversations");
-    const contents = welcome?.contents ?? "";
+    const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
+    const contents = colcoorConversationWelcomes(pkg)
+      .map((w) => w.contents ?? "")
+      .join("\n");
     expect(contents).not.toContain("command:colcoor.addConversationMember");
     expect(contents).not.toContain("command:colcoor.changeMemberRole");
     expect(contents).not.toContain("command:colcoor.removeMemberFromConversation");

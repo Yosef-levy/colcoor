@@ -188,8 +188,13 @@
       },
       {
         "command": "colcoor.deleteSelectedMessageSubtree",
-        "title": "Colcoor: Delete selected message branch (soft)…",
-        "description": "Soft-delete the selected tree node and all replies under it (owner/editor; conversation panel must be open)."
+        "title": "Colcoor: Delete selected message branch…",
+        "description": "Delete the selected tree node and all replies under it (owner/editor; conversation panel must be open)."
+      },
+      {
+        "command": "colcoor.restoreMessageBranch",
+        "title": "Colcoor: Restore message branch (soft-deleted)…",
+        "description": "Enter a soft-deleted event UUID to restore its branch (owner/editor; conversation panel must be open)."
       }
     ],
     "viewsContainers": {
@@ -212,7 +217,18 @@
     "viewsWelcome": [
       {
         "view": "colcoor.conversations",
-          "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Colcoor menu…](command:colcoor.showColcoorMenu)\n[Help…](command:colcoor.openAbout)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n\nAfter you sign in, conversations appear in this list. To delete a conversation, use the row’s ⋯ menu or the Command Palette (search “Colcoor delete”)."
+        "when": "!colcoor.backendSignedIn",
+        "contents": "Sign in with the same account you use in Cursor, then create a thread.\n[Sign in](command:colcoor.signIn)\n[Colcoor menu…](command:colcoor.showColcoorMenu)\n[Help…](command:colcoor.openAbout)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n\nAfter you sign in, conversations appear in this list. To delete a conversation, use the row’s ⋯ menu or the Command Palette (search “Colcoor delete”)."
+      },
+      {
+        "view": "colcoor.conversations",
+        "when": "colcoor.backendSignedIn",
+        "contents": "You’re signed in. When no conversations exist yet, use **Add conversation** (or the **+** in the view title) to create one.\n[Add conversation](command:colcoor.newConversation)\n[Sign out](command:colcoor.signOut)\n[Colcoor menu…](command:colcoor.showColcoorMenu)\n[Help…](command:colcoor.openAbout)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n\nAfter a thread exists, it appears in this list. To delete a conversation, use the row’s ⋯ menu or the Command Palette (search “Colcoor delete”)."
+      },
+      {
+        "view": "colcoor.conversations",
+        "when": "colcoor.backendSignedIn && !colcoor.cursorAgentApiKeySet",
+        "contents": "\n**Agent:** no Cursor API key is stored yet. Colcoor needs it to run the agent locally.\n[Set Cursor API key…](command:colcoor.setCursorAgentApiKey)\n[Set up Cursor CLI (agent)…](command:colcoor.setupCursorCli)"
       }
     ],
     "menus": {

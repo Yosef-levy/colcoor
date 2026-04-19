@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
 from colcoor_backend.core.config import Settings
-from colcoor_backend.db.models import ConversationUserState, Event
+from colcoor_backend.db.models import Conversation, ConversationUserState, Event
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,27 @@ async def purge_soft_deleted_events(session: AsyncSession, *, older_than: timede
             await session.execute(delete(Event).where(Event.id.in_(ids)))
             await session.flush()
             total += len(ids)
+        conv_n = 0
+        while True:
+            res_c = await session.execute(
+                select(Conversation.id).where(
+                    Conversation.deleted_at.isnot(None),
+                    Conversation.deleted_at < cutoff,
+                    ~exists(select(literal(1)).where(Event.conversation_id == Conversation.id)),
+                ).limit(100)
+            )
+            cids = [row[0] for row in res_c.all()]
+            if not cids:
+                break
+            await session.execute(delete(Conversation).where(Conversation.id.in_(cids)))
+            await session.flush()
+            conv_n += len(cids)
+        if conv_n:
+            logger.info(
+                "event purge removed %s soft-deleted conversation row(s) with no events (cutoff=%s)",
+                conv_n,
+                cutoff.isoformat(),
+            )
         if total:
             logger.info("event purge removed %s soft-deleted event row(s) (cutoff=%s)", total, cutoff.isoformat())
         return total
