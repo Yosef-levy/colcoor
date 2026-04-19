@@ -29,7 +29,7 @@ from colcoor_backend.services.graph import (
     soft_delete_event_subtree,
 )
 from fastapi.testclient import TestClient
-from sqlalchemy import func, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 pytestmark = pytest.mark.skipif(
