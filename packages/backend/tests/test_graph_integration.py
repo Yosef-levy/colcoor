@@ -559,7 +559,14 @@ def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> N
 
         r = client.get(f"/api/v1/conversations/{cid}/side-chat/messages", headers=auth)
         assert r.status_code == 200, r.text
-        assert r.json()["messages"] == []
+        tomb_msgs = r.json()["messages"]
+        assert len(tomb_msgs) == 1
+        tomb = tomb_msgs[0]
+        assert tomb["id"] == mid
+        assert tomb["deleted_at"] is not None
+        assert tomb["body"] is None
+        assert tomb["deletion_kind"] == "self"
+        assert tomb["deleted_by_user_id"] == m0["author_user_id"]
 
     get_settings.cache_clear()
 

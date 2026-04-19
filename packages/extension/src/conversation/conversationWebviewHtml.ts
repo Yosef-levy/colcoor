@@ -245,6 +245,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-right: 3px solid var(--vscode-focusBorder);
       background: var(--vscode-textBlockQuote-background);
     }
+    .inline-sidechat-deleted {
+      margin: 0;
+      font-style: italic;
+      color: var(--vscode-descriptionForeground);
+    }
     .inline-sidechat-meta-row {
       display: flex;
       align-items: flex-start;
@@ -2275,6 +2280,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     /** Unread dot is for others’ messages only — own user rows are never unread for the viewer. */
     function inlineSideChatMessageUnreadForViewer(m, seqNum, lr) {
+      if (m && m.deleted_at != null && String(m.deleted_at).trim() !== "") return false;
       if (!(typeof seqNum === "number" && seqNum > lr)) return false;
       var k = m && m.kind ? String(m.kind) : "user";
       if (k !== "user") return true;

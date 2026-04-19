@@ -76,7 +76,7 @@ async def get_side_chat_messages(
             conversation_id,
             user_id,
             after_seq=after_seq,
-            include_deleted=False,
+            include_deleted=True,
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None

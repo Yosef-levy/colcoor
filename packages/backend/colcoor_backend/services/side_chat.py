@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from collections.abc import Sequence
+from typing import Literal
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -102,9 +103,9 @@ async def list_side_chat_messages(
 ) -> list[SideChatMessage]:
     """List rows with ``seq > after_seq``.
 
-    Transcript-style callers (HTTP GET) pass ``include_deleted=False`` so soft-deleted rows are
-    omitted. The SSE poller passes ``include_deleted=True`` so in-window tombstones can still be
-    delivered when the incremental cursor catches an update.
+    Pass ``include_deleted=False`` to omit soft-deleted rows (e.g. internal queries). HTTP GET and
+    the SSE poller use ``include_deleted=True`` so clients receive tombstones for transcript and
+    incremental sync.
     """
     await ensure_conversation_member(session, conversation_id, user_id)
     cond = [
@@ -115,6 +116,18 @@ async def list_side_chat_messages(
         cond.append(SideChatMessage.deleted_at.is_(None))
     res = await session.execute(select(SideChatMessage).where(*cond).order_by(SideChatMessage.seq.asc()))
     return list(res.scalars().all())
+
+
+def _deletion_kind_for_out(msg: SideChatMessage) -> Literal["self", "moderator"] | None:
+    if msg.deleted_at is None:
+        return None
+    db = msg.deleted_by_user_id
+    if db is None:
+        return None
+    au = msg.author_user_id
+    if au is not None and db == au:
+        return "self"
+    return "moderator"
 
 
 async def load_users_by_ids(
@@ -135,6 +148,7 @@ def side_chat_message_to_out(msg: SideChatMessage, author: User | None) -> SideC
         dn = (author.display_name or "").strip()
         display = dn if dn else None
         avatar = author.avatar_url
+    is_deleted = msg.deleted_at is not None
     return SideChatMessageOut(
         id=msg.id,
         conversation_id=msg.conversation_id,
@@ -143,15 +157,17 @@ def side_chat_message_to_out(msg: SideChatMessage, author: User | None) -> SideC
         author_user_id=msg.author_user_id,
         author_display_name=display,
         author_avatar_url=avatar,
-        body=msg.body,
-        content_json=msg.content_json,
-        referenced_event_id=msg.referenced_event_id,
-        referenced_note_id=msg.referenced_note_id,
-        referenced_side_chat_message_id=msg.referenced_side_chat_message_id,
+        body=None if is_deleted else msg.body,
+        content_json=None if is_deleted else msg.content_json,
+        referenced_event_id=None if is_deleted else msg.referenced_event_id,
+        referenced_note_id=None if is_deleted else msg.referenced_note_id,
+        referenced_side_chat_message_id=None if is_deleted else msg.referenced_side_chat_message_id,
         created_at=msg.created_at,
         updated_at=msg.updated_at,
-        edited_at=msg.edited_at,
+        edited_at=None if is_deleted else msg.edited_at,
         deleted_at=msg.deleted_at,
+        deleted_by_user_id=msg.deleted_by_user_id if is_deleted else None,
+        deletion_kind=_deletion_kind_for_out(msg),
     )
 
 
@@ -298,6 +314,7 @@ async def soft_delete_side_chat_message(
     now = datetime.now(tz=UTC)
     msg.deleted_at = now
     msg.updated_at = now
+    msg.deleted_by_user_id = user_id
     await session.flush()
     await session.refresh(msg)
     return msg

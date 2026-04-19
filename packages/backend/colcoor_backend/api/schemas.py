@@ -280,6 +280,14 @@ class SideChatMessageOut(BaseModel):
     updated_at: datetime
     edited_at: datetime | None
     deleted_at: datetime | None
+    deleted_by_user_id: UUID | None = Field(
+        default=None,
+        description="Set when soft-deleted: user id who performed the delete.",
+    )
+    deletion_kind: Literal["self", "moderator"] | None = Field(
+        default=None,
+        description="When deleted: author removed their own row vs someone else (conversation owner).",
+    )
 
 
 class SideChatMessagesResponse(BaseModel):

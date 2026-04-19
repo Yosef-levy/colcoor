@@ -246,6 +246,8 @@ describe("ColcoorApiClient note mutations", () => {
       updated_at: "t",
       edited_at: null,
       deleted_at: "2026-01-01T00:00:00Z",
+      deleted_by_user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      deletion_kind: "self",
     };
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

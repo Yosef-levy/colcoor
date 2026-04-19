@@ -254,6 +254,9 @@ class SideChatMessage(Base):
     )
     edited_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    deleted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class UserSideChatState(Base):

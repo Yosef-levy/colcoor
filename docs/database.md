@@ -115,6 +115,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | updated_at | timestamptz not null | Row touch |
 | edited_at | timestamptz null | User-visible edit |
 | deleted_at | timestamptz null | Soft delete |
+| deleted_by_user_id | uuid FK null | User who performed the soft delete (SET NULL if user removed) |
 
 ---
 
@@ -321,6 +322,7 @@ CREATE TABLE side_chat_messages (
     updated_at timestamptz NOT NULL DEFAULT now(),
     edited_at timestamptz,
     deleted_at timestamptz,
+    deleted_by_user_id uuid REFERENCES users (id) ON DELETE SET NULL,
     CONSTRAINT uq_side_chat_messages_conversation_seq UNIQUE (conversation_id, seq),
     CONSTRAINT ck_side_chat_messages_kind CHECK (kind IN ('user', 'system_join', 'system_leave'))
 );

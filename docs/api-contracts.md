@@ -407,7 +407,7 @@ For `user_input`, `content` may be empty after trim when `content_json.colcoor_u
 
 ### 10.1 `GET /api/v1/conversations/{conversation_id}/side-chat/messages`
 
-**Query:** `after_seq` (integer, optional, default `0`). Returns messages with `seq > after_seq`, ascending `seq`.
+**Query:** `after_seq` (integer, optional, default `0`). Returns messages with `seq > after_seq`, ascending `seq`, **including** soft-deleted rows as tombstones (see `deleted_at` / `deletion_kind`).
 
 | **200** | `{ "messages": SideChatMessageOut[] }` |
 
@@ -431,6 +431,10 @@ For `user_input`, `content` may be empty after trim when `content_json.colcoor_u
 | `updated_at` | string | yes |
 | `edited_at` | string \| null | yes |
 | `deleted_at` | string \| null | yes |
+| `deleted_by_user_id` | uuid \| null | yes | When `deleted_at` is set: user who performed the delete; otherwise `null`. |
+| `deletion_kind` | string \| null | yes | When soft-deleted: `self` (author removed their own message) or `moderator` (someone else removed it; only conversation owners may remove others’ rows); otherwise `null`. |
+
+When `deleted_at` is non-null, `body`, `content_json`, each `referenced_*`, and `edited_at` are always `null` in the API response (content is not returned after delete).
 
 ### 10.2 `POST /api/v1/conversations/{conversation_id}/side-chat/messages`
 

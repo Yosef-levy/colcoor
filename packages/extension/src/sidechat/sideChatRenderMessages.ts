@@ -23,6 +23,25 @@ function escapeHtmlAttr(s: string): string {
     .replace(/</g, "&lt;");
 }
 
+function escapeHtmlText(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function deletedSideChatPlaceholderHtml(m: SideChatMessageOut): string {
+  const kind = m.deletion_kind;
+  const text =
+    kind === "moderator"
+      ? "Message deleted by a conversation owner."
+      : kind === "self"
+        ? "Message deleted."
+        : "Message deleted.";
+  return `<p class="inline-sidechat-deleted">${escapeHtmlText(text)}</p>`;
+}
+
 function userMediaFiguresHtml(urls: readonly string[] | undefined): string {
   if (!urls?.length) {
     return "";
@@ -59,14 +78,25 @@ export function toSideChatRenderMessages(
   referenceLookups?: ReferenceLabelLookups,
   userImageDataUrlsByMessageId?: ReadonlyMap<string, readonly string[]>,
 ): SideChatRenderMessage[] {
-  return messages.map((m) => ({
-    ...m,
-    rendered_body_html: renderUserMessageBodyHtml(m, userImageDataUrlsByMessageId?.get(m.id)),
-    referenced_side_chat_preview: resolveSideChatReferencePreview(
-      messages,
-      m.referenced_side_chat_message_id,
-    ),
-    reference_chips: sideChatReferenceChips(m, referenceLookups),
-    mentions: extractSideChatMentions(m.body),
-  }));
+  return messages.map((m) => {
+    if (m.deleted_at != null) {
+      return {
+        ...m,
+        rendered_body_html: deletedSideChatPlaceholderHtml(m),
+        referenced_side_chat_preview: null,
+        reference_chips: [],
+        mentions: [],
+      };
+    }
+    return {
+      ...m,
+      rendered_body_html: renderUserMessageBodyHtml(m, userImageDataUrlsByMessageId?.get(m.id)),
+      referenced_side_chat_preview: resolveSideChatReferencePreview(
+        messages,
+        m.referenced_side_chat_message_id,
+      ),
+      reference_chips: sideChatReferenceChips(m, referenceLookups),
+      mentions: extractSideChatMentions(m.body),
+    };
+  });
 }

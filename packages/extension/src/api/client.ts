@@ -133,6 +133,10 @@ export type SideChatMessageOut = {
   updated_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  /** Present when soft-deleted: who performed the delete. */
+  deleted_by_user_id?: string | null;
+  /** When deleted: author removed own message vs conversation owner removed it. */
+  deletion_kind?: "self" | "moderator" | null;
 };
 
 export type SideChatPostBody = {

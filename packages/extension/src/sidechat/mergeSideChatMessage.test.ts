@@ -11,7 +11,7 @@ function msg(p: Partial<SideChatMessageOut> & { id: string; seq: number }): Side
     author_user_id: p.author_user_id ?? null,
     author_display_name: p.author_display_name ?? null,
     author_avatar_url: p.author_avatar_url ?? null,
-    body: p.body ?? "x",
+    body: "body" in p ? (p.body ?? null) : "x",
     referenced_event_id: null,
     referenced_note_id: null,
     referenced_side_chat_message_id: null,
@@ -19,6 +19,8 @@ function msg(p: Partial<SideChatMessageOut> & { id: string; seq: number }): Side
     updated_at: p.updated_at ?? "2026-01-01T00:00:00Z",
     edited_at: p.edited_at ?? null,
     deleted_at: p.deleted_at ?? null,
+    deleted_by_user_id: p.deleted_by_user_id ?? null,
+    deletion_kind: p.deletion_kind ?? null,
   };
 }
 
@@ -42,10 +44,12 @@ describe("mergeSideChatMessage", () => {
     expect(out).toHaveLength(1);
   });
 
-  it("removes message when incoming is soft-deleted", () => {
-    const a = [msg({ id: "a", seq: 1 }), msg({ id: "b", seq: 2 })];
-    const out = mergeSideChatMessage(a, msg({ id: "a", seq: 1, deleted_at: "2026-01-02T00:00:00Z" }));
-    expect(out.map((m) => m.id)).toEqual(["b"]);
+  it("replaces with tombstone when incoming is soft-deleted", () => {
+    const a = [msg({ id: "a", seq: 1, body: "hi" }), msg({ id: "b", seq: 2 })];
+    const out = mergeSideChatMessage(a, msg({ id: "a", seq: 1, body: null, deleted_at: "2026-01-02T00:00:00Z" }));
+    expect(out.map((m) => m.id)).toEqual(["a", "b"]);
+    expect(out[0]!.deleted_at).toBe("2026-01-02T00:00:00Z");
+    expect(out[0]!.body).toBeNull();
   });
 
   it("ignores unknown id tombstone without appending", () => {

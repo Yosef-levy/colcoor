@@ -22,7 +22,9 @@ function row(
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     edited_at: null,
-    deleted_at: null,
+    deleted_at: p.deleted_at ?? null,
+    deleted_by_user_id: p.deleted_by_user_id ?? null,
+    deletion_kind: p.deletion_kind ?? null,
   };
 }
 
@@ -84,6 +86,36 @@ describe("toSideChatRenderMessages", () => {
       }),
     ]);
     expect(out[0].reference_chips).toEqual(["event:11111111", "note:22222222", "reply:33333333"]);
+  });
+
+  it("renders deleted placeholder instead of body when deleted_at is set", () => {
+    const out = toSideChatRenderMessages([
+      row({
+        id: "m1",
+        seq: 1,
+        body: "secret",
+        deleted_at: "2026-01-02T00:00:00Z",
+        deletion_kind: "self",
+      }),
+    ]);
+    expect(out[0].rendered_body_html).toContain("inline-sidechat-deleted");
+    expect(out[0].rendered_body_html).toContain("Message deleted.");
+    expect(out[0].rendered_body_html).not.toContain("secret");
+    expect(out[0].reference_chips).toEqual([]);
+    expect(out[0].mentions).toEqual([]);
+  });
+
+  it("uses moderator deleted copy when deletion_kind is moderator", () => {
+    const out = toSideChatRenderMessages([
+      row({
+        id: "m1",
+        seq: 1,
+        body: "gone",
+        deleted_at: "2026-01-02T00:00:00Z",
+        deletion_kind: "moderator",
+      }),
+    ]);
+    expect(out[0].rendered_body_html).toContain("Message deleted by a conversation owner.");
   });
 
   it("uses reference lookup labels in chips when available", () => {
