@@ -98,16 +98,22 @@ async def list_side_chat_messages(
     user_id: uuid.UUID,
     *,
     after_seq: int,
+    include_deleted: bool = False,
 ) -> list[SideChatMessage]:
+    """List rows with ``seq > after_seq``.
+
+    Transcript-style callers (HTTP GET) pass ``include_deleted=False`` so soft-deleted rows are
+    omitted. The SSE poller passes ``include_deleted=True`` so in-window tombstones can still be
+    delivered when the incremental cursor catches an update.
+    """
     await ensure_conversation_member(session, conversation_id, user_id)
-    res = await session.execute(
-        select(SideChatMessage)
-        .where(
-            SideChatMessage.conversation_id == conversation_id,
-            SideChatMessage.seq > after_seq,
-        )
-        .order_by(SideChatMessage.seq.asc())
-    )
+    cond = [
+        SideChatMessage.conversation_id == conversation_id,
+        SideChatMessage.seq > after_seq,
+    ]
+    if not include_deleted:
+        cond.append(SideChatMessage.deleted_at.is_(None))
+    res = await session.execute(select(SideChatMessage).where(*cond).order_by(SideChatMessage.seq.asc()))
     return list(res.scalars().all())
 
 

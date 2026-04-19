@@ -557,6 +557,10 @@ def test_side_chat_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> N
         assert r.status_code == 200, r.text
         assert r.json()["deleted_at"] is not None
 
+        r = client.get(f"/api/v1/conversations/{cid}/side-chat/messages", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json()["messages"] == []
+
     get_settings.cache_clear()
 
 

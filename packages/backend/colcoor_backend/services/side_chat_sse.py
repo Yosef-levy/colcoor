@@ -117,7 +117,11 @@ async def iter_side_chat_sse(
         while True:
             async with factory() as session:
                 rows = await list_side_chat_messages(
-                    session, conversation_id, user_id, after_seq=last
+                    session,
+                    conversation_id,
+                    user_id,
+                    after_seq=last,
+                    include_deleted=True,
                 )
                 author_ids = [r.author_user_id for r in rows if r.author_user_id is not None]
                 authors = await load_users_by_ids(session, author_ids)

@@ -41,4 +41,19 @@ describe("mergeSideChatMessage", () => {
     const out = mergeSideChatMessage(a, msg({ id: "a", seq: 1, body: "x" }));
     expect(out).toHaveLength(1);
   });
+
+  it("removes message when incoming is soft-deleted", () => {
+    const a = [msg({ id: "a", seq: 1 }), msg({ id: "b", seq: 2 })];
+    const out = mergeSideChatMessage(a, msg({ id: "a", seq: 1, deleted_at: "2026-01-02T00:00:00Z" }));
+    expect(out.map((m) => m.id)).toEqual(["b"]);
+  });
+
+  it("ignores unknown id tombstone without appending", () => {
+    const a = [msg({ id: "a", seq: 1 })];
+    const out = mergeSideChatMessage(
+      a,
+      msg({ id: "ghost", seq: 99, deleted_at: "2026-01-02T00:00:00Z" }),
+    );
+    expect(out).toEqual(a);
+  });
 });

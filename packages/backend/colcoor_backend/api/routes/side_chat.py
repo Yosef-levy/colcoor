@@ -72,7 +72,11 @@ async def get_side_chat_messages(
 ) -> SideChatMessagesResponse:
     try:
         rows = await list_side_chat_messages(
-            session, conversation_id, user_id, after_seq=after_seq
+            session,
+            conversation_id,
+            user_id,
+            after_seq=after_seq,
+            include_deleted=False,
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
