@@ -1112,7 +1112,7 @@ def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgre
 
 
 def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
-    """PATCH /me updates display_name, avatar_url, and handle (api-contracts §9.1)."""
+    """PATCH /me updates display_name and avatar_url (api-contracts §9.1)."""
     secret = "x" * 40
     monkeypatch.setenv("DATABASE_URL", postgres_url)
     monkeypatch.setenv("JWT_SECRET", secret)
@@ -1126,7 +1126,6 @@ def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> No
         assert r.status_code == 200, r.text
         assert r.json()["email"] == "i@i.c"
         assert r.json()["display_name"] == ""
-        assert r.json().get("handle") in (None, "")
 
         r = client.patch("/api/v1/me", headers=auth, json={})
         assert r.status_code == 422, r.text
@@ -1149,17 +1148,5 @@ def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> No
         r = client.patch("/api/v1/me", headers=auth, json={"avatar_url": None})
         assert r.status_code == 200, r.text
         assert r.json()["avatar_url"] is None
-
-        r = client.patch("/api/v1/me", headers=auth, json={"handle": "patch_me_handle"})
-        assert r.status_code == 200, r.text
-        assert r.json()["handle"] == "patch_me_handle"
-
-        r = client.get("/api/v1/me", headers=auth)
-        assert r.status_code == 200, r.text
-        assert r.json()["handle"] == "patch_me_handle"
-
-        r = client.patch("/api/v1/me", headers=auth, json={"handle": None})
-        assert r.status_code == 200, r.text
-        assert r.json().get("handle") in (None, "")
 
     get_settings.cache_clear()

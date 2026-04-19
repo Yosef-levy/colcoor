@@ -71,10 +71,6 @@ import { buildSideChatSendPayload } from "../sidechat/sideChatSendPayload";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "../sidechat/sideChatRenderMessages";
 import { listConversationsCached } from "../conversations/conversationsListCache";
 import { runInlineSideChatSseLoop } from "../sidechat/runInlineSideChatSseLoop";
-import {
-  buildSideChatMentionPickList,
-  type SideChatMentionPickItem,
-} from "../sidechat/sideChatMentionDirectory";
 import { mentionTargetsForMe } from "../sidechat/sideChatMentionTargets";
 import { shouldNotifyForIncomingSideChatMessage } from "../sidechat/sideChatNotifyDedup";
 import { shouldEmitSideChatNotificationNow } from "../sidechat/sideChatNotificationRateLimit";
@@ -162,8 +158,6 @@ type WebviewStateMessage = {
   waitingForAssistant: boolean;
   /** Messages staged while {@link waitingForAssistant}; flushed after the current assistant reply. */
   queuedMainSendCount: number;
-  /** Conversation members (except viewer) for inline @ mention autocomplete in side chat. */
-  sideChatMentionPickList: SideChatMentionPickItem[];
 };
 
 type FromWebview =
@@ -382,8 +376,6 @@ export function createConversationPanelController(
   let viewerUserIdForWebview: string | null = null;
   /** Caller's membership role for inline side-chat delete rules. */
   let viewerConversationRole: ConversationMember["role"] | null = null;
-  /** Last member list from tree load; drives side-chat @ mention autocomplete in the webview. */
-  let lastConversationMembers: ConversationMember[] = [];
   /** Tree/note labels for side-chat reference chips (aligned with cached tree + notes). */
   let sideChatEventLabelsById: Record<string, string> = {};
   let sideChatNoteLabelsById: Record<string, string> = {};
@@ -856,7 +848,6 @@ export function createConversationPanelController(
     panel = undefined;
     webviewReady = false;
     lastTreeEvents = [];
-    lastConversationMembers = [];
     lastNotes = [];
     lastNeedsContextRebuild = false;
     lastUserImageDataUrlsByEventId = new Map();
@@ -913,11 +904,6 @@ export function createConversationPanelController(
     if (!panel || !conversationId || !webviewReady) {
       return;
     }
-    const viewerIdForMentions =
-      viewerUserIdForWebview ??
-      (typeof myProfileForSideChat?.id === "string" ? myProfileForSideChat.id : null) ??
-      (typeof viewerUserIdMemo === "string" ? viewerUserIdMemo : null);
-    const sideChatMentionPickList = buildSideChatMentionPickList(lastConversationMembers, viewerIdForMentions);
     syncSideChatReferenceLabelMapsFromTree(events, lastNotes);
     try {
       lastPostedBusy = busy;
@@ -1000,7 +986,6 @@ export function createConversationPanelController(
         sideChatViewerRole: viewerConversationRole,
         waitingForAssistant,
         queuedMainSendCount: pendingMainSendQueue.length,
-        sideChatMentionPickList,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -1070,7 +1055,6 @@ export function createConversationPanelController(
           sideChatViewerRole: viewerConversationRole,
           waitingForAssistant: Boolean(sendAbort && pendingSendUserMarkdown === undefined),
           queuedMainSendCount: pendingMainSendQueue.length,
-          sideChatMentionPickList,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -1099,7 +1083,6 @@ export function createConversationPanelController(
       let finalizeToDefaultBranchTip = Boolean(opts?.finalizeToDefaultBranchTip);
       let treePrefetch: GraphEventNode[] | undefined = opts?.prefetchedTreeEvents;
       let notesPrefetch: NoteOut[] | undefined = opts?.prefetchedNotes;
-      lastConversationMembers = [];
       conversationTreeLoading = true;
       postState(lastTreeEvents, lastPostedBusy, null);
       for (;;) {
@@ -1126,7 +1109,6 @@ export function createConversationPanelController(
           if (!skipConversationsList) {
             applyConversationMetaFromListRow(listRows.find((r) => r.id === conversationId));
           }
-          lastConversationMembers = members;
           const nextEventIds = new Set(events.map((e) => e.id));
           const stalePromptKey = staleTreeMissingSelectionPromptKey({
             previousSelectedEventId,
@@ -1271,7 +1253,6 @@ export function createConversationPanelController(
           inlineSideChatUrlsByMessageId = new Map();
           inlineSideChatRendered = [];
           inlineSideChatPostChain = Promise.resolve();
-          lastConversationMembers = [];
           conversationTreeLoading = false;
           postState([], busy, msg);
           return;
@@ -2306,7 +2287,6 @@ export function createConversationPanelController(
       selectedEventId = undefined;
       conversationPinned = false;
       lastTreeEvents = [];
-      lastConversationMembers = [];
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastSideChatReadSeq = 0;
@@ -2560,7 +2540,6 @@ export function createConversationPanelController(
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
-      lastConversationMembers = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
       lastSideChatReadSeq = 0;
@@ -2609,7 +2588,6 @@ export function createConversationPanelController(
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
-      lastConversationMembers = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
       lastSideChatReadSeq = 0;

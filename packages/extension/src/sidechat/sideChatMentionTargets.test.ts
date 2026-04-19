@@ -9,7 +9,6 @@ function me(p: Partial<MeOut>): MeOut {
     email: "sam.lee@example.com",
     display_name: "Sam Lee",
     avatar_url: null,
-    handle: null,
     ...p,
   };
 }
@@ -27,9 +26,5 @@ describe("mentionTargetsForMe", () => {
     expect(mentionTargetsForMe(me({ display_name: "Sam Lee!!!", email: "sam_lee@x.y" }))).toEqual([
       "sam_lee",
     ]);
-  });
-
-  it("includes normalized handle when set", () => {
-    expect(mentionTargetsForMe(me({ handle: "Sammy" }))).toEqual(["sammy", "sam_lee", "sam.lee"]);
   });
 });

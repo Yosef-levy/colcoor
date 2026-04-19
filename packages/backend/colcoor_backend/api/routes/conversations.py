@@ -397,7 +397,7 @@ async def get_conversation_members(
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     out: list[MemberOut] = []
-    for uid, role, email, display_name, handle in rows:
+    for uid, role, email, display_name in rows:
         out.append(
             MemberOut.model_validate(
                 {
@@ -405,7 +405,6 @@ async def get_conversation_members(
                     "role": role,
                     "email": email or None,
                     "display_name": display_name or None,
-                    "handle": handle,
                 }
             )
         )
@@ -464,7 +463,7 @@ async def post_conversation_member(
     body: MemberAddBody,
 ) -> MemberOut:
     try:
-        uid, role, email, display_name, handle = await add_conversation_member(
+        uid, role, email, display_name = await add_conversation_member(
             session,
             conversation_id=conversation_id,
             actor_user_id=user_id,
@@ -492,7 +491,6 @@ async def post_conversation_member(
             "role": role,
             "email": email or None,
             "display_name": display_name or None,
-            "handle": handle,
         }
     )
 
@@ -506,7 +504,7 @@ async def patch_conversation_member(
     body: MemberRolePatchBody,
 ) -> MemberOut:
     try:
-        uid, role, email, display_name, handle = await update_conversation_member_role(
+        uid, role, email, display_name = await update_conversation_member_role(
             session,
             conversation_id=conversation_id,
             actor_user_id=user_id,
@@ -532,7 +530,6 @@ async def patch_conversation_member(
             "role": role,
             "email": email or None,
             "display_name": display_name or None,
-            "handle": handle,
         }
     )
 
