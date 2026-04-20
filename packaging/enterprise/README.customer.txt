@@ -67,12 +67,23 @@ Backend container unhealthy
 
     ./scripts/08-show-backend-logs.sh --tail=200
 
-  Common causes:
-  - Stale global volume: an older Colcoor compose used a host-wide volume name and a different
-    Postgres password than your current .env. Current bundles use a project-scoped volume instead.
-    Fix: ./scripts/03-stack-down.sh then remove the orphan volume only if you accept data loss:
-      docker volume ls | grep colcoor
-      docker volume rm <name>    # e.g. colcoor_postgres_data from an old project
-    Then ./scripts/02-stack-up.sh again (Postgres re-initializes from your current .env).
-  - Regenerated .env (01-setup-env.sh --force) without wiping the DB volume — see section above
-    "Regenerating secrets".
+  "password authentication failed for user colcoor" (often during alembic upgrade)
+  ------------------------------------------------
+  Postgres only reads POSTGRES_PASSWORD on **first** database initialization. If you changed
+  .env (or ran 01-setup-env.sh --force) but kept the same Docker volume, the DB still has the
+  old password while the backend uses the new DATABASE_URL.
+
+  Fix (deletes Colcoor data for this stack only; keeps your current .env):
+
+    COLCOOR_I_UNDERSTAND_DELETE_DB=1 ./scripts/09-reset-postgres-data-and-up.sh
+
+  Or manually:
+
+    ./scripts/03-stack-down.sh --remove-volumes
+    ./scripts/02-stack-up.sh
+
+  Other causes:
+  - Stale global volume from an old compose file (name: colcoor_postgres_data): upgrade the
+    bundle docker-compose.yml to a version without a fixed volume name, then down/up; or
+    docker volume rm colcoor_postgres_data if nothing else needs it.
+  - Regenerated .env without wiping the DB — same fix as above; see "Regenerating secrets".
