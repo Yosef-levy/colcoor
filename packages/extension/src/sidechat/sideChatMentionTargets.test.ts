@@ -27,4 +27,8 @@ describe("mentionTargetsForMe", () => {
       "sam_lee",
     ]);
   });
+
+  it("includes normalized public handle when set", () => {
+    expect(mentionTargetsForMe(me({ handle: "Sam.Handle" }))).toContain("sam.handle");
+  });
 });

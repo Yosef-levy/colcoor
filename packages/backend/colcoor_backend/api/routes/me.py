@@ -18,6 +18,7 @@ async def get_me_route(session: DbSession, user_id: CurrentUserId) -> MeOut:
         email=user.email,
         display_name=user.display_name,
         avatar_url=user.avatar_url,
+        handle=user.handle,
     )
 
 
@@ -38,4 +39,5 @@ async def patch_me_route(
         email=user.email,
         display_name=user.display_name,
         avatar_url=user.avatar_url,
+        handle=user.handle,
     )

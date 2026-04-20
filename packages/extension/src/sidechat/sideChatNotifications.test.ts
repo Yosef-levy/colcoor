@@ -92,6 +92,31 @@ describe("decideSideChatNotification", () => {
     expect(out?.title).toContain("mention");
   });
 
+  it("treats @all as a mention for everyone (mention title even when not personally targeted)", () => {
+    const out = decideSideChatNotification({
+      panelVisible: false,
+      myUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      myMentionTargets: ["charlie"],
+      incoming: msg({ id: "m", seq: 9, body: "team @ALL please read" }),
+      notificationsEnabled: true,
+      mentionNotificationsEnabled: true,
+    });
+    expect(out?.title).toContain("mention");
+  });
+
+  it("does not use mention title for @all when mention notifications are off", () => {
+    const out = decideSideChatNotification({
+      panelVisible: false,
+      myUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      myMentionTargets: ["charlie"],
+      incoming: msg({ id: "m", seq: 10, body: "hi @all" }),
+      notificationsEnabled: true,
+      mentionNotificationsEnabled: false,
+    });
+    expect(out?.title).toContain("message");
+    expect(out?.title).not.toContain("mention");
+  });
+
   it("falls back to generic message notification", () => {
     const out = decideSideChatNotification({
       panelVisible: false,

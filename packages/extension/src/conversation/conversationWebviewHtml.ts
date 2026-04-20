@@ -357,7 +357,50 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       vertical-align: middle;
     }
     .inline-sidechat .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .inline-sidechat-composer { display: flex; gap: 8px; align-items: center; }
+    .inline-sidechat-composer {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      position: relative;
+    }
+    .inline-sidechat-mention-picker {
+      position: absolute;
+      left: 0;
+      right: 88px;
+      bottom: 100%;
+      margin-bottom: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 60;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    }
+    .inline-sidechat-mention-picker[hidden] {
+      display: none !important;
+    }
+    .inline-sidechat-mention-item {
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 8px 10px;
+      border: none;
+      border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      background: transparent;
+      color: var(--vscode-foreground);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .inline-sidechat-mention-item:last-child {
+      border-bottom: none;
+    }
+    .inline-sidechat-mention-item:hover,
+    .inline-sidechat-mention-item.mention-item-active {
+      background: var(--vscode-list-hoverBackground);
+      color: var(--vscode-list-hoverForeground);
+    }
     .inline-sidechat-composer textarea {
       flex: 1;
       min-height: 54px;
@@ -1375,7 +1418,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" id="btnClearInlineSideChatReply" class="btn-secondary">Clear reply</button>
         </div>
         <div class="inline-sidechat-composer" style="flex-shrink:0;">
-          <textarea id="inlineSideChatInput" dir="auto" placeholder="Side chat… Shift+Enter for newline, Enter to send."></textarea>
+          <div id="inlineSideChatMentionPicker" class="inline-sidechat-mention-picker" hidden></div>
+          <textarea
+            id="inlineSideChatInput"
+            dir="auto"
+            placeholder="Side chat… Type @ to mention a member. Shift+Enter for newline, Enter to send."
+          ></textarea>
           <div id="pendingInlineSideChatImages" class="composer-pending-images" style="display:none"></div>
           <button type="button" id="btnInlineSideChatSend" class="btn-secondary">Send</button>
         </div>
@@ -1425,6 +1473,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       playInlineSideChatTone(740, 120, 0.05);
     }
     var inlineSideChatReplyTargetId = null;
+    var inlineSideChatMentionSelIndex = 0;
+    var inlineSideChatMentionLastMatches = [];
     var pendingSendImages = [];
     var pendingInlineSideChatImages = [];
     /** After local inline side-chat send: scroll list when host state catches up; do not scroll on passive refresh. */
@@ -1542,6 +1592,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       selectionVisitCanGoForward: false,
       waitingForAssistant: false,
       queuedMainSendCount: 0,
+      sideChatMentionMembers: [],
     };
 
     var openColcoorListsDrawer = function (tab) {
@@ -1686,6 +1737,182 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    function closeInlineSideChatMentionPicker() {
+      var el = document.getElementById("inlineSideChatMentionPicker");
+      if (el) {
+        el.hidden = true;
+        el.replaceChildren();
+      }
+      inlineSideChatMentionLastMatches = [];
+      inlineSideChatMentionSelIndex = 0;
+    }
+
+    function sideChatMentionChipTitleForHandle(hStr) {
+      var mems = Array.isArray(state.sideChatMentionMembers) ? state.sideChatMentionMembers : [];
+      var h = String(hStr || "").toLowerCase();
+      if (h === "all") {
+        return "Everyone in this conversation";
+      }
+      for (var i = 0; i < mems.length; i++) {
+        var m = mems[i] || {};
+        var mh = m.handle && String(m.handle).toLowerCase() === h;
+        var dnorm = m.display_name
+          ? String(m.display_name)
+              .toLowerCase()
+              .replace(/\\s+/g, "_")
+              .replace(/[^a-z0-9_.-]/g, "")
+          : "";
+        var lp = m.email && String(m.email).indexOf("@") > 0 ? String(m.email).split("@")[0].toLowerCase() : "";
+        if (mh || (dnorm && dnorm === h) || (lp && lp === h)) {
+          var parts = [];
+          if (m.display_name) parts.push(String(m.display_name));
+          if (m.handle) parts.push("@" + String(m.handle));
+          if (m.email) parts.push(String(m.email));
+          return parts.join(" · ");
+        }
+      }
+      return "";
+    }
+
+    function sideChatMentionActiveContext(ta) {
+      if (!ta) return null;
+      var v = String(ta.value || "");
+      var caret = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length;
+      var before = v.slice(0, caret);
+      var at = before.lastIndexOf("@");
+      if (at < 0) return null;
+      var tail = before.slice(at + 1);
+      if (/[\\s\\n\\r]/.test(tail)) return null;
+      return { start: at, end: caret, query: tail };
+    }
+
+    function sideChatMentionFilterMembers(query) {
+      var q = String(query || "").toLowerCase();
+      var mems = Array.isArray(state.sideChatMentionMembers) ? state.sideChatMentionMembers : [];
+      var vid = state.viewerUserId && String(state.viewerUserId).trim();
+      var out = [];
+      var showAll = !q || "all".indexOf(q) === 0;
+      if (showAll) {
+        out.push({ __mentionAll: true });
+      }
+      for (var i = 0; i < mems.length; i++) {
+        var m = mems[i] || {};
+        if (vid && m.user_id && String(m.user_id).trim() === vid) continue;
+        var keys = [];
+        if (m.handle) keys.push(String(m.handle).toLowerCase());
+        if (m.display_name) {
+          keys.push(
+            String(m.display_name)
+              .toLowerCase()
+              .replace(/\\s+/g, "_")
+              .replace(/[^a-z0-9_.-]/g, "")
+          );
+        }
+        if (m.email && String(m.email).indexOf("@") > 0) {
+          keys.push(String(m.email).split("@")[0].toLowerCase());
+        }
+        var hit =
+          !q ||
+          keys.some(function (x) {
+            return x && x.indexOf(q) === 0;
+          });
+        if (hit) out.push(m);
+      }
+      return out.slice(0, 12);
+    }
+
+    function highlightInlineSideChatMentionPicker() {
+      var box = document.getElementById("inlineSideChatMentionPicker");
+      if (!box || box.hidden) return;
+      var btns = box.querySelectorAll("button.inline-sidechat-mention-item");
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle("mention-item-active", i === inlineSideChatMentionSelIndex);
+      }
+    }
+
+    function renderInlineSideChatMentionPicker(matches) {
+      var box = document.getElementById("inlineSideChatMentionPicker");
+      if (!box) return;
+      box.replaceChildren();
+      inlineSideChatMentionLastMatches = matches;
+      inlineSideChatMentionSelIndex = Math.min(
+        inlineSideChatMentionSelIndex,
+        Math.max(0, matches.length - 1)
+      );
+      if (!matches.length) {
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      for (var j = 0; j < matches.length; j++) {
+        var m = matches[j];
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "inline-sidechat-mention-item";
+        btn.setAttribute("data-idx", String(j));
+        if (m.__mentionAll) {
+          btn.textContent = "All — @all (everyone)";
+        } else {
+          var primary =
+            m.handle && String(m.handle).trim()
+              ? "@" + String(m.handle).trim()
+              : m.display_name && String(m.display_name).trim()
+                ? String(m.display_name).trim()
+                : m.email
+                  ? String(m.email)
+                  : String(m.user_id || "");
+          var sub = [];
+          if (m.display_name && (!m.handle || String(m.display_name).trim() !== primary))
+            sub.push(String(m.display_name).trim());
+          if (m.email) sub.push(String(m.email));
+          btn.textContent = primary + (sub.length ? " — " + sub.join(" · ") : "");
+        }
+        box.appendChild(btn);
+      }
+      highlightInlineSideChatMentionPicker();
+    }
+
+    function applyInlineSideChatMentionPick(m) {
+      var ta = document.getElementById("inlineSideChatInput");
+      var ctx = sideChatMentionActiveContext(ta);
+      if (!ta || !ctx || !m) return;
+      var insert = "";
+      if (m.__mentionAll) {
+        insert = "@all";
+      } else {
+        insert =
+          m.handle && String(m.handle).trim()
+            ? "@" + String(m.handle).trim()
+            : "@" +
+              String(m.display_name || "")
+                .trim()
+                .toLowerCase()
+                .replace(/\\s+/g, "_")
+                .replace(/[^a-z0-9_.-]/g, "");
+      }
+      if (!insert || insert === "@") return;
+      var v = String(ta.value || "");
+      var next = v.slice(0, ctx.start) + insert + " " + v.slice(ctx.end);
+      ta.value = next;
+      var pos = ctx.start + insert.length + 1;
+      try {
+        ta.setSelectionRange(pos, pos);
+      } catch (ePick) {}
+      closeInlineSideChatMentionPicker();
+      updateInlineSideChatSendEnabled();
+    }
+
+    function updateInlineSideChatMentionPicker() {
+      var ta = document.getElementById("inlineSideChatInput");
+      var ctx = sideChatMentionActiveContext(ta);
+      if (!ctx) {
+        closeInlineSideChatMentionPicker();
+        return;
+      }
+      var matches = sideChatMentionFilterMembers(ctx.query);
+      renderInlineSideChatMentionPicker(matches);
     }
 
     ${treeEventTimeLabelWebviewScriptBlock()}
@@ -2635,6 +2862,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!state.sideChatVisible) {
         col.style.display = "none";
         col.setAttribute("aria-hidden", "true");
+        closeInlineSideChatMentionPicker();
         inlineSideChatCloseMsgMenu();
         list.textContent = "";
         pendingInlineSideChatScrollAfterSend = false;
@@ -2690,7 +2918,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             '<span class="inline-sidechat-mentions">' +
             m.mentions
               .map(function (h) {
-                return '<span class="mention-chip">@' + esc(String(h)) + "</span>";
+                var ht = sideChatMentionChipTitleForHandle(h);
+                return (
+                  '<span class="mention-chip"' +
+                  (ht ? ' title="' + esc(ht) + '"' : "") +
+                  ">@" +
+                  esc(String(h)) +
+                  "</span>"
+                );
               })
               .join("") +
             "</span>";
@@ -3641,6 +3876,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               ? Math.max(0, Math.floor(m.queuedMainSendCount))
               : 0,
           conversationLoading: m.conversationLoading === true,
+          sideChatMentionMembers: Array.isArray(m.sideChatMentionMembers) ? m.sideChatMentionMembers : [],
         };
         render();
         return;
@@ -3962,7 +4198,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (sb) sb.click();
     });
 
+    document.getElementById("inlineSideChatMentionPicker").addEventListener("click", function (ev) {
+      var t = ev.target && ev.target.closest && ev.target.closest("button.inline-sidechat-mention-item");
+      if (!t) return;
+      var idx = parseInt(t.getAttribute("data-idx") || "-1", 10);
+      if (!isFinite(idx) || idx < 0) return;
+      var row = inlineSideChatMentionLastMatches[idx];
+      if (row) applyInlineSideChatMentionPick(row);
+    });
+
     document.getElementById("inlineSideChatInput").addEventListener("input", function () {
+      updateInlineSideChatMentionPicker();
       updateInlineSideChatSendEnabled();
     });
 
@@ -4005,6 +4251,37 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
 
     document.getElementById("inlineSideChatInput").addEventListener("keydown", function (e) {
+      var picker = document.getElementById("inlineSideChatMentionPicker");
+      var open = picker && !picker.hidden && picker.querySelector("button.inline-sidechat-mention-item");
+      if (open && e.key === "Escape") {
+        e.preventDefault();
+        closeInlineSideChatMentionPicker();
+        return;
+      }
+      if (open && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        e.preventDefault();
+        var n = inlineSideChatMentionLastMatches.length;
+        if (!n) return;
+        if (e.key === "ArrowDown") {
+          inlineSideChatMentionSelIndex = Math.min(inlineSideChatMentionSelIndex + 1, n - 1);
+        } else {
+          inlineSideChatMentionSelIndex = Math.max(inlineSideChatMentionSelIndex - 1, 0);
+        }
+        highlightInlineSideChatMentionPicker();
+        return;
+      }
+      if (open && e.key === "Tab") {
+        e.preventDefault();
+        var cur = inlineSideChatMentionLastMatches[inlineSideChatMentionSelIndex];
+        if (cur) applyInlineSideChatMentionPick(cur);
+        return;
+      }
+      if (open && shouldSendOnEnter(e)) {
+        e.preventDefault();
+        var pick = inlineSideChatMentionLastMatches[inlineSideChatMentionSelIndex];
+        if (pick) applyInlineSideChatMentionPick(pick);
+        return;
+      }
       if (!shouldSendOnEnter(e)) return;
       var ta = document.getElementById("inlineSideChatInput");
       var raw = ta && ta.value ? String(ta.value) : "";

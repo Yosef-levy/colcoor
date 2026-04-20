@@ -158,6 +158,7 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 | `role` | string | yes | `owner` \| `editor` \| `viewer` |
 | `email` | string | no | snapshot for UI |
 | `display_name` | string | no | snapshot for UI |
+| `handle` | string | no | public `@handle` when set (`users.handle`) |
 
 ### 4.1a `GET /api/v1/conversations/{conversation_id}/member-invite-search`
 
@@ -461,6 +462,7 @@ For `user_input`, `content` may be empty after trim when `content_json.colcoor_u
 | `email` | string | yes |
 | `display_name` | string | yes |
 | `avatar_url` | string \| null | yes |
+| `handle` | string | no | public `@handle` when set |
 | `access_token` | string | no | present only if JWT claims must be refreshed |
 
 ---

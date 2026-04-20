@@ -163,6 +163,7 @@ class MemberOut(BaseModel):
     role: Literal["owner", "editor", "viewer"]
     email: str | None = None
     display_name: str | None = None
+    handle: str | None = None
 
 
 class MemberInviteCandidateOut(BaseModel):
@@ -268,6 +269,7 @@ class MeOut(BaseModel):
     email: str
     display_name: str
     avatar_url: str | None
+    handle: str | None = None
     access_token: str | None = Field(
         default=None,
         description="Omitted unless the server refreshes JWT claims (not used on simple profile patch).",

@@ -127,7 +127,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - Open/close in the **same conversation tab**: **three columns** (event tree · main thread and composer · side chat), each with a **horizontally resizable** width where the webview supports it; widths persist in workspace state.
 - **Unread** badge on the open control.
 - **List**, **send**, **edit**, **delete** (per permissions).
-- **@mentions** and notifications (aligned with §1 sounds).
+- **@mentions** — type `@` in the side-chat composer to pick a **member** or **All** (`@all`, notifies everyone); match on `@handle`, display name, or email local-part; **Enter** / **Tab** completes; chips in the list show a **tooltip** when the token resolves to a member or to broadcast **@all**. **Sounds / desktop notifications** treat `@…` as a mention when it matches **your** profile handle, display name, or email local part, or when the message includes **`@all`** (see §1).
 - **Reference** main-thread **message** or **note** for the next post.
 - **Realtime** (e.g. SSE) so the thread updates without manual refresh.
 
@@ -144,7 +144,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 ## 12. Membership and conversation metadata
 
-- **Add editor/viewer** (email + role); **owner** manages members.
+- **Add editor/viewer** (user id, email, `@handle`, or disambiguation when needed); **owner** or **editor** may invite.
 - **Rename conversation** where role allows.
 
 ---

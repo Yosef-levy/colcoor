@@ -50,6 +50,16 @@ describe("decideSideChatSoundKind", () => {
     );
   });
 
+  it("returns mention sound for @all broadcast", () => {
+    expect(
+      decideSideChatSoundKind({
+        ...base,
+        myMentionTargets: ["someone_else"],
+        incoming: msg({ id: "m", seq: 8, body: "hi @all" }),
+      }),
+    ).toBe("mention");
+  });
+
   it("falls back to generic message sound", () => {
     expect(decideSideChatSoundKind({ ...base, incoming: msg({ id: "m", seq: 3, body: "hello team" }) })).toBe(
       "message",

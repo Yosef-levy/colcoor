@@ -158,6 +158,13 @@ type WebviewStateMessage = {
   waitingForAssistant: boolean;
   /** Messages staged while {@link waitingForAssistant}; flushed after the current assistant reply. */
   queuedMainSendCount: number;
+  /** Members of this conversation (side-chat @ autocomplete and mention tooltips). */
+  sideChatMentionMembers: {
+    user_id: string;
+    display_name: string | null;
+    handle: string | null;
+    email: string | null;
+  }[];
 };
 
 type FromWebview =
@@ -341,6 +348,8 @@ export function createConversationPanelController(
 
   /** Last successful tree payload for lightweight UI refresh (e.g. settings). */
   let lastTreeEvents: GraphEventNode[] = [];
+  /** Last GET …/members payload (side-chat @ mentions). */
+  let lastConversationMembers: ConversationMember[] = [];
   /** Notes list aligned with the last successful tree load (for thread rendering without extra round-trips). */
   let lastNotes: NoteOut[] = [];
   /** From GET …/caller-state after each successful tree load (domain-model §4). */
@@ -848,6 +857,7 @@ export function createConversationPanelController(
     panel = undefined;
     webviewReady = false;
     lastTreeEvents = [];
+    lastConversationMembers = [];
     lastNotes = [];
     lastNeedsContextRebuild = false;
     lastUserImageDataUrlsByEventId = new Map();
@@ -986,6 +996,12 @@ export function createConversationPanelController(
         sideChatViewerRole: viewerConversationRole,
         waitingForAssistant,
         queuedMainSendCount: pendingMainSendQueue.length,
+        sideChatMentionMembers: lastConversationMembers.map((m) => ({
+          user_id: m.user_id,
+          display_name: m.display_name ?? null,
+          handle: m.handle ?? null,
+          email: m.email ?? null,
+        })),
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -1055,6 +1071,12 @@ export function createConversationPanelController(
           sideChatViewerRole: viewerConversationRole,
           waitingForAssistant: Boolean(sendAbort && pendingSendUserMarkdown === undefined),
           queuedMainSendCount: pendingMainSendQueue.length,
+          sideChatMentionMembers: lastConversationMembers.map((m) => ({
+            user_id: m.user_id,
+            display_name: m.display_name ?? null,
+            handle: m.handle ?? null,
+            email: m.email ?? null,
+          })),
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -1230,6 +1252,7 @@ export function createConversationPanelController(
           if (hadInlineSideChatOpenAtTreeLoad && !skipInlineSideChatRefresh) {
             await markInlineSideChatReadFromCache(true);
           }
+          lastConversationMembers = members;
           conversationTreeLoading = false;
           postState(events, busy, lastError);
           if (members.length > 1) {
@@ -1253,6 +1276,7 @@ export function createConversationPanelController(
           inlineSideChatUrlsByMessageId = new Map();
           inlineSideChatRendered = [];
           inlineSideChatPostChain = Promise.resolve();
+          lastConversationMembers = [];
           conversationTreeLoading = false;
           postState([], busy, msg);
           return;
@@ -2287,6 +2311,7 @@ export function createConversationPanelController(
       selectedEventId = undefined;
       conversationPinned = false;
       lastTreeEvents = [];
+      lastConversationMembers = [];
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastSideChatReadSeq = 0;
@@ -2540,6 +2565,7 @@ export function createConversationPanelController(
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
+      lastConversationMembers = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
       lastSideChatReadSeq = 0;
@@ -2588,6 +2614,7 @@ export function createConversationPanelController(
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
+      lastConversationMembers = [];
       sideChatUnreadCount = 0;
       sideChatHasUnread = false;
       lastSideChatReadSeq = 0;

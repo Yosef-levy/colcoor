@@ -13,6 +13,10 @@ describe("extractSideChatMentions", () => {
     expect(extractSideChatMentions("hi @alice and (@bob)")).toEqual(["alice", "bob"]);
   });
 
+  it("extracts @all for broadcast mentions", () => {
+    expect(extractSideChatMentions("heads up @all")).toEqual(["all"]);
+  });
+
   it("dedupes mentions case-insensitively", () => {
     expect(extractSideChatMentions("@ALICE @alice @Alice")).toEqual(["ALICE"]);
   });

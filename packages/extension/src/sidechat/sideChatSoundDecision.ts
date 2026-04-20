@@ -1,5 +1,5 @@
 import type { SideChatMessageOut } from "../api/client";
-import { extractSideChatMentions } from "./sideChatMentions";
+import { extractSideChatMentions, SIDE_CHAT_BROADCAST_MENTION } from "./sideChatMentions";
 
 export type SideChatSoundKind = "message" | "mention";
 
@@ -29,7 +29,9 @@ export function decideSideChatSoundKind(args: Args): SideChatSoundKind | null {
   const body = (m.body ?? "").trim();
   const mentions = extractSideChatMentions(body);
   const targets = new Set(args.myMentionTargets.map((s) => s.toLowerCase()));
-  const isMention = mentions.some((h) => targets.has(h.toLowerCase()));
+  const isMention =
+    mentions.some((h) => h.toLowerCase() === SIDE_CHAT_BROADCAST_MENTION) ||
+    mentions.some((h) => targets.has(h.toLowerCase()));
   if (isMention && args.mentionSoundEnabled) {
     return "mention";
   }

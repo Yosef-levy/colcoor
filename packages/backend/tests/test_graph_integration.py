@@ -455,6 +455,8 @@ def test_conversation_membership_mutations_http(monkeypatch: pytest.MonkeyPatch,
         r = client.get(f"/api/v1/conversations/{cid}/members", headers=auth_owner)
         assert r.status_code == 200, r.text
         assert len(r.json()) == 3
+        for row in r.json():
+            assert "handle" in row
 
         r = client.patch(
             f"/api/v1/conversations/{cid}/members/{uid_editor}",

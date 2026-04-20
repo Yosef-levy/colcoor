@@ -67,6 +67,8 @@ export type ConversationMember = {
   role: "owner" | "editor" | "viewer";
   email?: string | null;
   display_name?: string | null;
+  /** Public Colcoor @handle when set (GET …/members). */
+  handle?: string | null;
 };
 
 /** Row from GET …/member-invite-search (api-contracts §4.1a). */
@@ -125,6 +127,8 @@ export type MeOut = {
   email: string;
   display_name: string;
   avatar_url: string | null;
+  /** Public @handle when set (GET/PATCH …/me). */
+  handle?: string | null;
   access_token?: string;
 };
 

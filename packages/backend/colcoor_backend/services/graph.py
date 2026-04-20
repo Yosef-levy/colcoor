@@ -686,18 +686,24 @@ async def soft_delete_conversation_for_owner(
 
 async def list_conversation_members(
     session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
-) -> list[tuple[uuid.UUID, str, str, str]]:
-    """Return ``(user_id, role, email, display_name)`` for each member; caller must be a member."""
+) -> list[tuple[uuid.UUID, str, str, str, str | None]]:
+    """Return ``(user_id, role, email, display_name, handle)`` for each member; caller must be a member."""
     await ensure_conversation_member(session, conversation_id, user_id)
     await require_live_conversation(session, conversation_id)
     stmt = (
-        select(ConversationMember.user_id, ConversationMember.role, User.email, User.display_name)
+        select(
+            ConversationMember.user_id,
+            ConversationMember.role,
+            User.email,
+            User.display_name,
+            User.handle,
+        )
         .join(User, User.id == ConversationMember.user_id)
         .where(ConversationMember.conversation_id == conversation_id)
         .order_by(User.email.asc())
     )
     res = await session.execute(stmt)
-    return [(r[0], r[1], r[2], r[3]) for r in res.all()]
+    return [(r[0], r[1], r[2], r[3], r[4]) for r in res.all()]
 
 
 async def list_events_for_tree(
@@ -991,7 +997,7 @@ async def add_conversation_member(
     actor_user_id: uuid.UUID,
     new_user_id: uuid.UUID,
     role: str,
-) -> tuple[uuid.UUID, str, str, str]:
+) -> tuple[uuid.UUID, str, str, str, str | None]:
     """Add ``new_user_id`` as ``editor`` or ``viewer``; **owner or editor** may invite ([permissions.md])."""
     actor = await get_conversation_member(session, conversation_id, actor_user_id)
     if actor is None:
@@ -1026,9 +1032,9 @@ async def add_conversation_member(
         )
     )
     await session.flush()
-    res_row = await session.execute(select(User.email, User.display_name).where(User.id == new_user_id))
-    em, dn = res_row.one()
-    return (new_user_id, role, em, dn or "")
+    res_row = await session.execute(select(User.email, User.display_name, User.handle).where(User.id == new_user_id))
+    em, dn, hn = res_row.one()
+    return (new_user_id, role, em, dn or "", hn)
 
 
 _MEMBER_INVITE_SEARCH_QUERY_MAX = 320
@@ -1114,7 +1120,7 @@ async def update_conversation_member_role(
     actor_user_id: uuid.UUID,
     target_user_id: uuid.UUID,
     new_role: str,
-) -> tuple[uuid.UUID, str, str, str]:
+) -> tuple[uuid.UUID, str, str, str, str | None]:
     """Change a member's role; **owner only**. Promoting to ``owner`` demotes the previous owner to ``editor``."""
     actor = await get_conversation_member(session, conversation_id, actor_user_id)
     if actor is None:
@@ -1141,9 +1147,9 @@ async def update_conversation_member_role(
         )
     target.role = new_role
     await session.flush()
-    res_row = await session.execute(select(User.email, User.display_name).where(User.id == target_user_id))
-    em, dn = res_row.one()
-    return (target_user_id, new_role, em, dn or "")
+    res_row = await session.execute(select(User.email, User.display_name, User.handle).where(User.id == target_user_id))
+    em, dn, hn = res_row.one()
+    return (target_user_id, new_role, em, dn or "", hn)
 
 
 async def remove_conversation_member(

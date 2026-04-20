@@ -19,6 +19,7 @@ export function mentionTargetsForMe(me: MeOut | null): string[] {
     candidates.push(t);
   };
   push(me.display_name);
+  push(me.handle);
   const localPart = me.email.split("@")[0] ?? "";
   push(localPart);
   const normalized = candidates

@@ -1,3 +1,6 @@
+/** Reserved `@all` side-chat token: notifies everyone in the conversation (client-side). */
+export const SIDE_CHAT_BROADCAST_MENTION = "all";
+
 /**
  * Extract mention handles from plain text (`@alice`, `@team_ops`).
  * Keeps first-seen order, case-insensitive dedupe.

@@ -1,5 +1,5 @@
 import type { SideChatMessageOut } from "../api/client";
-import { extractSideChatMentions } from "./sideChatMentions";
+import { extractSideChatMentions, SIDE_CHAT_BROADCAST_MENTION } from "./sideChatMentions";
 
 export type SideChatNotificationDecision = {
   title: string;
@@ -38,9 +38,10 @@ export function decideSideChatNotification(args: Args): SideChatNotificationDeci
   const body = (m.body ?? "").trim();
   const mentions = extractSideChatMentions(body);
   const mentionTargets = new Set(args.myMentionTargets.map((s) => s.toLowerCase()));
+  const mentionsAll = mentions.some((h) => h.toLowerCase() === SIDE_CHAT_BROADCAST_MENTION);
   const isMentioned =
     args.mentionNotificationsEnabled &&
-    mentions.some((h) => mentionTargets.has(h.toLowerCase()));
+    (mentionsAll || mentions.some((h) => mentionTargets.has(h.toLowerCase())));
   if (isMentioned) {
     return {
       title: `Colcoor side chat mention (#${m.seq})`,
