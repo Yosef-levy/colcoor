@@ -242,7 +242,7 @@ For **air-gapped or registry-free** handoffs, build a single folder you can zip 
 npm run bundle:enterprise
 ```
 
-The bundle script sets **`DOCKER_BUILDKIT=1`** so `docker build` uses BuildKit (quieter than the legacy builder on newer Docker installs). The backend Dockerfile sets **`DEBIAN_FRONTEND=noninteractive`** during `apt-get` to avoid debconf “TERM is not set” noise.
+The bundle and ship scripts source **`scripts/docker-enable-buildkit-if-ok.sh`**: if **`docker buildx`** works, **`DOCKER_BUILDKIT=1`** is set; otherwise **`DOCKER_BUILDKIT=0`** so the **classic builder** runs (avoids “BuildKit is enabled but the buildx component is missing” on minimal installs). The backend Dockerfile sets **`DEBIAN_FRONTEND=noninteractive`** during `apt-get` to avoid debconf “TERM is not set” noise.
 
 If **`tsc` is missing** (fresh clone, no `node_modules`), the bundle step runs **`npm ci`** at the repo root automatically before packaging the VSIX (requires **Node 20+** and npm registry access).
 

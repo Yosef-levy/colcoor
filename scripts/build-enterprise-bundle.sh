@@ -18,8 +18,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# Use BuildKit (avoids "legacy builder is deprecated" on newer Docker; faster layer cache).
-export DOCKER_BUILDKIT=1
+# shellcheck source=docker-enable-buildkit-if-ok.sh
+source "$ROOT/scripts/docker-enable-buildkit-if-ok.sh"
 
 SKIP_VSIX=0
 VSIX_PATH=""

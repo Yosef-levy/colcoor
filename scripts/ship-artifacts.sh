@@ -10,7 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-export DOCKER_BUILDKIT=1
+# shellcheck source=docker-enable-buildkit-if-ok.sh
+source "$ROOT/scripts/docker-enable-buildkit-if-ok.sh"
 
 PUSH=0
 if [[ "${1:-}" == "--push" ]]; then
