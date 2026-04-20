@@ -1,0 +1,105 @@
+# Colcoor enterprise bundle — use with a pre-loaded Docker image (no build context).
+# Run from the bundle directory after: ./scripts/00-load-image.sh && ./scripts/01-setup-env.sh
+#
+# Requires: Docker Compose v2.22+ for pull_policy (or remove pull_policy lines on older installs).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    stop_grace_period: 60s
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=8MB
+      - -c
+      - random_page_cost=1.1
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - internal
+
+  backend:
+    image: colcoor-backend:prod
+    pull_policy: never
+    restart: unless-stopped
+    stop_grace_period: 35s
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      COLCOOR_ENV: production
+      PORT: "8000"
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      COLCOOR_LOG_LEVEL: ${COLCOOR_LOG_LEVEL:-INFO}
+      COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED: ${COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED:-true}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os, urllib.request; p=os.environ.get('PORT','8000'); urllib.request.urlopen(f'http://127.0.0.1:{p}/ready', timeout=12)\"",
+        ]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.26-alpine
+    restart: unless-stopped
+    stop_grace_period: 20s
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: colcoor_postgres_data

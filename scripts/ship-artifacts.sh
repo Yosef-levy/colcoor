@@ -37,6 +37,9 @@ echo ""
 echo "Built:"
 echo "  VSIX:  packages/extension/colcoor-extension-$(node -p "require('./packages/extension/package.json').version").vsix"
 echo "  Image: colcoor-backend:${BACKEND_VERSION}  (and :prod)"
+echo ""
+echo "For a company handoff folder (image tarball + VSIX + compose + scripts):"
+echo "  npm run bundle:enterprise"
 
 if [[ "${PUSH}" -eq 1 ]]; then
   if [[ -z "${DOCKER_REGISTRY:-}" ]]; then

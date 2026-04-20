@@ -68,3 +68,11 @@ npm run ship:artifacts
 ```
 
 See **[`docs/production.md`](docs/production.md)** § Release artifacts for outputs and optional registry push.
+
+**Enterprise bundle** (image `.tar.gz` + VSIX + compose + operator scripts for the customer VM):
+
+```bash
+npm run bundle:enterprise
+```
+
+Output directory: **`dist/colcoor-enterprise-BE…-EXT…/`** (see `README.customer.txt` inside the bundle).

@@ -234,6 +234,25 @@ DOCKER_REGISTRY=ghcr.io/yourorg npm run ship:artifacts -- --push
 
 Customers can point `docker-compose.prod.yml` at your registry by changing the `backend.image` line (or overriding with Compose `image:` + pull policy in your own overlay).
 
+### Enterprise bundle (image tarball + VSIX + operator scripts)
+
+For **air-gapped or registry-free** handoffs, build a single folder you can zip and send to the customer’s VM team:
+
+```bash
+npm run bundle:enterprise
+```
+
+This writes **`dist/colcoor-enterprise-BE<py-version>-EXT<ext-version>/`** containing:
+
+- `colcoor-backend-<version>.tar.gz` — `docker save` of **`colcoor-backend:<version>`** and **`colcoor-backend:prod`**
+- `colcoor-extension-<version>.vsix`
+- `docker-compose.yml` (pre-loaded image only, **no build context**)
+- `nginx/nginx.conf`
+- `scripts/` — load image, generate `.env` / secrets, stack up/down/restart, health check, Postgres backup, **JWT_SECRET rotation**
+- `README.customer.txt` — operator order of operations
+
+Customer VM (typical): `00-load-image` → `01-setup-env` → `02-stack-up` → `05-health-check` (paths relative to the bundle directory; see that README).
+
 ---
 
 ## Related docs

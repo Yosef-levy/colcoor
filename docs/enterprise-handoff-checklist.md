@@ -2,7 +2,19 @@
 
 Send this to **security**, **network**, **identity**, and **endpoint management** before users install the Colcoor extension. Copy the blocks below into your ticket or runbook.
 
-**Related:** [production.md](production.md) (full stack deploy), [authentication.md](authentication.md) (Cursor sign-in → JWT).
+**Related:** [production.md](production.md) (full stack deploy, release + enterprise bundle), [authentication.md](authentication.md) (Cursor sign-in → JWT).
+
+---
+
+## 0. Deliverable bundle (optional)
+
+From your build machine (repo root, Docker required):
+
+```bash
+npm run bundle:enterprise
+```
+
+Ship **`dist/colcoor-enterprise-BE…-EXT…/`** (zip it if you like) to the customer. It includes the **pre-built backend image tarball**, **extension `.vsix`**, **Compose + nginx**, and **scripts** that generate random `POSTGRES_PASSWORD` / `JWT_SECRET`, write `DATABASE_URL` into `.env`, and bring the stack up or down. Operator steps: `README.customer.txt` inside the bundle.
 
 ---
 
