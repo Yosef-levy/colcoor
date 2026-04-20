@@ -101,5 +101,6 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
-    name: colcoor_postgres_data
+  # Project-scoped name (e.g. {dirname}_postgres_data). Avoids reusing another stack's
+  # Postgres files when an old global volume `colcoor_postgres_data` existed with a different password.
+  postgres_data: {}
