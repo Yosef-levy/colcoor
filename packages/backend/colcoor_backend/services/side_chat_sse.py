@@ -94,7 +94,8 @@ async def iter_side_chat_sse(
                     pass
 
             ag_listener = _listener
-            listen_conn = listen_conn.execution_options(isolation_level="AUTOCOMMIT")
+            # AsyncConnection.execution_options is awaitable (unlike AsyncEngine.execution_options).
+            listen_conn = await listen_conn.execution_options(isolation_level="AUTOCOMMIT")
             raw = await listen_conn.get_raw_connection()
             ag_conn = raw.driver_connection
             await ag_conn.add_listener(SIDE_CHAT_NOTIFY_CHANNEL, ag_listener)
