@@ -173,6 +173,7 @@ type WebviewStateMessage = {
 
 type FromWebview =
   | { type: "ready" }
+  | { type: "audioUnlocked" }
   | {
       type: "send";
       text: string;
@@ -329,6 +330,7 @@ export function createConversationPanelController(
 
   let panel: vscode.WebviewPanel | undefined;
   let webviewReady = false;
+  let webviewAudioUnlocked = false;
   let conversationId: string | undefined;
   let conversationTitle: string | null | undefined;
   let conversationPinned = false;
@@ -612,7 +614,9 @@ export function createConversationPanelController(
           messageSoundEnabled: cue.messageSoundEnabled,
           mentionSoundEnabled: cue.mentionSoundEnabled,
         });
-        if (soundKind && webviewReady) {
+        // VS Code may queue webview messages while the tab is hidden; only play when visible
+        // to avoid delayed burst playback when the user returns.
+        if (soundKind && webviewReady && panel.visible) {
           try {
             await panel.webview.postMessage({
               type: "playSound",
@@ -872,6 +876,7 @@ export function createConversationPanelController(
     panel?.dispose();
     panel = undefined;
     webviewReady = false;
+    webviewAudioUnlocked = false;
     lastTreeEvents = [];
     lastConversationMembers = [];
     lastNotes = [];
@@ -1671,7 +1676,12 @@ export function createConversationPanelController(
       }
       if (msg.type === "ready") {
         webviewReady = true;
+        webviewAudioUnlocked = false;
         await loadTreeAndPush(false, null);
+        return;
+      }
+      if (msg.type === "audioUnlocked") {
+        webviewAudioUnlocked = true;
         return;
       }
       if (msg.type === "select" && typeof msg.id === "string") {
@@ -2817,6 +2827,9 @@ export function createConversationPanelController(
     },
     async previewSideChatSound(kind: "message" | "mention"): Promise<boolean> {
       if (!panel || !webviewReady) {
+        return false;
+      }
+      if (!webviewAudioUnlocked) {
         return false;
       }
       const cue = readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor"));

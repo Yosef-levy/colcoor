@@ -450,7 +450,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const ok = await conversationPanel.previewSideChatSound(pick.soundKind);
       if (!ok) {
         await vscode.window.showInformationMessage(
-          "Colcoor: open a conversation tab first to preview side-chat sounds.",
+          "Colcoor: open a conversation tab and click once inside it to enable side-chat sounds, then test again.",
         );
       }
     }),
