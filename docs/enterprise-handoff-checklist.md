@@ -14,7 +14,9 @@ From your build machine (repo root, Docker required):
 npm run bundle:enterprise
 ```
 
-Ship **`dist/colcoor-enterprise-BE…-EXT…/`** (zip it if you like) to the customer. It includes the **pre-built backend image tarball**, **extension `.vsix`**, **Compose + nginx**, and **scripts** that generate random `POSTGRES_PASSWORD` / `JWT_SECRET`, write `DATABASE_URL` into `.env`, and bring the stack up or down. Operator steps: `README.customer.txt` inside the bundle.
+On a host that has Docker but **not** a full Node extension build (no `tsc`), use **`npm run bundle:enterprise:skip-vsix`** and ship the `.vsix` from a dev machine separately (the bundle will include `EXTENSION_VSIX_NOT_INCLUDED.txt`).
+
+Ship **`dist/colcoor-enterprise-BE…-EXT…/`** (zip it if you like) to the customer. It includes the **pre-built backend image tarball**, **extension `.vsix`** (unless skipped), **Compose + nginx**, and **scripts** that generate random `POSTGRES_PASSWORD` / `JWT_SECRET`, write `DATABASE_URL` into `.env`, and bring the stack up or down. Operator steps: `README.customer.txt` inside the bundle.
 
 ---
 

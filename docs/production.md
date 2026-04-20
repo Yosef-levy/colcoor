@@ -242,6 +242,20 @@ For **air-gapped or registry-free** handoffs, build a single folder you can zip 
 npm run bundle:enterprise
 ```
 
+The bundle script sets **`DOCKER_BUILDKIT=1`** so `docker build` uses BuildKit (quieter than the legacy builder on newer Docker installs). The backend Dockerfile sets **`DEBIAN_FRONTEND=noninteractive`** during `apt-get` to avoid debconf “TERM is not set” noise.
+
+If **`tsc` is missing** (fresh clone, no `node_modules`), the bundle step runs **`npm ci`** at the repo root automatically before packaging the VSIX (requires **Node 20+** and npm registry access).
+
+If the build host has **Docker but no Node / no network for npm**, build **backend + compose only** and add the VSIX from your dev machine later:
+
+```bash
+npm run bundle:enterprise:skip-vsix
+# equivalent:
+npm run bundle:enterprise -- --skip-vsix
+```
+
+That omits the VSIX and drops **`EXTENSION_VSIX_NOT_INCLUDED.txt`** in the bundle explaining what to copy. Alternatively, point at an existing VSIX: **`npm run bundle:enterprise -- --vsix-path=/abs/path/colcoor-extension-0.0.1.vsix`**.
+
 This writes **`dist/colcoor-enterprise-BE<py-version>-EXT<ext-version>/`** containing:
 
 - `colcoor-backend-<version>.tar.gz` — `docker save` of **`colcoor-backend:<version>`** and **`colcoor-backend:prod`**

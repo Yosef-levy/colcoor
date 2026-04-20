@@ -424,8 +424,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "build": "npx --no-install tsc -p ./",
+    "watch": "npx --no-install tsc -watch -p ./",
     "lint": "eslint .",
     "test": "vitest run",
     "package": "npm run build && vsce package --no-dependencies",

@@ -10,11 +10,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+export DOCKER_BUILDKIT=1
+
 PUSH=0
 if [[ "${1:-}" == "--push" ]]; then
   PUSH=1
 fi
 
+bash "$ROOT/scripts/ensure-npm-extension-deps.sh"
 npm run package:extension
 
 BACKEND_VERSION="$(
