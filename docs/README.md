@@ -26,7 +26,8 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 | [authentication.md](authentication.md) | **`cursor_sub`**; **`POST /api/v1/auth/cursor`** |
 | [monetization.md](monetization.md) | Tokens on every request; links **billing-usage** |
 | [architecture.md](architecture.md) | Components and boundaries |
-| [production.md](production.md) | Docker, nginx, Postgres, env, health |
+| [production.md](production.md) | Docker, nginx, Postgres, env, health, release artifacts (`npm run ship:artifacts`) |
+| [enterprise-handoff-checklist.md](enterprise-handoff-checklist.md) | Copy-paste checklist for customer IT / security rollout |
 | [git-integration.md](git-integration.md) | Optional Git metadata |
 | [ui-features.md](ui-features.md) | User-visible UI checklist |
 | [tree-ui-contract.md](tree-ui-contract.md) | **Normative** conversation tree: node state, selection vs actions, future layouts |

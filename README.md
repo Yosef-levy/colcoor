@@ -58,3 +58,13 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 The **API is Python (FastAPI)** in `packages/backend/`. Root `package.json` is for the editor extension only.
+
+## Ship artifacts (VSIX + Docker image)
+
+From the repo root (requires Docker for the image build):
+
+```bash
+npm run ship:artifacts
+```
+
+See **[`docs/production.md`](docs/production.md)** § Release artifacts for outputs and optional registry push.

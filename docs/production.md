@@ -165,14 +165,74 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_
 
 When the API runs on a **remote VM** (this Compose stack), configure the extension to call that host—not `127.0.0.1`.
 
-1. **Settings** (Cursor or VS Code): search **Colcoor** → **Colcoor: Backend base URL**.
-2. Set it to the **public origin** only: scheme + host, optional non-default port, **no path**, **no trailing slash**.  
-   Examples: `https://api.example.com`, `https://203.0.113.10` (HTTPS preferred in production).  
-   The extension appends **`/api/v1`** itself (e.g. `…/api/v1/auth/cursor`).
-3. **Firewall / cloud security group:** allow inbound **80** and/or **443** on the VM from the network where you run Cursor (home IP, office VPN, etc.).
-4. **TLS:** use a certificate Node trusts (e.g. Let’s Encrypt). **Self-signed** HTTPS typically causes **fetch / certificate** errors until the system trusts the CA or you terminate TLS with a public cert.
-5. **`CORS_ORIGINS`:** the extension issues requests from the **Node extension host**, not a browser tab, so **empty `CORS_ORIGINS` is fine** for extension-only traffic (see [`.env.example`](../.env.example)). Set `CORS_ORIGINS` when **browser** clients must call the API cross-origin.
-6. **Auth:** production clients **MUST** use **`POST /api/v1/auth/cursor`** only ([authentication.md](authentication.md), [api-contracts.md](api-contracts.md) §2.1).
+### Required URL behavior
+
+- The extension has **no fallback default backend URL**.
+- Startup requires either:
+  - `colcoor.backendBaseUrl` (recommended), or
+  - `COLCOOR_API_URL` in the extension host environment.
+- If neither is set, the extension shows a clear error and asks the user/admin to define one.
+
+### URL format rules
+
+Set the backend URL to the **public origin only**: scheme + host, optional non-default port, **no path**, **no trailing slash**.
+
+Examples: `https://api.example.com`, `https://203.0.113.10` (HTTPS preferred in production).
+
+The extension appends **`/api/v1`** itself (e.g. `…/api/v1/auth/cursor`).
+
+### Enterprise rollout options
+
+#### Option A (recommended): managed editor settings
+
+Use organization-managed Cursor/VS Code settings to set:
+
+- `colcoor.backendBaseUrl`: `https://api.company.example`
+
+This is the lowest-friction rollout because users do not need to touch local settings.
+
+#### Option B: environment variable
+
+Set this environment variable where Cursor/VS Code is launched:
+
+- `COLCOOR_API_URL=https://api.company.example`
+
+Use this when you already manage desktop/session environment variables.
+
+### Operational checks
+
+1. **Firewall / cloud security group:** allow inbound **80** and/or **443** on the VM from the network where you run Cursor (home IP, office VPN, etc.).
+2. **TLS:** use a certificate Node trusts (e.g. Let’s Encrypt). **Self-signed** HTTPS typically causes **fetch / certificate** errors until the system trusts the CA or you terminate TLS with a public cert.
+3. **`CORS_ORIGINS`:** the extension issues requests from the **Node extension host**, not a browser tab, so **empty `CORS_ORIGINS` is fine** for extension-only traffic (see [`.env.example`](../.env.example)). Set `CORS_ORIGINS` when **browser** clients must call the API cross-origin.
+4. **Auth:** production clients **MUST** use **`POST /api/v1/auth/cursor`** only ([authentication.md](authentication.md), [api-contracts.md](api-contracts.md) §2.1).
+
+---
+
+## Release artifacts (VSIX + Docker image)
+
+From the **repository root**, one command builds:
+
+- the **extension** `.vsix` (version from [`packages/extension/package.json`](../packages/extension/package.json)), and
+- the **backend** image tagged `colcoor-backend:<version>` and `colcoor-backend:prod` (version from [`packages/backend/pyproject.toml`](../packages/backend/pyproject.toml) `[project].version`).
+
+```bash
+npm run ship:artifacts
+```
+
+Outputs:
+
+| Artifact | Location / name |
+|----------|------------------|
+| VSIX | `packages/extension/colcoor-extension-<extension-version>.vsix` |
+| Docker | `colcoor-backend:<backend-version>` and `colcoor-backend:prod` |
+
+To **push** the same tags to a registry after `docker login`:
+
+```bash
+DOCKER_REGISTRY=ghcr.io/yourorg npm run ship:artifacts -- --push
+```
+
+Customers can point `docker-compose.prod.yml` at your registry by changing the `backend.image` line (or overriding with Compose `image:` + pull policy in your own overlay).
 
 ---
 

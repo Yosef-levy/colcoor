@@ -75,16 +75,26 @@ import { confirmDestructiveActionByTypingDelete } from "./conversation/destructi
 import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starredTreeEvents";
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
+const BACKEND_URL_ENV_VAR = "COLCOOR_API_URL";
 
 /** Same conv payload shape as other conversation-scoped commands (sidebar tree item or `{ conv }`). */
 type OpenSideChatCommandArg = ConversationCommandArg;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const config = vscode.workspace.getConfiguration("colcoor");
-  const baseUrl = (config.get<string>("backendBaseUrl") ?? "http://127.0.0.1:8000").replace(
-    /\/$/,
-    "",
-  );
+  const configuredBaseUrl = config.get<string>("backendBaseUrl")?.trim();
+  const envBaseUrl = process.env[BACKEND_URL_ENV_VAR]?.trim();
+  const baseUrl = (configuredBaseUrl || envBaseUrl || "").replace(/\/$/, "");
+  if (!baseUrl) {
+    const choice = await vscode.window.showErrorMessage(
+      "Colcoor: backend URL is not configured. Set `colcoor.backendBaseUrl` in Settings or define COLCOOR_API_URL.",
+      "Open Settings",
+    );
+    if (choice === "Open Settings") {
+      await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
+    }
+    return;
+  }
 
   const session = new CursorSession(context.secrets, SECRET_KEY_BACKEND_JWT);
   const api = new ColcoorApiClient({
