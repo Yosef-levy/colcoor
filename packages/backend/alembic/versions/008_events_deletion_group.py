@@ -6,7 +6,6 @@ Revises: 007_side_chat_deleted_by
 
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 revision: str = "008_events_deletion_group"
@@ -16,21 +15,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("events", sa.Column("deletion_group_id", sa.Uuid(), nullable=True))
-    op.add_column("events", sa.Column("deleted_by_user_id", sa.Uuid(), nullable=True))
-    op.create_index("idx_events_deletion_group_id", "events", ["deletion_group_id"])
-    op.create_foreign_key(
-        "fk_events_deleted_by_user_id_users",
-        "events",
-        "users",
-        ["deleted_by_user_id"],
-        ["id"],
-        ondelete="SET NULL",
+    op.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS deletion_group_id UUID NULL;")
+    op.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS deleted_by_user_id UUID NULL;")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_events_deletion_group_id ON events (deletion_group_id);"
     )
+    op.execute("""
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_events_deleted_by_user_id_users'
+  ) THEN
+    ALTER TABLE events
+      ADD CONSTRAINT fk_events_deleted_by_user_id_users
+      FOREIGN KEY (deleted_by_user_id) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+""")
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_events_deleted_by_user_id_users", "events", type_="foreignkey")
-    op.drop_index("idx_events_deletion_group_id", table_name="events")
-    op.drop_column("events", "deleted_by_user_id")
-    op.drop_column("events", "deletion_group_id")
+    op.execute("ALTER TABLE events DROP CONSTRAINT IF EXISTS fk_events_deleted_by_user_id_users;")
+    op.execute("DROP INDEX IF EXISTS idx_events_deletion_group_id;")
+    op.execute("ALTER TABLE events DROP COLUMN IF EXISTS deleted_by_user_id;")
+    op.execute("ALTER TABLE events DROP COLUMN IF EXISTS deletion_group_id;")

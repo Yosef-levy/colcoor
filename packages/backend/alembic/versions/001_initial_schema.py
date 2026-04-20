@@ -21,6 +21,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     bind = op.get_bind()
+    # Creates the full schema from current ORM models. Later revisions (005+) use IF NOT EXISTS /
+    # guards so `alembic upgrade head` stays safe when tables already exist here.
     Base.metadata.create_all(bind)
 
 
