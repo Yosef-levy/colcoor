@@ -87,6 +87,7 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.sendMessage",
   "colcoor.showNotesOnSelectedMessage",
   "colcoor.stopGeneration",
+  "colcoor.testSideChatSound",
   "colcoor.togglePinnedConversation",
   "colcoor.toggleStarSelectedMessage",
 ]);

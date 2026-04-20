@@ -399,6 +399,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           label: "Side chat sounds & notifications…",
           commandId: "colcoor.openSideChatSoundSettings",
         },
+        {
+          label: "Test side chat sound…",
+          description: "Preview message vs mention tone in the open conversation tab",
+          commandId: "colcoor.testSideChatSound",
+        },
         { label: "Profile…", commandId: "colcoor.editProfile" },
         { label: "Cursor CLI (agent) setup…", commandId: "colcoor.setupCursorCli" },
         { label: "Cursor API key for agent…", commandId: "colcoor.setCursorAgentApiKey" },
@@ -425,6 +430,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query), {
         searchSuffix: "side chat",
       });
+    }),
+    vscode.commands.registerCommand("colcoor.testSideChatSound", async () => {
+      type SideChatSoundPick = vscode.QuickPickItem & { soundKind: "message" | "mention" };
+      const pick = await vscode.window.showQuickPick<SideChatSoundPick>(
+        [
+          { label: "Message sound", soundKind: "message" },
+          { label: "Mention sound", soundKind: "mention" },
+        ],
+        {
+          title: "Colcoor — test side-chat sound",
+          placeHolder: "Choose which sound to preview",
+          ignoreFocusOut: true,
+        },
+      );
+      if (!pick) {
+        return;
+      }
+      const ok = await conversationPanel.previewSideChatSound(pick.soundKind);
+      if (!ok) {
+        await vscode.window.showInformationMessage(
+          "Colcoor: open a conversation tab first to preview side-chat sounds.",
+        );
+      }
     }),
     vscode.commands.registerCommand("colcoor.toggleConversationsSidebar", async () => {
       await toggleSidebarVisibility((cmd) => vscode.commands.executeCommand(cmd));

@@ -4,7 +4,6 @@ import { extractSideChatMentions, SIDE_CHAT_BROADCAST_MENTION } from "./sideChat
 export type SideChatSoundKind = "message" | "mention";
 
 type Args = {
-  panelVisible: boolean;
   myUserId: string | null;
   myMentionTargets: string[];
   incoming: SideChatMessageOut;
@@ -13,12 +12,9 @@ type Args = {
 };
 
 /**
- * Decide whether to play a side-chat sound cue in the visible webview.
+ * Decide whether to play a side-chat sound cue.
  */
 export function decideSideChatSoundKind(args: Args): SideChatSoundKind | null {
-  if (!args.panelVisible) {
-    return null;
-  }
   const m = args.incoming;
   if (m.kind !== "user" || m.deleted_at) {
     return null;

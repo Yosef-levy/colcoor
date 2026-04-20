@@ -9,6 +9,7 @@ describe("readSideChatCueSettings", () => {
       mentionNotificationsEnabled: true,
       messageSoundEnabled: true,
       mentionSoundEnabled: true,
+      soundVolume: 0.7,
     });
   });
 
@@ -20,6 +21,7 @@ describe("readSideChatCueSettings", () => {
           sideChatMentionNotificationsEnabled: true,
           sideChatSoundEnabled: false,
           sideChatMentionSoundEnabled: true,
+          sideChatSoundVolume: 35,
         })[key],
     });
     expect(s).toEqual({
@@ -27,6 +29,16 @@ describe("readSideChatCueSettings", () => {
       mentionNotificationsEnabled: true,
       messageSoundEnabled: false,
       mentionSoundEnabled: true,
+      soundVolume: 0.35,
     });
+  });
+
+  it("clamps volume to [0, 1] and defaults for invalid values", () => {
+    const s0 = readSideChatCueSettings({ get: (k: string) => (k === "sideChatSoundVolume" ? -5 : undefined) });
+    expect(s0.soundVolume).toBe(0);
+    const s1 = readSideChatCueSettings({ get: (k: string) => (k === "sideChatSoundVolume" ? 500 : undefined) });
+    expect(s1.soundVolume).toBe(1);
+    const sd = readSideChatCueSettings({ get: (k: string) => (k === "sideChatSoundVolume" ? "loud" : undefined) });
+    expect(sd.soundVolume).toBe(0.7);
   });
 });

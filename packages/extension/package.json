@@ -53,7 +53,12 @@
       {
         "command": "colcoor.openSideChatSoundSettings",
         "title": "Colcoor: Open side chat sound & notification settings…",
-        "description": "Open Settings filtered to Colcoor side-chat notification and sound toggles ([ui-features.md] §1.1)."
+        "description": "Open Settings filtered to Colcoor side-chat notification, sound, and volume options ([ui-features.md] §1.1)."
+      },
+      {
+        "command": "colcoor.testSideChatSound",
+        "title": "Colcoor: Test side chat sound…",
+        "description": "Preview side-chat message or mention sounds using the current volume setting."
       },
       {
         "command": "colcoor.newConversation",
@@ -402,27 +407,19 @@
         "colcoor.sideChatSoundEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Play a short sound cue for new incoming side-chat messages while the conversation tab is visible and the side-chat column is open."
+          "description": "Play a short sound cue for new incoming side-chat messages in the open conversation, even when that tab is not focused."
         },
         "colcoor.sideChatMentionSoundEnabled": {
           "type": "boolean",
           "default": true,
-          "description": "Use a distinct mention sound pattern when a visible side-chat message mentions your profile handle."
+          "description": "Use a distinct mention sound pattern when a side-chat message mentions your profile handle."
         },
-        "colcoor.legalTermsUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Optional URL to your Terms of Service (https recommended). When set, links appear in About, the conversation panel, drawers, and side chat."
-        },
-        "colcoor.legalPrivacyUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Optional URL to your Privacy policy. When set, links appear in About, the conversation panel, drawers, and side chat."
-        },
-        "colcoor.legalRefundUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Optional URL to your Refund policy. When set, links appear in About, the conversation panel, drawers, and side chat."
+        "colcoor.sideChatSoundVolume": {
+          "type": "number",
+          "default": 70,
+          "minimum": 0,
+          "maximum": 100,
+          "markdownDescription": "Volume percentage for side-chat sound cues (0 = muted, 100 = full level). Use [Test side chat sound…](command:colcoor.testSideChatSound) to preview."
         }
       }
     }

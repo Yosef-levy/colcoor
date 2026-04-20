@@ -128,7 +128,7 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="inlineSideChatReplyRow"');
     expect(html).toContain('id="inlineSideChatMsgMenu"');
-    expect(html).toContain("function playInlineSideChatSound(kind)");
+    expect(html).toContain("function playInlineSideChatSound(kind, volume)");
     expect(html).toContain('m.type === "playSound"');
     expect(html).toContain("sideChatViewerRole: null");
     expect(html).toContain("m.sideChatViewerRole");

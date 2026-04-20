@@ -83,6 +83,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.sendMessage",
       "colcoor.showNotesOnSelectedMessage",
       "colcoor.stopGeneration",
+      "colcoor.testSideChatSound",
       "colcoor.togglePinnedConversation",
       "colcoor.toggleStarSelectedMessage",
     ]);

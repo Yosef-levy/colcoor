@@ -27,6 +27,7 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.sendMessage");
     expect(cmds).toContain("colcoor.openLegalPolicySettings");
     expect(cmds).toContain("colcoor.openSideChatSoundSettings");
+    expect(cmds).toContain("colcoor.testSideChatSound");
   });
 
   it("documents jumpToLatestInConversation for default-branch navigation ([ui-features.md] §6)", () => {
@@ -221,6 +222,16 @@ describe("package.json Colcoor contributions", () => {
     expect(cmd?.title).toBe("Colcoor: Open side chat sound & notification settings…");
     expect(cmd?.description).toContain("§1.1");
     expect(cmd?.description).toMatch(/sound|notification/i);
+  });
+
+  it("documents side-chat test-sound command for local preview", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: { commands?: Array<{ command?: string; title?: string; description?: string }> };
+    };
+    const cmd = pkg.contributes?.commands?.find((c) => c.command === "colcoor.testSideChatSound");
+    expect(cmd?.title).toBe("Colcoor: Test side chat sound…");
+    expect(cmd?.description).toMatch(/preview|sound/i);
   });
 
 

@@ -167,6 +167,8 @@ type WebviewStateMessage = {
   }[];
   /** Normalized lowercase @-tokens that refer to the viewer (side-chat “mentioned you” row styling). */
   sideChatMyMentionTargets: string[];
+  /** Side-chat sound preview/playback volume as linear gain (0..1). */
+  sideChatSoundVolume: number;
 };
 
 type FromWebview =
@@ -319,6 +321,8 @@ export function createConversationPanelController(
   restoreMessageBranchFromPalette: () => Promise<void>;
   /** Show inline side-chat drawer in this conversation tab. */
   openInlineSideChat: () => Promise<void>;
+  /** Play side-chat sound preview in the open webview. */
+  previewSideChatSound: (kind: "message" | "mention") => Promise<boolean>;
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
@@ -602,7 +606,6 @@ export function createConversationPanelController(
         const me = await ensureMeForSideChat();
         const cue = readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor"));
         const soundKind = decideSideChatSoundKind({
-          panelVisible: watchingSideChat,
           myUserId: me?.id ?? null,
           myMentionTargets: mentionTargetsForMe(me),
           incoming,
@@ -611,7 +614,11 @@ export function createConversationPanelController(
         });
         if (soundKind && webviewReady) {
           try {
-            await panel.webview.postMessage({ type: "playSound", kind: soundKind });
+            await panel.webview.postMessage({
+              type: "playSound",
+              kind: soundKind,
+              volume: cue.soundVolume,
+            });
           } catch {
             /* webview gone */
           }
@@ -1013,6 +1020,7 @@ export function createConversationPanelController(
           email: m.email ?? null,
         })),
         sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
+        sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -1089,6 +1097,7 @@ export function createConversationPanelController(
             email: m.email ?? null,
           })),
           sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
+          sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -2805,6 +2814,22 @@ export function createConversationPanelController(
         }
       }
       postState(lastTreeEvents, Boolean(sendAbort), null);
+    },
+    async previewSideChatSound(kind: "message" | "mention"): Promise<boolean> {
+      if (!panel || !webviewReady) {
+        return false;
+      }
+      const cue = readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor"));
+      try {
+        await panel.webview.postMessage({
+          type: "playSound",
+          kind,
+          volume: cue.soundVolume,
+        });
+        return true;
+      } catch {
+        return false;
+      }
     },
     dispose: () => {
       subscription.dispose();

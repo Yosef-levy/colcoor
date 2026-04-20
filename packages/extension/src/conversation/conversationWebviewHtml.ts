@@ -1521,43 +1521,83 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     const vscode = acquireVsCodeApi();
     let hasReceivedState = false;
     var audioCtx = null;
-    function playInlineSideChatTone(freq, durationMs, gainValue) {
+    var audioUnlockAttempted = false;
+    function ensureInlineSideChatAudioContextReady() {
       try {
         var Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return;
+        if (!Ctx) return Promise.resolve(false);
         if (!audioCtx) audioCtx = new Ctx();
-        var osc = audioCtx.createOscillator();
-        var gain = audioCtx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        gain.gain.value = gainValue;
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        setTimeout(function () {
-          try {
-            osc.stop();
-          } catch (e1) {}
-          try {
-            osc.disconnect();
-          } catch (e2) {}
-          try {
-            gain.disconnect();
-          } catch (e3) {}
-        }, durationMs);
+        if (audioCtx.state === "suspended" && typeof audioCtx.resume === "function") {
+          return audioCtx
+            .resume()
+            .then(function () {
+              return true;
+            })
+            .catch(function () {
+              return false;
+            });
+        }
+        return Promise.resolve(true);
+      } catch (e) {
+        return Promise.resolve(false);
+      }
+    }
+    function wireInlineSideChatAudioUnlockFromUserGesture() {
+      var unlockOnce = function () {
+        if (audioUnlockAttempted) return;
+        audioUnlockAttempted = true;
+        ensureInlineSideChatAudioContextReady().catch(function () {});
+        document.removeEventListener("pointerdown", unlockOnce, true);
+        document.removeEventListener("keydown", unlockOnce, true);
+      };
+      document.addEventListener("pointerdown", unlockOnce, true);
+      document.addEventListener("keydown", unlockOnce, true);
+    }
+    function playInlineSideChatTone(freq, durationMs, gainValue) {
+      try {
+        var startTone = function () {
+          if (!audioCtx) return;
+          var osc = audioCtx.createOscillator();
+          var gain = audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = freq;
+          gain.gain.value = gainValue;
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          setTimeout(function () {
+            try {
+              osc.stop();
+            } catch (e1) {}
+            try {
+              osc.disconnect();
+            } catch (e2) {}
+            try {
+              gain.disconnect();
+            } catch (e3) {}
+          }, durationMs);
+        };
+        ensureInlineSideChatAudioContextReady().then(function (ok) {
+          if (ok) startTone();
+        });
       } catch (e) {
         /* audio unsupported */
       }
     }
-    function playInlineSideChatSound(kind) {
+    function clampInlineSideChatVolume(v) {
+      var n = typeof v === "number" && isFinite(v) ? v : 1;
+      return Math.max(0, Math.min(1, n));
+    }
+    function playInlineSideChatSound(kind, volume) {
+      var vol = clampInlineSideChatVolume(volume);
       if (kind === "mention") {
-        playInlineSideChatTone(880, 110, 0.06);
+        playInlineSideChatTone(880, 110, 0.14 * vol);
         setTimeout(function () {
-          playInlineSideChatTone(988, 120, 0.06);
+          playInlineSideChatTone(988, 120, 0.14 * vol);
         }, 120);
         return;
       }
-      playInlineSideChatTone(740, 120, 0.05);
+      playInlineSideChatTone(740, 120, 0.12 * vol);
     }
     var inlineSideChatReplyTargetId = null;
     var inlineSideChatMentionSelIndex = 0;
@@ -1681,7 +1721,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       queuedMainSendCount: 0,
       sideChatMentionMembers: [],
       sideChatMyMentionTargets: [],
+      sideChatSoundVolume: 0.7,
     };
+    wireInlineSideChatAudioUnlockFromUserGesture();
 
     var openColcoorListsDrawer = function (tab) {
       void tab;
@@ -3946,7 +3988,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     window.addEventListener("message", (event) => {
       const m = event.data;
       if (m && m.type === "playSound" && (m.kind === "message" || m.kind === "mention")) {
-        playInlineSideChatSound(m.kind);
+        playInlineSideChatSound(m.kind, m.volume);
         return;
       }
       if (m && m.type === "focusSideChatSeq") {
@@ -3996,6 +4038,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           conversationLoading: m.conversationLoading === true,
           sideChatMentionMembers: Array.isArray(m.sideChatMentionMembers) ? m.sideChatMentionMembers : [],
           sideChatMyMentionTargets: Array.isArray(m.sideChatMyMentionTargets) ? m.sideChatMyMentionTargets : [],
+          sideChatSoundVolume:
+            typeof m.sideChatSoundVolume === "number" && Number.isFinite(m.sideChatSoundVolume)
+              ? clampInlineSideChatVolume(m.sideChatSoundVolume)
+              : 0.7,
         };
         render();
         return;

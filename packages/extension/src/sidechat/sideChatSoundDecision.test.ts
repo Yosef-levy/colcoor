@@ -25,15 +25,13 @@ function msg(p: Partial<SideChatMessageOut> & { id: string; seq: number }): Side
 
 describe("decideSideChatSoundKind", () => {
   const base = {
-    panelVisible: true,
     myUserId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     myMentionTargets: ["sam_lee", "sam.lee"],
     messageSoundEnabled: true,
     mentionSoundEnabled: true,
   };
 
-  it("returns null for hidden/non-user/deleted/self", () => {
-    expect(decideSideChatSoundKind({ ...base, panelVisible: false, incoming: msg({ id: "m", seq: 1 }) })).toBeNull();
+  it("returns null for non-user/deleted/self", () => {
     expect(decideSideChatSoundKind({ ...base, incoming: msg({ id: "m", seq: 1, kind: "system_join" }) })).toBeNull();
     expect(decideSideChatSoundKind({ ...base, incoming: msg({ id: "m", seq: 1, deleted_at: "x" }) })).toBeNull();
     expect(
