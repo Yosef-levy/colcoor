@@ -61,6 +61,19 @@ Compose note
   in docker-compose.yml, or upgrade Docker Compose.
 
 
+Troubleshooting: backend unhealthy / "password authentication failed for user colcoor"
+-------------------------------------------------------------------------------------
+  Postgres reads POSTGRES_PASSWORD only the first time its data volume is created. If you
+  ran 01-setup-env.sh again (or used --force) while the Docker volume colcoor_postgres_data
+  already existed, the new password in .env does not match the database.
+
+  Fix (wipes Colcoor DB in that volume): ./scripts/03-stack-down.sh --remove-volumes
+  Then: ./scripts/02-stack-up.sh   (keep the same .env so Postgres re-inits with matching secrets)
+
+  If you need new random secrets after wiping the volume, run 01-setup-env.sh --force after
+  down --remove-volumes, then ./scripts/02-stack-up.sh again.
+
+
 Backend container unhealthy
 ---------------------------
   Inspect API / migration errors:

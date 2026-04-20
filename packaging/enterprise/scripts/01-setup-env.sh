@@ -24,6 +24,36 @@ if ! command -v openssl >/dev/null 2>&1; then
   exit 1
 fi
 
+# Postgres only applies POSTGRES_PASSWORD on first init of the data volume. If the Docker
+# volume colcoor_postgres_data already exists, new random passwords in .env will NOT match
+# the database (backend: "password authentication failed for user colcoor").
+POSTGRES_VOLUME_NAME="${POSTGRES_VOLUME_NAME:-colcoor_postgres_data}"
+will_write_new_secrets=0
+if [[ ! -f "$ROOT/.env" ]] || [[ "$FORCE" -eq 1 ]]; then
+  will_write_new_secrets=1
+fi
+if [[ "$will_write_new_secrets" -eq 1 ]] && [[ "${COLCOOR_ALLOW_NEW_SECRETS_WITH_EXISTING_VOLUME:-}" != "1" ]]; then
+  if command -v docker >/dev/null 2>&1 && docker volume inspect "$POSTGRES_VOLUME_NAME" >/dev/null 2>&1; then
+    cat >&2 <<EOF
+Refusing to write new Postgres secrets: Docker volume '${POSTGRES_VOLUME_NAME}' already exists.
+
+The password inside that volume was set on first Postgres start and does not change when you
+regenerate .env. Fix one of these ways:
+
+  A) Fresh database (destroys Colcoor data in that volume):
+       ./scripts/03-stack-down.sh --remove-volumes
+       Then re-run: $0 $([[ "$FORCE" -eq 1 ]] && echo --force)
+
+  B) Keep existing data: restore the original .env (same POSTGRES_PASSWORD as when the volume
+     was created), or change the Postgres role password to match your new DATABASE_URL (advanced).
+
+Only if you know what you are doing:
+  COLCOOR_ALLOW_NEW_SECRETS_WITH_EXISTING_VOLUME=1 $0 ...
+EOF
+    exit 1
+  fi
+fi
+
 POSTGRES_DB="${POSTGRES_DB:-colcoor}"
 POSTGRES_USER="${POSTGRES_USER:-colcoor}"
 POSTGRES_PASSWORD="$(openssl rand -hex 32)"
