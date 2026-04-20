@@ -11,6 +11,7 @@ import {
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
   COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL,
 } from "../util/colcoorApiFailureActions";
+import { SIDE_CHAT_BROADCAST_MENTION } from "../sidechat/sideChatMentions";
 
 export function getConversationWebviewHtml(cspSource: string, nonce: string): string {
   const csp = [
@@ -244,6 +245,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .inline-sidechat-msg-peer {
       border-right: 3px solid var(--vscode-focusBorder);
       background: var(--vscode-textBlockQuote-background);
+    }
+    /* Other people’s messages where the viewer is @-mentioned (or @all). */
+    .inline-sidechat-msg.inline-sidechat-msg-mention-you.inline-sidechat-msg-peer {
+      background: var(
+        --vscode-editor-findMatchHighlightBackground,
+        var(--vscode-textBlockQuote-background)
+      );
+      border-color: var(--vscode-focusBorder);
     }
     .inline-sidechat-deleted {
       margin: 0;
@@ -489,6 +498,54 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border: 1px solid var(--vscode-panel-border);
       background: var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background));
       line-height: 1.45;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .panel-hint-title {
+      font-weight: 600;
+      color: var(--vscode-foreground);
+    }
+    .panel-hint-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .btn-icon {
+      min-width: 26px;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border-radius: 5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95em;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .btn-icon.btn-secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: 1px solid var(--vscode-button-border, transparent);
+    }
+    .help-popover {
+      position: fixed;
+      z-index: 25000;
+      max-width: min(420px, calc(100vw - 24px));
+      padding: 10px 12px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 8px;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      color: var(--vscode-foreground);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      white-space: pre-line;
+      line-height: 1.4;
+    }
+    .help-popover[hidden] {
+      display: none;
     }
     .tree > ul {
       list-style: none;
@@ -1022,8 +1079,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .composer label.priv input { cursor: pointer; margin-top: 2px; flex-shrink: 0; }
     .composer label.priv .priv-body {
       display: flex;
-      flex-direction: column;
-      gap: 3px;
+      align-items: center;
+      gap: 6px;
       line-height: 1.35;
       max-width: 52em;
     }
@@ -1032,10 +1089,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-foreground);
       font-size: 0.95em;
     }
-    .composer label.priv .priv-desc {
-      font-size: 0.88em;
-      color: var(--vscode-descriptionForeground);
-    }
+    .composer label.priv .priv-help { font-size: 0.85em; }
     .btn-secondary {
       background: var(--vscode-button-secondaryBackground);
       color: var(--vscode-button-secondaryForeground);
@@ -1337,7 +1391,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   ></div>
   <div class="layout">
     <div class="col-tree">
-      <div class="hint tree-panel-hint">Event tree — click a node to choose where the next reply attaches. Use the resize handle in the bottom-right corner of this panel to change width.</div>
+      <div class="hint tree-panel-hint">
+        <span class="panel-hint-title">Event tree</span>
+        <span class="panel-hint-actions">
+          <button
+            id="btnTreeHintHelp"
+            type="button"
+            class="btn-secondary btn-icon"
+            title="Click a node to choose where the next reply attaches. Use the resize handle in the bottom-right corner of this panel to change width."
+            aria-label="Event tree help"
+            data-help-text="Click a node to choose where the next reply attaches.\nUse the resize handle in the bottom-right corner of this panel to change width."
+          >?</button>
+          <button
+            id="refresh"
+            type="button"
+            class="btn-secondary btn-icon"
+            title=${JSON.stringify(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION)}
+            aria-label=${JSON.stringify(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL)}
+          >↻</button>
+        </span>
+      </div>
       <div class="tree-scroll">
         <div id="tree" class="tree"></div>
       </div>
@@ -1375,10 +1448,19 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
         <div id="pendingConversationImages" class="composer-pending-images" style="display:none"></div>
         <label id="privateBranchLabel" class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
-          <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" aria-describedby="privateBranchHelp" />
+          <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" />
           <span class="priv-body">
             <span class="priv-lead">${PRIVATE_BRANCH_LEAD}</span>
-            <span id="privateBranchHelp" class="priv-desc">${PRIVATE_BRANCH_DESCRIPTION}</span>
+            <button
+              id="privateBranchHelp"
+              type="button"
+              class="btn-secondary btn-icon priv-help"
+              title=${JSON.stringify(PRIVATE_BRANCH_DESCRIPTION)}
+              aria-label="Private draft help"
+              data-help-text=${JSON.stringify(
+                "Private draft keeps your draft-only lines hidden from collaborators.\n" + PRIVATE_BRANCH_DESCRIPTION,
+              )}
+            >?</button>
           </span>
         </label>
         <div id="composerWhileWaitingRow" class="row composer-waiting-row" style="display:none">
@@ -1394,23 +1476,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div class="row">
           <button id="send" type="button" disabled>Send</button>
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
-          <button id="refresh" type="button" title=${JSON.stringify(
-            COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
-          )}>${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}</button>
           <span class="hint" id="busy" style="display:none">Working…</span>
         </div>
       </div>
     </div>
     <div id="colSideChat" class="col-sidechat" style="display:none" aria-hidden="true">
-      <div class="hint sidechat-panel-hint" style="flex-shrink:0;margin-bottom:4px;">
-        Side chat — use the resize handle in the bottom-right corner of this panel to change width.
+      <div class="hint sidechat-panel-hint tree-panel-hint" style="flex-shrink:0;margin-bottom:4px;">
+        <span class="panel-hint-title">Side chat</span>
+        <span class="panel-hint-actions">
+          <button
+            type="button"
+            id="btnSideChatHintHelp"
+            class="btn-secondary btn-icon"
+            title="Use the resize handle in the bottom-right corner of this panel to change width."
+            aria-label="Side chat help"
+            data-help-text="Side chat is for quick teammate coordination next to the main thread.\nYou can reference a tree node or a note in your next side-chat message.\nUse the resize handle in the bottom-right corner of this panel to change width."
+          >?</button>
+          <button type="button" id="btnRefreshSideChat" class="btn-secondary btn-icon" title="Refresh side chat" aria-label="Refresh side chat">↻</button>
+          <button type="button" id="btnCloseSideChat" class="btn-secondary btn-icon" title="Close side chat" aria-label="Close side chat">×</button>
+        </span>
       </div>
       <div id="inlineSideChat" class="inline-sidechat">
-        <div class="row" style="flex-shrink:0;margin:0;">
-          <div class="hint" style="margin:0;">Same tab</div>
-          <button type="button" id="btnCloseSideChat" class="btn-secondary">Close side chat</button>
-          <button type="button" id="btnRefreshSideChat" class="btn-secondary">Refresh</button>
-        </div>
         <div id="inlineSideChatList" class="inline-sidechat-list"></div>
         <div id="inlineSideChatMsgMenu" class="inline-sidechat-msg-menu" role="menu" hidden></div>
         <div id="inlineSideChatReplyRow" class="row inline-sidechat-reply-row" style="display:none">
@@ -1430,6 +1516,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       </div>
     </div>
   </div>
+  <div id="helpPopover" class="help-popover" role="dialog" aria-live="polite" hidden></div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let hasReceivedState = false;
@@ -1593,6 +1680,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       waitingForAssistant: false,
       queuedMainSendCount: 0,
       sideChatMentionMembers: [],
+      sideChatMyMentionTargets: [],
     };
 
     var openColcoorListsDrawer = function (tab) {
@@ -2602,6 +2690,29 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return true;
     }
 
+    /** True when someone else’s user message @-mentions the viewer (including @all). */
+    function inlineSideChatMessageMentionsViewer(m, ownSc) {
+      if (ownSc) return false;
+      var mk = m && m.kind ? String(m.kind) : "user";
+      if (mk !== "user") return false;
+      var ms = m && Array.isArray(m.mentions) ? m.mentions : [];
+      if (!ms.length) return false;
+      var broad = ${JSON.stringify(SIDE_CHAT_BROADCAST_MENTION)};
+      var targets = Array.isArray(state.sideChatMyMentionTargets) ? state.sideChatMyMentionTargets : [];
+      var tset = {};
+      for (var ti = 0; ti < targets.length; ti++) {
+        var x = targets[ti];
+        if (x) tset[String(x).toLowerCase()] = true;
+      }
+      for (var i = 0; i < ms.length; i++) {
+        var h = ms[i] != null ? String(ms[i]).toLowerCase() : "";
+        if (!h) continue;
+        if (h === broad) return true;
+        if (tset[h]) return true;
+      }
+      return false;
+    }
+
     function inlineSideChatGetMenuOpts(m) {
       var role = state.sideChatViewerRole;
       var vid =
@@ -2955,15 +3066,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             esc(mid) +
             '" aria-haspopup="menu" aria-label="Side-chat message actions" title="Message actions (right-click message for same menu)">⋯</button>';
         }
+        var mentionYou = inlineSideChatMessageMentionsViewer(m, ownSc);
+        var rowTitle = mentionYou
+          ? "You were @-mentioned. Right-click for Reply, Edit, or Delete when available."
+          : "Right-click for Reply, Edit, or Delete when available.";
         html +=
           '<div class="inline-sidechat-msg ' +
           (ownSc ? "inline-sidechat-msg-self" : "inline-sidechat-msg-peer") +
           (unread ? " inline-sidechat-msg-unread" : "") +
+          (mentionYou ? " inline-sidechat-msg-mention-you" : "") +
           '" data-sidechat-id="' +
           esc(mid) +
           '" data-sidechat-seq="' +
           esc(String(seqNum)) +
-          '" data-editing="0" tabindex="-1" title="Right-click for Reply, Edit, or Delete when available">' +
+          '" data-editing="0" tabindex="-1" title="' +
+          esc(rowTitle) +
+          '">' +
           '<div class="inline-sidechat-meta-row">' +
           '<div class="inline-sidechat-meta-main">' +
           esc(inlineSideChatAuthorLabel(m)) +
@@ -3877,6 +3995,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               : 0,
           conversationLoading: m.conversationLoading === true,
           sideChatMentionMembers: Array.isArray(m.sideChatMentionMembers) ? m.sideChatMentionMembers : [],
+          sideChatMyMentionTargets: Array.isArray(m.sideChatMyMentionTargets) ? m.sideChatMyMentionTargets : [],
         };
         render();
         return;
@@ -4003,6 +4122,49 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       });
     })();
 
+    var activeHelpButtonId = null;
+    function closeHelpPopover() {
+      var pop = document.getElementById("helpPopover");
+      if (pop) {
+        pop.hidden = true;
+        pop.textContent = "";
+      }
+      if (activeHelpButtonId) {
+        var b = document.getElementById(activeHelpButtonId);
+        if (b) b.setAttribute("aria-expanded", "false");
+      }
+      activeHelpButtonId = null;
+    }
+    function openHelpPopover(button, text) {
+      var pop = document.getElementById("helpPopover");
+      if (!pop || !button) return;
+      pop.textContent = String(text || "").trim();
+      pop.hidden = false;
+      var r = button.getBoundingClientRect();
+      var top = r.bottom + 8;
+      var left = r.right - Math.min(420, window.innerWidth - 24);
+      left = Math.max(12, left);
+      if (top + 160 > window.innerHeight) {
+        top = Math.max(12, r.top - 8 - 160);
+      }
+      pop.style.top = Math.max(12, top) + "px";
+      pop.style.left = left + "px";
+    }
+    function toggleHelpPopoverByButtonId(buttonId) {
+      var btn = document.getElementById(buttonId);
+      if (!btn) return;
+      var text = btn.getAttribute("data-help-text") || btn.title || "";
+      if (!text.trim()) return;
+      if (activeHelpButtonId === buttonId) {
+        closeHelpPopover();
+        return;
+      }
+      closeHelpPopover();
+      activeHelpButtonId = buttonId;
+      btn.setAttribute("aria-expanded", "true");
+      openHelpPopover(btn, text);
+    }
+
     document.getElementById("btnCopy").addEventListener("click", () => {
       const ev = (state.events || []).find((e) => e.id === state.selectedEventId);
       if (!ev) return;
@@ -4074,6 +4236,34 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("btnOpenSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "openSideChat" });
     });
+    document.getElementById("btnTreeHintHelp").addEventListener("click", function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleHelpPopoverByButtonId("btnTreeHintHelp");
+    });
+    document.getElementById("btnSideChatHintHelp").addEventListener("click", function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleHelpPopoverByButtonId("btnSideChatHintHelp");
+    });
+    document.getElementById("privateBranchHelp").addEventListener("click", function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      toggleHelpPopoverByButtonId("privateBranchHelp");
+    });
+    document.addEventListener("click", function (ev) {
+      if (!activeHelpButtonId) return;
+      var pop = document.getElementById("helpPopover");
+      var t = ev.target;
+      var btn = activeHelpButtonId ? document.getElementById(activeHelpButtonId) : null;
+      if ((pop && pop.contains(t)) || (btn && btn.contains(t))) return;
+      closeHelpPopover();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") closeHelpPopover();
+    });
+    window.addEventListener("resize", closeHelpPopover);
+    window.addEventListener("scroll", closeHelpPopover, true);
     document.getElementById("btnCloseSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "closeSideChat" });
     });

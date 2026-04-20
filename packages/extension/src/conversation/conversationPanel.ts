@@ -165,6 +165,8 @@ type WebviewStateMessage = {
     handle: string | null;
     email: string | null;
   }[];
+  /** Normalized lowercase @-tokens that refer to the viewer (side-chat “mentioned you” row styling). */
+  sideChatMyMentionTargets: string[];
 };
 
 type FromWebview =
@@ -381,6 +383,8 @@ export function createConversationPanelController(
   let inlineSideChatPostChain: Promise<void> = Promise.resolve();
   /** Cached GET /me for optimistic side-chat author line (primed on first inline send). */
   let myProfileForSideChat: MeOut | null | undefined = undefined;
+  /** In-flight shared promise so concurrent callers do not duplicate GET /me. */
+  let ensureMeForSideChatInFlight: Promise<MeOut | null> | undefined;
   /** From GET …/caller-state `user_id` for the open conversation (inline side-chat “own message” unread UI). */
   let viewerUserIdForWebview: string | null = null;
   /** Caller's membership role for inline side-chat delete rules. */
@@ -698,12 +702,17 @@ export function createConversationPanelController(
     if (myProfileForSideChat !== undefined) {
       return myProfileForSideChat;
     }
-    try {
-      myProfileForSideChat = await api.getMe();
-    } catch {
-      myProfileForSideChat = null;
-    }
-    return myProfileForSideChat;
+    ensureMeForSideChatInFlight ??= (async () => {
+      try {
+        myProfileForSideChat = await api.getMe();
+      } catch {
+        myProfileForSideChat = null;
+      } finally {
+        ensureMeForSideChatInFlight = undefined;
+      }
+      return myProfileForSideChat ?? null;
+    })();
+    return ensureMeForSideChatInFlight;
   }
 
   async function refreshInlineSideChat(): Promise<void> {
@@ -869,6 +878,7 @@ export function createConversationPanelController(
     inlineSideChatUrlsByMessageId = new Map();
     inlineSideChatPostChain = Promise.resolve();
     myProfileForSideChat = undefined;
+    ensureMeForSideChatInFlight = undefined;
   }
 
   function readCollapsedByConversation(): Record<string, string[]> {
@@ -1002,6 +1012,7 @@ export function createConversationPanelController(
           handle: m.handle ?? null,
           email: m.email ?? null,
         })),
+        sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -1077,6 +1088,7 @@ export function createConversationPanelController(
             handle: m.handle ?? null,
             email: m.email ?? null,
           })),
+          sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -1254,6 +1266,7 @@ export function createConversationPanelController(
           }
           lastConversationMembers = members;
           conversationTreeLoading = false;
+          await ensureMeForSideChat();
           postState(events, busy, lastError);
           if (members.length > 1) {
             ensureInlineSideChatSseForConversation();

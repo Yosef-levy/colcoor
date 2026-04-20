@@ -20,7 +20,8 @@ describe("getConversationWebviewHtml", () => {
   it("names the tree reload control consistently with the refresh command ([ui-features.md] §6)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonceTreeReload");
     expect(html).toContain(`id="refresh"`);
-    expect(html).toContain(`>${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}</button>`);
+    expect(html).toContain(">↻</button>");
+    expect(html).toContain(`aria-label=${JSON.stringify(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL)}`);
     expect(html).toContain("sign-in — then click ");
     expect(html).toContain(JSON.stringify(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL));
   });
@@ -156,6 +157,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("inline-sidechat-msg-self");
     expect(html).toContain("inline-sidechat-msg-peer");
     expect(html).toContain("inline-sidechat-msg-unread");
+    expect(html).toContain("inline-sidechat-msg-mention-you");
     expect(html).toContain("inline-sidechat-unread");
     expect(html).toContain("sideChatLastReadSeq: 0");
     expect(html).toContain("viewerUserId: null");
@@ -193,12 +195,12 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('<span class="badge-pvt">Private</span>');
   });
 
-  it("renders expanded private-draft composer help", () => {
+  it("renders private-draft composer help behind a ? control", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(`>${PRIVATE_BRANCH_LEAD}<`);
-    expect(html).toContain(PRIVATE_BRANCH_DESCRIPTION);
     expect(html).toContain('id="privateBranchHelp"');
-    expect(html).toContain('aria-describedby="privateBranchHelp"');
+    expect(html).toContain(`title=${JSON.stringify(PRIVATE_BRANCH_DESCRIPTION)}`);
+    expect(html).not.toContain('aria-describedby="privateBranchHelp"');
   });
 
   it("hides private graph rows in the tree when the Private draft checkbox is unchecked", () => {
@@ -234,11 +236,11 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("openSideChatBtn.textContent");
   });
 
-  it("tree panel hint describes the bottom-right resize handle ([ui-features.md] §5)", () => {
+  it("tree panel keeps short title and moves explanation to ? help ([ui-features.md] §5)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain(
-      "Event tree — click a node to choose where the next reply attaches. Use the resize handle in the bottom-right corner of this panel to change width.",
-    );
+    expect(html).toContain('<span class="panel-hint-title">Event tree</span>');
+    expect(html).toContain('id="btnTreeHintHelp"');
+    expect(html).toContain("Event tree help");
   });
 
   it("exposes thread visited-selection back/forward controls under the thread hint", () => {
@@ -261,7 +263,10 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("function applySideChatColumnWidth()");
     expect(html).toContain("function wireSideChatResize()");
     expect(html).toContain("sideChatColumnWidthPx: sw");
-    expect(html).toContain("resize handle in the bottom-right corner");
+    expect(html).toContain('id="btnSideChatHintHelp"');
+    expect(html).toContain('id="btnCloseSideChat"');
+    expect(html).toContain('id="btnRefreshSideChat"');
+    expect(html).not.toContain("Same tab");
   });
 
   it("scrolls the thread scroll region after renderThread (selection or new messages)", () => {
