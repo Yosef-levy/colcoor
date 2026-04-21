@@ -40,6 +40,9 @@ Extension machines
     http://YOUR_SERVER_IP
   (no trailing slash, no /api/v1). Use https:// when TLS is enabled on nginx.
 
+  After you change the backend URL (or COLCOOR_API_URL), reload the editor window
+  so the extension host picks it up: Command Palette -> "Developer: Reload Window".
+
 
 Backend URL for the extension (important)
 -----------------------------------------

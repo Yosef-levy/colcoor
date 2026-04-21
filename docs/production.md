@@ -199,6 +199,8 @@ Set this environment variable where Cursor/VS Code is launched:
 
 Use this when you already manage desktop/session environment variables.
 
+After changing **`colcoor.backendBaseUrl`** or **`COLCOOR_API_URL`**, have users run **Developer: Reload Window** (Command Palette) so the extension host reloads with the new origin.
+
 ### Operational checks
 
 1. **Firewall / cloud security group:** allow inbound **80** and/or **443** on the VM from the network where you run Cursor (home IP, office VPN, etc.).

@@ -43,6 +43,8 @@ The extension has **no default** backend URL. Each environment must set **one** 
 
 **URL rules:** origin only — `https` + host + optional port. **No path**, **no trailing slash**. The extension adds `/api/v1` itself.
 
+After the URL is set or changed, users should **reload the window** (**Developer: Reload Window** in the Command Palette) so the extension picks up the new value.
+
 **Copy-paste — managed setting (JSON fragment):**
 
 ```json

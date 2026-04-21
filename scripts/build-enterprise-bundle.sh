@@ -93,6 +93,10 @@ docker save "colcoor-backend:${BACKEND_VERSION}" colcoor-backend:prod | gzip >"$
 
 if [[ -n "$VSIX_OUT" ]]; then
   cp -a "$VSIX_OUT" "$OUT/"
+  # Keep release artifacts under dist/ only.
+  if [[ "$VSIX_OUT" == "packages/extension/colcoor-extension-${EXT_VERSION}.vsix" ]]; then
+    rm -f "$VSIX_OUT"
+  fi
 fi
 if [[ "$SKIP_VSIX" -eq 1 ]]; then
   cat >"$OUT/EXTENSION_VSIX_NOT_INCLUDED.txt" <<'EOF'

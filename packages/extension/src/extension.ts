@@ -81,7 +81,27 @@ const BACKEND_URL_ENV_VAR = "COLCOOR_API_URL";
 type OpenSideChatCommandArg = ConversationCommandArg;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const activationLog = vscode.window.createOutputChannel("Colcoor Activation");
+  context.subscriptions.push(activationLog);
+  let activationStep = "activate:start";
+  const markActivationStep = (step: string): void => {
+    activationStep = step;
+    activationLog.appendLine(`[${new Date().toISOString()}] ${step}`);
+  };
+  markActivationStep("activate:start");
+  const activationWatchdog = setTimeout(() => {
+    activationLog.appendLine(
+      `[${new Date().toISOString()}] activation watchdog: still running at "${activationStep}"`,
+    );
+  }, 15000);
+  context.subscriptions.push(
+    new vscode.Disposable(() => {
+      clearTimeout(activationWatchdog);
+    }),
+  );
+
   const config = vscode.workspace.getConfiguration("colcoor");
+  markActivationStep("config:loaded");
   const configuredBaseUrl = config.get<string>("backendBaseUrl")?.trim();
   const envBaseUrl = process.env[BACKEND_URL_ENV_VAR]?.trim();
   const baseUrl = (configuredBaseUrl || envBaseUrl || "").replace(/\/$/, "");
@@ -105,6 +125,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     getAccessToken: () => session.getBackendAccessToken(),
   });
   const agent = new AgentRunner(context.secrets);
+  markActivationStep("api-and-agent:ready");
 
   const conversationPanel = createConversationPanelController(context, {
     api,
@@ -112,6 +133,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
   });
   context.subscriptions.push(new vscode.Disposable(() => conversationPanel.dispose()));
+  markActivationStep("conversation-panel:ready");
 
   const colcoorLog = vscode.window.createOutputChannel("Colcoor");
   context.subscriptions.push(colcoorLog);
@@ -181,6 +203,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     showCollapseAll: false,
   });
   context.subscriptions.push(treeView);
+  markActivationStep("tree-view:ready");
   let drawersPanel: vscode.WebviewPanel | undefined;
   let drawersConversationId: string | undefined;
   let drawersConversationTitle: string | null = null;
@@ -227,6 +250,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       clearInterval(autoRefreshTimer);
     }),
   );
+  markActivationStep("commands:registered");
 
   async function pickConversationInteractively(): Promise<
     { id: string; title: string | null; pinned: boolean } | undefined
@@ -1415,6 +1439,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     ),
   );
+  markActivationStep("activate:complete");
+  clearTimeout(activationWatchdog);
 }
 
 export function deactivate(): void {}

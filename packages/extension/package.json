@@ -1,6 +1,7 @@
 {
   "name": "colcoor-extension",
   "displayName": "Colcoor",
+  "icon": "media/icon.png",
   "description": "Colcoor conversation orchestrator for Cursor (see repo docs/).",
   "version": "0.0.1",
   "publisher": "colcoor",
@@ -11,7 +12,11 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:colcoor.conversations",
+    "onCommand:colcoor.signIn",
+    "onCommand:colcoor.showColcoorMenu",
+    "onCommand:colcoor.openSettings"
   ],
   "main": "./dist/extension.js",
   "contributes": {
