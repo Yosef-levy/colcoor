@@ -37,9 +37,12 @@ docker build \
   -f packages/backend/Dockerfile \
   packages/backend
 
+EXT_VERSION="$(node -p "require('./packages/extension/package.json').version")"
+BUNDLE_NAME="colcoor-enterprise-BE${BACKEND_VERSION}-EXT${EXT_VERSION}"
+
 echo ""
 echo "Built:"
-echo "  VSIX:  packages/extension/colcoor-extension-$(node -p "require('./packages/extension/package.json').version").vsix"
+echo "  VSIX:  dist/${BUNDLE_NAME}/colcoor-extension-${EXT_VERSION}.vsix"
 echo "  Image: colcoor-backend:${BACKEND_VERSION}  (and :prod)"
 echo ""
 echo "For a company handoff folder (image tarball + VSIX + compose + scripts):"

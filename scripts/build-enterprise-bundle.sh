@@ -76,7 +76,7 @@ elif [[ "$SKIP_VSIX" -eq 1 ]]; then
 else
   bash "$ROOT/scripts/ensure-npm-extension-deps.sh"
   echo "Packaging VSIX ..."
-  npm run package:extension
+  npm run package -w colcoor-extension
   VSIX_BUILT="packages/extension/colcoor-extension-${EXT_VERSION}.vsix"
   if [[ ! -f "$VSIX_BUILT" ]]; then
     echo "Expected VSIX missing: $VSIX_BUILT (try: npm install from repo root, or use --skip-vsix / --vsix-path=...)" >&2
@@ -103,8 +103,8 @@ if [[ "$SKIP_VSIX" -eq 1 ]]; then
 This bundle was built with --skip-vsix (typical on a Docker-only VM).
 
 Add the extension installer from your dev machine:
-  packages/extension/colcoor-extension-<version>.vsix
-after:  cd repo && npm install && npm run package -w colcoor-extension
+  dist/colcoor-enterprise-BE<backend>-EXT<ext>/colcoor-extension-<version>.vsix
+after:  cd repo && npm install && npm run package:extension
 
 Or rebuild the bundle with:
   npm run bundle:enterprise -- --vsix-path=/path/to/colcoor-extension-0.0.1.vsix

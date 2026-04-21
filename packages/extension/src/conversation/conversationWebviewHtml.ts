@@ -334,6 +334,57 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
       color: var(--vscode-menu-selectionForeground, var(--vscode-list-hoverForeground));
     }
+    .composer-ctx-menu {
+      position: fixed;
+      z-index: 25000;
+      min-width: 220px;
+      background: var(--vscode-menu-background);
+      color: var(--vscode-menu-foreground);
+      border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, var(--vscode-panel-border)));
+      border-radius: 4px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      padding: 4px 0;
+    }
+    .composer-ctx-menu[hidden] {
+      display: none !important;
+    }
+    .composer-ctx-menu:not([hidden]) {
+      display: block;
+    }
+    .composer-ctx-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      width: 100%;
+      padding: 6px 14px;
+      margin: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .composer-ctx-row:hover {
+      background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+      color: var(--vscode-menu-selectionForeground, var(--vscode-list-hoverForeground));
+    }
+    .composer-ctx-label {
+      flex: 0 1 auto;
+    }
+    .composer-ctx-shortcut {
+      flex: 0 0 auto;
+      opacity: 0.75;
+      font-size: 0.92em;
+      white-space: nowrap;
+    }
+    .composer-ctx-sep {
+      height: 1px;
+      margin: 4px 0;
+      background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
+    }
     .inline-sidechat-refs { display: inline; margin-left: 6px; }
     .inline-sidechat-refs .ref-chip {
       display: inline-block;
@@ -779,7 +830,34 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border-radius: 999px;
       padding: 2px 6px;
     }
-    .msg { margin: 8px 0; padding: 8px; border-radius: 4px; }
+    .msg { margin: 8px 0; padding: 8px; border-radius: 4px; position: relative; }
+    .thread-copy-icon-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
+      background: var(--vscode-editor-background);
+      color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0.75;
+    }
+    .thread-copy-icon-btn:hover {
+      opacity: 1;
+      color: var(--vscode-foreground);
+      border-color: var(--vscode-focusBorder, var(--vscode-panel-border));
+    }
+    .thread-copy-icon-btn:focus-visible {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: 1px;
+    }
     .msg.user {
       background: var(--vscode-editor-inactiveSelectionBackground);
       border-left: 3px solid var(--vscode-focusBorder);
@@ -880,7 +958,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground, rgba(240, 80, 80, 0.14)));
       color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
     }
-    .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
+    .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; padding-right: 30px; }
     .thread .msg .thread-msg-title {
       font-size: 0.92em;
       font-weight: 500;
@@ -957,16 +1035,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       clear: both;
     }
     .thread .msg .body.md .code-block-wrap .code-copy {
-      float: right;
-      margin: 0 0 6px 8px;
-      padding: 2px 10px;
-      font-size: 0.85em;
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      margin: 0;
     }
     .thread .msg .body.md pre {
       white-space: pre-wrap;
       word-break: break-word;
       margin: 0;
-      padding: 10px 12px;
+      padding: 30px 12px 10px;
       border-radius: 6px;
       background: var(--vscode-textCodeBlock-background);
       border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
@@ -1517,6 +1595,28 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     </div>
   </div>
   <div id="helpPopover" class="help-popover" role="dialog" aria-live="polite" hidden></div>
+  <div id="composerCtxMenu" class="composer-ctx-menu" role="menu" hidden aria-label="Editor context menu">
+    <button type="button" class="composer-ctx-row" data-composer-cmd="undo" role="menuitem">
+      <span class="composer-ctx-label">Undo</span><span class="composer-ctx-shortcut" data-k="undo"></span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-composer-cmd="redo" role="menuitem">
+      <span class="composer-ctx-label">Redo</span><span class="composer-ctx-shortcut" data-k="redo"></span>
+    </button>
+    <div class="composer-ctx-sep" role="separator"></div>
+    <button type="button" class="composer-ctx-row" data-composer-cmd="cut" role="menuitem">
+      <span class="composer-ctx-label">Cut</span><span class="composer-ctx-shortcut" data-k="cut"></span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-composer-cmd="copy" role="menuitem">
+      <span class="composer-ctx-label">Copy</span><span class="composer-ctx-shortcut" data-k="copy"></span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-composer-cmd="paste" role="menuitem">
+      <span class="composer-ctx-label">Paste</span><span class="composer-ctx-shortcut" data-k="paste"></span>
+    </button>
+    <div class="composer-ctx-sep" role="separator"></div>
+    <button type="button" class="composer-ctx-row" data-composer-cmd="selectAll" role="menuitem">
+      <span class="composer-ctx-label">Select All</span><span class="composer-ctx-shortcut" data-k="selectAll"></span>
+    </button>
+  </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let hasReceivedState = false;
@@ -2648,7 +2748,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         html +=
           '<div class="msg ' +
           cls +
-          '"><div class="role">' +
+          '" data-event-id="' +
+          esc(String(s.eventId || "")) +
+          '"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">' +
           role +
           privBadge +
           "</div>" +
@@ -2696,7 +2798,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       if (state.pendingUserHtml) {
         html +=
-          '<div class="msg user pending-send"><div class="role">User</div>' +
+          '<div class="msg user pending-send"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">User</div>' +
           '<p class="pending-hint">Sending… (not on the tree until saved)</p>' +
           '<div class="body md" dir="auto">' +
           state.pendingUserHtml +
@@ -2704,7 +2806,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       if (state.streamingHtml) {
         html +=
-          '<div class="msg assistant streaming"><div class="role">Assistant</div><div class="body md" dir="auto">' +
+          '<div class="msg assistant streaming"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">Assistant</div><div class="body md" dir="auto">' +
           state.streamingHtml +
           "</div></div>";
       } else if (state.busy) {
@@ -2715,7 +2817,31 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           "</div>";
       }
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
+      wireThreadCopyButtons(el);
       scrollThreadToBottom();
+    }
+
+    function wireThreadCopyButtons(threadEl) {
+      if (!threadEl) return;
+      var pres = threadEl.querySelectorAll(".msg .body pre");
+      for (var i = 0; i < pres.length; i++) {
+        var pre = pres[i];
+        if (!pre) continue;
+        if (pre.closest && pre.closest(".code-block-wrap")) continue;
+        var parent = pre.parentElement;
+        if (!parent) continue;
+        var wrap = document.createElement("div");
+        wrap.className = "code-block-wrap";
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "thread-copy-icon-btn code-copy";
+        btn.setAttribute("aria-label", "Copy code block");
+        btn.title = "Copy code block";
+        btn.textContent = "⧉";
+        parent.insertBefore(wrap, pre);
+        wrap.appendChild(btn);
+        wrap.appendChild(pre);
+      }
     }
 
     function inlineSideChatAuthorLabel(m) {
@@ -4381,6 +4507,29 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       }
       var t = ev.target;
+      var msgCopyBtn = t && t.closest && t.closest(".msg-copy-icon");
+      if (msgCopyBtn) {
+        ev.preventDefault();
+        var msg = msgCopyBtn.closest && msgCopyBtn.closest(".msg");
+        var eventId = msg && msg.getAttribute ? msg.getAttribute("data-event-id") : "";
+        var copyText = "";
+        if (eventId) {
+          var evs = Array.isArray(state.events) ? state.events : [];
+          for (var i = 0; i < evs.length; i++) {
+            var row = evs[i];
+            if (row && String(row.id || "") === String(eventId)) {
+              copyText = row.content_text != null ? String(row.content_text) : "";
+              break;
+            }
+          }
+        }
+        if (!copyText) {
+          var body = msg && msg.querySelector ? msg.querySelector(".body") : null;
+          copyText = body ? body.innerText || "" : "";
+        }
+        vscode.postMessage({ type: "copy", text: copyText });
+        return;
+      }
       var copyBtn = t && t.closest && t.closest(".code-copy");
       if (!copyBtn) return;
       ev.preventDefault();
@@ -4389,6 +4538,147 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var text = pre ? pre.innerText || "" : "";
       vscode.postMessage({ type: "copy", text: text });
     });
+
+    (function wireComposerContextMenu() {
+      var menu = document.getElementById("composerCtxMenu");
+      if (!menu || menu.dataset.wired === "1") return;
+      menu.dataset.wired = "1";
+      var mac = /Mac|iPhone|iPod|iPad/i.test(navigator.platform || navigator.userAgent || "");
+      var mod = mac ? "⌘" : "Ctrl";
+      var shortcuts = {
+        undo: mod + "+Z",
+        redo: mac ? mod + "+Shift+Z" : "Ctrl+Y",
+        cut: mod + "+X",
+        copy: mod + "+C",
+        paste: mod + "+V",
+        selectAll: mod + "+A",
+      };
+      menu.querySelectorAll("[data-k]").forEach(function (el) {
+        var k = el.getAttribute("data-k");
+        if (k && shortcuts[k]) el.textContent = shortcuts[k];
+      });
+      var activeTa = null;
+      function closeComposerCtxMenu() {
+        menu.hidden = true;
+        activeTa = null;
+      }
+      function positionComposerCtxMenu(x, y) {
+        var pad = 6;
+        var vw = window.innerWidth || 800;
+        var vh = window.innerHeight || 600;
+        menu.hidden = false;
+        menu.style.left = pad + "px";
+        menu.style.top = pad + "px";
+        var w = menu.offsetWidth || 220;
+        var h = menu.offsetHeight || 200;
+        var nx = Math.max(pad, Math.min(x, vw - w - pad));
+        var ny = Math.max(pad, Math.min(y, vh - h - pad));
+        menu.style.left = nx + "px";
+        menu.style.top = ny + "px";
+      }
+      function isComposerTextarea(el) {
+        if (!el || el.tagName !== "TEXTAREA") return false;
+        if (el.id === "input" || el.id === "inlineSideChatInput") return true;
+        if (el.classList && el.classList.contains("edit-ta")) {
+          var list = document.getElementById("inlineSideChatList");
+          return !!(list && el.closest && el.closest("#inlineSideChatList"));
+        }
+        return false;
+      }
+      function insertAtSelectionFallback(ta, text) {
+        var t = text != null ? String(text) : "";
+        var start = typeof ta.selectionStart === "number" ? ta.selectionStart : (ta.value || "").length;
+        var end = typeof ta.selectionEnd === "number" ? ta.selectionEnd : start;
+        try {
+          ta.setRangeText(t, start, end, "end");
+        } catch (e) {
+          var v = ta.value || "";
+          ta.value = v.slice(0, start) + t + v.slice(end);
+          var pos = start + t.length;
+          try {
+            ta.setSelectionRange(pos, pos);
+          } catch (e2) {}
+        }
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      function runComposerCmd(cmd) {
+        var ta = activeTa;
+        if (!ta) return;
+        ta.focus();
+        try {
+          if (cmd === "selectAll") {
+            ta.select();
+            return;
+          }
+          if (cmd === "copy") {
+            document.execCommand("copy");
+            return;
+          }
+          if (cmd === "cut") {
+            document.execCommand("cut");
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+            return;
+          }
+          if (cmd === "paste") {
+            var pasted = document.execCommand("paste");
+            if (!pasted && navigator.clipboard && navigator.clipboard.readText) {
+              navigator.clipboard.readText().then(function (pt) {
+                insertAtSelectionFallback(ta, pt);
+              });
+            }
+            return;
+          }
+          if (cmd === "undo" || cmd === "redo") {
+            document.execCommand(cmd);
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        } catch (e) {}
+      }
+      menu.addEventListener("click", function (ev) {
+        var btn = ev.target.closest && ev.target.closest("[data-composer-cmd]");
+        if (!btn) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        var cmd = btn.getAttribute("data-composer-cmd");
+        if (cmd) runComposerCmd(cmd);
+        closeComposerCtxMenu();
+      });
+      document.addEventListener(
+        "pointerdown",
+        function (ev) {
+          if (menu.hidden) return;
+          if (menu.contains(ev.target)) return;
+          closeComposerCtxMenu();
+        },
+        true,
+      );
+      document.addEventListener(
+        "keydown",
+        function (ev) {
+          if (!menu.hidden && ev.key === "Escape") {
+            closeComposerCtxMenu();
+          }
+        },
+        true,
+      );
+      document.addEventListener(
+        "contextmenu",
+        function (ev) {
+          var ta = ev.target;
+          if (isComposerTextarea(ta)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            activeTa = ta;
+            positionComposerCtxMenu(ev.clientX, ev.clientY);
+            return;
+          }
+          if (ev.target.closest && ev.target.closest("#tree .node")) return;
+          if (ev.target.closest && ev.target.closest(".inline-sidechat-msg")) return;
+          ev.preventDefault();
+        },
+        true,
+      );
+    })();
 
     document.getElementById("input").addEventListener("input", function () {
       updateComposerSendEnabled();

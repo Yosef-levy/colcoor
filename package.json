@@ -8,7 +8,7 @@
     "test": "npm run test:extension && npm run test:backend",
     "test:extension": "npm run test -w colcoor-extension",
     "test:backend": "sh -c 'cd packages/backend && if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest -q; else python3 -m pytest -q; fi'",
-    "package:extension": "npm run package -w colcoor-extension",
+    "package:extension": "bash scripts/package-extension-to-enterprise-dist.sh",
     "ship:artifacts": "bash scripts/ship-artifacts.sh",
     "bundle:enterprise": "bash scripts/build-enterprise-bundle.sh",
     "bundle:enterprise:skip-vsix": "bash scripts/build-enterprise-bundle.sh --skip-vsix"

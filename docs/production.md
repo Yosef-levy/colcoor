@@ -225,7 +225,7 @@ Outputs:
 
 | Artifact | Location / name |
 |----------|------------------|
-| VSIX | `packages/extension/colcoor-extension-<extension-version>.vsix` |
+| VSIX | `dist/colcoor-enterprise-BE<backend-version>-EXT<extension-version>/colcoor-extension-<extension-version>.vsix` (from `npm run package:extension` at repo root) |
 | Docker | `colcoor-backend:<backend-version>` and `colcoor-backend:prod` |
 
 To **push** the same tags to a registry after `docker login`:
