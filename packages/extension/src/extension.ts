@@ -85,20 +85,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const configuredBaseUrl = config.get<string>("backendBaseUrl")?.trim();
   const envBaseUrl = process.env[BACKEND_URL_ENV_VAR]?.trim();
   const baseUrl = (configuredBaseUrl || envBaseUrl || "").replace(/\/$/, "");
+  const effectiveBaseUrl = baseUrl || "http://invalid.colcoor.local";
   if (!baseUrl) {
-    const choice = await vscode.window.showErrorMessage(
-      "Colcoor: backend URL is not configured. Set `colcoor.backendBaseUrl` in Settings or define COLCOOR_API_URL.",
-      "Open Settings",
-    );
-    if (choice === "Open Settings") {
-      await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
-    }
-    return;
+    void vscode.window
+      .showErrorMessage(
+        "Colcoor: backend URL is not configured. Set `colcoor.backendBaseUrl` in Settings or define COLCOOR_API_URL.",
+        "Open Settings",
+      )
+      .then(async (choice) => {
+        if (choice === "Open Settings") {
+          await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
+        }
+      });
   }
 
   const session = new CursorSession(context.secrets, SECRET_KEY_BACKEND_JWT);
   const api = new ColcoorApiClient({
-    baseUrl,
+    baseUrl: effectiveBaseUrl,
     getAccessToken: () => session.getBackendAccessToken(),
   });
   const agent = new AgentRunner(context.secrets);

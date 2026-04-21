@@ -41,6 +41,23 @@ Extension machines
   (no trailing slash, no /api/v1). Use https:// when TLS is enabled on nginx.
 
 
+Backend URL for the extension (important)
+-----------------------------------------
+  The URL in extension settings must be the backend machine's EXTERNAL reachable URL,
+  not an internal Docker hostname like "backend" and not VM-local "127.0.0.1"
+  (unless the extension runs on the same machine as Docker).
+
+  Use one of:
+    http://PUBLIC_IP
+    http://PUBLIC_DNS_NAME
+    https://PUBLIC_DNS_NAME   (recommended once TLS is enabled)
+
+  Example:
+    http://203.0.113.10
+
+  Keep it as origin only: no trailing slash and no /api/v1 path.
+
+
 Day-2 operations
 ----------------
   ./scripts/04-stack-restart.sh       Recreate containers (keeps Postgres volume).
