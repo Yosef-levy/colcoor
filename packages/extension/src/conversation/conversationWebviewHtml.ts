@@ -725,8 +725,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       display: inline-block;
       font-size: 0.68em;
       font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      letter-spacing: 0.02em;
       padding: 3px 9px;
       border-radius: 999px;
       border: 1px solid transparent;
@@ -958,7 +957,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground, rgba(240, 80, 80, 0.14)));
       color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
     }
-    .msg .role { font-size: 0.8em; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin-bottom: 6px; padding-right: 30px; }
+    .msg .role { font-size: 0.8em; color: var(--vscode-descriptionForeground); margin-bottom: 6px; padding-right: 30px; }
     .thread .msg .thread-msg-title {
       font-size: 0.92em;
       font-weight: 500;
@@ -2201,12 +2200,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return "role-other";
     }
 
+    /** Same "User (Display Name)" text for tree pills and thread headers when a composer name exists. */
+    function userRoleLabelFromComposerName(composerName) {
+      var d = composerName != null ? String(composerName).trim() : "";
+      return d.length ? "User (" + esc(d) + ")" : "User";
+    }
+
     function treeEventRoleLabel(ev) {
-      var base = treeKindLabel(ev.kind);
-      if (ev.kind === "user_input" && ev.composer_display_name && String(ev.composer_display_name).trim()) {
-        return esc(base) + " (" + esc(String(ev.composer_display_name).trim()) + ")";
+      if (ev.kind === "user_input") {
+        return userRoleLabelFromComposerName(ev.composer_display_name);
       }
-      return esc(base);
+      return esc(treeKindLabel(ev.kind));
     }
 
     function pathChain(events, selectedId) {
@@ -2751,11 +2755,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       for (const s of segs) {
         const cls = s.role === "user" ? "user" : "assistant";
         var roleLine =
-          s.role === "user"
-            ? s.composerDisplayName && String(s.composerDisplayName).trim()
-              ? "User — " + esc(String(s.composerDisplayName).trim())
-              : "User"
-            : "Assistant";
+          s.role === "user" ? userRoleLabelFromComposerName(s.composerDisplayName) : "Assistant";
         const privBadge =
           s.privateScope === true ? '<span class="badge-pvt">Private</span>' : "";
         html +=
