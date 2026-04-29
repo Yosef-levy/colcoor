@@ -28,6 +28,7 @@ import {
 } from "./normalizeUserInputText";
 import { buildUserImageDataUrlsByEventId } from "./conversationImageDataUrls";
 import { runColcoorUserTurn } from "./runUserTurn";
+import { enrichGraphEventsWithComposerDisplay } from "./enrichGraphEventsWithComposerDisplay";
 import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { pendingUserHtmlForPanelState } from "./pendingUserHtmlForPanelState";
@@ -974,16 +975,22 @@ export function createConversationPanelController(
       const pendingUserHtml = pendingUserHtmlForPanelState(busy, pendingSendUserMarkdown);
       const waitingForAssistant = Boolean(sendAbort && pendingSendUserMarkdown === undefined);
       const drawersModel = buildConversationDrawersModel(events, lastNotes);
+      const eventsForWebview = enrichGraphEventsWithComposerDisplay(events, lastConversationMembers);
       const msg: WebviewStateMessage = {
         type: "state",
         conversationId,
         title: conversationTitle ?? null,
         conversationPinned,
-        events,
+        events: eventsForWebview,
         selectedEventId: sel ?? "",
-        threadSegments: buildThreadSegments(events, sel ?? "", lastNotes, lastUserImageDataUrlsByEventId),
+        threadSegments: buildThreadSegments(
+          eventsForWebview,
+          sel ?? "",
+          lastNotes,
+          lastUserImageDataUrlsByEventId,
+        ),
         threadPlainText: appendPendingPlainThreadFragment(
-          buildPlainThread(events, sel ?? "", lastNotes),
+          buildPlainThread(eventsForWebview, sel ?? "", lastNotes),
           busy,
           pendingSendUserMarkdown,
         ),

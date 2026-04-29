@@ -47,6 +47,38 @@ describe("buildPlainThread", () => {
     expect(out).toContain("User: Follow up");
   });
 
+  it("uses User (display name): when composer_display_name is set", () => {
+    const uid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const events: GraphEventNode[] = [
+      {
+        id: "u0",
+        conversation_id: "c",
+        parent_event_id: null,
+        kind: "user_input",
+        actor_type: "user",
+        actor_user_id: null,
+        content_text: "",
+        visible_to: null,
+        created_at: "2020-01-01T00:00:00Z",
+        updated_at: "2020-01-01T00:00:00Z",
+      },
+      {
+        id: "u1",
+        conversation_id: "c",
+        parent_event_id: "u0",
+        kind: "user_input",
+        actor_type: "user",
+        actor_user_id: uid,
+        composer_display_name: "John Smith",
+        content_text: "Hello",
+        visible_to: null,
+        created_at: "2020-01-01T00:01:00Z",
+        updated_at: "2020-01-01T00:01:00Z",
+      },
+    ];
+    expect(buildPlainThread(events, "u1")).toContain("User (John Smith): Hello");
+  });
+
   it("includes NOTE lines after messages when notes are passed", () => {
     const events: GraphEventNode[] = [
       {

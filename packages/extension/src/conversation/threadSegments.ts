@@ -36,6 +36,8 @@ export type ThreadSegment = {
   role: "user" | "assistant";
   /** Host graph event id (for diagnostics; notes are keyed to this row). */
   eventId: string;
+  /** Member display name for user rows when known (thread header). */
+  composerDisplayName?: string;
   html: string;
   /** True when `visible_to` is set on this event (private draft visible only to that user). */
   privateScope?: boolean;
@@ -120,9 +122,14 @@ export function buildThreadSegments(
           bodyHtml += `<figure class="msg-user-image"><img src="${escapeHtmlAttr(u)}" alt="User image" /></figure>`;
         }
       }
+      const composerDn =
+        typeof ev.composer_display_name === "string" && ev.composer_display_name.trim()
+          ? ev.composer_display_name.trim()
+          : undefined;
       out.push({
         role: "user",
         eventId: ev.id,
+        ...(composerDn !== undefined ? { composerDisplayName: composerDn } : {}),
         html: bodyHtml,
         ...(privateScope ? { privateScope: true } : {}),
         ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),

@@ -349,12 +349,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await showColcoorApiFailure(e);
       }
     }),
-    vscode.commands.registerCommand("colcoor.signOut", async () => {
-      await session.clearBackendAccessToken();
-      await refreshConversationsWelcomeContext();
-      refreshTree();
-      await vscode.window.showInformationMessage("Colcoor: signed out.");
-    }),
+    vscode.commands.registerCommand(
+      "colcoor.signOut",
+      async (opts?: { silent?: boolean }) => {
+        await session.clearBackendAccessToken();
+        await refreshConversationsWelcomeContext();
+        refreshTree();
+        if (!opts?.silent) {
+          await vscode.window.showInformationMessage("Colcoor: signed out.");
+        }
+      },
+    ),
     vscode.commands.registerCommand("colcoor.newConversation", async () => {
       const title = await vscode.window.showInputBox({
         title: "New Colcoor conversation",

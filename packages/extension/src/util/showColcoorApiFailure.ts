@@ -58,6 +58,7 @@ export async function showColcoorApiFailure(e: unknown): Promise<void> {
     return;
   }
   if (isUnauthorizedColcoorApiError(e)) {
+    await vscode.commands.executeCommand("colcoor.signOut", { silent: true });
     const choice = await vscode.window.showErrorMessage(
       `Colcoor: sign in required or session expired — ${e.message}`,
       COLOOR_API_FAILURE_SIGN_IN_ACTION,

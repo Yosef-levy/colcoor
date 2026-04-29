@@ -2201,6 +2201,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return "role-other";
     }
 
+    function treeEventRoleLabel(ev) {
+      var base = treeKindLabel(ev.kind);
+      if (ev.kind === "user_input" && ev.composer_display_name && String(ev.composer_display_name).trim()) {
+        return esc(base) + " (" + esc(String(ev.composer_display_name).trim()) + ")";
+      }
+      return esc(base);
+    }
+
     function pathChain(events, selectedId) {
       const byId = Object.fromEntries(events.map((e) => [e.id, e]));
       const chain = [];
@@ -2707,7 +2715,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             '<div class="node-head">' +
             badge +
             '<span class="node-role">' +
-            esc(treeKindLabel(e.kind)) +
+            treeEventRoleLabel(e) +
             "</span>" +
             whenSpan +
             iconsWrap +
@@ -2742,7 +2750,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       let html = "";
       for (const s of segs) {
         const cls = s.role === "user" ? "user" : "assistant";
-        const role = s.role === "user" ? "User" : "Assistant";
+        var roleLine =
+          s.role === "user"
+            ? s.composerDisplayName && String(s.composerDisplayName).trim()
+              ? "User — " + esc(String(s.composerDisplayName).trim())
+              : "User"
+            : "Assistant";
         const privBadge =
           s.privateScope === true ? '<span class="badge-pvt">Private</span>' : "";
         html +=
@@ -2751,7 +2764,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           '" data-event-id="' +
           esc(String(s.eventId || "")) +
           '"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">' +
-          role +
+          roleLine +
           privBadge +
           "</div>" +
           (s.checkpointLabel

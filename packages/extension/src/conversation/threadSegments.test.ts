@@ -97,6 +97,30 @@ describe("buildThreadSegments", () => {
     expect(segs[1]!.notes).toBeUndefined();
   });
 
+  it("includes composerDisplayName on user segments when composer_display_name is set", () => {
+    const events: GraphEventNode[] = [
+      ev({
+        id: "r",
+        parent_event_id: null,
+        kind: "user_input",
+        created_at: "2020-01-01T00:00:00Z",
+        content_text: "",
+      }),
+      ev({
+        id: "u1",
+        parent_event_id: "r",
+        kind: "user_input",
+        created_at: "2020-01-01T00:01:00Z",
+        content_text: "Hi",
+        composer_display_name: "Jane Doe",
+        actor_user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      }),
+    ];
+    const segs = buildThreadSegments(events, "u1");
+    expect(segs).toHaveLength(1);
+    expect(segs[0]!.composerDisplayName).toBe("Jane Doe");
+  });
+
   it("sets privateScope on user and assistant when visible_to marks a private draft", () => {
     const uid = "11111111-1111-4111-8111-111111111111";
     const events: GraphEventNode[] = [

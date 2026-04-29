@@ -26,7 +26,12 @@ export function buildPlainThread(
       }
       const mediaFrag = formatUserMediaTranscriptFragment(ev.content_json ?? undefined);
       const userText = [text.trimEnd(), mediaFrag].filter(Boolean).join("\n");
-      let userLine = `User: ${userText}`;
+      const dn =
+        typeof ev.composer_display_name === "string" && ev.composer_display_name.trim()
+          ? ev.composer_display_name.trim()
+          : undefined;
+      const userLead = dn !== undefined ? `User (${dn})` : "User";
+      let userLine = `${userLead}: ${userText}`;
       if (cp !== undefined) {
         userLine += `\nTitle: ${cp}`;
       }

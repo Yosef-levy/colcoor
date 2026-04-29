@@ -35,6 +35,8 @@ export type GraphEventNode = {
   kind: string;
   actor_type: string;
   actor_user_id: string | null;
+  /** UI-only: resolved from conversation members for user_input rows (not returned by the tree API). */
+  composer_display_name?: string | null;
   content_text: string | null;
   /** Cursor CLI stream-json timeline envelope (`colcoor_agent_trace`), when present. */
   content_json?: Record<string, unknown> | null;

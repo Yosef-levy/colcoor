@@ -78,6 +78,7 @@ describe("showColcoorApiFailure", () => {
     showErrorMessage.mockResolvedValue(undefined);
     const e = new ColcoorApiHttpError("list conversations", 401, "{}");
     await showColcoorApiFailure(e);
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.signOut", { silent: true });
     expect(showErrorMessage).toHaveBeenCalledWith(
       expect.stringContaining("sign in required"),
       COLOOR_API_FAILURE_SIGN_IN_ACTION,
@@ -89,12 +90,14 @@ describe("showColcoorApiFailure", () => {
   it("runs Colcoor: Sign in when user picks the 401 action", async () => {
     showErrorMessage.mockResolvedValue(COLOOR_API_FAILURE_SIGN_IN_ACTION);
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 401, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.signOut", { silent: true });
     expect(executeCommand).toHaveBeenCalledWith("colcoor.signIn");
   });
 
   it("does not run sign-in when user dismisses the 401 toast", async () => {
     showErrorMessage.mockResolvedValue(undefined);
     await showColcoorApiFailure(new ColcoorApiHttpError("x", 401, ""));
+    expect(executeCommand).toHaveBeenCalledWith("colcoor.signOut", { silent: true });
     expect(executeCommand).not.toHaveBeenCalledWith("colcoor.signIn");
   });
 
