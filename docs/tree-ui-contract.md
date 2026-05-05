@@ -130,7 +130,7 @@ Visualizations SHOULD keep rows **compact**; full body lives in **thread** and *
 
 | Metadata | Rule |
 |----------|------|
-| **Role label / icon** | Distinguish **user** vs **assistant** (from **`kind`**). Icon vs text is a presentation choice. |
+| **Role label / icon** | Distinguish **user** vs **assistant** (from **`kind`**). Icon vs text is a presentation choice. For **`user_input`**, the label **may** append a **member display name** resolved client-side from **conversation members** + **`actor_user_id`** (not returned as a separate field on tree nodes). |
 | **Private indicator** | Shown when **`is_private`**. |
 | **Star indicator** | Shown when **`is_starred`** (from API field **`starred`** on tree nodes for the current user). |
 | **Notes** | If **`has_notes`**, MAY show icon and/or **`note_count`** (from API field **`note_count`** on tree nodes). |
@@ -159,6 +159,7 @@ The **default** Colcoor extension visualization is an **indented vertical outlin
 - **Vertical list** of nodes; **indentation** encodes **parent/child** for discoverability.
 - **Siblings** at the same depth are visible according to **`is_expanded`** on ancestors.
 - **Expand/collapse** per node with **`has_children`**.
+- When the rendered tree is **wider than the pane** (deep indent, long labels), the pane SHOULD offer **horizontal scrolling** so no node is clipped off-screen.
 
 This mode MUST still comply with §2–§8. **Implementation** details (CSS, webview structure) live outside this document.
 

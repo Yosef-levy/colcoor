@@ -24,6 +24,10 @@ There is **no** alternate development-only login HTTP route; the same **`POST /a
 3. Store **`access_token`** from **`AuthResponse`** in **SecretStorage** (or equivalent). Omit from workspace files.
 4. Send **`Authorization: Bearer <access_token>`** on every **`/api/v1/...`** request until expiry; then repeat from step 1.
 
+### 2.1 Invalid or expired JWT (HTTP 401) in the extension
+
+When an API response is **401** (missing, invalid, or expired Colcoor JWT per [api-contracts.md](api-contracts.md)), the extension **SHOULD clear the stored Colcoor access token** (local sign-out of the Colcoor session only) **before** or alongside user-facing recovery (e.g. “sign in” toast). That avoids a **stale token** blocking a clean re-authentication flow (user should not need a manual **Sign out** first).
+
 ---
 
 ## 3. Backend behavior

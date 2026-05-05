@@ -29,7 +29,19 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 | [production.md](production.md) | Docker, nginx, Postgres, env, health, release artifacts, enterprise bundle (`npm run bundle:enterprise`) |
 | [enterprise-handoff-checklist.md](enterprise-handoff-checklist.md) | Copy-paste checklist for customer IT / security rollout |
 | [git-integration.md](git-integration.md) | Optional Git metadata |
-| [ui-features.md](ui-features.md) | User-visible UI checklist |
+| [ui-features.md](ui-features.md) | User-visible UI checklist (thread, tree, drawers / in-conversation search, side-chat settings, 401 handling) |
 | [tree-ui-contract.md](tree-ui-contract.md) | **Normative** conversation tree: node state, selection vs actions, future layouts |
 
 Cross-references are **within this folder** unless the link is a public standard (e.g. VS Code SecretStorage).
+
+## Keeping docs in sync with the product
+
+After code ships, align **user-facing** specs with the smallest clear range of commits:
+
+1. Find the latest commit that already touched this tree:  
+   `git log -1 --format=oneline -- docs/`
+2. Review every commit **after** that toward `HEAD`:  
+   `git log --oneline <that_commit>..HEAD`  
+   Map messages (and diffs when unclear) to **[ui-features.md](ui-features.md)** for UX, **[tree-ui-contract.md](tree-ui-contract.md)** for tree semantics, **[api-contracts.md](api-contracts.md)** / **[permissions.md](permissions.md)** for API or roles, **[production.md](production.md)** for build and ops.
+
+That bounds the audit to “everything since docs were last updated,” instead of an arbitrary depth from `HEAD`.

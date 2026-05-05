@@ -212,6 +212,12 @@ After changing **`colcoor.backendBaseUrl`** or **`COLCOOR_API_URL`**, have users
 
 ## Release artifacts (VSIX + Docker image)
 
+### Extension build (bundle)
+
+The extension package ([`packages/extension`](../packages/extension/)) uses **`npm run build`**: **TypeScript `--noEmit` check**, then **esbuild** bundles the activation entry plus runtime dependencies (**markdown**, **sanitize-html**, **temml**, etc.) into a single **`dist/extension.js`**. Packaging uses **`vsce package --no-dependencies`** because dependencies are **embedded** in that bundle — this avoids workspace hoisting issues and keeps **`npm run package:extension`** reliable in the monorepo.
+
+---
+
 From the **repository root**, one command builds:
 
 - the **extension** `.vsix` (version from [`packages/extension/package.json`](../packages/extension/package.json)), and

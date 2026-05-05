@@ -12,7 +12,7 @@ Default UX: select node → run → see result; no raw transcript or prompt plum
 
 ### 1.1 Settings (narrow scope)
 
-- **Side chat notification sounds** — toggle for new activity; optional distinct sound for **@mentions**.
+- **Side chat notification sounds** — toggles for **desktop notifications** and **sounds** (general traffic and **@mentions** separately where offered), plus **volume** for sounds — product-defined granularity in settings.
 - **Display name** — how the user appears in **side chat** (persisted on the backend).
 - **Avatar** — user-set or chosen **avatar** for side chat and account UI (backend persists URL or asset reference; source is product-defined).
 
@@ -25,6 +25,10 @@ Menu action to **reload** the conversation list from the Colcoor backend.
 ### 1.3 Legal / policy
 
 Link or embed **Terms**, **Privacy**, **Refund** as product policy requires.
+
+### 1.4 Session expiry (HTTP 401)
+
+When the Colcoor API rejects the stored JWT (**HTTP 401** — invalid or expired token), the extension **clears the local Colcoor session** so the user can **Sign in** again without manually signing out first. User-facing messaging still invites sign-in. See [authentication.md](authentication.md).
 
 ---
 
@@ -72,7 +76,9 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - **Indented outline** (vertical list, parent/child via indentation) is the **reference** visualization; **expand/collapse** per node that has children.
 - **Select** a node as the primary on-tree action; selection drives **thread** and **detail bar** path.
 - **Jump to latest** on the default branch — detail bar action; Command Palette **Colcoor: Jump to latest in conversation** when the conversation panel is open.
+- **Horizontal scroll** — when indentation or labels make the tree wider than the pane, the tree column scrolls horizontally so deep branches remain reachable ([tree-ui-contract.md](tree-ui-contract.md) §9).
 - Nodes show **role** (user vs assistant), **private** when applicable, **star** and **notes** when applicable, compact **snippet** (and **title** when the product exposes one), and **time** per [tree-ui-contract.md](tree-ui-contract.md) §7.
+- For **user** messages, the role line **may** include a **member display label** (e.g. `User (Jane Doe)`) when **`actor_user_id`** can be matched to **conversation members** (display name, else `@handle`, else email) — same source as side-chat @-mention metadata ([tree-ui-contract.md](tree-ui-contract.md) §7).
 - **Star, notes, private commit/delete, resend**, etc. are **not** required as heavy inline controls on each row; they surface via **detail bar**, **context menu**, **command palette**, or shortcuts ([tree-ui-contract.md](tree-ui-contract.md) §5–§6).
 
 **Future:** other layouts (e.g. graph) MUST reuse the same contract ([tree-ui-contract.md](tree-ui-contract.md) §10).
@@ -82,14 +88,15 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 ## 7. Thread view (root → active path)
 
 - Path **root → active**.
-- **Markdown** rendering (GFM-style: tables, task lists, etc.).
-- **Fenced code** with **copy**.
+- **Markdown** rendering — **GitHub Flavored Markdown** (tables, task lists, strikethrough, task checkboxes, bare-URL autolinks, etc.) via a normal markdown pipeline in the extension.
+- **LaTeX math** — inline `\(...\)` and block `\[...\]` delimiters (including common **double-escaped** backslashes from model output) are rendered to **readable math** (MathML via **Temml** in the shipped extension); fall back to monospace text if a fragment cannot be parsed.
+- **Fenced code** with **copy**; **copy** on each message row. After a successful copy, the button **briefly shows a check** (then reverts) so the user gets feedback without a separate toast.
 - **RTL** where applicable for message text.
 - **Notes** inline under messages with edit/delete when allowed.
 - **In-flight turn:** pending user line + updating assistant text until done or cancelled.
 - **While the assistant is generating** (after your user line is visible): composer can **queue** the next message so it attaches under that assistant reply when it finishes, or start a **new branch** from the same anchor you replied from (parallel sibling); **shared vs private** follows the composer **Private (draft)** checkbox, same as a normal send.
 - **Star** on messages.
-- **Copy** message content where the platform supports it.
+- **Copy** message content (same feedback pattern as code blocks where the platform supports it).
 - **Optional CLI trace:** assistant messages may include a **collapsible** summary of local agent activity (reads, edits, shell) derived from Cursor CLI **stream-json** output. That block is separate chrome, not part of the message markdown body.
 
 **Excluded:** no dense inline tool-transcript rows in the main message body as the default reading experience.
@@ -113,6 +120,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 ## 9. Composer (main thread)
 
+- **Context menu** (right-click): standard text editing actions — **Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select all** — where the webview supports them (aligned with typical editor behavior).
 - Multiline input; **Enter** send, **Shift+Enter** newline (or idiomatic equivalent).
 - **Send** disabled while your first line is still being posted; **Queue after reply** / **New branch** appear while the assistant is generating so you can stage the next send (branch uses the **Private (draft)** checkbox for shared vs private).
 - **Enter** during that phase queues after the pending reply (same as **Queue after reply**).
@@ -124,6 +132,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 ## 10. Side chat
 
+- **Composer** input uses the same **context menu** affordances as §9 (right-click cut/copy/paste, etc.) where supported.
 - Open/close in the **same conversation tab**: **three columns** (event tree · main thread and composer · side chat), each with a **horizontally resizable** width where the webview supports it; widths persist in workspace state.
 - **Unread** badge on the open control.
 - **List**, **send**, **edit**, **delete** (per permissions).
@@ -135,6 +144,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 ## 11. Drawers and collaboration
 
+- **Search** drawer — find text in the **current conversation** with **scopes** (main-thread message bodies, **message titles**, **notes**, **side chat**); choose which scopes apply; open a hit to **jump** to that message or note.
 - **Starred messages** drawer — jump to message.
 - **TODO notes** drawer — notes whose body starts with `TODO` (case-insensitive); jump to host.
 - **Presence** — other active users on this conversation (when collaboration is on).
@@ -153,7 +163,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 | Section | Topic |
 |---------|--------|
-| §1 | Settings (sounds, name, avatar), refresh |
+| §1 | Settings (sounds, name, avatar), refresh, **401** session handling |
 | §2 | About |
 | §3 | Account + paywall |
 | §4 | Conversation list + minimize |
@@ -163,7 +173,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 | §8 | Detail bar + details pane |
 | §9 | Composer |
 | §10 | Side chat |
-| §11 | Drawers + presence + stale prompt |
+| §11 | Drawers (search, starred, TODO) + presence + stale prompt |
 | §12 | Members + rename |
 
 **Avatar:** §1.1. **Tool rows:** excluded in §7. **Tree behavior/state:** [tree-ui-contract.md](tree-ui-contract.md).
