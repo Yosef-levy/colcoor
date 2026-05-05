@@ -958,6 +958,28 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
     }
     .msg .role { font-size: 0.8em; color: var(--vscode-descriptionForeground); margin-bottom: 6px; padding-right: 30px; }
+    .msg .math-inline code {
+      font-family: var(--vscode-editor-font-family);
+      background: var(--vscode-textCodeBlock-background);
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 4px;
+      padding: 0 4px;
+      white-space: nowrap;
+    }
+    .msg .math-block {
+      margin: 8px 0;
+    }
+    .msg .math-block code {
+      display: block;
+      font-family: var(--vscode-editor-font-family);
+      background: var(--vscode-textCodeBlock-background);
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.45;
+    }
     .thread .msg .thread-msg-title {
       font-size: 0.92em;
       font-weight: 500;

@@ -50,4 +50,20 @@ describe("markdownToSafeHtml", () => {
     expect(html).toContain('href="https://example.com/path?q=1"');
     expect(html).toContain("noopener");
   });
+
+  it("renders LaTeX delimiters as readable math blocks", () => {
+    const html = markdownToSafeHtml("Inline \\(a_t = \\\\ddot{s}\\) and block:\\n\\[m\\\\ell\\\\ddot{\\\\theta}=-mg\\\\sin\\\\theta\\]");
+    expect(html).toContain('class="math-inline"');
+    expect(html).toContain('class="math-block"');
+    expect(html).not.toContain("\\(");
+    expect(html).not.toContain("\\[");
+  });
+
+  it("also supports model-escaped delimiters with doubled backslashes", () => {
+    const html = markdownToSafeHtml("Inline \\\\(m\\\\) and block:\\n\\\\[F=-mg\\\\sin\\\\theta\\\\]");
+    expect(html).toContain('class="math-inline"');
+    expect(html).toContain('class="math-block"');
+    expect(html).not.toContain("\\\\(");
+    expect(html).not.toContain("\\\\[");
+  });
 });

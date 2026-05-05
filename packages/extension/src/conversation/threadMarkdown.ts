@@ -7,6 +7,11 @@ function escapeHtml(text: string): string {
     .replaceAll("'", "&#39;");
 }
 
+function normalizeMathExpression(expr: string): string {
+  // Many model outputs escape LaTeX with doubled backslashes (e.g. "\\theta").
+  return expr.replace(/\\\\/g, "\\").trim();
+}
+
 function isSafeHttpUrl(url: string): boolean {
   return /^https?:\/\/[^\s]+$/i.test(url);
 }
@@ -47,8 +52,23 @@ export function markdownToSafeHtml(markdown: string): string {
     codeBlocks.push(`<pre><code class="${languageClass.trim()}">${escapeHtml(code)}</code></pre>`);
     return token;
   });
+  const blockMathTokens: string[] = [];
+  const inlineMathTokens: string[] = [];
+  const withoutBlockMath = withoutCode.replace(/\\{1,2}\[\s*([\s\S]*?)\s*\\{1,2}\]/g, (_m, expr: string) => {
+    const token = `@@MATH_BLOCK_${blockMathTokens.length}@@`;
+    const escapedExpr = escapeHtml(normalizeMathExpression(expr)).replaceAll("\n", "<br>");
+    blockMathTokens.push(`<div class="math-block"><code>${escapedExpr}</code></div>`);
+    return token;
+  });
+  const withoutMath = withoutBlockMath.replace(/\\{1,2}\(([^)]*?)\\{1,2}\)/g, (_m, expr: string) => {
+    const token = `@@MATH_INLINE_${inlineMathTokens.length}@@`;
+    inlineMathTokens.push(
+      `<span class="math-inline"><code>${escapeHtml(normalizeMathExpression(expr))}</code></span>`,
+    );
+    return token;
+  });
 
-  const escaped = escapeHtml(withoutCode);
+  const escaped = escapeHtml(withoutMath);
   const lines = escaped.split("\n");
   const out: string[] = [];
   const paragraph: string[] = [];
@@ -73,6 +93,13 @@ export function markdownToSafeHtml(markdown: string): string {
     const line = lineRaw.trimEnd();
     const codeTokenMatch = line.match(/^@@CODE_BLOCK_(\d+)@@$/);
     if (codeTokenMatch) {
+      flushParagraph();
+      flushList();
+      out.push(line);
+      continue;
+    }
+    const blockMathMatch = line.match(/^@@MATH_BLOCK_(\d+)@@$/);
+    if (blockMathMatch) {
       flushParagraph();
       flushList();
       out.push(line);
@@ -105,6 +132,12 @@ export function markdownToSafeHtml(markdown: string): string {
   let html = out.join("\n");
   for (let i = 0; i < codeBlocks.length; i += 1) {
     html = html.replaceAll(`@@CODE_BLOCK_${i}@@`, codeBlocks[i]);
+  }
+  for (let i = 0; i < blockMathTokens.length; i += 1) {
+    html = html.replaceAll(`@@MATH_BLOCK_${i}@@`, blockMathTokens[i]);
+  }
+  for (let i = 0; i < inlineMathTokens.length; i += 1) {
+    html = html.replaceAll(`@@MATH_INLINE_${i}@@`, inlineMathTokens[i]);
   }
   return html;
 }
