@@ -74,7 +74,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       flex: 1;
       min-height: 0;
       overflow-y: auto;
-      overflow-x: hidden;
+      overflow-x: auto;
+      overscroll-behavior: contain;
     }
     .col-center {
       flex: 1;
@@ -602,6 +603,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       list-style: none;
       margin: 0;
       padding: 0;
+      min-width: max-content;
     }
     .tree-branch {
       list-style: none;
@@ -663,7 +665,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       display: flex;
       align-items: stretch;
       gap: 2px;
-      min-width: 0;
+      min-width: max-content;
     }
     .tree-expand {
       flex: 0 0 22px;
@@ -853,6 +855,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-foreground);
       border-color: var(--vscode-focusBorder, var(--vscode-panel-border));
     }
+    .thread-copy-icon-btn.copy-ok {
+      opacity: 1;
+      color: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen, #73c991));
+      border-color: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen, #73c991));
+    }
     .thread-copy-icon-btn:focus-visible {
       outline: 1px solid var(--vscode-focusBorder);
       outline-offset: 1px;
@@ -958,6 +965,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       color: var(--vscode-diffEditor-removedTextColor, var(--vscode-editor-foreground));
     }
     .msg .role { font-size: 0.8em; color: var(--vscode-descriptionForeground); margin-bottom: 6px; padding-right: 30px; }
+    .msg .math-inline {
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .msg .math-inline math {
+      font-size: 1.02em;
+    }
     .msg .math-inline code {
       font-family: var(--vscode-editor-font-family);
       background: var(--vscode-textCodeBlock-background);
@@ -968,6 +982,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
     .msg .math-block {
       margin: 8px 0;
+      display: block;
+    }
+    .msg .math-block math {
+      display: block;
+      font-size: 1.06em;
+      overflow-x: auto;
+      padding: 4px 0;
     }
     .msg .math-block code {
       display: block;
@@ -2879,6 +2900,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
     }
 
+    /** Brief visual confirmation after copy actions (message row / code block). */
+    function flashCopyButtonSuccess(btn) {
+      if (!btn) return;
+      var prevText = btn.textContent || "⧉";
+      var prevTitle = btn.title || "";
+      if (btn._colcoorCopyTid) {
+        try {
+          clearTimeout(btn._colcoorCopyTid);
+        } catch (e0) {}
+      }
+      btn.textContent = "✓";
+      btn.title = "Copied";
+      btn.classList.add("copy-ok");
+      btn._colcoorCopyTid = setTimeout(function () {
+        btn.textContent = prevText;
+        btn.title = prevTitle;
+        btn.classList.remove("copy-ok");
+        btn._colcoorCopyTid = null;
+      }, 900);
+    }
+
     function inlineSideChatAuthorLabel(m) {
       var k = m && m.kind ? String(m.kind) : "user";
       if (k === "system_join") return "System · join";
@@ -4563,6 +4605,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           copyText = body ? body.innerText || "" : "";
         }
         vscode.postMessage({ type: "copy", text: copyText });
+        flashCopyButtonSuccess(msgCopyBtn);
         return;
       }
       var copyBtn = t && t.closest && t.closest(".code-copy");
@@ -4572,6 +4615,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var pre = wrap && wrap.querySelector("pre");
       var text = pre ? pre.innerText || "" : "";
       vscode.postMessage({ type: "copy", text: text });
+      flashCopyButtonSuccess(copyBtn);
     });
 
     (function wireComposerContextMenu() {

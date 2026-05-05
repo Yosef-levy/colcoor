@@ -1,143 +1,125 @@
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+import { marked } from "marked";
+import sanitizeHtml from "sanitize-html";
+import temml from "temml";
+
+const ALLOWED_MATHML_TAGS = [
+  "math",
+  "semantics",
+  "annotation",
+  "annotation-xml",
+  "mrow",
+  "mi",
+  "mn",
+  "mo",
+  "mtext",
+  "mspace",
+  "ms",
+  "mfrac",
+  "msqrt",
+  "mroot",
+  "msub",
+  "msup",
+  "msubsup",
+  "munder",
+  "mover",
+  "munderover",
+  "mtable",
+  "mtr",
+  "mtd",
+  "mstyle",
+  "mpadded",
+  "mphantom",
+  "menclose",
+  "mfenced",
+  "mmultiscripts",
+  "mprescripts",
+  "none",
+];
+
+marked.use({ gfm: true, breaks: false });
 
 function normalizeMathExpression(expr: string): string {
-  // Many model outputs escape LaTeX with doubled backslashes (e.g. "\\theta").
   return expr.replace(/\\\\/g, "\\").trim();
 }
 
-function isSafeHttpUrl(url: string): boolean {
-  return /^https?:\/\/[^\s]+$/i.test(url);
-}
-
-function applyInlineMarkdown(escaped: string): string {
-  const inlineCodeTokens: string[] = [];
-  let text = escaped.replace(/`([^`]+)`/g, (_m, code: string) => {
-    const token = `@@INLINE_CODE_${inlineCodeTokens.length}@@`;
-    inlineCodeTokens.push(`<code>${code}</code>`);
-    return token;
-  });
-
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, label: string, url: string) => {
-    if (!isSafeHttpUrl(url)) {
-      return m;
-    }
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-  });
-  text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-
-  for (let i = 0; i < inlineCodeTokens.length; i += 1) {
-    text = text.replaceAll(`@@INLINE_CODE_${i}@@`, inlineCodeTokens[i]);
+function renderMathExpression(expr: string, displayMode: boolean): string {
+  try {
+    const mathml = temml.renderToString(normalizeMathExpression(expr), {
+      displayMode,
+      throwOnError: false,
+      annotate: true,
+    });
+    return `<span class="${displayMode ? "math-block" : "math-inline"}">${mathml}</span>`;
+  } catch {
+    const safe = sanitizeHtml(normalizeMathExpression(expr), { allowedTags: [], allowedAttributes: {} });
+    return displayMode
+      ? `<pre class="math-block math-fallback">${safe}</pre>`
+      : `<code class="math-inline math-fallback">${safe}</code>`;
   }
-  return text;
 }
 
-/**
- * Render markdown (GFM-style) to HTML safe for `innerHTML` in the webview.
- */
+function replaceMathDelimiters(input: string): string {
+  return input
+    .replace(/\\{1,2}\[\s*([\s\S]*?)\s*\\{1,2}\]/g, (_m, expr: string) =>
+      renderMathExpression(expr, true),
+    )
+    .replace(/\\{1,2}\(([\s\S]*?)\\{1,2}\)/g, (_m, expr: string) =>
+      renderMathExpression(expr, false),
+    );
+}
+
+function wrapCodeBlocksWithCopyButton(html: string): string {
+  return html.replace(
+    /<pre><code([^>]*)>([\s\S]*?)<\/code><\/pre>/g,
+    (_m, attrs: string, codeHtml: string) =>
+      `<div class="code-block-wrap"><button type="button" class="thread-copy-icon-btn code-copy" aria-label="Copy code block" title="Copy code block">⧉</button><pre><code${attrs}>${codeHtml}</code></pre></div>`,
+  );
+}
+
 export function markdownToSafeHtml(markdown: string): string {
   const raw = (markdown ?? "").replace(/\r\n/g, "\n");
-  const codeBlocks: string[] = [];
-  const withoutCode = raw.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_m, lang: string, code: string) => {
-    const token = `@@CODE_BLOCK_${codeBlocks.length}@@`;
-    const language = lang.trim();
-    const languageClass = language ? ` language-${escapeHtml(language)}` : "";
-    codeBlocks.push(`<pre><code class="${languageClass.trim()}">${escapeHtml(code)}</code></pre>`);
-    return token;
+  const rendered = marked.parse(replaceMathDelimiters(raw), { async: false }) as string;
+  const sanitized = sanitizeHtml(rendered, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+      "del",
+      "img",
+      "input",
+      "table",
+      "thead",
+      "tbody",
+      "tr",
+      "th",
+      "td",
+      "span",
+      ...ALLOWED_MATHML_TAGS,
+    ]),
+    allowedAttributes: {
+      ...sanitizeHtml.defaults.allowedAttributes,
+      a: ["href", "name", "target", "rel", "title"],
+      code: ["class"],
+      span: ["class", "style"],
+      pre: ["class"],
+      input: ["type", "checked", "disabled"],
+      math: ["display", "xmlns", "class", "style"],
+      "annotation-xml": ["encoding"],
+      mstyle: ["displaystyle", "scriptlevel"],
+      mo: ["stretchy", "form", "fence", "separator", "symmetric", "lspace", "rspace"],
+      img: ["src", "alt", "title"],
+    },
+    allowedSchemes: ["http", "https", "data"],
+    transformTags: {
+      a: (tagName, attribs) => {
+        const href = typeof attribs.href === "string" ? attribs.href : "";
+        if (!/^https?:\/\/[^\s]+$/i.test(href)) {
+          return { tagName: "span", attribs: {} };
+        }
+        return {
+          tagName,
+          attribs: { ...attribs, target: "_blank", rel: "noopener noreferrer" },
+        };
+      },
+    },
+    disallowedTagsMode: "discard",
   });
-  const blockMathTokens: string[] = [];
-  const inlineMathTokens: string[] = [];
-  const withoutBlockMath = withoutCode.replace(/\\{1,2}\[\s*([\s\S]*?)\s*\\{1,2}\]/g, (_m, expr: string) => {
-    const token = `@@MATH_BLOCK_${blockMathTokens.length}@@`;
-    const escapedExpr = escapeHtml(normalizeMathExpression(expr)).replaceAll("\n", "<br>");
-    blockMathTokens.push(`<div class="math-block"><code>${escapedExpr}</code></div>`);
-    return token;
-  });
-  const withoutMath = withoutBlockMath.replace(/\\{1,2}\(([^)]*?)\\{1,2}\)/g, (_m, expr: string) => {
-    const token = `@@MATH_INLINE_${inlineMathTokens.length}@@`;
-    inlineMathTokens.push(
-      `<span class="math-inline"><code>${escapeHtml(normalizeMathExpression(expr))}</code></span>`,
-    );
-    return token;
-  });
-
-  const escaped = escapeHtml(withoutMath);
-  const lines = escaped.split("\n");
-  const out: string[] = [];
-  const paragraph: string[] = [];
-  let listItems: string[] = [];
-
-  const flushParagraph = (): void => {
-    if (paragraph.length === 0) {
-      return;
-    }
-    out.push(`<p>${paragraph.join("<br>")}</p>`);
-    paragraph.length = 0;
-  };
-  const flushList = (): void => {
-    if (listItems.length === 0) {
-      return;
-    }
-    out.push(`<ul>${listItems.join("")}</ul>`);
-    listItems = [];
-  };
-
-  for (const lineRaw of lines) {
-    const line = lineRaw.trimEnd();
-    const codeTokenMatch = line.match(/^@@CODE_BLOCK_(\d+)@@$/);
-    if (codeTokenMatch) {
-      flushParagraph();
-      flushList();
-      out.push(line);
-      continue;
-    }
-    const blockMathMatch = line.match(/^@@MATH_BLOCK_(\d+)@@$/);
-    if (blockMathMatch) {
-      flushParagraph();
-      flushList();
-      out.push(line);
-      continue;
-    }
-    if (line.trim().length === 0) {
-      flushParagraph();
-      flushList();
-      continue;
-    }
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      flushParagraph();
-      flushList();
-      const level = headingMatch[1].length;
-      out.push(`<h${level}>${applyInlineMarkdown(headingMatch[2])}</h${level}>`);
-      continue;
-    }
-    const listMatch = line.match(/^\s*[-*]\s+(.+)$/);
-    if (listMatch) {
-      flushParagraph();
-      listItems.push(`<li>${applyInlineMarkdown(listMatch[1])}</li>`);
-      continue;
-    }
-    paragraph.push(applyInlineMarkdown(line));
-  }
-  flushParagraph();
-  flushList();
-
-  let html = out.join("\n");
-  for (let i = 0; i < codeBlocks.length; i += 1) {
-    html = html.replaceAll(`@@CODE_BLOCK_${i}@@`, codeBlocks[i]);
-  }
-  for (let i = 0; i < blockMathTokens.length; i += 1) {
-    html = html.replaceAll(`@@MATH_BLOCK_${i}@@`, blockMathTokens[i]);
-  }
-  for (let i = 0; i < inlineMathTokens.length; i += 1) {
-    html = html.replaceAll(`@@MATH_INLINE_${i}@@`, inlineMathTokens[i]);
-  }
-  return html;
+  return wrapCodeBlocksWithCopyButton(sanitized);
 }
