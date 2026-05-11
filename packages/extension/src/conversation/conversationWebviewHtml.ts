@@ -386,12 +386,46 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       margin: 4px 0;
       background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
     }
-    .inline-sidechat-refs { display: inline; margin-left: 6px; }
-    .inline-sidechat-refs .ref-chip {
-      display: inline-block;
-      margin-right: 4px;
-      font-size: 0.78em;
+    .inline-sidechat-ref-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 6px 0 4px 0;
+      width: 100%;
+    }
+    .inline-sidechat-ref-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+      border-radius: 4px;
+      padding: 6px 8px;
+      background: var(--vscode-editor-inactiveSelectionBackground, rgba(128, 128, 128, 0.12));
+      color: var(--vscode-foreground);
+      cursor: pointer;
+      font: inherit;
+      line-height: 1.25;
+    }
+    .inline-sidechat-ref-btn:hover:not(:disabled) {
+      background: var(--vscode-list-hoverBackground);
+    }
+    .inline-sidechat-ref-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .inline-sidechat-ref-title {
+      display: block;
+      font-size: 0.72em;
+      font-weight: 600;
+      letter-spacing: 0.02em;
       color: var(--vscode-descriptionForeground);
+    }
+    .inline-sidechat-ref-sub {
+      display: block;
+      margin-top: 3px;
+      font-size: 0.88em;
+      color: var(--vscode-textLink-foreground, var(--vscode-foreground));
+      word-break: break-word;
     }
     .inline-sidechat-mentions { display: inline; margin-left: 6px; }
     .inline-sidechat-mentions .mention-chip {
@@ -3245,6 +3279,58 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       bodyEl.appendChild(wrap);
     }
 
+    function inlineSideChatReferenceStackHtml(m) {
+      var links = Array.isArray(m.reference_links) ? m.reference_links : [];
+      if (!links.length) return "";
+      var parts = [];
+      for (var i = 0; i < links.length; i++) {
+        var L = links[i];
+        if (!L || !L.kind) continue;
+        if (L.kind === "event" && L.event_id) {
+          parts.push(
+            '<button type="button" class="inline-sidechat-ref-btn" data-ref-kind="event" data-event-id="' +
+              esc(String(L.event_id)) +
+              '" title="Select this message in the conversation tree">' +
+              '<span class="inline-sidechat-ref-title">Referenced message</span>' +
+              '<span class="inline-sidechat-ref-sub">' +
+              esc(String(L.primary || "")) +
+              "</span></button>",
+          );
+        } else if (L.kind === "note") {
+          var dis = !L.event_id || !String(L.event_id).trim();
+          parts.push(
+            '<button type="button" class="inline-sidechat-ref-btn"' +
+              (dis ? " disabled" : "") +
+              ' data-ref-kind="note" data-event-id="' +
+              esc(String(L.event_id || "")) +
+              '" data-note-id="' +
+              esc(String(L.note_id || "")) +
+              '" title="Select the message this note is on">' +
+              '<span class="inline-sidechat-ref-title">Referenced note</span>' +
+              '<span class="inline-sidechat-ref-sub">' +
+              esc(String(L.primary || "")) +
+              "</span></button>",
+          );
+        } else if (L.kind === "reply") {
+          var sq = typeof L.seq === "number" && L.seq > 0 ? Math.floor(L.seq) : 0;
+          var disR = sq <= 0;
+          parts.push(
+            '<button type="button" class="inline-sidechat-ref-btn"' +
+              (disR ? " disabled" : "") +
+              ' data-ref-kind="reply" data-sc-seq="' +
+              esc(String(sq)) +
+              '" title="Scroll to this side-chat message">' +
+              '<span class="inline-sidechat-ref-title">Reply reference</span>' +
+              '<span class="inline-sidechat-ref-sub">' +
+              esc(String(L.primary || "")) +
+              "</span></button>",
+          );
+        }
+      }
+      if (!parts.length) return "";
+      return '<div class="inline-sidechat-ref-stack">' + parts.join("") + "</div>";
+    }
+
     function wireInlineSideChatListActions() {
       var list = document.getElementById("inlineSideChatList");
       if (!list || list.dataset.inlineScWired === "1") return;
@@ -3276,6 +3362,36 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         true,
       );
       list.addEventListener("click", function (ev) {
+        var refBtn = ev.target.closest && ev.target.closest("button.inline-sidechat-ref-btn");
+        if (refBtn && !refBtn.disabled) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var rk = refBtn.getAttribute("data-ref-kind");
+          if (rk === "event") {
+            var eid = refBtn.getAttribute("data-event-id");
+            if (eid)
+              vscode.postMessage({ type: "selectSideChatReference", kind: "event", eventId: eid });
+            return;
+          }
+          if (rk === "note") {
+            var ne = refBtn.getAttribute("data-event-id");
+            var nn = refBtn.getAttribute("data-note-id");
+            if (ne && nn)
+              vscode.postMessage({
+                type: "selectSideChatReference",
+                kind: "note",
+                eventId: ne,
+                noteId: nn,
+              });
+            return;
+          }
+          if (rk === "reply") {
+            var sq = parseInt(refBtn.getAttribute("data-sc-seq") || "0", 10);
+            if (sq > 0) vscode.postMessage({ type: "selectSideChatReference", kind: "reply", seq: sq });
+            return;
+          }
+          return;
+        }
         var t = ev.target;
         if (!t || !t.closest) return;
         var mb = t.closest("[data-inline-sc-menu-btn]");
@@ -3375,17 +3491,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               .join("") +
             "</span>";
         }
-        var refsHtml = "";
-        if (Array.isArray(m.reference_chips) && m.reference_chips.length) {
-          refsHtml =
-            '<span class="inline-sidechat-refs">' +
-            m.reference_chips
-              .map(function (r) {
-                return '<span class="ref-chip">' + esc(String(r)) + "</span>";
-              })
-              .join("") +
-            "</span>";
-        }
+        var refStackHtml = inlineSideChatReferenceStackHtml(m);
         var refPreview = "";
         if (m.referenced_side_chat_preview && typeof m.referenced_side_chat_preview.seq === "number") {
           refPreview =
@@ -3423,10 +3529,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             ? '<span class="inline-sidechat-unread" title="Unread">●</span>'
             : "") +
           mentionsHtml +
-          refsHtml +
           "</div>" +
           menuBtn +
           "</div>" +
+          refStackHtml +
           refPreview +
           '<div class="body md" dir="auto">' +
           bodyHtml +

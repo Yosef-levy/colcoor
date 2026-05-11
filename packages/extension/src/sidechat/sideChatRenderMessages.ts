@@ -1,13 +1,15 @@
-import type { SideChatMessageOut } from "../api/client";
+import type { NoteOut, SideChatMessageOut } from "../api/client";
 import { markdownToSafeHtml } from "../conversation/threadMarkdown";
 import { extractSideChatMentions } from "./sideChatMentions";
-import { sideChatReferenceChips } from "./sideChatReferenceChips";
+import { buildSideChatReferenceLinks, sideChatReferenceChips, type SideChatReferenceLink } from "./sideChatReferenceChips";
 import { resolveSideChatReferencePreview } from "./sideChatReferences";
 
 export type SideChatRenderMessage = SideChatMessageOut & {
   rendered_body_html: string;
   referenced_side_chat_preview: { seq: number; text: string } | null;
   reference_chips: string[];
+  /** Clickable main-thread / reply refs for the inline side-chat list. */
+  reference_links: SideChatReferenceLink[];
   mentions: string[];
 };
 
@@ -77,6 +79,7 @@ export function toSideChatRenderMessages(
   messages: readonly SideChatMessageOut[],
   referenceLookups?: ReferenceLabelLookups,
   userImageDataUrlsByMessageId?: ReadonlyMap<string, readonly string[]>,
+  notes?: readonly NoteOut[] | null,
 ): SideChatRenderMessage[] {
   return messages.map((m) => {
     if (m.deleted_at != null) {
@@ -85,6 +88,7 @@ export function toSideChatRenderMessages(
         rendered_body_html: deletedSideChatPlaceholderHtml(m),
         referenced_side_chat_preview: null,
         reference_chips: [],
+        reference_links: [],
         mentions: [],
       };
     }
@@ -96,6 +100,7 @@ export function toSideChatRenderMessages(
         m.referenced_side_chat_message_id,
       ),
       reference_chips: sideChatReferenceChips(m, referenceLookups),
+      reference_links: buildSideChatReferenceLinks(m, referenceLookups, notes ?? undefined, messages),
       mentions: extractSideChatMentions(m.body),
     };
   });

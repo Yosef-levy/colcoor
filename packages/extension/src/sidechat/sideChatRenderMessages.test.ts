@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SideChatMessageOut } from "../api/client";
+import type { NoteOut, SideChatMessageOut } from "../api/client";
 import { toSideChatRenderMessages } from "./sideChatRenderMessages";
 
 function row(
@@ -86,6 +86,21 @@ describe("toSideChatRenderMessages", () => {
       }),
     ]);
     expect(out[0].reference_chips).toEqual(["event:11111111", "note:22222222", "reply:33333333"]);
+    expect(out[0].reference_links).toEqual([
+      { kind: "event", event_id: "11111111-1111-4111-8111-111111111111", primary: "11111111" },
+      {
+        kind: "note",
+        event_id: "11111111-1111-4111-8111-111111111111",
+        note_id: "22222222-2222-4222-8222-222222222222",
+        primary: "22222222",
+      },
+      {
+        kind: "reply",
+        message_id: "33333333-3333-4333-8333-333333333333",
+        seq: 0,
+        primary: "reply:33333333",
+      },
+    ]);
   });
 
   it("renders deleted placeholder instead of body when deleted_at is set", () => {
@@ -102,6 +117,7 @@ describe("toSideChatRenderMessages", () => {
     expect(out[0].rendered_body_html).toContain("Message deleted.");
     expect(out[0].rendered_body_html).not.toContain("secret");
     expect(out[0].reference_chips).toEqual([]);
+    expect(out[0].reference_links).toEqual([]);
     expect(out[0].mentions).toEqual([]);
   });
 
@@ -135,5 +151,51 @@ describe("toSideChatRenderMessages", () => {
       },
     );
     expect(out[0].reference_chips).toEqual(["event:11111111 Root summary", "note:22222222 Bug note"]);
+    expect(out[0].reference_links).toEqual([
+      { kind: "event", event_id: "11111111-1111-4111-8111-111111111111", primary: "11111111 · Root summary" },
+      {
+        kind: "note",
+        event_id: "11111111-1111-4111-8111-111111111111",
+        note_id: "22222222-2222-4222-8222-222222222222",
+        primary: "22222222 · Bug note",
+      },
+    ]);
+  });
+
+  it("reference_links resolve note host from notes when referenced_event_id is absent", () => {
+    const noteId = "22222222-2222-4222-8222-222222222222";
+    const eventId = "11111111-1111-4111-8111-111111111111";
+    const notes: NoteOut[] = [
+      {
+        id: noteId,
+        event_id: eventId,
+        author_user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        content: "n",
+        created_at: "t",
+        updated_at: "t",
+      },
+    ];
+    const out = toSideChatRenderMessages(
+      [
+        row({
+          id: "m1",
+          seq: 1,
+          body: "x",
+          referenced_event_id: null,
+          referenced_note_id: noteId,
+        }),
+      ],
+      undefined,
+      undefined,
+      notes,
+    );
+    expect(out[0].reference_links).toEqual([
+      {
+        kind: "note",
+        event_id: eventId,
+        note_id: noteId,
+        primary: "22222222",
+      },
+    ]);
   });
 });

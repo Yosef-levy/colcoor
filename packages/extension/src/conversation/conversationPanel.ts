@@ -208,6 +208,9 @@ type FromWebview =
   | { type: "referenceInSideChat" }
   | { type: "referenceNoteInSideChat" }
   | { type: "clearSideChatGraphReference" }
+  | { type: "selectSideChatReference"; kind: "event"; eventId: string }
+  | { type: "selectSideChatReference"; kind: "note"; eventId: string; noteId: string }
+  | { type: "selectSideChatReference"; kind: "reply"; seq: number }
   | { type: "openMembers" }
   | { type: "addMember" }
   | { type: "changeMemberRole" }
@@ -751,6 +754,7 @@ export function createConversationPanelController(
       inlineSideChatRows,
       { eventLabelsById: sideChatEventLabelsById, noteLabelsById: sideChatNoteLabelsById },
       inlineSideChatUrlsByMessageId,
+      lastNotes,
     );
   }
 
@@ -2052,6 +2056,69 @@ export function createConversationPanelController(
       if (msg.type === "clearSideChatGraphReference") {
         clearPendingSideChatGraphReference();
         postState(lastTreeEvents, sendAbort != null, null);
+        return;
+      }
+      if (msg.type === "selectSideChatReference") {
+        if (!conversationId || !panel) {
+          return;
+        }
+        if (msg.kind === "event") {
+          const id = normalizeOptionalGraphEventId(typeof msg.eventId === "string" ? msg.eventId : "");
+          if (id === undefined || !lastTreeEvents.some((e) => e.id === id)) {
+            void vscode.window.showWarningMessage(
+              `Colcoor: that message is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+            );
+            return;
+          }
+          const prevSel = selectedEventId;
+          selectedEventId = id;
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          void syncActiveToBackend(id, {
+            needsContextRebuild: prevSel !== undefined && prevSel !== id,
+          });
+          return;
+        }
+        if (msg.kind === "note") {
+          const eid = normalizeOptionalGraphEventId(typeof msg.eventId === "string" ? msg.eventId : "");
+          if (eid === undefined || !lastTreeEvents.some((e) => e.id === eid)) {
+            void vscode.window.showWarningMessage(
+              `Colcoor: that note’s message is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+            );
+            return;
+          }
+          const prevSel = selectedEventId;
+          selectedEventId = eid;
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          void syncActiveToBackend(eid, {
+            needsContextRebuild: prevSel !== undefined && prevSel !== eid,
+          });
+          await showNotesOnSelectedMessage();
+          return;
+        }
+        if (msg.kind === "reply") {
+          const seq = typeof msg.seq === "number" && Number.isFinite(msg.seq) ? Math.floor(msg.seq) : 0;
+          if (seq <= 0) {
+            return;
+          }
+          if (conversationId) {
+            dismissedInlineSideChatByConversationId.delete(conversationId);
+          }
+          inlineSideChatVisible = true;
+          try {
+            await refreshInlineSideChat();
+          } catch (e) {
+            if (isPlanLimitColcoorApiError(e)) {
+              void showColcoorApiFailure(e);
+            }
+          }
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          try {
+            await panel.webview.postMessage({ type: "focusSideChatSeq", seq });
+          } catch {
+            /* webview gone */
+          }
+          return;
+        }
         return;
       }
       if (msg.type === "closeSideChat") {
