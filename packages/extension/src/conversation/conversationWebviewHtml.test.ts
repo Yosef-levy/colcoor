@@ -229,6 +229,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('walk("__root__", 0)');
   });
 
+  it("shows staged main-thread reference row and clear postMessage in inline side chat", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="inlineSideChatGraphRefRow"');
+    expect(html).toContain('id="btnClearInlineSideChatGraphRef"');
+    expect(html).toContain('vscode.postMessage({ type: "clearSideChatGraphReference" })');
+    expect(html).toContain("inlineSideChatUpdateGraphRefHint");
+  });
+
   it("drives Open side chat label and tooltip from host unread state ([ui-features.md] §10)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("sideChatOpenButtonLabel");
@@ -238,9 +246,11 @@ describe("getConversationWebviewHtml", () => {
 
   it("tree panel keeps short title and moves explanation to ? help ([ui-features.md] §5)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('<span class="panel-hint-title">Event tree</span>');
+    expect(html).toContain('<span class="panel-hint-title">Conversation tree</span>');
     expect(html).toContain('id="btnTreeHintHelp"');
-    expect(html).toContain("Event tree help");
+    expect(html).toContain("Conversation tree help");
+    expect(html).toContain('id="btnCollapseToThread"');
+    expect(html).toContain("collapseToCurrentThread");
   });
 
   it("exposes thread visited-selection back/forward controls under the thread hint", () => {

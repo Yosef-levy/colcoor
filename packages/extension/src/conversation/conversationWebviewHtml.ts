@@ -1512,16 +1512,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   <div class="layout">
     <div class="col-tree">
       <div class="hint tree-panel-hint">
-        <span class="panel-hint-title">Event tree</span>
+        <span class="panel-hint-title">Conversation tree</span>
         <span class="panel-hint-actions">
           <button
             id="btnTreeHintHelp"
             type="button"
             class="btn-secondary btn-icon"
             title="Click a node to choose where the next reply attaches. Use the resize handle in the bottom-right corner of this panel to change width."
-            aria-label="Event tree help"
+            aria-label="Conversation tree help"
             data-help-text="Click a node to choose where the next reply attaches.\nUse the resize handle in the bottom-right corner of this panel to change width."
           >?</button>
+          <button
+            id="btnCollapseToThread"
+            type="button"
+            class="btn-secondary btn-icon"
+            title="Collapse all branches except the selected thread"
+            aria-label="Collapse to current thread"
+          >⇲</button>
           <button
             id="refresh"
             type="button"
@@ -1622,6 +1629,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div id="inlineSideChatReplyRow" class="row inline-sidechat-reply-row" style="display:none">
           <span id="inlineSideChatReplyHint" class="inline-sidechat-reply-hint" role="status"></span>
           <button type="button" id="btnClearInlineSideChatReply" class="btn-secondary">Clear reply</button>
+        </div>
+        <div id="inlineSideChatGraphRefRow" class="row inline-sidechat-reply-row" style="display:none">
+          <span id="inlineSideChatGraphRefHint" class="inline-sidechat-reply-hint" role="status"></span>
+          <button type="button" id="btnClearInlineSideChatGraphRef" class="btn-secondary">Clear reference</button>
         </div>
         <div class="inline-sidechat-composer" style="flex-shrink:0;">
           <div id="inlineSideChatMentionPicker" class="inline-sidechat-mention-picker" hidden></div>
@@ -1879,6 +1890,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       sideChatMentionMembers: [],
       sideChatMyMentionTargets: [],
       sideChatSoundVolume: 0.7,
+      pendingSideChatGraphReferenceSummary: null,
     };
     wireInlineSideChatAudioUnlockFromUserGesture();
 
@@ -2685,14 +2697,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       composerResizeObserver.observe(ta);
     }
 
-    function renderTree() {
-      const root = document.getElementById("tree");
-      if (!root) return;
+    function buildVisibleTreeContext() {
       const evs = state.events;
-      if (!evs.length) {
-        root.innerHTML = '<p class="empty">No events yet.</p>';
-        return;
-      }
       const showPrivate = showPrivateDraftSubtreeInUi();
       const byId = Object.fromEntries(evs.map((e) => [e.id, e]));
       const treeEvents = showPrivate ? evs : evs.filter((e) => !graphEventIsPrivate(e));
@@ -2706,9 +2712,59 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       for (const arr of byParent.values()) {
         arr.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
       }
+      return { evs, byId, treeEvents, shownIds, byParent };
+    }
+
+    function postCollapsedTreeState() {
+      var collapsedList = [];
+      for (var cid in state.treeCollapsedIds) {
+        if (Object.prototype.hasOwnProperty.call(state.treeCollapsedIds, cid) && state.treeCollapsedIds[cid]) {
+          collapsedList.push(cid);
+        }
+      }
+      vscode.postMessage({ type: "treeCollapse", collapsedEventIds: collapsedList });
+    }
+
+    function collapseToCurrentThread() {
+      const ctx = buildVisibleTreeContext();
+      const treeEvents = ctx.treeEvents;
+      if (!treeEvents.length) return;
+      const keepExpanded = new Set();
+      const seen = new Set();
+      let curId = typeof state.selectedEventId === "string" ? state.selectedEventId : "";
+      while (curId && !seen.has(curId)) {
+        seen.add(curId);
+        const row = ctx.byId[curId];
+        if (!row) break;
+        const parentKey = effectiveTreeParentKey(row, ctx.byId, ctx.shownIds, showPrivateDraftSubtreeInUi());
+        if (!parentKey || parentKey === "__root__") break;
+        keepExpanded.add(parentKey);
+        curId = parentKey;
+      }
+      const next = {};
+      for (const e of treeEvents) {
+        const childList = ctx.byParent.get(e.id);
+        const hasKids = !!(childList && childList.length);
+        if (hasKids && !keepExpanded.has(e.id)) {
+          next[e.id] = true;
+        }
+      }
+      state.treeCollapsedIds = next;
+      renderTree();
+      postCollapsedTreeState();
+    }
+
+    function renderTree() {
+      const root = document.getElementById("tree");
+      if (!root) return;
+      const ctx = buildVisibleTreeContext();
+      if (!ctx.evs.length) {
+        root.innerHTML = '<p class="empty">No events yet.</p>';
+        return;
+      }
       function walk(parentKey, depth) {
         const d = typeof depth === "number" && depth >= 0 ? depth : 0;
-        const kids = byParent.get(parentKey) || [];
+        const kids = ctx.byParent.get(parentKey) || [];
         if (!kids.length) return "";
         const colorLevel = d % 6;
         let html = '<ul class="tree-nested tree-guide-l' + colorLevel + '">';
@@ -2728,7 +2784,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               ? String(e.checkpoint_label).trim()
               : "";
           const msgTitleBlock = cpTree ? '<div class="node-msg-title">' + esc(cpTree) + "</div>" : "";
-          const childList = byParent.get(e.id);
+          const childList = ctx.byParent.get(e.id);
           const hasKids = !!(childList && childList.length);
           const collapsed = !!(hasKids && state.treeCollapsedIds && state.treeCollapsedIds[e.id]);
           const expander = hasKids
@@ -3124,6 +3180,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       hint.textContent = "Replying to a side-chat message — send includes that reference.";
     }
 
+    function inlineSideChatUpdateGraphRefHint() {
+      var row = document.getElementById("inlineSideChatGraphRefRow");
+      var hint = document.getElementById("inlineSideChatGraphRefHint");
+      if (!row || !hint) return;
+      var s =
+        state.pendingSideChatGraphReferenceSummary &&
+        String(state.pendingSideChatGraphReferenceSummary).trim();
+      if (!s) {
+        row.style.display = "none";
+        hint.textContent = "";
+        return;
+      }
+      row.style.display = "flex";
+      hint.textContent = "Next send also references: " + s + ".";
+    }
+
     function inlineSideChatEndEdit(rowEl, bodyHtml) {
       rowEl.dataset.editing = "0";
       var bodyEl = rowEl.querySelector(".body");
@@ -3245,6 +3317,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           sideChatResizeObserver.disconnect();
           sideChatResizeObserver = null;
         }
+        inlineSideChatUpdateGraphRefHint();
         return;
       }
       col.style.display = "flex";
@@ -3256,6 +3329,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         list.innerHTML = '<p class="empty">No side-chat messages yet.</p>';
         maybeScrollInlineSideChatAfterLocalSend();
         inlineSideChatUpdateReplyHint();
+        inlineSideChatUpdateGraphRefHint();
         return;
       }
       var lrRaw = state.sideChatLastReadSeq;
@@ -3362,6 +3436,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       list.innerHTML = html;
       maybeScrollInlineSideChatAfterLocalSend();
       inlineSideChatUpdateReplyHint();
+      inlineSideChatUpdateGraphRefHint();
     }
 
     function scrollInlineSideChatToSeq(seq) {
@@ -3732,13 +3807,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
           state.treeCollapsedIds = next;
           renderTree();
-          var collapsedList = [];
-          for (var cid in state.treeCollapsedIds) {
-            if (Object.prototype.hasOwnProperty.call(state.treeCollapsedIds, cid) && state.treeCollapsedIds[cid]) {
-              collapsedList.push(cid);
-            }
-          }
-          vscode.postMessage({ type: "treeCollapse", collapsedEventIds: collapsedList });
+          postCollapsedTreeState();
           return;
         }
         var node = ev.target.closest && ev.target.closest(".node");
@@ -4260,6 +4329,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             typeof m.sideChatSoundVolume === "number" && Number.isFinite(m.sideChatSoundVolume)
               ? clampInlineSideChatVolume(m.sideChatSoundVolume)
               : 0.7,
+          pendingSideChatGraphReferenceSummary:
+            typeof m.pendingSideChatGraphReferenceSummary === "string" &&
+            m.pendingSideChatGraphReferenceSummary.trim()
+              ? m.pendingSideChatGraphReferenceSummary.trim()
+              : null,
         };
         render();
         return;
@@ -4505,6 +4579,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       ev.stopPropagation();
       toggleHelpPopoverByButtonId("btnTreeHintHelp");
     });
+    document.getElementById("btnCollapseToThread").addEventListener("click", function () {
+      collapseToCurrentThread();
+    });
     document.getElementById("btnSideChatHintHelp").addEventListener("click", function (ev) {
       ev.preventDefault();
       ev.stopPropagation();
@@ -4537,6 +4614,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("btnClearInlineSideChatReply").addEventListener("click", function () {
       inlineSideChatReplyTargetId = null;
       inlineSideChatUpdateReplyHint();
+    });
+    document.getElementById("btnClearInlineSideChatGraphRef").addEventListener("click", function () {
+      vscode.postMessage({ type: "clearSideChatGraphReference" });
     });
     document.getElementById("btnInlineSideChatSend").addEventListener("click", () => {
       var ta = document.getElementById("inlineSideChatInput");

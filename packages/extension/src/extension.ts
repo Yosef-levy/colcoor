@@ -1289,6 +1289,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       try {
         await conversationPanel.reveal(ctx.conversationId, ctx.title ?? null);
+        conversationPanel.queueSideChatGraphReferenceForNextSend(ctx.selectedEventId, null);
         await conversationPanel.openInlineSideChat();
       } catch (e) {
         await showColcoorApiFailure(e);
@@ -1327,9 +1328,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         if (!pick) {
           return;
         }
+        const noteId =
+          typeof (pick as { nid?: string }).nid === "string" && (pick as { nid: string }).nid.trim()
+            ? (pick as { nid: string }).nid.trim()
+            : typeof pick.description === "string"
+              ? pick.description.trim()
+              : "";
         await conversationPanel.revealAtEvent(ctx.conversationId, ctx.title ?? null, ctx.selectedEventId, {
           prefetchedNotes: notesForPick,
         });
+        conversationPanel.queueSideChatGraphReferenceForNextSend(ctx.selectedEventId, noteId || null);
         await conversationPanel.openInlineSideChat();
       } catch (e) {
         await showColcoorApiFailure(e);

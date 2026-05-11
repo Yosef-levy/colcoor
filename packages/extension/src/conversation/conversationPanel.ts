@@ -170,6 +170,8 @@ type WebviewStateMessage = {
   sideChatMyMentionTargets: string[];
   /** Side-chat sound preview/playback volume as linear gain (0..1). */
   sideChatSoundVolume: number;
+  /** One-line summary for staged main-thread reference on next side-chat send, or null. */
+  pendingSideChatGraphReferenceSummary: string | null;
 };
 
 type FromWebview =
@@ -205,6 +207,7 @@ type FromWebview =
     }
   | { type: "referenceInSideChat" }
   | { type: "referenceNoteInSideChat" }
+  | { type: "clearSideChatGraphReference" }
   | { type: "openMembers" }
   | { type: "addMember" }
   | { type: "changeMemberRole" }
@@ -323,6 +326,8 @@ export function createConversationPanelController(
   restoreMessageBranchFromPalette: () => Promise<void>;
   /** Show inline side-chat drawer in this conversation tab. */
   openInlineSideChat: () => Promise<void>;
+  /** Attach main-thread message/note ids to the next inline side-chat send (cleared after send or conversation switch). */
+  queueSideChatGraphReferenceForNextSend: (eventId: string | null, noteId: string | null) => void;
   /** Play side-chat sound preview in the open webview. */
   previewSideChatSound: (kind: "message" | "mention") => Promise<boolean>;
   dispose: () => void;
@@ -399,6 +404,9 @@ export function createConversationPanelController(
   /** Tree/note labels for side-chat reference chips (aligned with cached tree + notes). */
   let sideChatEventLabelsById: Record<string, string> = {};
   let sideChatNoteLabelsById: Record<string, string> = {};
+  /** Next inline side-chat POST includes these main-thread refs (until sent or cleared). */
+  let pendingSideChatReferencedEventId: string | null = null;
+  let pendingSideChatReferencedNoteId: string | null = null;
   let sideChatSseAbort: AbortController | undefined;
   let inlineSideChatSseConversationId: string | undefined;
   const inlineSideChatNotifiedMessageIds = new Set<string>();
@@ -531,6 +539,42 @@ export function createConversationPanelController(
   function shortTreeNoteLabelForSideChat(n: NoteOut): string {
     const t = n.content.replace(/\s+/g, " ").trim();
     return t ? t.slice(0, 32) : "(empty note)";
+  }
+
+  function clearPendingSideChatGraphReference(): void {
+    pendingSideChatReferencedEventId = null;
+    pendingSideChatReferencedNoteId = null;
+  }
+
+  function applyPendingSideChatGraphReference(eventId: string | null, noteId: string | null): void {
+    pendingSideChatReferencedEventId = normalizeSideChatReferenceId(
+      typeof eventId === "string" ? eventId : undefined,
+    );
+    pendingSideChatReferencedNoteId = normalizeSideChatReferenceId(
+      typeof noteId === "string" ? noteId : undefined,
+    );
+  }
+
+  function pendingSideChatGraphReferenceSummaryForWebview(): string | null {
+    if (pendingSideChatReferencedNoteId) {
+      const nid = pendingSideChatReferencedNoteId;
+      let text: string | undefined = sideChatNoteLabelsById[nid];
+      if (!text) {
+        const n = lastNotes.find((x) => x.id === nid);
+        text = n ? shortTreeNoteLabelForSideChat(n) : undefined;
+      }
+      return text ? `Note · ${text}` : "Note";
+    }
+    if (pendingSideChatReferencedEventId) {
+      const eid = pendingSideChatReferencedEventId;
+      let text: string | undefined = sideChatEventLabelsById[eid];
+      if (!text) {
+        const ev = lastTreeEvents.find((x) => x.id === eid);
+        text = ev ? shortTreeEventLabelForSideChat(ev) : undefined;
+      }
+      return text ? `Message · ${text}` : "Message";
+    }
+    return null;
   }
 
   function syncSideChatReferenceLabelMapsFromTree(events: GraphEventNode[], notes: NoteOut[]): void {
@@ -789,6 +833,23 @@ export function createConversationPanelController(
     }
   }
 
+  async function openInlineSideChatDrawer(): Promise<void> {
+    if (conversationId) {
+      dismissedInlineSideChatByConversationId.delete(conversationId);
+    }
+    inlineSideChatVisible = true;
+    try {
+      await refreshConversationMeta();
+      await refreshInlineSideChat();
+      await markInlineSideChatReadFromCache(true);
+    } catch (e) {
+      if (isPlanLimitColcoorApiError(e)) {
+        void showColcoorApiFailure(e);
+      }
+    }
+    postState(lastTreeEvents, sendAbort != null, null);
+  }
+
   async function postOneInlineSideChatJob(job: {
     conversationId: string;
     tempId: string;
@@ -1033,6 +1094,7 @@ export function createConversationPanelController(
         })),
         sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
         sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
+        pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
       };
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
@@ -1110,6 +1172,7 @@ export function createConversationPanelController(
           })),
           sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
           sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
+          pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -1860,7 +1923,8 @@ export function createConversationPanelController(
           );
           return;
         }
-        await vscode.commands.executeCommand("colcoor.referenceSelectedMessageInSideChat");
+        applyPendingSideChatGraphReference(selectedEventId, null);
+        await openInlineSideChatDrawer();
         return;
       }
       if (msg.type === "referenceNoteInSideChat") {
@@ -1982,19 +2046,11 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "openSideChat") {
-        if (conversationId) {
-          dismissedInlineSideChatByConversationId.delete(conversationId);
-        }
-        inlineSideChatVisible = true;
-        try {
-          await refreshConversationMeta();
-          await refreshInlineSideChat();
-          await markInlineSideChatReadFromCache(true);
-        } catch (e) {
-          if (isPlanLimitColcoorApiError(e)) {
-            void showColcoorApiFailure(e);
-          }
-        }
+        await openInlineSideChatDrawer();
+        return;
+      }
+      if (msg.type === "clearSideChatGraphReference") {
+        clearPendingSideChatGraphReference();
         postState(lastTreeEvents, sendAbort != null, null);
         return;
       }
@@ -2048,11 +2104,13 @@ export function createConversationPanelController(
         const refSc = normalizeSideChatReferenceId(
           typeof msg.referencedSideChatMessageId === "string" ? msg.referencedSideChatMessageId : undefined,
         );
+        const snapEv = pendingSideChatReferencedEventId;
+        const snapNote = pendingSideChatReferencedNoteId;
         const payload = buildSideChatSendPayload(
           msg.text,
           refSc,
-          null,
-          null,
+          snapEv,
+          snapNote,
           inlineSideChatRows,
           contentJson,
         );
@@ -2060,6 +2118,7 @@ export function createConversationPanelController(
           void vscode.window.showWarningMessage("Colcoor: side chat message is empty.");
           return;
         }
+        clearPendingSideChatGraphReference();
         const me = await ensureMeForSideChat();
         const tempId = newOptimisticSideChatMessageId();
         const jobConversationId = conversationId;
@@ -2361,6 +2420,7 @@ export function createConversationPanelController(
       inlineSideChatUrlsByMessageId = new Map();
       inlineSideChatRendered = [];
       inlineSideChatPostChain = Promise.resolve();
+      clearPendingSideChatGraphReference();
       syncConversationPanelOpenContext();
     });
 
@@ -2592,6 +2652,7 @@ export function createConversationPanelController(
         busyAnchorParentEventId = undefined;
         pendingSendUserMarkdown = undefined;
         syncConversationReplyInProgressContext();
+        clearPendingSideChatGraphReference();
       }
       conversationId = cid;
       conversationTitle = title;
@@ -2642,6 +2703,7 @@ export function createConversationPanelController(
         busyAnchorParentEventId = undefined;
         pendingSendUserMarkdown = undefined;
         syncConversationReplyInProgressContext();
+        clearPendingSideChatGraphReference();
       }
       conversationId = cid;
       conversationTitle = title;
@@ -2817,20 +2879,10 @@ export function createConversationPanelController(
       }
     },
     async openInlineSideChat(): Promise<void> {
-      if (conversationId) {
-        dismissedInlineSideChatByConversationId.delete(conversationId);
-      }
-      inlineSideChatVisible = true;
-      try {
-        await refreshConversationMeta();
-        await refreshInlineSideChat();
-        await markInlineSideChatReadFromCache(true);
-      } catch (e) {
-        if (isPlanLimitColcoorApiError(e)) {
-          void showColcoorApiFailure(e);
-        }
-      }
-      postState(lastTreeEvents, Boolean(sendAbort), null);
+      await openInlineSideChatDrawer();
+    },
+    queueSideChatGraphReferenceForNextSend(eventId: string | null, noteId: string | null): void {
+      applyPendingSideChatGraphReference(eventId, noteId);
     },
     async previewSideChatSound(kind: "message" | "mention"): Promise<boolean> {
       if (!panel || !webviewReady) {
