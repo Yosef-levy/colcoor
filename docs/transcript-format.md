@@ -1,6 +1,8 @@
-# Transcript format — Colcoor extension
+# Transcript format — Colcoor Cursor extension
 
-Single reference for the **text** the extension builds and sends to the Cursor agent (**authoritative context**). Uses **wrapper tags** for **USER**, **LLM**, and **NOTE** only — no `<<<TOOL_CALL>>>`, `<<<TOOL_RESULT>>>`, or `<<<SYSTEM>>>` in this product’s transcript.
+Single reference for the **text** the **Cursor / VS Code extension** ([`packages/extension`](../packages/extension)) builds and sends to the Cursor agent (**authoritative context**). Uses **wrapper tags** for **USER**, **LLM**, and **NOTE** only — no `<<<TOOL_CALL>>>`, `<<<TOOL_RESULT>>>`, or `<<<SYSTEM>>>` in this product’s transcript.
+
+> **Scope:** this format is required only on the **Cursor main-thread agent path**. Clients that are not main-thread agent hosts — for example the Claude Desktop extension at [`packages/claude_extension/`](../packages/claude_extension/) — do **not** build this transcript: Claude reasons over the live `/api/v1` tool responses (tree, notes, side chat) returned by the MCP server.
 
 Ordering and path rules align with [domain-model.md](domain-model.md) and [principles.md](principles.md).
 

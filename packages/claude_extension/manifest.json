@@ -1,0 +1,120 @@
+{
+  "dxt_version": "0.1",
+  "name": "colcoor",
+  "display_name": "Colcoor",
+  "version": "0.1.0",
+  "description": "Drive the Colcoor conversation orchestrator from Claude Desktop via the same backend the Cursor extension uses.",
+  "long_description": "Colcoor is a structured conversation orchestrator (event graph, side chat, notes, stars, branches). This extension lets Claude Desktop list and create conversations, traverse the main-thread event tree, append user messages and assistant replies, manage members, and post side-chat messages. All operations go through the existing Colcoor HTTP backend; no Colcoor code is bundled in the extension.",
+  "author": {
+    "name": "Colcoor"
+  },
+  "license": "MIT",
+  "keywords": ["colcoor", "mcp", "conversation", "orchestrator"],
+  "server": {
+    "type": "node",
+    "entry_point": "server.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server.js"],
+      "env": {
+        "COLCOOR_BACKEND_URL": "${user_config.backend_url}",
+        "COLCOOR_API_TOKEN": "${user_config.api_token}",
+        "COLCOOR_CURSOR_ACCESS_TOKEN": "${user_config.cursor_access_token}",
+        "COLCOOR_PROVIDER_HINT": "${user_config.provider_hint}",
+        "COLCOOR_AGENT_AUTHOR": "${user_config.agent_author}",
+        "COLCOOR_REQUEST_TIMEOUT_MS": "${user_config.request_timeout_ms}"
+      }
+    }
+  },
+  "user_config": {
+    "backend_url": {
+      "type": "string",
+      "title": "Colcoor backend URL",
+      "description": "Origin only (no path, no trailing slash). e.g. http://127.0.0.1:8000 for local uvicorn, http://127.0.0.1 for local docker-compose nginx, https://your-host for a deployed VM.",
+      "required": true,
+      "default": "http://127.0.0.1:8000"
+    },
+    "api_token": {
+      "type": "string",
+      "title": "Colcoor API JWT (optional)",
+      "description": "Pre-issued Colcoor JWT obtained from POST /api/v1/auth/cursor. Leave blank to sign in interactively via the colcoor_sign_in_with_cursor tool.",
+      "required": false,
+      "sensitive": true,
+      "default": ""
+    },
+    "cursor_access_token": {
+      "type": "string",
+      "title": "Cursor / VS Code IdP access token (optional)",
+      "description": "If provided and `api_token` is empty, the extension exchanges this token for a Colcoor JWT on startup via POST /api/v1/auth/cursor (see docs/authentication.md).",
+      "required": false,
+      "sensitive": true,
+      "default": ""
+    },
+    "provider_hint": {
+      "type": "string",
+      "title": "Identity provider hint",
+      "description": "Used alongside `cursor_access_token`. One of: auto, github, microsoft, google.",
+      "required": false,
+      "default": "auto"
+    },
+    "agent_author": {
+      "type": "string",
+      "title": "Author label for assistant messages",
+      "description": "String stored in `events.author` when Claude appends an `assistant_output` via colcoor_append_assistant_message. Default: claude_desktop.",
+      "required": false,
+      "default": "claude_desktop"
+    },
+    "request_timeout_ms": {
+      "type": "string",
+      "title": "Per-request timeout (ms)",
+      "description": "Default timeout in milliseconds for backend HTTP requests. Increase if your backend is remote and slow.",
+      "required": false,
+      "default": "30000"
+    }
+  },
+  "tools": [
+    { "name": "colcoor_health", "description": "Probe the configured Colcoor backend health endpoint." },
+    { "name": "colcoor_session_status", "description": "Whether the MCP server is signed in to Colcoor." },
+    { "name": "colcoor_sign_in_with_cursor", "description": "Exchange a Cursor IdP access token for a Colcoor JWT." },
+    { "name": "colcoor_set_api_token", "description": "Set the in-memory Colcoor JWT directly." },
+    { "name": "colcoor_sign_out", "description": "Clear the in-memory Colcoor JWT." },
+    { "name": "colcoor_who_am_i", "description": "Fetch the caller's Colcoor profile." },
+    { "name": "colcoor_update_profile", "description": "Update the caller's display name and/or avatar." },
+    { "name": "colcoor_list_conversations", "description": "List conversations the caller is a member of." },
+    { "name": "colcoor_create_conversation", "description": "Create a new conversation (caller becomes owner)." },
+    { "name": "colcoor_rename_conversation", "description": "Update a conversation's shared title." },
+    { "name": "colcoor_set_conversation_pinned", "description": "Pin or unpin a conversation for the caller." },
+    { "name": "colcoor_delete_conversation", "description": "Owner-only: soft-delete an entire conversation graph." },
+    { "name": "colcoor_restore_deleted_conversation", "description": "Owner/editor: restore a soft-deleted conversation." },
+    { "name": "colcoor_list_members", "description": "List members of a conversation." },
+    { "name": "colcoor_search_member_invite_candidates", "description": "Search Colcoor accounts to invite by UUID, email, or handle." },
+    { "name": "colcoor_add_member", "description": "Owner/editor: add a member as editor or viewer." },
+    { "name": "colcoor_change_member_role", "description": "Owner-only: change a member's role." },
+    { "name": "colcoor_remove_member", "description": "Owner-only: remove a non-owner member." },
+    { "name": "colcoor_get_conversation_tree", "description": "Get the full main-thread event graph." },
+    { "name": "colcoor_get_active_path", "description": "Get the caller's active node and the root → active path." },
+    { "name": "colcoor_set_active_event", "description": "Move the caller's active branch anchor." },
+    { "name": "colcoor_star_event", "description": "Star an event (idempotent)." },
+    { "name": "colcoor_unstar_event", "description": "Remove a star from an event." },
+    { "name": "colcoor_delete_event_subtree", "description": "Soft-delete an event and all replies under it." },
+    { "name": "colcoor_undo_event_delete", "description": "Undo a recent soft-delete batch by deletion_group_id." },
+    { "name": "colcoor_restore_event_subtree", "description": "Owner/editor: restore a soft-deleted branch." },
+    { "name": "colcoor_set_event_checkpoint_label", "description": "Set or clear an event's display-only checkpoint label." },
+    { "name": "colcoor_append_user_message", "description": "Append a `user_input` event under the chosen reply parent." },
+    { "name": "colcoor_append_assistant_message", "description": "Append an `assistant_output` event (Claude as the agent author)." },
+    { "name": "colcoor_get_default_branch_tip", "description": "Return the event the next user_input would attach to by default." },
+    { "name": "colcoor_list_notes", "description": "List notes on events in a conversation." },
+    { "name": "colcoor_create_note", "description": "Create a note attached to an event." },
+    { "name": "colcoor_update_note", "description": "Update a note's content." },
+    { "name": "colcoor_delete_note", "description": "Delete a note." },
+    { "name": "colcoor_list_side_chat_messages", "description": "List side-chat messages after a given seq." },
+    { "name": "colcoor_post_side_chat_message", "description": "Post a side-chat message." },
+    { "name": "colcoor_edit_side_chat_message", "description": "Edit a side-chat message body." },
+    { "name": "colcoor_delete_side_chat_message", "description": "Soft-delete a side-chat message." },
+    { "name": "colcoor_mark_side_chat_read", "description": "Move the caller's side-chat read cursor." }
+  ],
+  "prompts": [
+    { "name": "colcoor_send_message", "description": "Draft and send a user message to a Colcoor conversation." },
+    { "name": "colcoor_summarize_conversation", "description": "Summarize a Colcoor conversation (tree + notes + stars)." }
+  ]
+}

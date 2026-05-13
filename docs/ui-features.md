@@ -1,6 +1,8 @@
-# UI features — Colcoor Cursor extension
+# UI features — Colcoor Cursor / VS Code extension
 
-**User-visible** capabilities the extension should provide. Does not prescribe implementation (webview vs native UI, exact VS Code APIs).
+**User-visible** capabilities the **Cursor / VS Code extension** ([`packages/extension`](../packages/extension)) should provide. Does not prescribe implementation (webview vs native UI, exact VS Code APIs).
+
+> **Scope:** this checklist is **Cursor-specific** — sidebar tree views, webview panels, side-chat sound cues, status-bar items, and keybindings only translate to that environment. The **Claude Desktop extension** ([`packages/claude_extension/`](../packages/claude_extension/)) is an MCP server; its "UI" is whatever Claude renders from the tool responses. See its README for the tool surface. The screens below do not apply to Claude Desktop.
 
 **Out of scope for this spec:** server-driven **web search** and **code execution** on the main thread; **any** thread UI rows for **tool calls**, **tool results**, or **assistant steps** (no tool graph in the thread path).
 

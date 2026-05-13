@@ -2,7 +2,7 @@
 
 This document describes how to run the **Colcoor extension-dedicated API** on a **single Linux VM** using **Docker Compose**, **nginx** as the only public entrypoint, and **PostgreSQL** for persistence.
 
-**Runtime:** the HTTP API is **Python 3.12 + FastAPI + Gunicorn (Uvicorn workers)** in [`packages/backend/`](../packages/backend/). The repo root [`package.json`](../package.json) is for the **VS Code/Cursor extension** only, not the API server.
+**Runtime:** the HTTP API is **Python 3.12 + FastAPI + Gunicorn (Uvicorn workers)** in [`packages/backend/`](../packages/backend/). The repo root [`package.json`](../package.json) is for the **VS Code/Cursor extension** only, not the API server. The **Claude Desktop extension** in [`packages/claude_extension/`](../packages/claude_extension/) is self-contained: it has its own `package.json` outside the root npm workspace and ships an independent `.dxt` bundle (see § Claude Desktop extension below).
 
 Product boundaries (no main-thread LLM on the server, no transcript-over-HTTP) are unchanged; see [architecture.md](architecture.md) and [principles.md](principles.md).
 
@@ -161,7 +161,11 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_
 
 ---
 
-## Cursor / VS Code extension (remote API)
+## Client extensions (remote API)
+
+Two first-party clients call the same backend. Configure each to point at the **public origin** of the Compose stack — not `127.0.0.1`.
+
+### Cursor / VS Code extension (remote API)
 
 When the API runs on a **remote VM** (this Compose stack), configure the extension to call that host—not `127.0.0.1`.
 
@@ -208,13 +212,36 @@ After changing **`colcoor.backendBaseUrl`** or **`COLCOOR_API_URL`**, have users
 3. **`CORS_ORIGINS`:** the extension issues requests from the **Node extension host**, not a browser tab, so **empty `CORS_ORIGINS` is fine** for extension-only traffic (see [`.env.example`](../.env.example)). Set `CORS_ORIGINS` when **browser** clients must call the API cross-origin.
 4. **Auth:** production clients **MUST** use **`POST /api/v1/auth/cursor`** only ([authentication.md](authentication.md), [api-contracts.md](api-contracts.md) §2.1).
 
+### Claude Desktop extension (remote API)
+
+The Claude Desktop extension at [`packages/claude_extension/`](../packages/claude_extension/) is a DXT-packaged MCP server spawned by Claude Desktop. Backend-URL configuration follows the same rules as the Cursor extension but uses a different mechanism:
+
+- The server **requires** a backend URL — provided by Claude Desktop's user-config form (declared in `manifest.json`) and exposed to the server process as the environment variable **`COLCOOR_BACKEND_URL`**.
+- **URL format:** origin only (scheme + host + optional non-default port). **No path**, **no trailing slash**. The MCP server appends `/api/v1` itself.
+- **Auth:** the user supplies either a pre-issued Colcoor JWT (**`COLCOOR_API_TOKEN`**, sensitive) or a Cursor IdP token (**`COLCOOR_CURSOR_ACCESS_TOKEN`**, sensitive) that the server exchanges via the same **`POST /api/v1/auth/cursor`** route on startup. Tokens are held **in memory only** by the MCP server process; persistence is owned by Claude Desktop's user-config store. See [`packages/claude_extension/README.md`](../packages/claude_extension/README.md) for the full user-config table and reauthentication tools.
+- **Network:** Claude Desktop spawns the MCP server locally and talks to it over stdio; the **API origin** must be reachable from the user's machine just like for the Cursor extension. Same firewall, TLS, and CORS considerations apply (CORS is irrelevant — requests originate from a Node process, not a browser).
+- **Health probe:** use the `colcoor_health` MCP tool, which hits **`GET /api/v1/health`** through the same client code path the rest of the tools use.
+
 ---
 
 ## Release artifacts (VSIX + Docker image)
 
-### Extension build (bundle)
+### Cursor / VS Code extension build (bundle)
 
 The extension package ([`packages/extension`](../packages/extension/)) uses **`npm run build`**: **TypeScript `--noEmit` check**, then **esbuild** bundles the activation entry plus runtime dependencies (**markdown**, **sanitize-html**, **temml**, etc.) into a single **`dist/extension.js`**. Packaging uses **`vsce package --no-dependencies`** because dependencies are **embedded** in that bundle — this avoids workspace hoisting issues and keeps **`npm run package:extension`** reliable in the monorepo.
+
+### Claude Desktop extension build (DXT bundle)
+
+The Claude Desktop extension ([`packages/claude_extension`](../packages/claude_extension/)) ships as a **DXT** archive (a `.dxt` zip with a `manifest.json` + bundled MCP server). Build and package:
+
+```bash
+cd packages/claude_extension
+npm install
+npm run build       # → dist/server.js (esbuild bundle, single ESM file)
+npm run package     # → build/colcoor-claude-extension-<version>.dxt
+```
+
+The packaging script writes the ZIP archive directly from Node (no external `zip` binary), so it works on minimal CI hosts as long as Node 18+ is available. The `.dxt` is **not** part of `npm run ship:artifacts` or `npm run bundle:enterprise` today — build it independently from this package.
 
 ---
 

@@ -1,0 +1,32 @@
+{
+  "name": "colcoor-claude-extension",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Claude Desktop Extension (MCP server) for Colcoor — exposes the existing Colcoor backend to Claude Desktop.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ./ --noEmit",
+    "build": "npm run typecheck && node ./scripts/build.mjs",
+    "watch": "node ./scripts/build.mjs --watch",
+    "test": "vitest run",
+    "smoke": "node ./scripts/smoke-test.mjs",
+    "smoke:integration": "node ./scripts/integration-smoke.mjs",
+    "smoke:integration:auth": "node ./scripts/integration-smoke-auth.mjs",
+    "package": "npm run build && node ./scripts/package.mjs",
+    "clean": "node -e \"import('node:fs/promises').then(fs => fs.rm('dist', { recursive: true, force: true }))\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

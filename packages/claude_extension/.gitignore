@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+*.dxt
+*.tgz
+*.log
+.npm/
+.cache/
+coverage/
+.tsbuildinfo

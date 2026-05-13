@@ -12,7 +12,7 @@ This document defines **execution order** and **behavioral invariants** for the 
 
 ---
 
-## 1. Main-thread execution order
+## 1. Main-thread execution order (Cursor extension)
 
 1. Caller ensures branch anchor and visibility mode per **[domain-model.md](domain-model.md)** §3–§4.
 2. Extension builds the **transcript** per **[transcript-format.md](transcript-format.md)** and **[principles.md](principles.md)**.
@@ -22,6 +22,16 @@ This document defines **execution order** and **behavioral invariants** for the 
 6. Extension refreshes UI from **`GET …/tree`** and related endpoints.
 
 There is **no** server-side SSE for main-thread completion. The extension **MUST NOT** send server web-search or code-execution flags on this path.
+
+### 1.1 Alternative: MCP client without a main-thread agent (Claude Desktop)
+
+The **Claude Desktop extension** at [`packages/claude_extension/`](../packages/claude_extension/) hits the same `/api/v1` routes but does **not** host a main-thread agent. Steps 2 and 4 do not apply: Claude itself is the LLM and reasons over live tool responses (tree, notes, side chat) instead of a pre-built transcript. The equivalent flow is:
+
+1. Claude calls `colcoor_get_conversation_tree` / `colcoor_get_active_path` to read the current branch.
+2. Claude calls `colcoor_append_user_message` (which internally resolves the reply parent and calls **`POST …/append-event`** with **`kind: user_input`**).
+3. *(Optional)* Claude calls `colcoor_append_assistant_message` to persist its own reply as an **`assistant_output`** event, mirroring step 5 above. The `author` field defaults to **`claude_desktop`** (configurable via the DXT user-config field `agent_author`).
+
+The error-handling rules in §3 still apply: if no usable assistant text is produced, do not append; on user interrupt, append the partial body if available.
 
 ---
 

@@ -1,6 +1,6 @@
-# Authentication — Colcoor extension
+# Authentication — Colcoor
 
-The extension obtains a **Colcoor API JWT** by calling **`POST /api/v1/auth/cursor`** with a **Cursor / VS Code identity-provider access token**. All other Colcoor APIs use **`Authorization: Bearer <access_token>`**.
+Any client obtains a **Colcoor API JWT** by calling **`POST /api/v1/auth/cursor`** with a **Cursor / VS Code identity-provider access token**. All other Colcoor APIs use **`Authorization: Bearer <access_token>`**.
 
 There is **no** alternate development-only login HTTP route; the same **`POST /api/v1/auth/cursor`** contract applies in every environment.
 
@@ -12,21 +12,37 @@ There is **no** alternate development-only login HTTP route; the same **`POST /a
 
 ## 1. Stable identity: `cursor_sub`
 
-- The **`users.cursor_sub`** column is the **only** stable external identity key for the extension product. It is **unique**, **non-null**, and set when the user is first provisioned via **`POST /api/v1/auth/cursor`**.
+- The **`users.cursor_sub`** column is the **only** stable external identity key for the Colcoor product. It is **unique**, **non-null**, and set when the user is first provisioned via **`POST /api/v1/auth/cursor`**.
 - The value is an **opaque string** produced by the backend after successful verification of the caller’s provider token. Clients **MUST NOT** parse or interpret `cursor_sub`; they **MUST** treat it as an opaque identifier in any UI that surfaces internal ids.
 
 ---
 
 ## 2. Client flow
 
+### 2.1 Cursor / VS Code extension
+
 1. Acquire a provider access token via **`vscode.authentication.getSession`** (scopes and provider ids are defined in the extension implementation; they are **not** part of this identity spec).
 2. **`POST /api/v1/auth/cursor`** with body **`{ "cursor_access_token": "<token>", "provider_hint": "auto" | "github" | "microsoft" | "google" }`**.
 3. Store **`access_token`** from **`AuthResponse`** in **SecretStorage** (or equivalent). Omit from workspace files.
 4. Send **`Authorization: Bearer <access_token>`** on every **`/api/v1/...`** request until expiry; then repeat from step 1.
 
-### 2.1 Invalid or expired JWT (HTTP 401) in the extension
+### 2.2 Claude Desktop extension (MCP)
 
-When an API response is **401** (missing, invalid, or expired Colcoor JWT per [api-contracts.md](api-contracts.md)), the extension **SHOULD clear the stored Colcoor access token** (local sign-out of the Colcoor session only) **before** or alongside user-facing recovery (e.g. “sign in” toast). That avoids a **stale token** blocking a clean re-authentication flow (user should not need a manual **Sign out** first).
+The Claude Desktop client at [`packages/claude_extension/`](../packages/claude_extension/) does **not** use VS Code APIs. Two equivalent paths are supported:
+
+1. **Pre-issued JWT** — the user supplies the Colcoor JWT obtained from another client (e.g. exported from the Cursor extension SecretStorage) in the DXT user-config field **`COLCOOR_API_TOKEN`**. The MCP server attaches `Authorization: Bearer …` on every request.
+2. **Cursor IdP token exchange** — the user supplies a Cursor / VS Code identity-provider access token via **`COLCOOR_CURSOR_ACCESS_TOKEN`** (optionally with **`COLCOOR_PROVIDER_HINT`**). The MCP server calls the **same** **`POST /api/v1/auth/cursor`** endpoint at startup and stores the resulting JWT **in memory only**. The tool **`colcoor_sign_in_with_cursor`** exposes the same flow on demand.
+
+The Claude Desktop extension does **not** persist the JWT to disk; the user-config form is the persistence boundary.
+
+### 2.3 Invalid or expired JWT (HTTP 401)
+
+When an API response is **401** (missing, invalid, or expired Colcoor JWT per [api-contracts.md](api-contracts.md)), the client **SHOULD clear the stored Colcoor access token** (local sign-out of the Colcoor session only) **before** or alongside user-facing recovery (e.g. “sign in” toast). That avoids a **stale token** blocking a clean re-authentication flow (user should not need a manual **Sign out** first).
+
+The same rule applies to both clients:
+
+- **Cursor / VS Code extension:** clear the SecretStorage entry; prompt for sign-in.
+- **Claude Desktop extension:** the MCP server's in-memory `SessionTokenStore` clears the JWT and surfaces the failure through the tool's structured error envelope (`http_status: 401`); the caller then re-runs `colcoor_sign_in_with_cursor` (or updates `COLCOOR_API_TOKEN`).
 
 ---
 

@@ -1,6 +1,8 @@
-# Principles and constraints — Colcoor Cursor extension
+# Principles and constraints — Colcoor
 
-This document **complements and overrides** other files in this folder where noted. **Colcoor** is the orchestrator (tree, transcript, backend); **Cursor** provides execution and code understanding.
+This document **complements and overrides** other files in this folder where noted. **Colcoor** is the orchestrator (tree, transcript, backend); **Cursor** provides execution and code understanding on the main-thread agent path.
+
+Unless otherwise noted, the principles below describe the **Cursor extension** main-thread flow — that is the path that builds the deterministic transcript and invokes the Cursor agent. The **Claude Desktop extension** ([`packages/claude_extension/`](../packages/claude_extension/)) is a second first-party client that calls the same backend through MCP tools; it is **not** a main-thread agent host and does not build the transcript. Where a principle applies only to the main-thread flow, it says so explicitly.
 
 **Normative HTTP surface:** [api-contracts.md](api-contracts.md).
 
@@ -25,9 +27,9 @@ The system **does not** attempt to fully control the entire execution environmen
 
 ---
 
-## Agent integration
+## Agent integration (Cursor extension — main thread)
 
-The extension integrates with the **Cursor agent** as the main-thread LLM.
+The **Cursor extension** integrates with the **Cursor agent** as the main-thread LLM.
 
 The extension is responsible for:
 
@@ -39,6 +41,8 @@ The extension is responsible for:
 The system **may** use Cursor-native execution (Composer / agent environment) and does **not** need to bypass it completely.
 
 **Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported** paths — see [data-flow-and-api.md](data-flow-and-api.md) §2 (CLI / ACP) and Composer as **fallback**.
+
+**Claude Desktop extension:** Claude itself is the LLM, so there is no separate main-thread agent to drive. The Claude Desktop extension exposes the backend through MCP tools and lets Claude record replies via `colcoor_append_assistant_message`. The transcript-construction principle below applies only to the Cursor extension path.
 
 ---
 
@@ -69,7 +73,7 @@ Colcoor **does not** fully replace or replicate this behavior.
 
 ## Transcript rules
 
-- Transcript is built **only in the extension**.
+- Transcript is built **only client-side** by the **Cursor extension** (main-thread agent path). Clients that are not main-thread agent hosts (e.g. the Claude Desktop extension) do not implement this format.
 - Semantics:
   - **Path-based** context along the active branch ([domain-model.md](domain-model.md)).
   - **Rebuild** when `needs_context_rebuild` is true ([domain-model.md](domain-model.md) §4).
@@ -106,11 +110,11 @@ The extension **may** pass to the agent runtime (when supported):
 
 ---
 
-## MCP (future — out of scope for MVP)
+## MCP (external clients vs main-thread agent)
 
-- **MVP:** no MCP requirement.
-- **Future:** MCP may allow the Cursor agent to call **Colcoor tools**.
-- **Current model:** Colcoor drives execution (transcript → append events); the agent is invoked with that contract.
+- **External MCP clients (supported):** the Claude Desktop extension at [`packages/claude_extension/`](../packages/claude_extension/) is a first-party MCP server that exposes the Colcoor backend (conversations, tree, notes, side chat, messaging) to Claude Desktop. It does **not** host a main-thread agent or build the transcript described above.
+- **Main-thread agent via MCP (out of scope for MVP):** letting the **Cursor agent** itself call Colcoor tools through MCP is still future work; the current Cursor extension path remains transcript → `append-event` with the Cursor agent invoked out-of-process.
+- **Current model:** Colcoor (the backend) is the source of truth for conversation structure; clients are responsible for translating user intent into the documented `/api/v1` routes, whether through VS Code commands or MCP tool calls.
 
 ---
 
