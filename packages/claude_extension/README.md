@@ -104,6 +104,39 @@ as a `.dxt` in Claude Desktop, those variables are populated from the
 > [`docs/authentication.md`](../../docs/authentication.md) for how to obtain
 > these from the existing Cursor extension flow.
 
+### Sign-out caveat: `colcoor_sign_out` only clears the in-memory token
+
+`colcoor_sign_out` clears the Colcoor API JWT held **in memory** by the MCP
+server process. It **cannot** clear the JWT that Claude Desktop persists in
+the extension's user-config form (the **Colcoor API JWT** /
+`COLCOOR_API_TOKEN` field).
+
+If a value is configured there, Claude Desktop re-loads it into memory the
+next time the MCP server is spawned — when you restart Claude Desktop, when
+the extension reconnects, or when any user-config field changes — and you
+will appear signed in again.
+
+**To permanently sign out** (or recover from a stale/invalid JWT triggering
+repeated 401s):
+
+1. Open **Claude Desktop → Settings → Extensions → Colcoor**.
+2. Clear the **Colcoor API JWT** field.
+3. Also clear the **Cursor / VS Code IdP access token** field if it is set
+   (otherwise the MCP server will exchange it for a new JWT on the next
+   spawn and you'll be signed in again).
+4. Save / restart the extension.
+
+The MCP server cannot do steps 1–3 for you because the user-config store is
+owned by Claude Desktop. The `colcoor_sign_out` tool's success message will
+remind you of this whenever a persisted token is detected.
+
+Related behavior: when any authenticated tool call returns **HTTP 401**, the
+MCP server automatically clears its in-memory JWT (so the next sign-in works
+cleanly) and surfaces a structured error envelope to the caller. The
+persisted user-config token is **not** touched — same caveat as above
+applies. See `handleApiError` in `src/tools.ts` for the implementation and
+`tests/handleApiError.test.ts` for the contract.
+
 ## Build
 
 ```bash

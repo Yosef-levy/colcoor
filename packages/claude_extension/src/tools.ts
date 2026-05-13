@@ -108,6 +108,7 @@ function registerHealthAndAuthTools({ server, client, tokens, config }: Register
         "Probe GET /api/v1/health on the configured Colcoor backend. No authentication required. " +
         "Use this to verify the configured backend URL before signing in.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
     },
     async () => {
       try {
@@ -130,6 +131,7 @@ function registerHealthAndAuthTools({ server, client, tokens, config }: Register
         "Report whether the MCP server currently has a Colcoor API JWT. " +
         "Does not contact the backend.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
     },
     async () => {
       return ok(
@@ -157,6 +159,7 @@ function registerHealthAndAuthTools({ server, client, tokens, config }: Register
           .optional()
           .describe("Identity provider hint. Defaults to 'auto'."),
       },
+      annotations: { destructiveHint: false },
     },
     async (args) => {
       try {
@@ -184,6 +187,7 @@ function registerHealthAndAuthTools({ server, client, tokens, config }: Register
       inputSchema: {
         api_token: z.string().min(1, "api_token is required"),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       tokens.set(args.api_token);
@@ -194,13 +198,30 @@ function registerHealthAndAuthTools({ server, client, tokens, config }: Register
   server.registerTool(
     "colcoor_sign_out",
     {
-      title: "Colcoor: sign out",
-      description: "Forget the in-memory Colcoor API JWT (local sign-out only).",
+      title: "Colcoor: sign out (in-memory only)",
+      description:
+        "Clear the **in-memory** Colcoor API JWT for this MCP server process. " +
+        "IMPORTANT: this does NOT clear the JWT persisted by Claude Desktop in the extension's " +
+        "user-config form (the `Colcoor API JWT` / `COLCOOR_API_TOKEN` field). If that field is " +
+        "set, Claude Desktop will re-load it into memory the next time the MCP server is spawned " +
+        "(restart, reconnect, or settings change), and you will appear signed in again. " +
+        "To permanently sign out: open Claude Desktop → Settings → Extensions → Colcoor and " +
+        "clear the `Colcoor API JWT` field (and any `Cursor IdP token` field) before restarting.",
       inputSchema: {},
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async () => {
+      const hadConfiguredToken = Boolean(config.apiToken);
       tokens.clear();
-      return okMessage("Cleared Colcoor session.");
+      const persistedNotice = hadConfiguredToken
+        ? " WARNING: a `COLCOOR_API_TOKEN` is still set in Claude Desktop's user-config for this " +
+          "extension. It will be re-loaded into memory on the next MCP server spawn (restart / " +
+          "reconnect), and you will appear signed in again. To permanently sign out, clear the " +
+          "`Colcoor API JWT` field in Claude Desktop → Settings → Extensions → Colcoor before " +
+          "restarting."
+        : " (No persisted COLCOOR_API_TOKEN configured, so this sign-out is permanent until you " +
+          "sign in again.)";
+      return okMessage(`Cleared in-memory Colcoor session.${persistedNotice}`);
     },
   );
 }
@@ -216,6 +237,7 @@ function registerProfileTools({ server, client, tokens }: RegisterToolsDeps): vo
       title: "Colcoor: who am I",
       description: "Fetch the caller's Colcoor profile (GET /api/v1/me).",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
     },
     async () => {
       const gate = requireSignedIn(tokens);
@@ -240,6 +262,7 @@ function registerProfileTools({ server, client, tokens }: RegisterToolsDeps): vo
         display_name: z.string().min(1).max(120).optional(),
         avatar_url: z.string().url().nullable().optional(),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -273,6 +296,7 @@ function registerConversationTools({ server, client, tokens }: RegisterToolsDeps
         "List conversations the caller is a member of (GET /api/v1/conversations). " +
         "Ordered server-side: pinned first, then most recently updated.",
       inputSchema: {},
+      annotations: { readOnlyHint: true },
     },
     async () => {
       const gate = requireSignedIn(tokens);
@@ -300,6 +324,7 @@ function registerConversationTools({ server, client, tokens }: RegisterToolsDeps
       inputSchema: {
         title: z.string().nullable().optional(),
       },
+      annotations: { destructiveHint: false },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -325,6 +350,7 @@ function registerConversationTools({ server, client, tokens }: RegisterToolsDeps
         conversation_id: UUIDSchema,
         title: z.string().nullable(),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -349,6 +375,7 @@ function registerConversationTools({ server, client, tokens }: RegisterToolsDeps
         conversation_id: UUIDSchema,
         pinned: z.boolean(),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -375,6 +402,7 @@ function registerConversationTools({ server, client, tokens }: RegisterToolsDeps
       inputSchema: {
         conversation_id: UUIDSchema,
       },
+      annotations: { destructiveHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -398,6 +426,7 @@ function registerConversationTools({ server, client, tokens }: RegisterToolsDeps
       inputSchema: {
         conversation_id: UUIDSchema,
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -423,6 +452,7 @@ function registerMemberTools({ server, client, tokens }: RegisterToolsDeps): voi
       title: "Colcoor: list conversation members",
       description: "List members of a conversation (GET …/members).",
       inputSchema: { conversation_id: UUIDSchema },
+      annotations: { readOnlyHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -451,6 +481,7 @@ function registerMemberTools({ server, client, tokens }: RegisterToolsDeps): voi
         conversation_id: UUIDSchema,
         q: z.string().min(1).max(320),
       },
+      annotations: { readOnlyHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -485,6 +516,7 @@ function registerMemberTools({ server, client, tokens }: RegisterToolsDeps): voi
         user_id: UUIDSchema,
         role: z.enum(MEMBER_ROLE_ADD),
       },
+      annotations: { destructiveHint: false },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -513,6 +545,7 @@ function registerMemberTools({ server, client, tokens }: RegisterToolsDeps): voi
         user_id: UUIDSchema,
         role: z.enum(MEMBER_ROLE_ANY),
       },
+      annotations: { destructiveHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -539,6 +572,7 @@ function registerMemberTools({ server, client, tokens }: RegisterToolsDeps): voi
         conversation_id: UUIDSchema,
         user_id: UUIDSchema,
       },
+      annotations: { destructiveHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -566,6 +600,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         "Return the full main-thread event graph for a conversation (GET …/tree). " +
         "Includes user_input and assistant_output nodes, stars, notes counts, and checkpoint labels.",
       inputSchema: { conversation_id: UUIDSchema },
+      annotations: { readOnlyHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -588,6 +623,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         "Read the caller's active node (GET …/caller-state) and return the root → active path. " +
         "Useful before appending a reply so you can confirm where the next user_input will attach.",
       inputSchema: { conversation_id: UUIDSchema },
+      annotations: { readOnlyHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -625,6 +661,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         active_event_id: UUIDSchema,
         needs_context_rebuild: z.boolean().optional(),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -650,6 +687,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         conversation_id: UUIDSchema,
         event_id: UUIDSchema,
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -672,6 +710,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         conversation_id: UUIDSchema,
         event_id: UUIDSchema,
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -696,6 +735,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         conversation_id: UUIDSchema,
         event_id: UUIDSchema,
       },
+      annotations: { destructiveHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -719,6 +759,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         conversation_id: UUIDSchema,
         deletion_group_id: UUIDSchema,
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -742,6 +783,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         conversation_id: UUIDSchema,
         event_id: UUIDSchema,
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -767,6 +809,7 @@ function registerTreeTools({ server, client, tokens }: RegisterToolsDeps): void 
         event_id: UUIDSchema,
         checkpoint_label: z.string().max(256).nullable(),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -811,6 +854,7 @@ function registerMessagingTools({ server, client, tokens, config }: RegisterTool
         private_branch: z.boolean().optional(),
         checkpoint_label: z.string().max(256).optional(),
       },
+      annotations: { destructiveHint: false },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -871,6 +915,7 @@ function registerMessagingTools({ server, client, tokens, config }: RegisterTool
           ),
         checkpoint_label: z.string().max(256).optional(),
       },
+      annotations: { destructiveHint: false },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -907,6 +952,7 @@ function registerMessagingTools({ server, client, tokens, config }: RegisterTool
         "Walk the default branch from root to its newest leaf and return that node — i.e. the event " +
         "the next `user_input` would attach to when no explicit `reply_parent_event_id` is given.",
       inputSchema: { conversation_id: UUIDSchema },
+      annotations: { readOnlyHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -936,6 +982,7 @@ function registerNoteTools({ server, client, tokens }: RegisterToolsDeps): void 
       title: "Colcoor: list notes",
       description: "List all notes on events visible to the caller in a conversation (GET …/notes).",
       inputSchema: { conversation_id: UUIDSchema },
+      annotations: { readOnlyHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -961,6 +1008,7 @@ function registerNoteTools({ server, client, tokens }: RegisterToolsDeps): void 
         event_id: UUIDSchema,
         content: z.string().min(1),
       },
+      annotations: { destructiveHint: false },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -991,6 +1039,7 @@ function registerNoteTools({ server, client, tokens }: RegisterToolsDeps): void 
         note_id: UUIDSchema,
         content: z.string().min(1),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -1015,6 +1064,7 @@ function registerNoteTools({ server, client, tokens }: RegisterToolsDeps): void 
         conversation_id: UUIDSchema,
         note_id: UUIDSchema,
       },
+      annotations: { destructiveHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -1045,6 +1095,7 @@ function registerSideChatTools({ server, client, tokens }: RegisterToolsDeps): v
         conversation_id: UUIDSchema,
         after_seq: z.number().int().min(0).optional(),
       },
+      annotations: { readOnlyHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -1075,6 +1126,7 @@ function registerSideChatTools({ server, client, tokens }: RegisterToolsDeps): v
         referenced_note_id: UUIDSchema.nullable().optional(),
         referenced_side_chat_message_id: UUIDSchema.nullable().optional(),
       },
+      annotations: { destructiveHint: false },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -1112,6 +1164,7 @@ function registerSideChatTools({ server, client, tokens }: RegisterToolsDeps): v
         message_id: UUIDSchema,
         body: z.string().min(1),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -1136,6 +1189,7 @@ function registerSideChatTools({ server, client, tokens }: RegisterToolsDeps): v
         conversation_id: UUIDSchema,
         message_id: UUIDSchema,
       },
+      annotations: { destructiveHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -1160,6 +1214,7 @@ function registerSideChatTools({ server, client, tokens }: RegisterToolsDeps): v
         conversation_id: UUIDSchema,
         last_read_seq: z.number().int().min(0),
       },
+      annotations: { destructiveHint: false, idempotentHint: true },
     },
     async (args) => {
       const gate = requireSignedIn(tokens);
@@ -1178,7 +1233,11 @@ function registerSideChatTools({ server, client, tokens }: RegisterToolsDeps): v
 // Error helpers
 // ---------------------------------------------------------------------------
 
-function handleApiError(operation: string, err: unknown, tokens: SessionTokenStore) {
+/**
+ * @internal exported only so unit tests can exercise the 401 token-clearing
+ * behavior in isolation. Not part of the public MCP/HTTP surface.
+ */
+export function handleApiError(operation: string, err: unknown, tokens: SessionTokenStore) {
   if (isUnauthorizedColcoorApiError(err)) {
     // Mirror packages/extension behavior: clear stored token on 401 so re-auth works cleanly.
     tokens.clear();
