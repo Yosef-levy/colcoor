@@ -114,7 +114,17 @@
     { "name": "colcoor_mark_side_chat_read", "description": "Move the caller's side-chat read cursor." }
   ],
   "prompts": [
-    { "name": "colcoor_send_message", "description": "Draft and send a user message to a Colcoor conversation." },
-    { "name": "colcoor_summarize_conversation", "description": "Summarize a Colcoor conversation (tree + notes + stars)." }
+    {
+      "name": "colcoor_send_message",
+      "description": "Draft and send a user message to a Colcoor conversation.",
+      "arguments": ["conversation_id", "draft"],
+      "text": "I want to send the following message to Colcoor conversation ${arguments.conversation_id}.\n\nBefore sending:\n1. Call `colcoor_get_active_path` so we can see the current branch tip.\n2. Reword the draft if it is unclear, but ask me to confirm changes.\n3. Then call `colcoor_append_user_message` with the finalized text.\n\n--- DRAFT ---\n${arguments.draft}"
+    },
+    {
+      "name": "colcoor_summarize_conversation",
+      "description": "Summarize a Colcoor conversation (tree + notes + stars).",
+      "arguments": ["conversation_id"],
+      "text": "Summarize the Colcoor conversation below.\n\n1. Call `colcoor_get_conversation_tree` for conversation_id=${arguments.conversation_id}.\n2. Call `colcoor_list_notes` for the same conversation.\n3. Produce a Markdown summary with sections:\n   - Overview (2–3 sentences)\n   - Key decisions\n   - Starred messages (link by event id)\n   - Open TODOs (from notes containing TODO, FIXME, ?, …)\nQuote sparingly and prefer paraphrase."
+    }
   ]
 }
