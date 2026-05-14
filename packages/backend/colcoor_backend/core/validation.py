@@ -58,6 +58,11 @@ def validate_production_settings(settings: Settings) -> None:
     if msg := _database_url_invalid(settings.database_url):
         raise RuntimeError(f"Production misconfiguration: {msg}")
 
+    if settings.email_login_log_codes:
+        raise RuntimeError(
+            "Production misconfiguration: COLCOOR_EMAIL_LOGIN_LOG_CODES must be false in production",
+        )
+
     for origin in settings.cors_origin_list():
         if origin.strip() == "*":
             raise RuntimeError(

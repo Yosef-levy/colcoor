@@ -380,6 +380,36 @@ export class ColcoorApiClient {
     return this.parseOrThrow<AuthResponseBody>(res, "Cursor sign-in");
   }
 
+  /** Request a 6-digit verification code emailed to the user (no auth). */
+  async requestEmailLoginCode(email: string): Promise<{ status: string; message?: string }> {
+    const res = await this.fetchInternal(
+      "/auth/email/send-code",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      },
+      "email login send code",
+      { auth: false },
+    );
+    return this.parseOrThrow<{ status: string; message?: string }>(res, "email login send code");
+  }
+
+  /** Exchange email + code for a Colcoor JWT (no auth). */
+  async verifyEmailLoginCode(email: string, code: string): Promise<AuthResponseBody> {
+    const res = await this.fetchInternal(
+      "/auth/email/verify",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      },
+      "email login verify",
+      { auth: false },
+    );
+    return this.parseOrThrow<AuthResponseBody>(res, "email login verify");
+  }
+
   // ----- Profile -----
 
   async getMe(): Promise<MeOut> {

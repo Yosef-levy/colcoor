@@ -8,6 +8,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SessionTokenStore, signInWithCursorAccessToken } from "./auth.js";
 import { ColcoorApiClient } from "./colcoorClient.js";
 import { assertHasBackendUrl, loadConfigFromEnv, type ColcoorExtensionConfig } from "./config.js";
+import { registerColcoorMcpSurface } from "./mcpApp/colcoorMcpApp.js";
 import { registerAllPrompts } from "./prompts.js";
 import { registerAllTools } from "./tools.js";
 
@@ -50,6 +51,7 @@ export function buildColcoorMcpServer(opts: BuildServerOptions = {}): BuiltServe
   });
 
   registerAllTools({ server, client, tokens, config });
+  registerColcoorMcpSurface({ server, client, tokens });
   registerAllPrompts(server);
 
   return { server, client, tokens, config };

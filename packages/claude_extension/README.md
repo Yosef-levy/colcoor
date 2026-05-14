@@ -6,7 +6,9 @@ server. It mirrors the conceptual capabilities of the Cursor extension
 (`packages/extension`) — conversations, members, the main-thread event graph,
 notes, stars, and side chat — but runs over the same HTTP API used by every
 other Colcoor client. **No backend code is bundled here; the extension is a
-thin orchestration layer.**
+thin orchestration layer.** When Claude Desktop supports [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps.md), the
+`colcoor_open_conversation_explorer` tool can render an **embedded interactive** main-thread
+navigator (see [`docs/MCP_APP.md`](./docs/MCP_APP.md)).
 
 > Authentication, route shapes, error semantics, and identity rules are
 > authoritative in [`docs/authentication.md`](../../docs/authentication.md) and
@@ -18,15 +20,15 @@ thin orchestration layer.**
 It registers an [MCP](https://modelcontextprotocol.io) server (`colcoor`) with
 the following surface:
 
-### Tools (39)
+### Tools (42)
 
 | Group | Tools |
 |-------|-------|
-| Connectivity / auth | `colcoor_health`, `colcoor_session_status`, `colcoor_sign_in_with_cursor`, `colcoor_set_api_token`, `colcoor_sign_out` |
+| Connectivity / auth | `colcoor_health`, `colcoor_session_status`, `colcoor_sign_in_with_cursor`, `colcoor_request_email_login_code`, `colcoor_complete_email_login`, `colcoor_set_api_token`, `colcoor_sign_out` |
 | Profile | `colcoor_who_am_i`, `colcoor_update_profile` |
 | Conversations | `colcoor_list_conversations`, `colcoor_create_conversation`, `colcoor_rename_conversation`, `colcoor_set_conversation_pinned`, `colcoor_delete_conversation`, `colcoor_restore_deleted_conversation` |
 | Members | `colcoor_list_members`, `colcoor_search_member_invite_candidates`, `colcoor_add_member`, `colcoor_change_member_role`, `colcoor_remove_member` |
-| Main-thread tree | `colcoor_get_conversation_tree`, `colcoor_get_active_path`, `colcoor_set_active_event`, `colcoor_get_default_branch_tip`, `colcoor_set_event_checkpoint_label` |
+| Main-thread tree | `colcoor_get_conversation_tree`, `colcoor_get_active_path`, `colcoor_open_conversation_explorer` (MCP App UI), `colcoor_set_active_event`, `colcoor_get_default_branch_tip`, `colcoor_set_event_checkpoint_label` |
 | Stars / branches | `colcoor_star_event`, `colcoor_unstar_event`, `colcoor_delete_event_subtree`, `colcoor_undo_event_delete`, `colcoor_restore_event_subtree` |
 | Messaging | `colcoor_append_user_message`, `colcoor_append_assistant_message` |
 | Notes | `colcoor_list_notes`, `colcoor_create_note`, `colcoor_update_note`, `colcoor_delete_note` |
@@ -57,6 +59,8 @@ packages/claude_extension/
 ├── tsconfig.json                   # strict TS config
 ├── vitest.config.mts               # unit test config
 ├── .env.example                    # local dev environment template
+├── docs/
+│   └── MCP_APP.md                  # MCP Apps: capabilities, limits, example flow
 ├── README.md                       # this file
 ├── src/
 │   ├── index.ts                    # MCP server entry point (stdio transport)
@@ -67,11 +71,17 @@ packages/claude_extension/
 │   ├── treeUtils.ts                # default-branch-tip, path helpers
 │   ├── toolHelpers.ts              # MCP CallToolResult envelopes
 │   ├── tools.ts                    # tool registrations
-│   └── prompts.ts                  # prompt registrations
+│   ├── prompts.ts                  # prompt registrations
+│   ├── mcpApp/                     # MCP App: ui:// HTML + explorer tool
+│   │   ├── colcoorMcpApp.ts
+│   │   ├── explorerBootScript.ts
+│   │   ├── explorerHtml.ts
+│   │   ├── explorerPayload.ts
+│   │   └── constants.ts
 ├── scripts/
 │   ├── build.mjs                   # esbuild bundle → dist/server.js
 │   ├── package.mjs                 # pure-Node ZIP → build/*.dxt
-│   ├── smoke-test.mjs              # spawn server, initialize, list tools
+│   ├── smoke-test.mjs              # spawn server, initialize, list tools, read ui:// resource
 │   ├── integration-smoke.mjs       # call colcoor_health against a real backend
 │   └── integration-smoke-auth.mjs  # verify auth/HTTP error propagation
 └── tests/
@@ -80,6 +90,8 @@ packages/claude_extension/
     ├── treeUtils.test.ts
     ├── auth.test.ts
     ├── server.test.ts
+    ├── explorerPayload.test.ts
+    ├── explorerHtml.test.ts
     └── manifest.test.ts
 ```
 
@@ -92,17 +104,16 @@ as a `.dxt` in Claude Desktop, those variables are populated from the
 | Env var | DXT user_config field | Required | Notes |
 |---------|----------------------|----------|-------|
 | `COLCOOR_BACKEND_URL` | **Colcoor backend URL** | yes | Origin only (no path, no trailing slash). |
-| `COLCOOR_API_TOKEN` | Colcoor API JWT (optional, sensitive) | no | If empty, sign in via `colcoor_sign_in_with_cursor`. |
+| `COLCOOR_API_TOKEN` | Colcoor API JWT (optional, sensitive) | no | If empty, sign in via **`colcoor_request_email_login_code`** + **`colcoor_complete_email_login`** (email OTP), **`colcoor_sign_in_with_cursor`**, or startup `COLCOOR_CURSOR_ACCESS_TOKEN`. |
 | `COLCOOR_CURSOR_ACCESS_TOKEN` | Cursor IdP token (optional, sensitive) | no | If set and `COLCOOR_API_TOKEN` is empty, the server exchanges it on startup via `POST /api/v1/auth/cursor`. |
 | `COLCOOR_PROVIDER_HINT` | Identity provider hint | no | One of `auto`, `github`, `microsoft`, `google`. Default `auto`. |
 | `COLCOOR_AGENT_AUTHOR` | Author label for assistant messages | no | Stored in `events.author` when Claude appends an `assistant_output`. Default `claude_desktop`. |
 | `COLCOOR_REQUEST_TIMEOUT_MS` | Per-request timeout (ms) | no | Default `30000`. |
 
-> **TODO (user-specific):** before installing, supply a `COLCOOR_BACKEND_URL`
-> for your environment and either a pre-issued Colcoor JWT (`COLCOOR_API_TOKEN`)
-> or a Cursor / VS Code IdP access token (`COLCOOR_CURSOR_ACCESS_TOKEN`). See
-> [`docs/authentication.md`](../../docs/authentication.md) for how to obtain
-> these from the existing Cursor extension flow.
+> **Before installing:** set `COLCOOR_BACKEND_URL` and either leave JWT empty
+> and use **email OTP** tools (backend must send mail or use dev log mode), or
+> set **`COLCOOR_API_TOKEN`**, or set **`COLCOOR_CURSOR_ACCESS_TOKEN`** for IdP
+> exchange. See [`docs/authentication.md`](../../docs/authentication.md).
 
 ### Sign-out caveat: `colcoor_sign_out` only clears the in-memory token
 

@@ -4,8 +4,8 @@
  *
  * 1. Verifies that the bundle exists under dist/.
  * 2. Spawns the bundled MCP server with a stubbed COLCOOR_BACKEND_URL.
- * 3. Sends a single `initialize` JSON-RPC request and checks that the
- *    server responds before SIGTERM-ing it.
+ * 3. Sends `initialize`, `notifications/initialized`, `tools/list`, `resources/list`,
+ *    and `resources/read` for the `ui://` MCP App shell — then SIGTERM.
  *
  * No real backend is required; this confirms the bundle, transport, and
  * tool registration all load cleanly. Use `npm run test` for unit tests.
@@ -124,6 +124,13 @@ async function main() {
     process.exit(1);
   }
 
+  proc.stdin.write(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+    }) + "\n",
+  );
+
   // Ask for the tool list.
   proc.stdin.write(jsonRpcRequest(2, "tools/list", {}));
 
@@ -136,7 +143,11 @@ async function main() {
     process.exit(1);
   }
 
-  proc.kill("SIGTERM");
+  if (toolsResponse.error) {
+    proc.kill("SIGTERM");
+    console.error(`smoke: tools/list error: ${JSON.stringify(toolsResponse.error)}`);
+    process.exit(1);
+  }
 
   const tools = toolsResponse.result?.tools ?? [];
   console.log(`smoke: server initialized OK; exposed ${tools.length} tool(s):`);
@@ -146,9 +157,80 @@ async function main() {
 
   if (tools.length < 10) {
     console.error(`smoke: expected at least 10 tools, got ${tools.length}`);
+    proc.kill("SIGTERM");
     process.exit(1);
   }
 
+  const explorer = tools.find((t) => t.name === "colcoor_open_conversation_explorer");
+  if (!explorer || !explorer._meta?.ui?.resourceUri) {
+    console.error("smoke: colcoor_open_conversation_explorer missing or lacks _meta.ui.resourceUri");
+    proc.kill("SIGTERM");
+    process.exit(1);
+  }
+
+  proc.stdin.write(jsonRpcRequest(3, "resources/list", {}));
+
+  let resourcesResponse;
+  try {
+    resourcesResponse = await waitFor((m) => m.id === 3, 5000);
+  } catch (e) {
+    proc.kill("SIGTERM");
+    console.error(`smoke: did not get resources/list response: ${e.message}`);
+    process.exit(1);
+  }
+
+  if (resourcesResponse.error) {
+    proc.kill("SIGTERM");
+    console.error(`smoke: resources/list error: ${JSON.stringify(resourcesResponse.error)}`);
+    process.exit(1);
+  }
+
+  const resources = resourcesResponse.result?.resources ?? [];
+  const uiRes = resources.find((r) => String(r.uri || "").startsWith("ui://"));
+  if (!uiRes) {
+    console.error("smoke: expected at least one ui:// resource in resources/list");
+    proc.kill("SIGTERM");
+    process.exit(1);
+  }
+
+  proc.stdin.write(
+    jsonRpcRequest(4, "resources/read", {
+      uri: uiRes.uri,
+    }),
+  );
+
+  let readResponse;
+  try {
+    readResponse = await waitFor((m) => m.id === 4, 8000);
+  } catch (e) {
+    proc.kill("SIGTERM");
+    console.error(`smoke: did not get resources/read response: ${e.message}`);
+    process.exit(1);
+  }
+
+  if (readResponse.error) {
+    proc.kill("SIGTERM");
+    console.error(`smoke: resources/read error: ${JSON.stringify(readResponse.error)}`);
+    process.exit(1);
+  }
+
+  const contents = readResponse.result?.contents ?? [];
+  const html = contents[0];
+  if (!html || !String(html.text || "").includes("Colcoor conversation explorer")) {
+    proc.kill("SIGTERM");
+    console.error("smoke: resources/read did not return expected HTML document");
+    process.exit(1);
+  }
+
+  if (String(html.mimeType || "") !== "text/html;profile=mcp-app") {
+    proc.kill("SIGTERM");
+    console.error(`smoke: unexpected UI mimeType: ${html.mimeType}`);
+    process.exit(1);
+  }
+
+  console.log(`smoke: resources OK; ui resource ${uiRes.uri} (${contents.length} content block(s))`);
+
+  proc.kill("SIGTERM");
   console.log("smoke: PASS");
 }
 

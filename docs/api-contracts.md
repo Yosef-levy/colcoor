@@ -2,7 +2,7 @@
 
 Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content-Type: application/json`**. Character encoding **UTF-8**. Line endings in text fields are normalized by the server to **Unix `\n`** where relevant.
 
-**Authentication:** every endpoint in §2–§7 except §1 **MUST** reject unauthenticated callers with **401** unless stated otherwise.
+**Authentication:** every endpoint in §3–§7 **MUST** reject unauthenticated callers with **401** unless stated otherwise. Section §2 documents **JWT issuance** (`POST /api/v1/auth/...`) — those calls do not send a Bearer token.
 
 **Error envelope (4xx / 5xx):** response body **MUST** be JSON **`{ "detail": string | array }`** (FastAPI-compatible). **`detail`** is a human-readable string, or an array of validation objects for **422** only.
 
@@ -22,7 +22,13 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 ## 2. Session (auth)
 
-**Only** **`POST /api/v1/auth/cursor`** is defined for obtaining a Colcoor JWT. No other auth login paths are part of this contract.
+Colcoor JWTs are obtained via **unauthenticated** `POST` routes under **`/api/v1/auth/`**:
+
+- **`POST /api/v1/auth/cursor`** — Cursor / VS Code IdP access token exchange (existing).
+- **`POST /api/v1/auth/email/send-code`** — request a short-lived email verification code.
+- **`POST /api/v1/auth/email/verify`** — exchange email + code for a JWT.
+
+See [authentication.md](authentication.md) for identity rules.
 
 ### 2.1 `POST /api/v1/auth/cursor`
 
@@ -50,6 +56,42 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 |-------|------|----------|
 | `access_token` | string | yes |
 | `token_type` | string | yes | literal `bearer` |
+
+### 2.2 `POST /api/v1/auth/email/send-code`
+
+**Purpose:** Start passwordless email sign-in by sending a short-lived one-time code to the mailbox.
+
+| | |
+|--|--|
+| **Auth** | none |
+| **200** | `{"status":"ok","message":string}` — **same shape** whether or not the mailbox exists (anti-enumeration) |
+| **429** | too many requests for this email |
+| **503** | email delivery not configured or SMTP failure |
+
+**Request body:**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `email` | string (email) | yes |
+
+### 2.3 `POST /api/v1/auth/email/verify`
+
+**Purpose:** Verify the emailed code and issue **`AuthResponse`** (same as §2.1).
+
+| | |
+|--|--|
+| **Auth** | none |
+| **200** | `AuthResponse` |
+| **401** | invalid or expired code |
+| **422** | body validation failed |
+| **503** | database unavailable |
+
+**Request body:**
+
+| Field | Type | Required |
+|-------|------|----------|
+| `email` | string (email) | yes |
+| `code` | string | yes | typically 6 digits |
 
 ---
 

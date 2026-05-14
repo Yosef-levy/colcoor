@@ -40,7 +40,8 @@ export type RegisterToolsDeps = {
 function requireSignedIn(tokens: SessionTokenStore) {
   if (!tokens.isSignedIn()) {
     return fail(
-      "Not signed in to Colcoor. Run `colcoor_sign_in_with_cursor` with a Cursor / VS Code IdP token, " +
+      "Not signed in to Colcoor. Use `colcoor_request_email_login_code` + `colcoor_complete_email_login`, " +
+        "or `colcoor_sign_in_with_cursor` with a Cursor / VS Code IdP token, " +
         "or set `COLCOOR_API_TOKEN` in the extension configuration. " +
         "See docs/authentication.md for details.",
     );
@@ -172,6 +173,55 @@ function registerHealthAndAuthTools({ server, client, tokens, config }: Register
         return okMessage("Signed in to Colcoor.");
       } catch (e) {
         return failFromError("sign in", e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "colcoor_request_email_login_code",
+    {
+      title: "Colcoor: request email login code",
+      description:
+        "Passwordless sign-in: send a short-lived 6-digit verification code to the given Colcoor account email " +
+        "(POST /api/v1/auth/email/send-code). Does not require an existing session. " +
+        "The server must have SMTP configured (or COLCOOR_EMAIL_LOGIN_LOG_CODES=true for development). " +
+        "Then call `colcoor_complete_email_login` with the same email and the code from the email.",
+      inputSchema: {
+        email: z.string().email().describe("Colcoor user email address."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async (args) => {
+      try {
+        const body = await client.requestEmailLoginCode(args.email);
+        return ok(body, body.message ?? "Verification code request accepted.");
+      } catch (e) {
+        return failFromError("email login send code", e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "colcoor_complete_email_login",
+    {
+      title: "Colcoor: complete email login",
+      description:
+        "Exchange the emailed 6-digit code for a Colcoor API JWT (POST /api/v1/auth/email/verify). " +
+        "Stores the JWT in memory for this MCP server (same as other sign-in paths). " +
+        "For persistence across restarts, also set `COLCOOR_API_TOKEN` in Claude Desktop extension settings.",
+      inputSchema: {
+        email: z.string().email(),
+        code: z.string().min(4).max(32).describe("6-digit code from the verification email."),
+      },
+      annotations: { destructiveHint: false },
+    },
+    async (args) => {
+      try {
+        const auth = await client.verifyEmailLoginCode(args.email, args.code.trim());
+        tokens.set(auth.access_token);
+        return okMessage("Signed in to Colcoor via email verification.");
+      } catch (e) {
+        return failFromError("email login verify", e);
       }
     },
   );

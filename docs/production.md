@@ -210,7 +210,7 @@ After changing **`colcoor.backendBaseUrl`** or **`COLCOOR_API_URL`**, have users
 1. **Firewall / cloud security group:** allow inbound **80** and/or **443** on the VM from the network where you run Cursor (home IP, office VPN, etc.).
 2. **TLS:** use a certificate Node trusts (e.g. Let’s Encrypt). **Self-signed** HTTPS typically causes **fetch / certificate** errors until the system trusts the CA or you terminate TLS with a public cert.
 3. **`CORS_ORIGINS`:** the extension issues requests from the **Node extension host**, not a browser tab, so **empty `CORS_ORIGINS` is fine** for extension-only traffic (see [`.env.example`](../.env.example)). Set `CORS_ORIGINS` when **browser** clients must call the API cross-origin.
-4. **Auth:** production clients **MUST** use **`POST /api/v1/auth/cursor`** only ([authentication.md](authentication.md), [api-contracts.md](api-contracts.md) §2.1).
+4. **Auth:** production clients obtain JWTs via **`POST /api/v1/auth/cursor`** and/or **`POST /api/v1/auth/email/*`** (see [authentication.md](authentication.md), [api-contracts.md](api-contracts.md) §2). Email OTP requires working **SMTP** (or a separate pre-issued JWT path); never enable **`COLCOOR_EMAIL_LOGIN_LOG_CODES`** in production.
 
 ### Claude Desktop extension (remote API)
 
@@ -218,7 +218,7 @@ The Claude Desktop extension at [`packages/claude_extension/`](../packages/claud
 
 - The server **requires** a backend URL — provided by Claude Desktop's user-config form (declared in `manifest.json`) and exposed to the server process as the environment variable **`COLCOOR_BACKEND_URL`**.
 - **URL format:** origin only (scheme + host + optional non-default port). **No path**, **no trailing slash**. The MCP server appends `/api/v1` itself.
-- **Auth:** the user supplies either a pre-issued Colcoor JWT (**`COLCOOR_API_TOKEN`**, sensitive) or a Cursor IdP token (**`COLCOOR_CURSOR_ACCESS_TOKEN`**, sensitive) that the server exchanges via the same **`POST /api/v1/auth/cursor`** route on startup. Tokens are held **in memory only** by the MCP server process; persistence is owned by Claude Desktop's user-config store. See [`packages/claude_extension/README.md`](../packages/claude_extension/README.md) for the full user-config table and reauthentication tools.
+- **Auth:** the user may supply a pre-issued Colcoor JWT (**`COLCOOR_API_TOKEN`**, sensitive), a Cursor IdP token (**`COLCOOR_CURSOR_ACCESS_TOKEN`**, sensitive) exchanged on startup via **`POST /api/v1/auth/cursor`**, or sign in through MCP tools **`colcoor_request_email_login_code`** / **`colcoor_complete_email_login`** (**`POST /api/v1/auth/email/*`**; requires backend SMTP). Tokens are held **in memory only** by the MCP server process; persistence is owned by Claude Desktop's user-config store. See [`packages/claude_extension/README.md`](../packages/claude_extension/README.md) for the full user-config table and tools.
 - **Network:** Claude Desktop spawns the MCP server locally and talks to it over stdio; the **API origin** must be reachable from the user's machine just like for the Cursor extension. Same firewall, TLS, and CORS considerations apply (CORS is irrelevant — requests originate from a Node process, not a browser).
 - **Health probe:** use the `colcoor_health` MCP tool, which hits **`GET /api/v1/health`** through the same client code path the rest of the tools use.
 

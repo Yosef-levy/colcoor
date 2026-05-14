@@ -1152,3 +1152,37 @@ def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> No
         assert r.json()["avatar_url"] is None
 
     get_settings.cache_clear()
+
+
+def test_email_login_code_roundtrip(caplog, monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """Email OTP: send-code + verify returns JWT (dev: code logged when COLCOOR_EMAIL_LOGIN_LOG_CODES=true)."""
+    import logging
+    import re
+
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    monkeypatch.setenv("COLCOOR_EMAIL_LOGIN_LOG_CODES", "true")
+    get_settings.cache_clear()
+    caplog.set_level(logging.WARNING)
+    email = f"otp-{uuid.uuid4().hex[:10]}@example.com"
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/auth/email/send-code", json={"email": email})
+        assert r.status_code == 200, r.text
+        assert r.json().get("status") == "ok"
+        code = None
+        for rec in caplog.records:
+            msg = rec.getMessage()
+            if "email login code" in msg and "code=" in msg:
+                m = re.search(r"code=(\d{6})", msg)
+                if m:
+                    code = m.group(1)
+                    break
+        assert code, "expected OTP in logs when COLCOOR_EMAIL_LOGIN_LOG_CODES=true"
+        r2 = client.post("/api/v1/auth/email/verify", json={"email": email, "code": code})
+        assert r2.status_code == 200, r2.text
+        body = r2.json()
+        assert body.get("token_type") == "bearer"
+        assert isinstance(body.get("access_token"), str) and len(body["access_token"]) > 10
+    get_settings.cache_clear()

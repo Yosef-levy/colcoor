@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 class EventKind(str, Enum):
@@ -65,6 +65,29 @@ class AuthCursorRequest(BaseModel):
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class AuthEmailSendRequest(BaseModel):
+    """Request a one-time verification code emailed to the user."""
+
+    email: EmailStr
+
+
+class AuthEmailVerifyRequest(BaseModel):
+    """Exchange email + OTP for a Colcoor API JWT."""
+
+    email: EmailStr
+    code: str = Field(..., min_length=3, max_length=32, description="6-digit code from email (leading zeros allowed).")
+
+
+class AuthEmailSendResponse(BaseModel):
+    """Opaque acknowledgement (same body whether or not the mailbox exists)."""
+
+    status: Literal["ok"] = "ok"
+    message: str = (
+        "If this address can receive email, a verification code was sent. "
+        "Codes expire after a few minutes."
+    )
 
 
 class ConversationCreate(BaseModel):

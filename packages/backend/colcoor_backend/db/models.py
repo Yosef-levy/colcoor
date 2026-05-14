@@ -376,6 +376,27 @@ class UsageMonthly(Base):
     )
 
 
+class EmailLoginChallenge(Base):
+    """One-time email verification codes (hashed); consumed on successful verify."""
+
+    __tablename__ = "email_login_challenges"
+    __table_args__ = (
+        Index("idx_email_login_challenges_email_created", "email", "created_at"),
+        Index("idx_email_login_challenges_expires", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    code_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class UsageEvent(Base):
     __tablename__ = "usage_events"
     __table_args__ = (

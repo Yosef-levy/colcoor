@@ -46,9 +46,12 @@ describe("manifest.json", () => {
     expect(names.length).toBeGreaterThanOrEqual(30);
     for (const required of [
       "colcoor_health",
+      "colcoor_request_email_login_code",
+      "colcoor_complete_email_login",
       "colcoor_list_conversations",
       "colcoor_create_conversation",
       "colcoor_get_conversation_tree",
+      "colcoor_open_conversation_explorer",
       "colcoor_append_user_message",
       "colcoor_post_side_chat_message",
     ]) {

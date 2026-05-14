@@ -15,6 +15,7 @@ dependencies = [
   "PyJWT>=2.9.0",
   "psycopg[binary]>=3.2.0",
   "httpx>=0.28.0",
+  "email-validator>=2.2.0",
 ]
 
 [project.optional-dependencies]

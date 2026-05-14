@@ -210,6 +210,21 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
+## 15. email_login_challenges
+
+Short-lived email OTP rows for **`POST /api/v1/auth/email/*`**. Codes are stored **hashed** (never plaintext). See Alembic revision **`010_email_login_challenges`**.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | uuid PK | Row id |
+| email | text not null | Normalized lowercase email |
+| code_hash | text not null | HMAC-SHA256 of code |
+| expires_at | timestamptz not null | After this instant the code is invalid |
+| consumed_at | timestamptz null | Set when used or superseded |
+| created_at | timestamptz not null | Insert time |
+
+---
+
 ## DDL
 
 ```sql

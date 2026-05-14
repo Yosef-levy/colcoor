@@ -103,6 +103,45 @@ class Settings(BaseSettings):
         description="Only the user who soft-deleted may undo within this window (same ``deletion_group_id``).",
     )
 
+    # ----- Email OTP login (POST /auth/email/*) -----
+    smtp_host: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SMTP_HOST", "COLCOOR_SMTP_HOST"),
+    )
+    smtp_port: int = Field(
+        default=587,
+        ge=1,
+        le=65535,
+        validation_alias=AliasChoices("SMTP_PORT", "COLCOOR_SMTP_PORT"),
+    )
+    smtp_user: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SMTP_USER", "COLCOOR_SMTP_USER"),
+    )
+    smtp_password: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SMTP_PASSWORD", "COLCOOR_SMTP_PASSWORD"),
+    )
+    smtp_from: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SMTP_FROM", "COLCOOR_SMTP_FROM"),
+        description="RFC5322 From address when sending OTP mail (defaults to smtp_user if empty).",
+    )
+    email_login_code_ttl_seconds: int = Field(
+        default=600,
+        ge=60,
+        le=3600,
+        validation_alias=AliasChoices(
+            "COLCOOR_EMAIL_LOGIN_CODE_TTL_SECONDS",
+        ),
+        description="Lifetime of each email OTP challenge (seconds).",
+    )
+    email_login_log_codes: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("COLCOOR_EMAIL_LOGIN_LOG_CODES"),
+        description="Development only: log OTP to server logs instead of SMTP (never enable in production).",
+    )
+
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"
 
