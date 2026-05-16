@@ -5,6 +5,9 @@
  * ui/notifications/size-changed, ui/resource-teardown response.
  *
  * Kept as an ES5-style IIFE for maximum compatibility with strict CSP (no modules).
+ *
+ * Tool-result parsing must stay aligned with `explorerStructuredFromToolResult.ts`
+ * (some hosts omit structuredContent and only send ok() text: summary + "\\n\\n" + JSON).
  */
 export function buildExplorerBootScript(): string {
   return `(function () {
@@ -65,16 +68,40 @@ export function buildExplorerBootScript(): string {
     return out.join("\\n") || "Error";
   }
 
-  function extractStructured(params) {
+  function parseJsonFromToolText(text) {
+    if (text == null) return null;
+    var t = String(text).trim();
+    if (!t) return null;
+    try {
+      return JSON.parse(t);
+    } catch (e0) {
+      var gap = t.indexOf("\n\n");
+      if (gap >= 0) {
+        try {
+          return JSON.parse(t.slice(gap + 2).trim());
+        } catch (e1) {}
+      }
+      var brace = t.indexOf("{");
+      if (brace >= 0) {
+        try {
+          return JSON.parse(t.slice(brace));
+        } catch (e2) {
+          return null;
+        }
+      }
+      return null;
+    }
+  }
+
+  function structuredFromToolResult(params) {
     if (!params) return null;
     if (params.structuredContent) return params.structuredContent;
     var c = params.content;
     if (!Array.isArray(c)) return null;
     for (var j = 0; j < c.length; j++) {
       if (c[j] && c[j].type === "text" && c[j].text) {
-        try {
-          return JSON.parse(c[j].text);
-        } catch (e) {}
+        var parsed = parseJsonFromToolText(c[j].text);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
       }
     }
     return null;
@@ -232,7 +259,7 @@ export function buildExplorerBootScript(): string {
       showError(extractText(params.content));
       return;
     }
-    var sc = extractStructured(params);
+    var sc = structuredFromToolResult(params);
     if (!sc || !sc.tree) {
       showError("Unexpected tool result (missing structured graph payload).");
       return;
@@ -274,7 +301,7 @@ export function buildExplorerBootScript(): string {
       arguments: { conversation_id: conv },
     });
     if (resPath && resPath.isError) throw new Error(extractText(resPath.content));
-    var sc = resPath.structuredContent;
+    var sc = structuredFromToolResult(resPath);
     if (sc) {
       state.caller_state = sc.caller_state;
       state.active_path = sc.path || [];
@@ -315,8 +342,9 @@ export function buildExplorerBootScript(): string {
         arguments: { conversation_id: conv },
       });
       if (resP && resP.isError) throw new Error(extractText(resP.content));
-      if (resT.structuredContent) state.tree = resT.structuredContent;
-      var scp = resP.structuredContent;
+      var st = structuredFromToolResult(resT);
+      if (st) state.tree = st;
+      var scp = structuredFromToolResult(resP);
       if (scp) {
         state.caller_state = scp.caller_state;
         state.active_path = scp.path || [];
@@ -350,7 +378,7 @@ export function buildExplorerBootScript(): string {
         arguments: { conversation_id: conv, after_seq: after },
       });
       if (res && res.isError) throw new Error(extractText(res.content));
-      var sc = res.structuredContent;
+      var sc = structuredFromToolResult(res);
       var msgs = (sc && sc.messages) || [];
       if (!state.side_chat) state.side_chat = { messages: [], after_seq: after, limit: 50 };
       state.side_chat.after_seq = after;

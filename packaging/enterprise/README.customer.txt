@@ -115,6 +115,14 @@ Backend container unhealthy
     ./scripts/03-stack-down.sh --remove-volumes
     ./scripts/02-stack-up.sh
 
+  "Production misconfiguration: COLCOOR_EMAIL_LOGIN_LOG_CODES must be false in production"
+  ----------------------------------------------------------------------------------------
+  The backend refuses to start if OTP codes would be written to logs. In the bundle directory,
+  edit .env: remove COLCOOR_EMAIL_LOGIN_LOG_CODES or set it to false (not true, not 1).
+
+  Email OTP still needs real SMTP (COLCOOR_SMTP_HOST, etc.); log-codes mode is for development
+  only. After fixing .env: ./scripts/04-stack-restart.sh
+
   Other causes:
   - Stale global volume from an old compose file (name: colcoor_postgres_data): upgrade the
     bundle docker-compose.yml to a version without a fixed volume name, then down/up; or

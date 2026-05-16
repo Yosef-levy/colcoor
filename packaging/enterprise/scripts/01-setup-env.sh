@@ -84,6 +84,9 @@ DATABASE_URL=${DATABASE_URL}
 
 JWT_SECRET=${JWT_SECRET}
 
+# Never log OTPs to server logs in production (required by validate_production_settings).
+COLCOOR_EMAIL_LOGIN_LOG_CODES=false
+
 COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED=${COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED:-true}
 EOF
 

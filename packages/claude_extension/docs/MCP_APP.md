@@ -28,7 +28,7 @@ Per the [MCP Apps specification](https://modelcontextprotocol.io/docs/extensions
 ## Example interaction flow
 
 1. User (or Claude) runs **`colcoor_open_conversation_explorer`** with `{ "conversation_id": "<uuid>" }`.
-2. The server returns a tool result whose **`structuredContent`** carries `{ tree, caller_state, active_path, side_chat? }`.
+2. The server returns a tool result with **`structuredContent`** and/or **`content`** text. The payload is `{ tree, caller_state, active_path, side_chat? }` (often as pretty-printed JSON after a short summary line from `ok()`). The embedded app parses **`content`** when **`structuredContent`** is missing.
 3. Claude Desktop **prefetches** the `ui://` HTML (via `resources/read`), opens the iframe, runs **`ui/initialize`**, then streams **`ui/notifications/tool-input`** / **`tool-result`** into the view.
 4. The user **clicks an event** in the tree. The iframe sends **`tools/call`** for `colcoor_set_active_event`, then **`colcoor_get_active_path`**, then **`ui/update-model-context`** so the model’s subsequent turns know which event is pinned.
 5. **Refresh** / **side-chat load** buttons issue additional `tools/call` requests for read-only endpoints already exposed by this server.
