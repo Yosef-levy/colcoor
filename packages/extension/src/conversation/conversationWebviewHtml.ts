@@ -2988,6 +2988,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       lastRole: "",
       pendingUserHtml: false,
     };
+    /** Set when the user scrolls away from the bottom during an in-flight assistant stream. */
+    var threadStreamScrollPinned = false;
 
     function getThreadScrollWrap() {
       var threadEl = document.getElementById("thread");
@@ -3084,11 +3086,60 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       }
       if (mode === "stick") {
-        if (wasAtBottom) scrollThreadToBottom();
-        else if (wrap && prevScrollTop != null) restoreThreadScroll(wrap, prevScrollTop);
+        if (threadStreamScrollPinned && wrap && prevScrollTop != null) {
+          setThreadScrollTopImmediate(wrap, prevScrollTop);
+        } else if (wasAtBottom) {
+          scrollThreadToBottom();
+        } else if (wrap && prevScrollTop != null) {
+          setThreadScrollTopImmediate(wrap, prevScrollTop);
+        }
         return;
       }
       scrollThreadToBottom();
+    }
+
+    function setThreadScrollTopImmediate(wrap, scrollTop) {
+      if (!wrap) return;
+      var top = typeof scrollTop === "number" && Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0;
+      try {
+        wrap.scrollTop = top;
+        var max = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+        if (wrap.scrollTop > max) wrap.scrollTop = max;
+      } catch (e0) {}
+    }
+
+    /** Update only the streaming assistant body to avoid full-thread innerHTML flicker. */
+    function patchStreamingAssistantBody(html) {
+      var el = document.getElementById("thread");
+      if (!el) return false;
+      var body = el.querySelector(".msg.assistant.streaming .body.md");
+      if (!body) return false;
+      var wrap = getThreadScrollWrap();
+      var prevTop = wrap ? wrap.scrollTop : 0;
+      var wasAtBottom = wrap ? isThreadScrolledToBottom(wrap) : true;
+      body.innerHTML = html || "";
+      if (threadStreamScrollPinned) {
+        if (wrap) setThreadScrollTopImmediate(wrap, prevTop);
+      } else if (wasAtBottom && wrap) {
+        setThreadScrollTopImmediate(wrap, wrap.scrollHeight);
+      } else if (wrap) {
+        setThreadScrollTopImmediate(wrap, prevTop);
+      }
+      return true;
+    }
+
+    function wireThreadScrollPinDuringStream() {
+      var wrap = getThreadScrollWrap();
+      if (!wrap || wrap.dataset.streamPinWired === "1") return;
+      wrap.dataset.streamPinWired = "1";
+      wrap.addEventListener(
+        "scroll",
+        function () {
+          if (!state.streamingHtml && !state.busy) return;
+          threadStreamScrollPinned = !isThreadScrolledToBottom(wrap);
+        },
+        { passive: true },
+      );
     }
 
     function renderThread(scrollOpts) {
@@ -4111,6 +4162,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           prevConversationIdForSideChatScroll = cidScroll;
           prevSideChatPanelOpen = false;
         }
+        if (!state.streamingHtml && !state.busy) {
+          threadStreamScrollPinned = false;
+        }
+        wireThreadScrollPinDuringStream();
         renderTree();
         var threadScrollMode = computeThreadScrollMode(
           preserveThreadScroll,
@@ -4854,8 +4909,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       if (m && m.type === "assistantStream" && typeof m.html === "string") {
         state = { ...state, streamingHtml: m.html || null };
+        wireThreadScrollPinDuringStream();
         try {
-          renderThread({ mode: "stick" });
+          if (!patchStreamingAssistantBody(m.html)) {
+            renderThread({ mode: threadStreamScrollPinned ? "preserve" : "stick" });
+          }
         } catch (e) {
           const msg = e && e.message ? String(e.message) : String(e);
           const errEl = document.getElementById("err");

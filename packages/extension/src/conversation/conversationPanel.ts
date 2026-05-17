@@ -1224,6 +1224,8 @@ export function createConversationPanelController(
     lastError: string | null,
     opts?: {
       finalizeToDefaultBranchTip?: boolean;
+      /** After refresh, select this event (e.g. assistant reply just completed) instead of the default branch tip. */
+      selectEventId?: string;
       skipConversationsList?: boolean;
       prefetchedTreeEvents?: GraphEventNode[];
       prefetchedNotes?: NoteOut[];
@@ -1363,7 +1365,11 @@ export function createConversationPanelController(
               continue;
             }
           }
-          if (finalizeToDefaultBranchTip && events.length > 0) {
+          const selectEventId =
+            typeof opts?.selectEventId === "string" ? opts.selectEventId.trim() : "";
+          if (selectEventId && events.some((e) => e.id === selectEventId)) {
+            selectedEventId = selectEventId;
+          } else if (finalizeToDefaultBranchTip && events.length > 0) {
             try {
               selectedEventId = findBranchTip(events).id;
             } catch {
@@ -1450,16 +1456,16 @@ export function createConversationPanelController(
     return mergeUserMediaImageRefs(existingRefs ?? [], uploaded);
   }
 
-  async function drainMainSendQueue(initialAssistantId: string | undefined): Promise<void> {
+  async function drainMainSendQueue(initialAssistantId: string | undefined): Promise<string | undefined> {
     let mainAssistant = initialAssistantId;
     const anchor = busyAnchorParentEventId;
     if (!conversationId || !anchor) {
-      return;
+      return mainAssistant;
     }
     const ws = getWorkspaceRoot();
     const sig = sendAbort?.signal;
     if (!sig) {
-      return;
+      return mainAssistant;
     }
     while (pendingMainSendQueue.length > 0) {
       const item = pendingMainSendQueue.shift()!;
@@ -1520,6 +1526,7 @@ export function createConversationPanelController(
         break;
       }
     }
+    return mainAssistant;
   }
 
   function applyWebviewSelection(eventId: string): void {
@@ -1686,10 +1693,17 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
+      let assistantTipId = result.assistantEventId;
       if (!result.cancelled) {
-        await drainMainSendQueue(result.assistantEventId);
+        assistantTipId = (await drainMainSendQueue(result.assistantEventId)) ?? assistantTipId;
       }
-      await loadTreeAndPush(false, null, { finalizeToDefaultBranchTip: true });
+      await loadTreeAndPush(
+        false,
+        null,
+        assistantTipId?.trim()
+          ? { selectEventId: assistantTipId.trim() }
+          : { finalizeToDefaultBranchTip: true },
+      );
       if (result.cancelled) {
         void vscode.window.showInformationMessage(
           result.assistantText?.trim()
@@ -1744,7 +1758,13 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
-      await loadTreeAndPush(false, null, { finalizeToDefaultBranchTip: true });
+      await loadTreeAndPush(
+        false,
+        null,
+        result.assistantEventId?.trim()
+          ? { selectEventId: result.assistantEventId.trim() }
+          : { finalizeToDefaultBranchTip: true },
+      );
       if (result.cancelled) {
         void vscode.window.showInformationMessage(
           result.assistantText?.trim()
