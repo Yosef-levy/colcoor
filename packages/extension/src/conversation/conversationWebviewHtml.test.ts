@@ -242,6 +242,13 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("visibleThreadSegmentsForUi()");
   });
 
+  it("resets Private draft checkbox when conversation changes", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("resetPrivateBranchCheckboxIfConversationChanged");
+    expect(html).toContain("prevConversationIdForPrivateBranch");
+    expect(html).toContain("priv.checked = false");
+  });
+
   it("marks tree snippets with dir=auto and unicode-bidi for mixed-direction labels", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toMatch(/class="node-snippet[^"]*" dir="auto"/);

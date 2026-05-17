@@ -1839,6 +1839,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     var inlineSideChatScrollAfterSendTimer = null;
     var prevSideChatPanelOpen = false;
     var prevConversationIdForSideChatScroll = "";
+    var prevConversationIdForPrivateBranch = "";
+
+    function resetPrivateBranchCheckboxIfConversationChanged(conversationId) {
+      var cid = typeof conversationId === "string" ? conversationId : "";
+      if (cid === prevConversationIdForPrivateBranch) return;
+      prevConversationIdForPrivateBranch = cid;
+      var priv = document.getElementById("privateBranch");
+      if (priv) priv.checked = false;
+    }
     function clearPendingSendMedia() {
       pendingSendImages = [];
       pendingSendImageRefs = [];
@@ -4156,6 +4165,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
           if (compH != null) ta.style.height = compH + "px";
         }
+        resetPrivateBranchCheckboxIfConversationChanged(state.conversationId);
         clampSelectionIfPrivateHidden();
         var cidScroll = typeof state.conversationId === "string" ? state.conversationId : "";
         if (cidScroll !== prevConversationIdForSideChatScroll) {
