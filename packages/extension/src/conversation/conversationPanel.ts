@@ -1637,19 +1637,6 @@ export function createConversationPanelController(
     return mainAssistant;
   }
 
-  function applyWebviewSelection(eventId: string): void {
-    const id = eventId.trim();
-    if (!id || !lastTreeEvents.some((e) => e.id === id)) {
-      return;
-    }
-    const prevSel = selectedEventId;
-    selectedEventId = id;
-    postState(lastTreeEvents, lastPostedBusy, lastPostedError);
-    void syncActiveToBackend(id, {
-      needsContextRebuild: prevSel !== undefined && prevSel !== id,
-    });
-  }
-
   async function handleEditUserMessage(targetEventId?: string): Promise<void> {
     const eventId = (targetEventId ?? selectedEventId)?.trim();
     const gate = evaluateEditUserMessageGate(conversationId, eventId, lastTreeEvents);
