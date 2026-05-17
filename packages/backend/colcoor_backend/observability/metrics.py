@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 from prometheus_client import CONTENT_TYPE_LATEST
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncEngine
 
 # Paths excluded from HTTP request metrics (scrapers / probes).
 SKIP_HTTP_METRICS_PATHS = frozenset({"/metrics", "/health", "/ready"})
