@@ -1229,6 +1229,8 @@ export function createConversationPanelController(
       finalizeToDefaultBranchTip?: boolean;
       /** After refresh, select this event (e.g. assistant reply just completed) instead of the default branch tip. */
       selectEventId?: string;
+      /** Skip “selection no longer available” prompt (e.g. after local subtree delete). */
+      skipStaleSelectionPrompt?: boolean;
       skipConversationsList?: boolean;
       prefetchedTreeEvents?: GraphEventNode[];
       prefetchedNotes?: NoteOut[];
@@ -1349,7 +1351,7 @@ export function createConversationPanelController(
           if (selectedEventId && nextEventIds.has(selectedEventId)) {
             staleTreePromptedForEventId = null;
           }
-          if (!busy && stalePromptKey) {
+          if (!busy && stalePromptKey && !opts?.skipStaleSelectionPrompt) {
             staleTreePromptedForEventId = stalePromptKey;
             const choice = await vscode.window.showWarningMessage(
               "Colcoor: the shared tree changed and your previous selection is no longer available.",
@@ -2883,10 +2885,24 @@ export function createConversationPanelController(
         return;
       }
     }
+    const deletedEventId = selectedEventId;
+    const deletedEv = lastTreeEvents.find((e) => e.id === deletedEventId);
+    const parentAfterDelete =
+      deletedEv?.parent_event_id != null ? String(deletedEv.parent_event_id).trim() : "";
+    const reloadAfterSubtreeDelete = async (): Promise<void> => {
+      if (staleTreePromptedForEventId === deletedEventId) {
+        staleTreePromptedForEventId = null;
+      }
+      await loadTreeAndPush(false, null, {
+        skipConversationsList: true,
+        skipStaleSelectionPrompt: true,
+        ...(parentAfterDelete ? { selectEventId: parentAfterDelete } : { finalizeToDefaultBranchTip: true }),
+      });
+    };
     try {
-      const out = await api.deleteEventSubtree(conversationId, selectedEventId);
+      const out = await api.deleteEventSubtree(conversationId, deletedEventId);
       void vscode.window.setStatusBarMessage("Colcoor: message branch deleted.", 2500);
-      await loadTreeAndPush(false, null, { skipConversationsList: true });
+      await reloadAfterSubtreeDelete();
       if (out.deleted_count > 0 && out.deletion_group_id) {
         const undoPick = await vscode.window.showInformationMessage(
           "Colcoor: message branch deleted.",
@@ -2896,7 +2912,7 @@ export function createConversationPanelController(
           try {
             await api.undoEventDeletion(conversationId, out.deletion_group_id);
             void vscode.window.setStatusBarMessage("Colcoor: deletion undone.", 2500);
-            await loadTreeAndPush(false, null, { skipConversationsList: true });
+            await reloadAfterSubtreeDelete();
           } catch (undoErr) {
             void showColcoorApiFailure(undoErr);
           }
