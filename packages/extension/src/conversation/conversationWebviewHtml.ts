@@ -2047,6 +2047,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       agentModelOptions: [],
       agentModelSelected: "auto",
       agentModelsListHint: null,
+      pendingAssistantModelLabel: null,
     };
     wireInlineSideChatAudioUnlockFromUserGesture();
 
@@ -2417,11 +2418,25 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return d.length ? "User (" + esc(d) + ")" : "User";
     }
 
+    function assistantRoleLabelFromModel(modelName) {
+      var d = modelName != null ? String(modelName).trim() : "";
+      return d.length ? "Assistant (" + esc(d) + ")" : "Assistant";
+    }
+
     function treeEventRoleLabel(ev) {
       if (ev.kind === "user_input") {
         return userRoleLabelFromComposerName(ev.composer_display_name);
       }
+      if (ev.kind === "assistant_output") {
+        return assistantRoleLabelFromModel(ev.assistant_display_model);
+      }
       return esc(treeKindLabel(ev.kind));
+    }
+
+    function pendingAssistantRoleLabel() {
+      var pending =
+        state.pendingAssistantModelLabel != null ? String(state.pendingAssistantModelLabel).trim() : "";
+      return assistantRoleLabelFromModel(pending || undefined);
     }
 
     function pathChain(events, selectedId) {
@@ -3197,7 +3212,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       for (const s of segs) {
         const cls = s.role === "user" ? "user" : "assistant";
         var roleLine =
-          s.role === "user" ? userRoleLabelFromComposerName(s.composerDisplayName) : "Assistant";
+          s.role === "user"
+            ? userRoleLabelFromComposerName(s.composerDisplayName)
+            : assistantRoleLabelFromModel(s.assistantDisplayModel);
         const privBadge =
           s.privateScope === true ? '<span class="badge-pvt">Private</span>' : "";
         html +=
@@ -3261,13 +3278,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       if (state.streamingHtml) {
         html +=
-          '<div class="msg assistant streaming"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">Assistant</div><div class="body md" dir="auto">' +
+          '<div class="msg assistant streaming"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">' +
+          pendingAssistantRoleLabel() +
+          '</div><div class="body md" dir="auto">' +
           state.streamingHtml +
           "</div></div>";
       } else if (state.busy) {
         html +=
           '<div class="msg assistant assistant-waiting">' +
-          '<div class="role">Assistant</div>' +
+          '<div class="role">' +
+          pendingAssistantRoleLabel() +
+          "</div>" +
           '<p class="pending-hint">Preparing reply…</p>' +
           "</div>";
       }

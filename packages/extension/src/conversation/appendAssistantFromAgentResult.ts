@@ -1,19 +1,23 @@
 import type { AgentRunResult, AssistantStubKind } from "../agent/agentRunner";
 import type { ColcoorApiClient } from "../api/client";
 import type { UserTurnResult } from "./runUserTurn";
+import { buildColcoorAgentMeta, mergeAssistantContentJson } from "./agentModelDisplay";
 import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 
 function assistantContentJson(runResult: AgentRunResult): Record<string, unknown> | undefined {
   const entries = runResult.cursorCliTimeline;
-  if (!entries?.length) {
-    return undefined;
-  }
-  return {
-    colcoor_agent_trace: {
-      version: 2,
-      entries,
-    },
-  };
+  const traceJson =
+    entries?.length ?
+      {
+        colcoor_agent_trace: {
+          version: 2,
+          entries,
+        },
+      }
+    : undefined;
+  const modelId = runResult.cliModelId?.trim();
+  const metaJson = buildColcoorAgentMeta(modelId, undefined);
+  return mergeAssistantContentJson(traceJson, metaJson);
 }
 
 /**

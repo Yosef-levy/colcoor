@@ -38,6 +38,8 @@ export type ThreadSegment = {
   eventId: string;
   /** Member display name for user rows when known (thread header). */
   composerDisplayName?: string;
+  /** Short Cursor model label for assistant rows when known. */
+  assistantDisplayModel?: string;
   html: string;
   /** True when `visible_to` is set on this event (private draft visible only to that user). */
   privateScope?: boolean;
@@ -137,9 +139,14 @@ export function buildThreadSegments(
       });
     } else if (ev.kind === "assistant_output") {
       const rawTrace = extractAgentTraceEntries(ev.content_json ?? undefined);
+      const assistantDn =
+        typeof ev.assistant_display_model === "string" && ev.assistant_display_model.trim()
+          ? ev.assistant_display_model.trim()
+          : undefined;
       out.push({
         role: "assistant",
         eventId: ev.id,
+        ...(assistantDn !== undefined ? { assistantDisplayModel: assistantDn } : {}),
         html: bodyHtmlFromMarkdown(text),
         ...(privateScope ? { privateScope: true } : {}),
         ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),

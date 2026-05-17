@@ -141,10 +141,13 @@ export function createStreamJsonStdoutFeed(): {
   getResolvedText(): string;
   /** Sanitized NDJSON-derived objects in stream order (for `events.content_json`). */
   getTimeline(): unknown[];
+  /** Model id from the stream `system` / `init` line when present. */
+  getSessionModel(): string | undefined;
 } {
   let lineBuf = "";
   let fromAssistant = "";
   let terminal: string | null = null;
+  let sessionModel: string | undefined;
   const timeline: unknown[] = [];
 
   function resolvedSoFar(): string {
@@ -175,6 +178,14 @@ export function createStreamJsonStdoutFeed(): {
   function processCompleteLine(line: string, onResolvedSoFar?: (textSoFar: string) => void): void {
     const o = tryParseNdjsonObject(line);
     if (o) {
+      if (
+        o.type === "system" &&
+        o.subtype === "init" &&
+        typeof o.model === "string" &&
+        o.model.trim()
+      ) {
+        sessionModel = o.model.trim();
+      }
       const slim = slimNdjsonForTimeline(o);
       if (slim) {
         appendTimelineEntry(timeline, slim);
@@ -209,6 +220,9 @@ export function createStreamJsonStdoutFeed(): {
     },
     getTimeline() {
       return [...timeline];
+    },
+    getSessionModel() {
+      return sessionModel;
     },
   };
 }

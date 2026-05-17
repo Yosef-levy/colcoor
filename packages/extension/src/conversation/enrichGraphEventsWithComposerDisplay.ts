@@ -1,16 +1,26 @@
+import type { AgentModelCatalogSnapshot } from "../agent/agentModelCatalogCache";
 import type { ConversationMember, GraphEventNode } from "../api/client";
+import { assistantDisplayModelFromEvent } from "./agentModelDisplay";
 import { conversationMemberPrimaryLabel } from "./conversationMemberDisplayName";
 
-/** Attach `composer_display_name` for user_input rows from conversation members (tree/thread UI only). */
+/** Attach display labels for tree/thread UI (not returned by the tree API). */
 export function enrichGraphEventsWithComposerDisplay(
   events: readonly GraphEventNode[],
   members: readonly ConversationMember[],
+  modelCatalog?: AgentModelCatalogSnapshot,
 ): GraphEventNode[] {
   const byUserId = new Map<string, ConversationMember>();
   for (const m of members) {
     byUserId.set(m.user_id, m);
   }
   return events.map((e) => {
+    if (e.kind === "assistant_output" && modelCatalog) {
+      const modelLabel = assistantDisplayModelFromEvent(e.content_json ?? undefined, modelCatalog);
+      if (modelLabel) {
+        return { ...e, assistant_display_model: modelLabel };
+      }
+      return e;
+    }
     if (e.kind !== "user_input") {
       return e;
     }

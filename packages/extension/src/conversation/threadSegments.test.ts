@@ -121,6 +121,29 @@ describe("buildThreadSegments", () => {
     expect(segs[0]!.composerDisplayName).toBe("Jane Doe");
   });
 
+  it("includes assistantDisplayModel on assistant segments when set", () => {
+    const events: GraphEventNode[] = [
+      ev({
+        id: "r",
+        parent_event_id: null,
+        kind: "user_input",
+        created_at: "2020-01-01T00:00:00Z",
+        content_text: "Hi",
+      }),
+      ev({
+        id: "a1",
+        parent_event_id: "r",
+        kind: "assistant_output",
+        created_at: "2020-01-01T00:01:00Z",
+        content_text: "Hello",
+        assistant_display_model: "Codex 5.3",
+      }),
+    ];
+    const segs = buildThreadSegments(events, "a1");
+    expect(segs).toHaveLength(2);
+    expect(segs[1]!.assistantDisplayModel).toBe("Codex 5.3");
+  });
+
   it("sets privateScope on user and assistant when visible_to marks a private draft", () => {
     const uid = "11111111-1111-4111-8111-111111111111";
     const events: GraphEventNode[] = [

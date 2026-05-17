@@ -42,7 +42,12 @@ export function buildPlainThread(
         }
       }
     } else if (ev.kind === "assistant_output") {
-      let asstLine = `Assistant: ${text.trimEnd()}`;
+      const mn =
+        typeof ev.assistant_display_model === "string" && ev.assistant_display_model.trim()
+          ? ev.assistant_display_model.trim()
+          : undefined;
+      const asstLead = mn !== undefined ? `Assistant (${mn})` : "Assistant";
+      let asstLine = `${asstLead}: ${text.trimEnd()}`;
       if (cp !== undefined) {
         asstLine += `\nTitle: ${cp}`;
       }

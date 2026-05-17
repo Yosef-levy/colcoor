@@ -37,6 +37,8 @@ export type GraphEventNode = {
   actor_user_id: string | null;
   /** UI-only: resolved from conversation members for user_input rows (not returned by the tree API). */
   composer_display_name?: string | null;
+  /** UI-only: short model label for assistant_output rows (from `content_json.colcoor_agent_meta`). */
+  assistant_display_model?: string | null;
   content_text: string | null;
   /** Cursor CLI stream-json timeline envelope (`colcoor_agent_trace`), when present. */
   content_json?: Record<string, unknown> | null;

@@ -45,7 +45,7 @@ describe("enrichGraphEventsWithComposerDisplay", () => {
     expect(out[0]).toEqual(raw);
   });
 
-  it("does not annotate assistant_output rows", () => {
+  it("annotates assistant_output with model label from content_json", () => {
     const members: ConversationMember[] = [
       { user_id: uid, role: "editor", display_name: "Alice", handle: null, email: null },
     ];
@@ -57,11 +57,19 @@ describe("enrichGraphEventsWithComposerDisplay", () => {
       actor_type: "assistant",
       actor_user_id: null,
       content_text: "y",
+      content_json: {
+        colcoor_agent_meta: { model_id: "gpt-5.5-medium", model_label: "GPT-5.5 1M" },
+      },
       visible_to: null,
       created_at: "2020-01-01T00:00:00Z",
       updated_at: "2020-01-01T00:00:00Z",
     };
-    const out = enrichGraphEventsWithComposerDisplay([asst], members);
-    expect(out[0]).toEqual(asst);
+    const catalog = {
+      curated: [],
+      all: [{ id: "gpt-5.5-medium", label: "GPT-5.5 1M" }],
+      hint: null,
+    };
+    const out = enrichGraphEventsWithComposerDisplay([asst], members, catalog);
+    expect(out[0]!.assistant_display_model).toBe("GPT-5.5 1M");
   });
 });

@@ -453,6 +453,17 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(feed.getResolvedText()).toBe("final only");
   });
 
+  it("captures session model from system init line", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push('{"type":"system","subtype":"init","model":"gpt-5.5-medium"}\n');
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getSessionModel()).toBe("gpt-5.5-medium");
+    expect(feed.getTimeline()).toHaveLength(0);
+  });
+
   it("does not put user, assistant, or system in the timeline", () => {
     const feed = createStreamJsonStdoutFeed();
     feed.push(

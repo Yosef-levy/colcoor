@@ -26,6 +26,8 @@ export type AgentRunResult = {
   cancelled?: boolean;
   /** Sanitized stream-json timeline for `assistant_output.content_json` (headless CLI only). */
   cursorCliTimeline?: unknown[];
+  /** Model id passed as `--model` or reported by the CLI init line when Automatic. */
+  cliModelId?: string;
 };
 
 export class AgentRunner {
@@ -72,7 +74,8 @@ export class AgentRunner {
     try {
       const storedKey = await this.secrets.get(SECRET_CURSOR_AGENT_API_KEY);
 
-      const { stdout, stderr, exitCode, cancelled, ndjsonTimeline } = await spawnCursorAgentPrint({
+      const { stdout, stderr, exitCode, cancelled, ndjsonTimeline, cliSessionModel } =
+        await spawnCursorAgentPrint({
         executable,
         workspaceRoot: cwd,
         prompt: promptForCli,
@@ -83,12 +86,14 @@ export class AgentRunner {
         outputMode,
         cliModel: input.cliModel?.trim() || undefined,
       });
+      const cliModelId = input.cliModel?.trim() || cliSessionModel?.trim() || undefined;
       if (cancelled) {
         return {
           text: normalizePersistedUserInputText(stdout),
           stub: "none",
           cancelled: true,
           cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
+          cliModelId,
         };
       }
       if (exitCode !== 0) {
@@ -119,6 +124,7 @@ export class AgentRunner {
         text,
         stub: "none",
         cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
+        cliModelId,
       };
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {

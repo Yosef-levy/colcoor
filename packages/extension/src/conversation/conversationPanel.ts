@@ -54,6 +54,7 @@ import {
   readSelectedAgentModelForConversation,
   writeSelectedAgentModelForConversation,
 } from "./conversationAgentModel";
+import { resolveAgentModelShortLabel } from "./agentModelDisplay";
 import { evaluateContinueFromHere } from "./continueFromHereGate";
 import { clipboardTextForTreeMessage } from "./selectedMessageClipboardText";
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
@@ -211,6 +212,8 @@ type WebviewStateMessage = {
   agentModelSelected: string;
   /** Shown as the model dropdown title when the CLI list is empty or failed. */
   agentModelsListHint: string | null;
+  /** Short label for the in-flight assistant reply (tree/thread headers while busy). */
+  pendingAssistantModelLabel: string | null;
   /** When true, re-render the thread without scrolling to the bottom (note add/edit/delete). */
   preserveThreadScroll?: boolean;
 };
@@ -1071,6 +1074,20 @@ export function createConversationPanelController(
     return agentModelCliFlag(readSelectedAgentModelForConversation(map, conversationId));
   }
 
+  function pendingAssistantModelLabelForWebview(): string | null {
+    if (!sendAbort) {
+      return null;
+    }
+    const map = readAgentModelByConversationMap(context.workspaceState);
+    const selected = conversationId
+      ? readSelectedAgentModelForConversation(map, conversationId)
+      : AGENT_MODEL_AUTO;
+    const catalog = getAgentModelCatalog();
+    const cliModel = agentModelCliFlag(selected);
+    const label = resolveAgentModelShortLabel(cliModel ?? selected, catalog);
+    return label ?? null;
+  }
+
   function agentModelFieldsForWebview(): {
     agentModelOptions: CursorAgentModelEntry[];
     agentModelSelected: string;
@@ -1244,7 +1261,11 @@ export function createConversationPanelController(
       const pendingUserHtml = pendingUserHtmlForPanelState(busy, pendingSendUserMarkdown);
       const waitingForAssistant = Boolean(sendAbort && pendingSendUserMarkdown === undefined);
       const drawersModel = buildConversationDrawersModel(events, lastNotes);
-      const eventsForWebview = enrichGraphEventsWithComposerDisplay(events, lastConversationMembers);
+      const eventsForWebview = enrichGraphEventsWithComposerDisplay(
+        events,
+        lastConversationMembers,
+        getAgentModelCatalog(),
+      );
       const msg: WebviewStateMessage = {
         type: "state",
         conversationId,
@@ -1305,6 +1326,7 @@ export function createConversationPanelController(
         pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
         ...(pendingComposerPrefill ? { composerPrefill: pendingComposerPrefill } : {}),
         ...agentModelFieldsForWebview(),
+        pendingAssistantModelLabel: pendingAssistantModelLabelForWebview(),
         ...(options?.preserveThreadScroll ? { preserveThreadScroll: true } : {}),
       };
       pendingComposerPrefill = null;
@@ -1386,6 +1408,7 @@ export function createConversationPanelController(
           sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
           pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
           ...agentModelFieldsForWebview(),
+          pendingAssistantModelLabel: pendingAssistantModelLabelForWebview(),
         };
         void panel.webview.postMessage(fallback);
       } catch {
