@@ -1040,12 +1040,15 @@ export function createConversationPanelController(
       const ids = new Set(events.map((e) => e.id));
       let sel = selectedEventId;
       if (!sel || !ids.has(sel)) {
-        try {
-          sel = events.length > 0 ? findBranchTip(events).id : "";
-        } catch {
-          sel = events[0]?.id ?? "";
+        // During send/stream the tree snapshot may lag behind selection (new user/assistant ids).
+        if (!(busy && sel)) {
+          try {
+            sel = events.length > 0 ? findBranchTip(events).id : "";
+          } catch {
+            sel = events[0]?.id ?? "";
+          }
+          selectedEventId = sel;
         }
-        selectedEventId = sel;
       }
       maybeRecordVisitedSelectionAfterPost(sel ?? "");
       const nav = visitedSelectionNavFlags();
@@ -1239,10 +1242,14 @@ export function createConversationPanelController(
       const skipConversationsList = Boolean(opts?.skipConversationsList);
       const skipInlineSideChatRefresh = Boolean(opts?.skipInlineSideChatRefresh);
       let finalizeToDefaultBranchTip = Boolean(opts?.finalizeToDefaultBranchTip);
+      const explicitSelectEventId =
+        typeof opts?.selectEventId === "string" ? opts.selectEventId.trim() : "";
       let treePrefetch: GraphEventNode[] | undefined = opts?.prefetchedTreeEvents;
       let notesPrefetch: NoteOut[] | undefined = opts?.prefetchedNotes;
-      conversationTreeLoading = true;
-      postState(lastTreeEvents, lastPostedBusy, null);
+      conversationTreeLoading = !busy;
+      if (!busy) {
+        postState(lastTreeEvents, lastPostedBusy, null);
+      }
       for (;;) {
         try {
           const hadInlineSideChatOpenAtTreeLoad = inlineSideChatVisible;
@@ -1311,9 +1318,11 @@ export function createConversationPanelController(
             const lr = caller.side_chat_last_read_seq;
             lastSideChatReadSeq =
               typeof lr === "number" && Number.isFinite(lr) ? Math.max(0, Math.floor(lr)) : 0;
-            const aid = caller.active_event_id;
-            if (events.some((e) => e.id === aid)) {
-              selectedEventId = aid;
+            if (!busy && !explicitSelectEventId) {
+              const aid = caller.active_event_id;
+              if (events.some((e) => e.id === aid)) {
+                selectedEventId = aid;
+              }
             }
           } else {
             lastNeedsContextRebuild = false;
@@ -1365,10 +1374,8 @@ export function createConversationPanelController(
               continue;
             }
           }
-          const selectEventId =
-            typeof opts?.selectEventId === "string" ? opts.selectEventId.trim() : "";
-          if (selectEventId && events.some((e) => e.id === selectEventId)) {
-            selectedEventId = selectEventId;
+          if (explicitSelectEventId && events.some((e) => e.id === explicitSelectEventId)) {
+            selectedEventId = explicitSelectEventId;
           } else if (finalizeToDefaultBranchTip && events.length > 0) {
             try {
               selectedEventId = findBranchTip(events).id;
@@ -1504,6 +1511,7 @@ export function createConversationPanelController(
               await loadTreeAndPush(true, null, {
                 skipConversationsList: true,
                 skipInlineSideChatRefresh: true,
+                selectEventId: userEventId,
               });
             },
           },
@@ -1688,6 +1696,7 @@ export function createConversationPanelController(
             await loadTreeAndPush(true, null, {
               skipConversationsList: true,
               skipInlineSideChatRefresh: true,
+              selectEventId: userEventId,
             });
           },
         },
