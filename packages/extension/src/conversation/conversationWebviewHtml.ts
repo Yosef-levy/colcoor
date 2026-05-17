@@ -273,6 +273,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       font-size: 0.82em;
       color: var(--vscode-descriptionForeground);
     }
+    .inline-sidechat-time {
+      font-weight: normal;
+      opacity: 0.92;
+    }
     .inline-sidechat-msg-unread .inline-sidechat-meta-main {
       color: var(--vscode-charts-yellow);
     }
@@ -3613,6 +3617,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             esc(mid) +
             '" aria-haspopup="menu" aria-label="Side-chat message actions" title="Message actions (right-click message for same menu)">⋯</button>';
         }
+        var metaLabel =
+          typeof m.meta_label === "string" && m.meta_label.trim() ? m.meta_label.trim() : "";
         var mentionYou = inlineSideChatMessageMentionsViewer(m, ownSc);
         var rowTitle = mentionYou
           ? "You were @-mentioned. Right-click for Reply, Edit, or Delete when available."
@@ -3632,6 +3638,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           '<div class="inline-sidechat-meta-row">' +
           '<div class="inline-sidechat-meta-main">' +
           esc(inlineSideChatAuthorLabel(m)) +
+          (metaLabel
+            ? ' · <span class="inline-sidechat-time">' + esc(metaLabel) + "</span>"
+            : "") +
           (unread
             ? '<span class="inline-sidechat-unread" title="Unread">●</span>'
             : "") +

@@ -1,10 +1,13 @@
 import type { NoteOut, SideChatMessageOut } from "../api/client";
 import { markdownToSafeHtml } from "../conversation/threadMarkdown";
 import { extractSideChatMentions } from "./sideChatMentions";
+import { formatSideChatMessageMetaLabel } from "./sideChatMessageMeta";
 import { buildSideChatReferenceLinks, sideChatReferenceChips, type SideChatReferenceLink } from "./sideChatReferenceChips";
 import { resolveSideChatReferencePreview } from "./sideChatReferences";
 
 export type SideChatRenderMessage = SideChatMessageOut & {
+  /** Time label for the message header (e.g. `5 minutes ago` or `14:32 17/05/2026 (edited)`). */
+  meta_label: string;
   rendered_body_html: string;
   referenced_side_chat_preview: { seq: number; text: string } | null;
   reference_chips: string[];
@@ -85,6 +88,7 @@ export function toSideChatRenderMessages(
     if (m.deleted_at != null) {
       return {
         ...m,
+        meta_label: formatSideChatMessageMetaLabel(m.created_at, m.edited_at),
         rendered_body_html: deletedSideChatPlaceholderHtml(m),
         referenced_side_chat_preview: null,
         reference_chips: [],
@@ -94,6 +98,7 @@ export function toSideChatRenderMessages(
     }
     return {
       ...m,
+      meta_label: formatSideChatMessageMetaLabel(m.created_at, m.edited_at),
       rendered_body_html: renderUserMessageBodyHtml(m, userImageDataUrlsByMessageId?.get(m.id)),
       referenced_side_chat_preview: resolveSideChatReferencePreview(
         messages,

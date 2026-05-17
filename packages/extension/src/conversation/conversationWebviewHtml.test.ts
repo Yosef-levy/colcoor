@@ -154,6 +154,8 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("function inlineSideChatAuthorLabel(m)");
     expect(html).toContain("function inlineSideChatMessageUnreadForViewer(m, seqNum, lr)");
+    expect(html).toContain("m.meta_label");
+    expect(html).toContain("inline-sidechat-time");
     expect(html).toContain("inline-sidechat-msg-self");
     expect(html).toContain("inline-sidechat-msg-peer");
     expect(html).toContain("inline-sidechat-msg-unread");

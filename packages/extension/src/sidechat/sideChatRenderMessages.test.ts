@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { NoteOut, SideChatMessageOut } from "../api/client";
+import { formatSideChatMessageMetaLabel } from "./sideChatMessageMeta";
 import { toSideChatRenderMessages } from "./sideChatRenderMessages";
 
 function row(
@@ -19,9 +20,9 @@ function row(
     referenced_event_id: p.referenced_event_id ?? null,
     referenced_note_id: p.referenced_note_id ?? null,
     referenced_side_chat_message_id: p.referenced_side_chat_message_id ?? null,
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-    edited_at: null,
+    created_at: p.created_at ?? "2026-01-01T00:00:00Z",
+    updated_at: p.updated_at ?? "2026-01-01T00:00:00Z",
+    edited_at: p.edited_at ?? null,
     deleted_at: p.deleted_at ?? null,
     deleted_by_user_id: p.deleted_by_user_id ?? null,
     deletion_kind: p.deletion_kind ?? null,
@@ -33,6 +34,24 @@ describe("toSideChatRenderMessages", () => {
     const out = toSideChatRenderMessages([row({ id: "m1", seq: 1, body: "# Hi\n\n`x`" })]);
     expect(out[0].rendered_body_html).toContain("<h1");
     expect(out[0].rendered_body_html).toContain("<code");
+  });
+
+  it("sets meta_label from created_at and edited_at", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T14:00:00.000Z"));
+    try {
+      const created = "2026-05-17T13:50:00.000Z";
+      const edited = "2026-05-17T13:55:00.000Z";
+      const out = toSideChatRenderMessages([
+        row({ id: "m1", seq: 1, body: "hi", created_at: created, edited_at: null }),
+        row({ id: "m2", seq: 2, body: "edited", created_at: created, edited_at: edited }),
+      ]);
+      expect(out[0].meta_label).toBe(formatSideChatMessageMetaLabel(created, null));
+      expect(out[1].meta_label).toBe(formatSideChatMessageMetaLabel(created, edited));
+      expect(out[1].meta_label).toContain("(edited)");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("strips script tags", () => {
