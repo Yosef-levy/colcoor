@@ -6,7 +6,7 @@
 
 import * as vscode from "vscode";
 import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
-import { SECRET_CURSOR_AGENT_API_KEY } from "./cursorAgentApiKey";
+import { SECRET_CURSOR_AGENT_API_KEY, URL_CURSOR_USER_API_KEYS } from "./cursorAgentApiKey";
 import {
   normalizeAgentCliOutputMode,
   spawnCursorAgentPrint,
@@ -94,7 +94,7 @@ export class AgentRunner {
         const invalidKey = /invalid.*api key|api key is invalid/i.test(detail);
         const authHint = /authentication|CURSOR_API_KEY|agent login/i.test(detail) || invalidKey
           ? '\n\nColcoor: Command Palette → "Colcoor: Set Cursor API key for agent" (replaces a bad CURSOR_API_KEY from the editor env), ' +
-            "or run `agent login` in a terminal. Docs: https://cursor.com/docs/cli/reference/authentication"
+            `or create a key at ${URL_CURSOR_USER_API_KEYS}`
           : "";
         const envHint = invalidKey && !storedKey?.trim()
           ? "\n\nThe key came from the Cursor process environment (CURSOR_API_KEY). Unset it or set Colcoor’s key to override."

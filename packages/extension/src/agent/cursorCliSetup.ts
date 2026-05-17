@@ -10,8 +10,6 @@ import { processEnvForCursorCli } from "./agentPathEnv";
 
 const DOCS_INSTALL = "https://cursor.com/docs/cli/installation";
 const DOCS_HEADLESS = "https://cursor.com/docs/cli/headless";
-const DOCS_AUTH = "https://cursor.com/docs/cli/reference/authentication";
-
 /** Returns true if `agent -v` exits 0 within the timeout. */
 export function probeAgentExecutable(executable: string, timeoutMs = 5000): Promise<boolean> {
   return new Promise((resolve) => {
@@ -63,7 +61,7 @@ export async function runCursorCliInstallerInTerminal(): Promise<void> {
   );
 }
 
-type SetupPickId = "docs" | "install" | "verify" | "headless" | "apikey" | "authdocs";
+type SetupPickId = "docs" | "install" | "verify" | "headless" | "apikey";
 
 export async function setupCursorCliInteractive(): Promise<void> {
   const items: (vscode.QuickPickItem & { id: SetupPickId })[] = [
@@ -71,11 +69,6 @@ export async function setupCursorCliInteractive(): Promise<void> {
       label: "$(key) Set Cursor API key for headless agent",
       description: "VS Code secret → CURSOR_API_KEY when Colcoor runs agent -p",
       id: "apikey",
-    },
-    {
-      label: "$(link-external) CLI authentication docs",
-      description: DOCS_AUTH,
-      id: "authdocs",
     },
     {
       label: "$(book) Open installation docs",
@@ -130,9 +123,6 @@ export async function setupCursorCliInteractive(): Promise<void> {
       break;
     case "apikey":
       await vscode.commands.executeCommand("colcoor.setCursorAgentApiKey");
-      break;
-    case "authdocs":
-      await vscode.env.openExternal(vscode.Uri.parse(DOCS_AUTH));
       break;
     default:
       break;
