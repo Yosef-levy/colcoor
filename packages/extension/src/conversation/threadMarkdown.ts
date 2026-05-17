@@ -36,7 +36,7 @@ const ALLOWED_MATHML_TAGS = [
   "none",
 ];
 
-marked.use({ gfm: true, breaks: false });
+marked.use({ gfm: true, breaks: true });
 
 function normalizeMathExpression(expr: string): string {
   return expr.replace(/\\\\/g, "\\").trim();

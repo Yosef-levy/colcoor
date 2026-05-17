@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { markdownToSafeHtml } from "./threadMarkdown";
 
 describe("markdownToSafeHtml", () => {
+  it("renders single newlines as line breaks (composer Shift+Enter)", () => {
+    const html = markdownToSafeHtml("line one\nline two");
+    expect(html).toMatch(/<br\s*\/?>/);
+    expect(html).toContain("line one");
+    expect(html).toContain("line two");
+  });
+
   it("renders GFM and strips script tags", () => {
     const html = markdownToSafeHtml("# Hi\n\n* item\n\n<script>x</script>");
     expect(html).toContain("<h1");
