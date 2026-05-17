@@ -188,6 +188,8 @@ type WebviewStateMessage = {
   pendingSideChatGraphReferenceSummary: string | null;
   /** One-shot composer fill after “Edit message” (consumed on next state post). */
   composerPrefill?: ComposerPrefillPayload | null;
+  /** When true, re-render the thread without scrolling to the bottom (note add/edit/delete). */
+  preserveThreadScroll?: boolean;
 };
 
 type FromWebview =
@@ -516,7 +518,7 @@ export function createConversationPanelController(
         ...e,
         note_count: counts.get(e.id) ?? 0,
       }));
-      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
     } catch (e) {
       if (isPlanLimitColcoorApiError(e)) {
         void showColcoorApiFailure(e);
@@ -1026,6 +1028,7 @@ export function createConversationPanelController(
     events: GraphEventNode[],
     busy: boolean,
     lastError: string | null,
+    options?: { preserveThreadScroll?: boolean },
   ): void {
     if (!panel || !conversationId || !webviewReady) {
       return;
@@ -1128,6 +1131,7 @@ export function createConversationPanelController(
         sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
         pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
         ...(pendingComposerPrefill ? { composerPrefill: pendingComposerPrefill } : {}),
+        ...(options?.preserveThreadScroll ? { preserveThreadScroll: true } : {}),
       };
       pendingComposerPrefill = null;
       lastTreeEvents = events;
@@ -2551,7 +2555,7 @@ export function createConversationPanelController(
           } else {
             lastNotes = [...lastNotes, updated];
           }
-          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
         } catch (e) {
           void showColcoorApiFailure(e);
         }
@@ -2665,7 +2669,7 @@ export function createConversationPanelController(
         ...e,
         note_count: counts.get(e.id) ?? 0,
       }));
-      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
     } catch (e) {
       void showColcoorApiFailure(e);
     }

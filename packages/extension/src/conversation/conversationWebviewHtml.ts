@@ -2986,13 +2986,28 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       root.innerHTML = walk("__root__", 0);
     }
 
-    function renderThread() {
+    function renderThread(preserveScroll) {
       const el = document.getElementById("thread");
       if (!el) return;
+      var wrap = el.closest(".thread-scroll");
+      var prevScrollTop =
+        preserveScroll && wrap
+          ? (function () {
+              try {
+                return wrap.scrollTop;
+              } catch (e0) {
+                return null;
+              }
+            })()
+          : null;
       const segs = visibleThreadSegmentsForUi();
       if (!segs.length && !state.pendingUserHtml && !state.streamingHtml && !state.busy) {
         el.innerHTML = '<p class="empty">Select an event in the tree.</p>';
-        scrollThreadToBottom();
+        if (preserveScroll && wrap && prevScrollTop != null) {
+          restoreThreadScroll(wrap, prevScrollTop);
+        } else {
+          scrollThreadToBottom();
+        }
         return;
       }
       let html = "";
@@ -3075,7 +3090,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
       wireThreadCopyButtons(el);
-      scrollThreadToBottom();
+      if (preserveScroll && wrap && prevScrollTop != null) {
+        restoreThreadScroll(wrap, prevScrollTop);
+      } else {
+        scrollThreadToBottom();
+      }
     }
 
     function wireThreadCopyButtons(threadEl) {
@@ -3768,6 +3787,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
     }
 
+    /** Restore thread scroll after a note-only re-render (content height may change). */
+    function restoreThreadScroll(wrap, scrollTop) {
+      if (!wrap) return;
+      var top = typeof scrollTop === "number" && Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0;
+      var run = function () {
+        try {
+          wrap.scrollTop = top;
+          var max = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+          if (wrap.scrollTop > max) wrap.scrollTop = max;
+        } catch (e) {}
+      };
+      try {
+        requestAnimationFrame(run);
+      } catch (e) {
+        setTimeout(run, 0);
+      }
+    }
+
     function scrollInlineSideChatListToBottom() {
       var list = document.getElementById("inlineSideChatList");
       if (!list) return;
@@ -3878,7 +3915,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       });
     })();
 
-    function render() {
+    function render(renderOpts) {
+      var preserveThreadScroll = !!(renderOpts && renderOpts.preserveThreadScroll);
       try {
         const errEl = document.getElementById("err");
         const loadEl = document.getElementById("conversationLoading");
@@ -3978,7 +4016,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           prevSideChatPanelOpen = false;
         }
         renderTree();
-        renderThread();
+        renderThread(preserveThreadScroll);
         renderInlineSideChat();
         renderDetailBar();
         updateThreadVisitNav();
@@ -4706,7 +4744,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               ? m.pendingSideChatGraphReferenceSummary.trim()
               : null,
         };
-        render();
+        render({ preserveThreadScroll: m.preserveThreadScroll === true });
         if (m.composerPrefill) {
           applyComposerPrefill(m.composerPrefill);
         }

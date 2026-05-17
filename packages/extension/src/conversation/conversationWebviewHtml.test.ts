@@ -316,6 +316,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("scrollThreadToBottom();");
   });
 
+  it("preserves thread scroll when host sets preserveThreadScroll (note add/edit/delete)", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("preserveThreadScroll");
+    expect(html).toContain("function restoreThreadScroll(wrap, scrollTop)");
+    expect(html).toContain("render({ preserveThreadScroll: m.preserveThreadScroll === true })");
+    expect(html).toContain("renderThread(preserveThreadScroll)");
+    expect(html).toContain("restoreThreadScroll(wrap, prevScrollTop)");
+  });
+
   it("opens message context menu on tree node contextmenu without changing selection ([tree-ui-contract.md] §5.2)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("openMessageContextMenuForEvent(ev.clientX, ev.clientY, nid)");
