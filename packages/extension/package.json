@@ -192,6 +192,11 @@
         "description": "Copy the selected tree message body to the clipboard (conversation panel must be open)."
       },
       {
+        "command": "colcoor.editUserMessage",
+        "title": "Colcoor: Edit user message",
+        "description": "Select parent and copy the user message into the composer, including image attachments (conversation panel must be open)."
+      },
+      {
         "command": "colcoor.refreshConversationTree",
         "title": "Colcoor: Refresh conversation tree",
         "description": "Reload the open conversation tree and thread from the server (conversation panel must be open)."

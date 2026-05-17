@@ -61,6 +61,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.deleteConversation",
       "colcoor.deleteSelectedMessageSubtree",
       "colcoor.editProfile",
+      "colcoor.editUserMessage",
       "colcoor.jumpToLatestInConversation",
       "colcoor.listConversationMembers",
       "colcoor.listStarredMessagesInConversation",

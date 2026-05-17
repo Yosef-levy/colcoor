@@ -189,6 +189,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("node-msg-title");
   });
 
+  it("Message menu includes Edit message for main-thread branch edit", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnEditUserMessage"');
+    expect(html).toContain('vscode.postMessage({ type: "editUserMessage" })');
+    expect(html).toContain("pendingSendImageRefs");
+    expect(html).toContain("applyComposerPrefill");
+    expect(html).toContain("composerPrefill");
+  });
+
   it("renders Private badge in thread rows when segment has privateScope", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("s.privateScope === true");

@@ -1427,6 +1427,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" class="menu-root-btn" id="menuBtnMessage" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelMessage">Message</button>
           <div class="menu-panel" id="menuPanelMessage" role="menu" hidden>
             <button type="button" class="menu-item" role="menuitem" id="btnCopy">Copy message</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnEditUserMessage" title="Select parent and copy this user message into the composer (new branch on send)">Edit message…</button>
             <button type="button" class="menu-item" role="menuitem" id="btnToggleStar" title="Star or unstar the selected message">Star</button>
             <button type="button" class="menu-item" role="menuitem" id="btnStarredDrawer" title="Starred messages in this conversation (slide-in drawer)">Starred</button>
             <button type="button" class="menu-item" role="menuitem" id="btnEditMessageTitle" title="Set or clear the display-only title for the selected message (owner/editor)">Add/edit title…</button>
@@ -1805,6 +1806,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     var inlineSideChatMentionSelIndex = 0;
     var inlineSideChatMentionLastMatches = [];
     var pendingSendImages = [];
+    /** Existing server image refs (e.g. from Edit message); sent without re-upload. */
+    var pendingSendImageRefs = [];
     var pendingInlineSideChatImages = [];
     /** After local inline side-chat send: scroll list when host state catches up; do not scroll on passive refresh. */
     var pendingInlineSideChatScrollAfterSend = false;
@@ -1812,15 +1815,55 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     var inlineSideChatScrollAfterSendTimer = null;
     var prevSideChatPanelOpen = false;
     var prevConversationIdForSideChatScroll = "";
+    function clearPendingSendMedia() {
+      pendingSendImages = [];
+      pendingSendImageRefs = [];
+      renderPendingConversationImages();
+      updateComposerSendEnabled();
+    }
+
     function renderPendingConversationImages() {
       var el = document.getElementById("pendingConversationImages");
       if (!el) return;
       el.replaceChildren();
-      if (!pendingSendImages.length) {
+      if (!pendingSendImages.length && !pendingSendImageRefs.length) {
         el.style.display = "none";
         return;
       }
       el.style.display = "flex";
+      pendingSendImageRefs.forEach(function (item, idx) {
+        if (!item || !item.id) return;
+        var url =
+          item.previewDataUrl && String(item.previewDataUrl).trim()
+            ? String(item.previewDataUrl)
+            : "";
+        var wrap = document.createElement("div");
+        wrap.className = "pending-thumb-wrap";
+        var im = document.createElement("img");
+        im.className = "pending-thumb";
+        im.alt = "";
+        if (url) {
+          im.src = url;
+        } else {
+          im.removeAttribute("src");
+          im.style.background = "var(--vscode-editor-inactiveSelectionBackground)";
+        }
+        var rm = document.createElement("button");
+        rm.type = "button";
+        rm.className = "btn-secondary remove-pending";
+        rm.textContent = "×";
+        rm.title = "Remove image";
+        rm.addEventListener("click", function () {
+          pendingSendImageRefs = pendingSendImageRefs.filter(function (_x, i) {
+            return i !== idx;
+          });
+          renderPendingConversationImages();
+          updateComposerSendEnabled();
+        });
+        wrap.appendChild(im);
+        wrap.appendChild(rm);
+        el.appendChild(wrap);
+      });
       pendingSendImages.forEach(function (item) {
         var url = item && item.dataUrl ? String(item.dataUrl) : "";
         if (!url) return;
@@ -1846,6 +1889,31 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         wrap.appendChild(rm);
         el.appendChild(wrap);
       });
+    }
+
+    function applyComposerPrefill(prefill) {
+      if (!prefill || typeof prefill !== "object") return;
+      var ta = document.getElementById("input");
+      if (ta) {
+        ta.value = typeof prefill.text === "string" ? prefill.text : "";
+      }
+      pendingSendImages = [];
+      pendingSendImageRefs = [];
+      var refs = Array.isArray(prefill.imageRefs) ? prefill.imageRefs : [];
+      var previews = Array.isArray(prefill.imagePreviewDataUrls) ? prefill.imagePreviewDataUrls : [];
+      refs.forEach(function (r, i) {
+        if (!r || typeof r.id !== "string" || !r.id.trim()) return;
+        var pv = previews[i];
+        pendingSendImageRefs.push({
+          id: String(r.id).trim(),
+          mime_type: typeof r.mime_type === "string" ? r.mime_type : "image/png",
+          byte_size: typeof r.byte_size === "number" && isFinite(r.byte_size) ? r.byte_size : 0,
+          previewDataUrl: typeof pv === "string" && pv.trim() ? pv : "",
+        });
+      });
+      renderPendingConversationImages();
+      updateComposerSendEnabled();
+      scheduleComposerFocus(ta);
     }
 
     function renderPendingInlineSideChatImages() {
@@ -2523,6 +2591,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     function renderDetailBar() {
       const copyBtn = document.getElementById("btnCopy");
+      const editUserBtn = document.getElementById("btnEditUserMessage");
       const toggleStarBtn = document.getElementById("btnToggleStar");
       const copyThreadBtn = document.getElementById("btnCopyThread");
       const editTitleBtn = document.getElementById("btnEditMessageTitle");
@@ -2539,6 +2608,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const deleteBranchBtn = document.getElementById("btnDeleteMessageBranch");
       if (
         !copyBtn ||
+        !editUserBtn ||
         !toggleStarBtn ||
         !resendBtn ||
         !refSideChatBtn ||
@@ -2574,6 +2644,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const last = bySel[sel] || (path.length ? path[path.length - 1] : null);
       if (!path.length || !last) {
         copyBtn.disabled = true;
+        editUserBtn.disabled = true;
         toggleStarBtn.disabled = true;
         refSideChatBtn.disabled = true;
         refNoteSideChatBtn.disabled = true;
@@ -2597,6 +2668,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (jumpBtnEmpty) jumpBtnEmpty.disabled = state.busy;
       } else {
       copyBtn.disabled = state.busy;
+      const canEditUser =
+        last &&
+        last.kind === "user_input" &&
+        last.parent_event_id != null &&
+        String(last.parent_event_id || "").trim().length > 0 &&
+        (String(last.content_text || "").trim().length > 0 ||
+          (function () {
+            var j = last.content_json;
+            if (!j || typeof j !== "object") return false;
+            var w = j.colcoor_user_media;
+            return !!(w && w.images && w.images.length);
+          })());
+      editUserBtn.disabled = state.busy || !canEditUser;
+      editUserBtn.title = canEditUser
+        ? "Select parent and copy this message into the composer (send creates a sibling branch)."
+        : "Select a user message with text or images (not the conversation root).";
       toggleStarBtn.disabled = state.busy;
       toggleStarBtn.textContent = last.starred === true ? "Unstar" : "Star";
       toggleStarBtn.title =
@@ -3569,7 +3656,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       }
       var hasText = ta && String(ta.value || "").trim().length > 0;
-      var has = hasText || pendingSendImages.length > 0;
+      var has = hasText || pendingSendImages.length > 0 || pendingSendImageRefs.length > 0;
       var wf = state.waitingForAssistant === true;
       if (state.busy && wf) {
         sendBtn.disabled = true;
@@ -4442,6 +4529,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               : null,
         };
         render();
+        if (m.composerPrefill) {
+          applyComposerPrefill(m.composerPrefill);
+        }
         return;
       }
       if (m && m.type === "assistantStream" && typeof m.html === "string") {
@@ -4475,7 +4565,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!ta) return;
       const text = ta.value ? ta.value.trim() : "";
       const imgs = pendingSendImages.slice();
-      if (!text && !imgs.length) return;
+      const refs = pendingSendImageRefs.map(function (r) {
+        return {
+          id: r.id,
+          mime_type: r.mime_type,
+          byte_size: r.byte_size,
+        };
+      });
+      if (!text && !imgs.length && !refs.length) return;
       var privEl = document.getElementById("privateBranch");
       var payload = { type: "send", text: ta.value.trimEnd(), privateBranch: false };
       if (busySendMode === "queue") {
@@ -4488,10 +4585,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         payload.privateBranch = !!(privEl && privEl.checked);
       }
       if (imgs.length) payload.images = imgs;
+      if (refs.length) payload.imageRefs = refs;
       vscode.postMessage(payload);
       ta.value = "";
-      pendingSendImages = [];
-      renderPendingConversationImages();
+      clearPendingSendMedia();
       updateComposerSendEnabled();
       scheduleComposerFocus(ta);
     }
@@ -4651,6 +4748,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     document.getElementById("btnResend").addEventListener("click", () => {
       vscode.postMessage({ type: "resend" });
     });
+
+    var btnEditUserMessage = document.getElementById("btnEditUserMessage");
+    if (btnEditUserMessage) {
+      btnEditUserMessage.addEventListener("click", () => {
+        vscode.postMessage({ type: "editUserMessage" });
+      });
+    }
 
     document.getElementById("btnReferenceSideChat").addEventListener("click", () => {
       vscode.postMessage({ type: "referenceInSideChat" });

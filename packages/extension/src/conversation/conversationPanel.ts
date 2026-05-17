@@ -45,6 +45,9 @@ import {
 import { evaluateContinueFromHere } from "./continueFromHereGate";
 import { clipboardTextForSelectedTreeMessage } from "./selectedMessageClipboardText";
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
+import { evaluateEditUserMessageGate } from "./editUserMessageGate";
+import { buildComposerPrefillFromUserEvent, type ComposerPrefillPayload } from "./buildComposerPrefillFromUserEvent";
+import { mergeUserMediaImageRefs } from "./mergeUserMediaImageRefs";
 import { findBranchTip, trimmedGraphCheckpointLabel } from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import {
@@ -94,8 +97,19 @@ const colcoorNotesChannel = vscode.window.createOutputChannel("Colcoor notes");
 
 /** Staged main-thread sends while the assistant is still generating the reply to the active user line. */
 type QueuedMainSendItem =
-  | { kind: "after_assistant"; text: string; images?: { dataUrl: string }[] }
-  | { kind: "new_branch"; text: string; images?: { dataUrl: string }[]; privateBranch: boolean };
+  | {
+      kind: "after_assistant";
+      text: string;
+      images?: { dataUrl: string }[];
+      imageRefs?: ColcoorUserMediaImageRef[];
+    }
+  | {
+      kind: "new_branch";
+      text: string;
+      images?: { dataUrl: string }[];
+      imageRefs?: ColcoorUserMediaImageRef[];
+      privateBranch: boolean;
+    };
 
 /** Optional server snapshots for `revealAtEvent` to skip redundant GETs after a palette/drawer fetch. */
 export type RevealAtEventPrefetchOptions = {
@@ -172,6 +186,8 @@ type WebviewStateMessage = {
   sideChatSoundVolume: number;
   /** One-line summary for staged main-thread reference on next side-chat send, or null. */
   pendingSideChatGraphReferenceSummary: string | null;
+  /** One-shot composer fill after “Edit message” (consumed on next state post). */
+  composerPrefill?: ComposerPrefillPayload | null;
 };
 
 type FromWebview =
@@ -183,12 +199,15 @@ type FromWebview =
       privateBranch?: boolean;
       /** Pasted images as data URLs (image/* only); host uploads then appends colcoor_user_media. */
       images?: { dataUrl: string }[];
+      /** Existing conversation image refs (e.g. from “Edit message”); not re-uploaded. */
+      imageRefs?: ColcoorUserMediaImageRef[];
       /**
        * When a main-thread reply is already generating: queue under the pending assistant reply,
        * or start a sibling branch from the anchor of the in-flight send (`privateBranch` follows the composer checkbox).
        */
       busySendMode?: "queue" | "branch";
     }
+  | { type: "editUserMessage" }
   | { type: "select"; id: string }
   | { type: "selectionHistoryBack" }
   | { type: "selectionHistoryForward" }
@@ -315,6 +334,8 @@ export function createConversationPanelController(
   continueFromHere: () => Promise<void>;
   /** Regenerate assistant under the selected user message (same as detail bar Resend). */
   resendAssistant: () => Promise<void>;
+  /** Prefill composer from selected user message and select its parent (branch edit). */
+  editUserMessage: () => Promise<void>;
   /** Select the default-branch tip (same as detail bar “Jump to latest”). */
   jumpToLatestInConversation: () => Promise<void>;
   /** Copy selected tree message body to the system clipboard ([ui-features.md] §7). */
@@ -384,6 +405,8 @@ export function createConversationPanelController(
   let busyAnchorParentEventId: string | undefined;
   /** Data URLs for `user_input` rows with `colcoor_user_media`, built on each tree refresh for thread HTML. */
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
+  /** Consumed once in {@link postState} to fill the main composer. */
+  let pendingComposerPrefill: ComposerPrefillPayload | null = null;
   /** Inline side-chat rows + rendered rows for same-tab drawer. */
   let inlineSideChatRows: SideChatMessageOut[] = [];
   /** Image data URLs keyed by side-chat message id (incremental fetches per row). */
@@ -1099,7 +1122,9 @@ export function createConversationPanelController(
         sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
         sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
         pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
+        ...(pendingComposerPrefill ? { composerPrefill: pendingComposerPrefill } : {}),
       };
+      pendingComposerPrefill = null;
       lastTreeEvents = events;
       void panel.webview.postMessage(msg);
     } catch (e) {
@@ -1408,6 +1433,14 @@ export function createConversationPanelController(
     return refs;
   }
 
+  async function resolveMainSendMediaRefs(
+    pastedImages: { dataUrl: string }[] | undefined,
+    existingRefs: ColcoorUserMediaImageRef[] | undefined,
+  ): Promise<ColcoorUserMediaImageRef[]> {
+    const uploaded = await uploadPastedImagesForMainSend(pastedImages);
+    return mergeUserMediaImageRefs(existingRefs ?? [], uploaded);
+  }
+
   async function drainMainSendQueue(initialAssistantId: string | undefined): Promise<void> {
     let mainAssistant = initialAssistantId;
     const anchor = busyAnchorParentEventId;
@@ -1423,7 +1456,7 @@ export function createConversationPanelController(
       const item = pendingMainSendQueue.shift()!;
       const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
       try {
-        const refs = await uploadPastedImagesForMainSend(item.images);
+        const refs = await resolveMainSendMediaRefs(item.images, item.imageRefs);
         const trimmed = normalizePersistedUserInputText(item.text);
         if (!trimmed && refs.length === 0) {
           stream.dispose();
@@ -1480,16 +1513,75 @@ export function createConversationPanelController(
     }
   }
 
+  async function handleEditUserMessage(): Promise<void> {
+    const gate = evaluateEditUserMessageGate(conversationId, selectedEventId, lastTreeEvents);
+    if (gate === "no_context") {
+      void vscode.window.showWarningMessage(
+        "Colcoor: open a conversation and select a user message in the tree.",
+      );
+      return;
+    }
+    if (gate === "not_in_tree") {
+      void vscode.window.showWarningMessage(
+        `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+      );
+      return;
+    }
+    if (gate === "not_user_message") {
+      void vscode.window.showWarningMessage(
+        'Colcoor: edit only applies to a user message — select a "User" row in the tree.',
+      );
+      return;
+    }
+    if (gate === "empty_user_body") {
+      void vscode.window.showWarningMessage(
+        "Colcoor: that user message has no text or images to edit.",
+      );
+      return;
+    }
+    if (gate === "no_parent" || gate === "parent_not_in_tree") {
+      void vscode.window.showWarningMessage(
+        "Colcoor: cannot edit the conversation root — select a user message with a parent.",
+      );
+      return;
+    }
+    const userEv = lastTreeEvents.find((e) => e.id === selectedEventId);
+    if (!userEv || userEv.kind !== "user_input") {
+      return;
+    }
+    const parentId =
+      userEv.parent_event_id != null ? String(userEv.parent_event_id).trim() : "";
+    if (!parentId) {
+      return;
+    }
+    const previews = lastUserImageDataUrlsByEventId.get(userEv.id);
+    pendingComposerPrefill = buildComposerPrefillFromUserEvent(userEv, previews);
+    const prevSel = selectedEventId;
+    selectedEventId = parentId;
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+    void syncActiveToBackend(parentId, {
+      needsContextRebuild: prevSel !== undefined && prevSel !== parentId,
+    });
+    void vscode.window.setStatusBarMessage(
+      "Colcoor: composer filled — edit and send to branch from the parent message.",
+      3000,
+    );
+  }
+
   async function handleSend(
     text: string,
     privateBranch: boolean,
     pastedImages?: { dataUrl: string }[],
+    imageRefs?: ColcoorUserMediaImageRef[],
     busySendMode?: "queue" | "branch",
   ): Promise<void> {
     const trimmed = normalizePersistedUserInputText(text);
     const hasPasted =
       Array.isArray(pastedImages) && pastedImages.some((x) => typeof x?.dataUrl === "string" && x.dataUrl.trim());
-    if ((!trimmed && !hasPasted) || !conversationId || !selectedEventId) {
+    const hasRefs =
+      Array.isArray(imageRefs) &&
+      imageRefs.some((r) => typeof r?.id === "string" && r.id.trim() && typeof r?.mime_type === "string");
+    if ((!trimmed && !hasPasted && !hasRefs) || !conversationId || !selectedEventId) {
       return;
     }
 
@@ -1507,12 +1599,18 @@ export function createConversationPanelController(
         return;
       }
       if (busySendMode === "queue") {
-        pendingMainSendQueue.push({ kind: "after_assistant", text: trimmed, images: pastedImages });
+        pendingMainSendQueue.push({
+          kind: "after_assistant",
+          text: trimmed,
+          images: pastedImages,
+          imageRefs,
+        });
       } else {
         pendingMainSendQueue.push({
           kind: "new_branch",
           text: trimmed,
           images: pastedImages,
+          imageRefs,
           privateBranch,
         });
       }
@@ -1523,7 +1621,7 @@ export function createConversationPanelController(
     pendingMainSendQueue = [];
     busyAnchorParentEventId = selectedEventId;
 
-    pendingSendUserMarkdown = trimmed || (hasPasted ? "_Image_…" : "");
+    pendingSendUserMarkdown = trimmed || (hasPasted || hasRefs ? "_Image_…" : "");
     const ws = getWorkspaceRoot();
     sendAbort = new AbortController();
     syncConversationReplyInProgressContext();
@@ -1531,7 +1629,7 @@ export function createConversationPanelController(
     postState(lastTreeEvents, true, lastPostedError);
     const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
     try {
-      const refs = await uploadPastedImagesForMainSend(pastedImages);
+      const refs = await resolveMainSendMediaRefs(pastedImages, imageRefs);
       if (!trimmed && refs.length === 0) {
         stream.dispose();
         postState(lastTreeEvents, false, lastPostedError);
@@ -1914,6 +2012,10 @@ export function createConversationPanelController(
       }
       if (msg.type === "resend") {
         await handleResend();
+        return;
+      }
+      if (msg.type === "editUserMessage") {
+        await handleEditUserMessage();
         return;
       }
       if (msg.type === "referenceInSideChat") {
@@ -2395,7 +2497,13 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {
-        await handleSend(msg.text, Boolean(msg.privateBranch), msg.images, msg.busySendMode);
+        await handleSend(
+          msg.text,
+          Boolean(msg.privateBranch),
+          msg.images,
+          msg.imageRefs,
+          msg.busySendMode,
+        );
         return;
       }
       if (msg.type === "deleteNote" && typeof msg.noteId === "string" && conversationId) {
@@ -2888,6 +2996,9 @@ export function createConversationPanelController(
         return;
       }
       await handleResend();
+    },
+    async editUserMessage(): Promise<void> {
+      await handleEditUserMessage();
     },
     async jumpToLatestInConversation(): Promise<void> {
       await jumpToDefaultBranchTip({ palette: true });

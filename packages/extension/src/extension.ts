@@ -854,6 +854,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("colcoor.copySelectedMessage", async () => {
       await conversationPanel.copySelectedMessage();
     }),
+    vscode.commands.registerCommand("colcoor.editUserMessage", async () => {
+      await conversationPanel.editUserMessage();
+    }),
     vscode.commands.registerCommand("colcoor.refreshConversationTree", async () => {
       await conversationPanel.refreshConversationTree();
     }),

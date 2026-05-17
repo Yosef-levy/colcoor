@@ -16,6 +16,11 @@ export const TREE_NODE_CONTEXT_MENU_ENTRIES: readonly TreeNodeContextMenuEntry[]
     quickPickDescription: "Select the newest leaf on the default branch",
   },
   { commandId: "colcoor.copySelectedMessage", quickPickLabel: "Copy selected message" },
+  {
+    commandId: "colcoor.editUserMessage",
+    quickPickLabel: "Edit user message",
+    quickPickDescription: "Select parent and copy message into the composer",
+  },
   { commandId: "colcoor.toggleStarSelectedMessage", quickPickLabel: "Toggle star on selected message" },
   { commandId: "colcoor.addNoteToSelectedMessage", quickPickLabel: "Add note to selected message" },
   { commandId: "colcoor.showNotesOnSelectedMessage", quickPickLabel: "Show notes on selected message" },
