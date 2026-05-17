@@ -4011,7 +4011,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
       }
       if (!ev) return null;
-      var text = String(ev.content_text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+      var text = String(ev.content_text || "").replace(/\\r\\n/g, "\\n").replace(/\\r/g, "\\n").trim();
       var hasMedia = false;
       var cj = ev.content_json;
       if (cj && typeof cj === "object" && cj.colcoor_user_media) {
@@ -4043,14 +4043,20 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function selectTreeNodeInWebview(eventId) {
       var root = document.getElementById("tree");
       if (!root) return;
-      state.selectedEventId = eventId;
+      var eid = String(eventId);
+      state.selectedEventId = eid;
       try {
         var prev = root.querySelector(".node.selected");
         if (prev) prev.classList.remove("selected");
-        var node = root.querySelector('.node[data-id="' + String(eventId).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"]');
-        if (node) node.classList.add("selected");
+        var nodes = root.querySelectorAll(".node[data-id]");
+        for (var ni = 0; ni < nodes.length; ni++) {
+          if (nodes[ni].getAttribute("data-id") === eid) {
+            nodes[ni].classList.add("selected");
+            break;
+          }
+        }
       } catch (e0) {}
-      vscode.postMessage({ type: "select", id: eventId });
+      vscode.postMessage({ type: "select", id: eid });
     }
 
     (function wireMessageContextMenu() {

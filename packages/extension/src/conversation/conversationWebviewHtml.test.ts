@@ -207,6 +207,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("openMessageContextMenuForEvent");
   });
 
+  it("webview inline script parses (no template-literal regex corruption)", () => {
+    const nonce = "parseCheckNonce";
+    const html = getConversationWebviewHtml("vscode-resource://test", nonce);
+    const m = html.match(new RegExp(`<script nonce="${nonce}">([\\s\\S]*?)</script>`));
+    expect(m).not.toBeNull();
+    expect(() => new Function(m![1])).not.toThrow();
+    expect(html).not.toContain(".replace(/\\/g");
+  });
+
   it("renders Private badge in thread rows when segment has privateScope", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("s.privateScope === true");
