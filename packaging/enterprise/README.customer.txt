@@ -4,8 +4,10 @@ Colcoor enterprise bundle (backend image + extension VSIX + Docker Compose)
 Contents
 --------
   colcoor-backend-*.tar.gz     Pre-built API image (load with script 00).
+  colcoor-pgbouncer-*.tar.gz   Pre-built PgBouncer image (load with script 00).
   colcoor-extension-*.vsix     Cursor / VS Code extension installer.
-  docker-compose.yml           Stack: nginx, backend (pre-loaded image), Postgres.
+  docker-compose.yml           Stack: nginx, backend, PgBouncer, Postgres, Redis.
+  pgbouncer/                   Pooler config (mounted by Compose).
   nginx/nginx.conf             Reverse proxy config.
   scripts/                     Operator helpers (run from this directory).
 
@@ -77,7 +79,7 @@ Regenerating secrets (01-setup-env.sh --force)
 
 Compose note
 ------------
-  If "pull_policy" is unsupported, remove the pull_policy line under service "backend"
+  If "pull_policy" is unsupported, remove the pull_policy lines under services "backend" and "pgbouncer"
   in docker-compose.yml, or upgrade Docker Compose.
 
 

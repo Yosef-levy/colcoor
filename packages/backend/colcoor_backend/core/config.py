@@ -32,6 +32,38 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("DATABASE_URL", "COLCOOR_DATABASE_URL"),
     )
+    database_migration_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DATABASE_MIGRATION_URL",
+            "COLCOOR_DATABASE_MIGRATION_URL",
+        ),
+        description="Direct Postgres URL for Alembic (bypass PgBouncer). Optional in dev.",
+    )
+    db_pool_size: int = Field(
+        default=5,
+        ge=1,
+        le=100,
+        validation_alias=AliasChoices("DB_POOL_SIZE", "COLCOOR_DB_POOL_SIZE"),
+    )
+    db_max_overflow: int = Field(
+        default=5,
+        ge=0,
+        le=100,
+        validation_alias=AliasChoices("DB_MAX_OVERFLOW", "COLCOOR_DB_MAX_OVERFLOW"),
+    )
+    db_pool_timeout: int = Field(
+        default=30,
+        ge=1,
+        le=300,
+        validation_alias=AliasChoices("DB_POOL_TIMEOUT", "COLCOOR_DB_POOL_TIMEOUT"),
+    )
+    db_pool_recycle: int = Field(
+        default=1800,
+        ge=60,
+        le=86_400,
+        validation_alias=AliasChoices("DB_POOL_RECYCLE", "COLCOOR_DB_POOL_RECYCLE"),
+    )
     redis_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("REDIS_URL", "COLCOOR_REDIS_URL"),

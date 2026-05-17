@@ -19,9 +19,10 @@ target_metadata = Base.metadata
 
 
 def get_sync_database_url() -> str:
-    raw = os.environ.get("DATABASE_URL", "")
+    """Prefer direct Postgres for DDL; fall back to DATABASE_URL (e.g. local dev without PgBouncer)."""
+    raw = os.environ.get("DATABASE_MIGRATION_URL") or os.environ.get("DATABASE_URL", "")
     if not raw:
-        raise RuntimeError("DATABASE_URL is required for migrations")
+        raise RuntimeError("DATABASE_URL or DATABASE_MIGRATION_URL is required for migrations")
     return raw.replace("postgresql+asyncpg://", "postgresql+psycopg://")
 
 

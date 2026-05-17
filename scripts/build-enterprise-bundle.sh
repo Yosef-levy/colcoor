@@ -2,7 +2,7 @@
 # Assemble a distributable enterprise folder under dist/:
 #   - colcoor-backend-<version>.tar.gz  (docker save, both :prod and :<version> tags)
 #   - colcoor-extension-<version>.vsix
-#   - docker-compose.yml, nginx/, scripts/, README.customer.txt
+#   - docker-compose.yml, nginx/, pgbouncer/, scripts/, README.customer.txt
 #
 # Usage (from repo root):
 #   npm run bundle:enterprise
@@ -63,6 +63,12 @@ docker build \
   -f packages/backend/Dockerfile \
   packages/backend
 
+echo "Building PgBouncer image colcoor-pgbouncer:1.23.1 ..."
+docker build \
+  -t "colcoor-pgbouncer:1.23.1" \
+  -f pgbouncer/Dockerfile \
+  pgbouncer
+
 VSIX_OUT=""
 if [[ -n "$VSIX_PATH" ]]; then
   if [[ ! -f "$VSIX_PATH" ]]; then
@@ -86,10 +92,13 @@ else
 fi
 
 rm -rf "$OUT"
-mkdir -p "$OUT/nginx" "$OUT/scripts"
+mkdir -p "$OUT/nginx" "$OUT/scripts" "$OUT/pgbouncer"
 
-echo "Saving image to tarball (both tags) ..."
+echo "Saving backend image to tarball (both tags) ..."
 docker save "colcoor-backend:${BACKEND_VERSION}" colcoor-backend:prod | gzip >"$OUT/colcoor-backend-${BACKEND_VERSION}.tar.gz"
+
+echo "Saving PgBouncer image to tarball ..."
+docker save colcoor-pgbouncer:1.23.1 | gzip >"$OUT/colcoor-pgbouncer-1.23.1.tar.gz"
 
 if [[ -n "$VSIX_OUT" ]]; then
   cp -a "$VSIX_OUT" "$OUT/"
@@ -113,8 +122,9 @@ fi
 cp -a "$ROOT/packaging/enterprise/docker-compose.yml" "$OUT/"
 cp -a "$ROOT/packaging/enterprise/README.customer.txt" "$OUT/"
 cp -a "$ROOT/nginx/nginx.conf" "$OUT/nginx/nginx.conf"
+cp -a "$ROOT/pgbouncer/"* "$OUT/pgbouncer/"
 cp -a "$ROOT/packaging/enterprise/scripts/"*.sh "$OUT/scripts/"
-chmod +x "$OUT/scripts/"*.sh
+chmod +x "$OUT/scripts/"*.sh "$OUT/pgbouncer/docker-entrypoint.sh"
 
 echo ""
 echo "Enterprise bundle ready:"

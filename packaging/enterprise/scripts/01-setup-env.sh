@@ -59,8 +59,9 @@ POSTGRES_USER="${POSTGRES_USER:-colcoor}"
 POSTGRES_PASSWORD="$(openssl rand -hex 32)"
 JWT_SECRET="$(openssl rand -hex 48)"
 
-# Password is hex-only; safe inside DATABASE_URL without extra encoding.
-DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+# Password is hex-only; safe inside URLs without extra encoding.
+DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}"
+DATABASE_MIGRATION_URL="postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
 
 CRED="$ROOT/credentials.generated.txt"
 ENV_OUT="$ROOT/.env.tmp"
@@ -81,6 +82,7 @@ POSTGRES_USER=${POSTGRES_USER}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
 DATABASE_URL=${DATABASE_URL}
+DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL}
 
 JWT_SECRET=${JWT_SECRET}
 
@@ -100,6 +102,7 @@ POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 JWT_SECRET=${JWT_SECRET}
 
 DATABASE_URL=${DATABASE_URL}
+DATABASE_MIGRATION_URL=${DATABASE_MIGRATION_URL}
 EOF
 chmod 600 "$CRED" "$ROOT/.env"
 

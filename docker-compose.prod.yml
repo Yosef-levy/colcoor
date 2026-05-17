@@ -58,6 +58,38 @@ services:
     networks:
       - internal
 
+  pgbouncer:
+    build:
+      context: ./pgbouncer
+      dockerfile: Dockerfile
+    image: colcoor-pgbouncer:1.23.1
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-}
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "PGPASSWORD=\"$$POSTGRES_PASSWORD\" psql -h 127.0.0.1 -p 6432 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -c 'SELECT 1' >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+
   backend:
     build:
       context: ./packages/backend
@@ -76,6 +108,11 @@ services:
       COLCOOR_LOG_LEVEL: ${COLCOOR_LOG_LEVEL:-INFO}
       COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED: ${COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED:-true}
       DATABASE_URL: ${DATABASE_URL}
+      DATABASE_MIGRATION_URL: ${DATABASE_MIGRATION_URL:-}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-1800}
       REDIS_URL: ${REDIS_URL}
       GCS_BUCKET: ${GCS_BUCKET}
       COLCOOR_IMAGE_STORAGE: ${COLCOOR_IMAGE_STORAGE:-gcs}
@@ -87,7 +124,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      postgres:
+      pgbouncer:
         condition: service_healthy
     # Readiness: verifies DB via /ready (compose + nginx depend on this). Dockerfile image
     # HEALTHCHECK is superseded by this block when using Compose.

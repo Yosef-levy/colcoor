@@ -14,9 +14,11 @@ Product boundaries (no main-thread LLM on the server, no transcript-over-HTTP) a
 |-------|------|-------------------|
 | **nginx** | TLS termination (optional), reverse proxy, rate limiting | **80** (and **443** when enabled) |
 | **backend** | FastAPI under `/api/v1`, `/health`, `/ready` | **No** (`expose` only on the Docker network) |
+| **pgbouncer** | Connection pooler (transaction mode) | **No** |
 | **postgres** | Application data | **No** |
+| **redis** | Side-chat SSE pub/sub | **No** |
 
-Traffic flow: **Internet → nginx → backend:8000 → postgres:5432** (service DNS names on the Compose network). Side-chat SSE wakeups use **Redis pub/sub** (`REDIS_URL`); see [side-chat-realtime.md](side-chat-realtime.md).
+Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postgres:5432**. Alembic migrations use **`DATABASE_MIGRATION_URL`** (direct Postgres) on container start. Side-chat SSE wakeups use **Redis** (`REDIS_URL`); see [side-chat-realtime.md](side-chat-realtime.md). Pool sizing and scaling: [pgbouncer.md](pgbouncer.md).
 
 ---
 
@@ -24,7 +26,9 @@ Traffic flow: **Internet → nginx → backend:8000 → postgres:5432** (service
 
 | Path | Purpose |
 |------|---------|
-| [`docker-compose.prod.yml`](../docker-compose.prod.yml) | Production stack: `nginx`, `backend`, `postgres`, named volume, healthchecks |
+| [`docker-compose.prod.yml`](../docker-compose.prod.yml) | Production stack: `nginx`, `backend`, `pgbouncer`, `postgres`, `redis`, healthchecks |
+| [`pgbouncer/`](../pgbouncer/) | PgBouncer config, entrypoint, Alpine-based image |
+| [`docs/pgbouncer.md`](pgbouncer.md) | Connection scaling, pool env vars, sizing examples |
 | [`nginx/nginx.conf`](../nginx/nginx.conf) | Full nginx main config (proxy, rate limits, `/health` + `/ready`) |
 | [`packages/backend/Dockerfile`](../packages/backend/Dockerfile) | Multi-stage image, non-root user, Gunicorn |
 | [`.env.example`](../.env.example) | Template for root `.env` (secrets must be replaced) |
@@ -46,8 +50,8 @@ From the **repository root**:
 
 ```bash
 cp .env.example .env
-# Edit .env: set POSTGRES_PASSWORD, DATABASE_URL (must match DB user/password/db),
-# JWT_SECRET (long random), optional CORS_ORIGINS, WEB_CONCURRENCY, COLCOOR_LOG_LEVEL.
+# Edit .env: set POSTGRES_PASSWORD, DATABASE_URL (pgbouncer:6432), DATABASE_MIGRATION_URL
+# (postgres:5432), JWT_SECRET (long random), GCS_BUCKET, REDIS_URL, optional pool/CORS vars.
 
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml ps
@@ -64,7 +68,7 @@ curl -fsS http://127.0.0.1/api/v1/health
 **Logs** (stdout/stderr):
 
 ```bash
-docker compose -f docker-compose.prod.yml logs -f nginx backend postgres
+docker compose -f docker-compose.prod.yml logs -f nginx backend pgbouncer postgres
 ```
 
 **Rebuild after code or config changes:**
@@ -96,7 +100,15 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `COLCOOR_ENV` | Yes | Must be `production` for strict validation |
 | `NODE_ENV` | Set by Compose | `production`; informational for tooling |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Yes | Used by the Postgres container |
-| `DATABASE_URL` | Yes | Async SQLAlchemy URL; hostname **`postgres`**, credentials must match Postgres |
+| `DATABASE_URL` | Yes | Async SQLAlchemy URL; hostname **`pgbouncer`**, port **6432** ([pgbouncer.md](pgbouncer.md)) |
+| `DATABASE_MIGRATION_URL` | Recommended | Direct Postgres for Alembic (`postgresql+psycopg://…@postgres:5432/…`) |
+| `DB_POOL_SIZE` | Optional | SQLAlchemy pool size per Gunicorn worker (default **5**) |
+| `DB_MAX_OVERFLOW` | Optional | Extra pool connections per worker under burst (default **5**) |
+| `DB_POOL_TIMEOUT` | Optional | Seconds to wait for a pooled connection (default **30**) |
+| `DB_POOL_RECYCLE` | Optional | Recycle pooled connections after N seconds (default **1800**) |
+| `PGBOUNCER_DEFAULT_POOL_SIZE` | Optional | Server connections to Postgres (default **20** in `pgbouncer.ini`) |
+| `PGBOUNCER_MAX_CLIENT_CONN` | Optional | Max client connections to PgBouncer (default **200**) |
+| `PGBOUNCER_RESERVE_POOL_SIZE` | Optional | Burst server pool (default **5**) |
 | `REDIS_URL` | Yes | Side-chat SSE pub/sub; hostname **`redis`** in Compose (`redis://redis:6379/0`) |
 | `GCS_BUCKET` | Yes | Conversation images; VM service account needs object access ([image-storage.md](image-storage.md)) |
 | `COLCOOR_IMAGE_STORAGE` | Optional | Default `gcs` when bucket set |
@@ -141,11 +153,13 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET`, `DATABASE_UR
 
 ---
 
-## PostgreSQL (Compose)
+## PostgreSQL and PgBouncer (Compose)
 
-- **Not** exposed on the host in `docker-compose.prod.yml`.
+- **Postgres** and **PgBouncer** are **not** exposed on the host in `docker-compose.prod.yml`.
 - Data persists in the named volume **`colcoor_postgres_data`**.
-- **Light tuning** is applied via `postgres` `command:` flags (shared buffers, `max_connections`, effective cache estimate, WAL/checkpoint settings) suitable for a **small VM**; adjust if you have very little RAM or much more capacity.
+- **Light tuning** on Postgres (`max_connections=50` by default) assumes **PgBouncer** multiplexes app traffic; see [pgbouncer.md](pgbouncer.md) for `max_connections`, pool size, and `WEB_CONCURRENCY` guidance.
+- The API connects only through **PgBouncer** (`DATABASE_URL`). **Migrations** use **`DATABASE_MIGRATION_URL`** (direct `postgres:5432`) so DDL is not affected by transaction pooling.
+- **SQLAlchemy + asyncpg:** prepared-statement caches are disabled in code when using `+asyncpg` (required for PgBouncer transaction mode).
 
 ---
 
@@ -272,6 +286,8 @@ That omits the VSIX and drops **`EXTENSION_VSIX_NOT_INCLUDED.txt`** in the bundl
 This writes **`dist/colcoor-enterprise-BE<py-version>-EXT<ext-version>/`** containing:
 
 - `colcoor-backend-<version>.tar.gz` — `docker save` of **`colcoor-backend:<version>`** and **`colcoor-backend:prod`**
+- `colcoor-pgbouncer-1.23.1.tar.gz` — pre-built **`colcoor-pgbouncer:1.23.1`** (Alpine PgBouncer + `psql` for healthchecks)
+- `pgbouncer/` — config mounted by Compose
 - `colcoor-extension-<version>.vsix`
 - `docker-compose.yml` (pre-loaded image only, **no build context**)
 - `nginx/nginx.conf`
@@ -284,6 +300,7 @@ Customer VM (typical): `00-load-image` → `01-setup-env` → `02-stack-up` → 
 
 ## Related docs
 
+- [pgbouncer.md](pgbouncer.md) — connection pooling, sizing, env vars
 - [database.md](database.md) — PostgreSQL schema (DDL)
 - [architecture.md](architecture.md) — backend role vs extension vs Cursor
 - [authentication.md](authentication.md) — Cursor account and JWT intent

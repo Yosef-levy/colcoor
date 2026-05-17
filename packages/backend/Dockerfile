@@ -52,5 +52,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import os, urllib.request; p=os.environ.get('PORT', '8000'); urllib.request.urlopen(f'http://127.0.0.1:{p}/health', timeout=4)" || exit 1
 
-# Apply DB migrations then start API (DATABASE_URL must use +asyncpg for the app; Alembic uses +psycopg via env.py).
+# Migrations: DATABASE_MIGRATION_URL (direct postgres) when set; app uses DATABASE_URL via PgBouncer.
 CMD ["sh", "-c", "alembic upgrade head && exec gunicorn colcoor_backend.main:app -k uvicorn.workers.UvicornWorker -w \"${WEB_CONCURRENCY:-2}\" -b \"0.0.0.0:${PORT:-8000}\" --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]

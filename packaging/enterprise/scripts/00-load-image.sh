@@ -1,33 +1,38 @@
 #!/usr/bin/env bash
-# Load the Colcoor backend image from the tarball in the bundle root.
+# Load Colcoor Docker images from tarballs in the bundle root (backend + PgBouncer).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [[ -n "${IMAGE_TAR:-}" ]]; then
-  TAR="$IMAGE_TAR"
-else
+load_one() {
+  local pattern="$1"
+  local label="$2"
+  local tar=""
   shopt -s nullglob
-  matches=(colcoor-backend-*.tar.gz)
+  local matches=($pattern)
   shopt -u nullglob
   if ((${#matches[@]} == 0)); then
-    echo "No colcoor-backend-*.tar.gz in $ROOT. Set IMAGE_TAR=/path/to/file.tar.gz" >&2
-    exit 1
+    echo "No ${pattern} in $ROOT." >&2
+    return 1
   fi
   if ((${#matches[@]} > 1)); then
-    echo "Multiple colcoor-backend-*.tar.gz files; set IMAGE_TAR to one of them:" >&2
+    echo "Multiple ${pattern} files; keep only one:" >&2
     printf '  %s\n' "${matches[@]}" >&2
-    exit 1
+    return 1
   fi
-  TAR="${matches[0]}"
+  tar="${matches[0]}"
+  echo "Loading ${label} from ${tar} ..."
+  docker load -i "$tar"
+}
+
+if [[ -n "${IMAGE_TAR:-}" ]]; then
+  echo "Loading Docker image from $IMAGE_TAR ..."
+  docker load -i "$IMAGE_TAR"
+else
+  load_one "colcoor-backend-*.tar.gz" "backend"
+  load_one "colcoor-pgbouncer-*.tar.gz" "PgBouncer"
 fi
 
-if [[ ! -f "$TAR" ]]; then
-  echo "Not a file: $TAR" >&2
-  exit 1
-fi
-
-echo "Loading Docker image from $TAR ..."
-docker load -i "$TAR"
-echo "Done. Expected tag: colcoor-backend:prod (and version tag). Run: docker images colcoor-backend"
+echo "Done. Expected tags: colcoor-backend:prod, colcoor-pgbouncer:1.23.1"
+echo "Run: docker images colcoor-backend colcoor-pgbouncer"
