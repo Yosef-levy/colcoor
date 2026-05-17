@@ -77,6 +77,7 @@ import { shortStarredEventLabel, starredTreeEvents } from "./conversation/starre
 
 const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
 const BACKEND_URL_ENV_VAR = "COLCOOR_API_URL";
+const DEFAULT_BACKEND_BASE_URL = "https://api.colcoor.com";
 
 /** Same conv payload shape as other conversation-scoped commands (sidebar tree item or `{ conv }`). */
 type OpenSideChatCommandArg = ConversationCommandArg;
@@ -105,20 +106,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   markActivationStep("config:loaded");
   const configuredBaseUrl = config.get<string>("backendBaseUrl")?.trim();
   const envBaseUrl = process.env[BACKEND_URL_ENV_VAR]?.trim();
-  const baseUrl = (configuredBaseUrl || envBaseUrl || "").replace(/\/$/, "");
-  const effectiveBaseUrl = baseUrl || "http://invalid.colcoor.local";
-  if (!baseUrl) {
-    void vscode.window
-      .showErrorMessage(
-        "Colcoor: backend URL is not configured. Set `colcoor.backendBaseUrl` in Settings or define COLCOOR_API_URL.",
-        "Open Settings",
-      )
-      .then(async (choice) => {
-        if (choice === "Open Settings") {
-          await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
-        }
-      });
-  }
+  const effectiveBaseUrl = (configuredBaseUrl || envBaseUrl || DEFAULT_BACKEND_BASE_URL).replace(
+    /\/$/,
+    "",
+  );
 
   const session = new CursorSession(context.secrets, SECRET_KEY_BACKEND_JWT);
   const api = new ColcoorApiClient({

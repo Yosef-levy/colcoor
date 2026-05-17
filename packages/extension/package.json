@@ -354,7 +354,8 @@
       "properties": {
         "colcoor.backendBaseUrl": {
           "type": "string",
-          "description": "API origin only (no path, no trailing slash). Required unless COLCOOR_API_URL is defined in the environment. Remote VM: https://your-host. Local docker-compose.prod: http://127.0.0.1 (nginx :80). Local uvicorn: http://127.0.0.1:8000."
+          "default": "https://api.colcoor.com",
+          "description": "API origin only (no path, no trailing slash). Defaults to https://api.colcoor.com unless COLCOOR_API_URL is set. Local docker-compose.prod: http://127.0.0.1 (nginx :80). Local uvicorn: http://127.0.0.1:8000."
         },
         "colcoor.agentMode": {
           "type": "string",
