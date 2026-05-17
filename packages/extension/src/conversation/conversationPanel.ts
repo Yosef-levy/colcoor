@@ -2753,7 +2753,6 @@ export function createConversationPanelController(
       );
       return;
     }
-    applyWebviewSelection(id);
     if (action === "copy") {
       await copyMessageForEvent(id);
       return;

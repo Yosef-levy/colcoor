@@ -4199,7 +4199,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (!nid) return;
         ev.preventDefault();
         ev.stopPropagation();
-        selectTreeNodeInWebview(nid);
         if (typeof window.openMessageContextMenuForEvent === "function") {
           window.openMessageContextMenuForEvent(ev.clientX, ev.clientY, nid);
         }
@@ -5050,7 +5049,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (!eid || !String(eid).trim()) return;
         ev.preventDefault();
         ev.stopPropagation();
-        selectTreeNodeInWebview(String(eid).trim());
         if (typeof window.openMessageContextMenuForEvent === "function") {
           window.openMessageContextMenuForEvent(ev.clientX, ev.clientY, String(eid).trim());
         }

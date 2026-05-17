@@ -316,10 +316,20 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("scrollThreadToBottom();");
   });
 
-  it("opens message context menu on tree node contextmenu ([tree-ui-contract.md] §5.2)", () => {
+  it("opens message context menu on tree node contextmenu without changing selection ([tree-ui-contract.md] §5.2)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("openMessageContextMenuForEvent(ev.clientX, ev.clientY, nid)");
     expect(html).toContain('addEventListener("contextmenu"');
+    const treeCtx = html.match(
+      /root\.addEventListener\("contextmenu", function \(ev\) \{[\s\S]*?openMessageContextMenuForEvent\(ev\.clientX, ev\.clientY, nid\)/,
+    );
+    expect(treeCtx).not.toBeNull();
+    expect(treeCtx![0]).not.toContain("selectTreeNodeInWebview");
+    const threadCtx = html.match(
+      /wireThreadContextMenu[\s\S]*?thread\.addEventListener\("contextmenu", function \(ev\) \{[\s\S]*?openMessageContextMenuForEvent/,
+    );
+    expect(threadCtx).not.toBeNull();
+    expect(threadCtx![0]).not.toContain("selectTreeNodeInWebview");
   });
 
   it("uses dir=auto on trace pre blocks for shell and legacy JSON", () => {
