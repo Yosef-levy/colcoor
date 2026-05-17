@@ -58,13 +58,6 @@ async def _seed_user_and_mint_jwt(postgres_url: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def postgres_url() -> str:
-    url = os.environ["COLCOOR_TEST_DATABASE_URL"].strip()
-    assert url.startswith("postgresql"), "use postgresql+asyncpg:// for async SQLAlchemy"
-    return url
-
-
-@pytest.fixture(scope="module")
 def async_engine(postgres_url: str) -> Iterator[AsyncEngine]:
     eng = create_async_engine(postgres_url)
 
