@@ -2467,11 +2467,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     function visibleThreadSegmentsForUi() {
-      var segs = state.threadSegments || [];
-      if (showPrivateDraftSubtreeInUi()) return segs;
-      return segs.filter(function (s) {
-        return s.privateScope !== true;
-      });
+      return visibleThreadSegmentsForUiFromState(state);
     }
 
     function threadPlainTextForCopy() {
@@ -2986,28 +2982,134 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       root.innerHTML = walk("__root__", 0);
     }
 
-    function renderThread(preserveScroll) {
+    var lastThreadScrollSnapshot = {
+      segmentCount: 0,
+      lastEventId: "",
+      lastRole: "",
+      pendingUserHtml: false,
+    };
+
+    function getThreadScrollWrap() {
+      var threadEl = document.getElementById("thread");
+      return threadEl && threadEl.closest ? threadEl.closest(".thread-scroll") : null;
+    }
+
+    /** True when the viewport is at (or within thresholdPx of) the bottom before content changes. */
+    function isThreadScrolledToBottom(wrap, thresholdPx) {
+      if (!wrap) return true;
+      var th = typeof thresholdPx === "number" && Number.isFinite(thresholdPx) ? thresholdPx : 48;
+      try {
+        return wrap.scrollHeight - wrap.clientHeight - wrap.scrollTop <= th;
+      } catch (e0) {
+        return true;
+      }
+    }
+
+    function threadScrollSnapshotFromState(st) {
+      var segs = visibleThreadSegmentsForUiFromState(st);
+      var last = segs.length ? segs[segs.length - 1] : null;
+      return {
+        segmentCount: segs.length,
+        lastEventId: last && last.eventId ? String(last.eventId) : "",
+        lastRole: last && last.role ? String(last.role) : "",
+        pendingUserHtml: !!(st && st.pendingUserHtml),
+        streamingHtml: !!(st && st.streamingHtml),
+      };
+    }
+
+    function visibleThreadSegmentsForUiFromState(st) {
+      var segs = (st && st.threadSegments) || [];
+      var showPrivate = true;
+      try {
+        showPrivate = showPrivateDraftSubtreeInUi();
+      } catch (e0) {
+        showPrivate = true;
+      }
+      if (showPrivate) return segs;
+      return segs.filter(function (s) {
+        return s.privateScope !== true;
+      });
+    }
+
+  /**
+   * preserve — note edits; force — new user line; stick — assistant stream/reply if already at bottom; default — scroll to bottom.
+   */
+    function computeThreadScrollMode(preserveThreadScroll, prevSnap, st) {
+      if (preserveThreadScroll) return "preserve";
+      if (st.pendingUserHtml) return "force";
+      if (st.streamingHtml) return "stick";
+      if (st.busy && !st.pendingUserHtml) return "stick";
+      var nextSnap = threadScrollSnapshotFromState(st);
+      if (prevSnap) {
+        if (
+          nextSnap.lastRole === "assistant" &&
+          (nextSnap.segmentCount > prevSnap.segmentCount ||
+            (nextSnap.lastEventId &&
+              nextSnap.lastEventId !== prevSnap.lastEventId &&
+              nextSnap.lastRole === "assistant"))
+        ) {
+          return "stick";
+        }
+        if (
+          nextSnap.lastRole === "user" &&
+          (nextSnap.segmentCount > prevSnap.segmentCount ||
+            (nextSnap.lastEventId &&
+              nextSnap.lastEventId !== prevSnap.lastEventId &&
+              nextSnap.lastRole === "user"))
+        ) {
+          return "force";
+        }
+      }
+      return "default";
+    }
+
+    function captureThreadScrollBeforeRender(wrap, mode) {
+      if (!wrap || (mode !== "preserve" && mode !== "stick")) {
+        return { prevScrollTop: null, wasAtBottom: true };
+      }
+      try {
+        return { prevScrollTop: wrap.scrollTop, wasAtBottom: isThreadScrolledToBottom(wrap) };
+      } catch (e0) {
+        return { prevScrollTop: null, wasAtBottom: true };
+      }
+    }
+
+    function applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom) {
+      if (mode === "preserve" && wrap && prevScrollTop != null) {
+        restoreThreadScroll(wrap, prevScrollTop);
+        return;
+      }
+      if (mode === "force") {
+        scrollThreadToBottom();
+        return;
+      }
+      if (mode === "stick") {
+        if (wasAtBottom) scrollThreadToBottom();
+        else if (wrap && prevScrollTop != null) restoreThreadScroll(wrap, prevScrollTop);
+        return;
+      }
+      scrollThreadToBottom();
+    }
+
+    function renderThread(scrollOpts) {
+      scrollOpts = scrollOpts || {};
+      var mode =
+        scrollOpts.mode === "preserve" ||
+        scrollOpts.mode === "force" ||
+        scrollOpts.mode === "stick" ||
+        scrollOpts.mode === "default"
+          ? scrollOpts.mode
+          : "default";
       const el = document.getElementById("thread");
       if (!el) return;
-      var wrap = el.closest(".thread-scroll");
-      var prevScrollTop =
-        preserveScroll && wrap
-          ? (function () {
-              try {
-                return wrap.scrollTop;
-              } catch (e0) {
-                return null;
-              }
-            })()
-          : null;
+      var wrap = getThreadScrollWrap();
+      var captured = captureThreadScrollBeforeRender(wrap, mode);
+      var prevScrollTop = captured.prevScrollTop;
+      var wasAtBottom = captured.wasAtBottom;
       const segs = visibleThreadSegmentsForUi();
       if (!segs.length && !state.pendingUserHtml && !state.streamingHtml && !state.busy) {
         el.innerHTML = '<p class="empty">Select an event in the tree.</p>';
-        if (preserveScroll && wrap && prevScrollTop != null) {
-          restoreThreadScroll(wrap, prevScrollTop);
-        } else {
-          scrollThreadToBottom();
-        }
+        applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom);
         return;
       }
       let html = "";
@@ -3090,11 +3192,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
       wireThreadCopyButtons(el);
-      if (preserveScroll && wrap && prevScrollTop != null) {
-        restoreThreadScroll(wrap, prevScrollTop);
-      } else {
-        scrollThreadToBottom();
-      }
+      applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom);
     }
 
     function wireThreadCopyButtons(threadEl) {
@@ -3771,9 +3869,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     /** Scroll the thread panel so the latest messages are visible (root → selected reads bottom-up). */
     function scrollThreadToBottom() {
-      var threadEl = document.getElementById("thread");
-      if (!threadEl) return;
-      var wrap = threadEl.closest(".thread-scroll");
+      var wrap = getThreadScrollWrap();
       if (!wrap) return;
       var run = function () {
         try {
@@ -4016,7 +4112,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           prevSideChatPanelOpen = false;
         }
         renderTree();
-        renderThread(preserveThreadScroll);
+        var threadScrollMode = computeThreadScrollMode(
+          preserveThreadScroll,
+          lastThreadScrollSnapshot,
+          state,
+        );
+        renderThread({ mode: threadScrollMode });
+        lastThreadScrollSnapshot = threadScrollSnapshotFromState(state);
         renderInlineSideChat();
         renderDetailBar();
         updateThreadVisitNav();
@@ -4753,7 +4855,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (m && m.type === "assistantStream" && typeof m.html === "string") {
         state = { ...state, streamingHtml: m.html || null };
         try {
-          renderThread();
+          renderThread({ mode: "stick" });
         } catch (e) {
           const msg = e && e.message ? String(e.message) : String(e);
           const errEl = document.getElementById("err");

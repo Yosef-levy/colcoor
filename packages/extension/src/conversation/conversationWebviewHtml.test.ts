@@ -321,8 +321,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("preserveThreadScroll");
     expect(html).toContain("function restoreThreadScroll(wrap, scrollTop)");
     expect(html).toContain("render({ preserveThreadScroll: m.preserveThreadScroll === true })");
-    expect(html).toContain("renderThread(preserveThreadScroll)");
+    expect(html).toContain("renderThread({ mode: threadScrollMode })");
     expect(html).toContain("restoreThreadScroll(wrap, prevScrollTop)");
+  });
+
+  it("sticks assistant stream scroll to bottom only when already scrolled down", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function isThreadScrolledToBottom(wrap");
+    expect(html).toContain('renderThread({ mode: "stick" })');
+    expect(html).toContain('return "stick"');
+    expect(html).toContain('return "force"');
+    expect(html).toContain("applyThreadScrollAfterRender");
   });
 
   it("opens message context menu on tree node contextmenu without changing selection ([tree-ui-contract.md] §5.2)", () => {
