@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
+import { listCursorAgentModels } from "../agent/cursorAgentModels";
+import { SECRET_CURSOR_AGENT_API_KEY } from "../agent/cursorAgentApiKey";
 import type {
   ColcoorApiClient,
   ConversationMember,
@@ -42,6 +44,13 @@ import {
   COMPOSER_TEXTAREA_HEIGHT_STATE_KEY,
   clampComposerTextareaHeightPx,
 } from "./composerLayoutPersistence";
+import {
+  AGENT_MODEL_AUTO,
+  agentModelCliFlag,
+  readAgentModelByConversationMap,
+  readSelectedAgentModelForConversation,
+  writeSelectedAgentModelForConversation,
+} from "./conversationAgentModel";
 import { evaluateContinueFromHere } from "./continueFromHereGate";
 import { clipboardTextForTreeMessage } from "./selectedMessageClipboardText";
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
@@ -193,6 +202,12 @@ type WebviewStateMessage = {
   pendingSideChatGraphReferenceSummary: string | null;
   /** One-shot composer fill after “Edit message” (consumed on next state post). */
   composerPrefill?: ComposerPrefillPayload | null;
+  /** Cursor CLI model ids from `agent models` (plus the per-conversation selection when not listed). */
+  agentModelOptions: string[];
+  /** `auto` or a model id from {@link agentModelOptions}. */
+  agentModelSelected: string;
+  /** Shown as the model dropdown title when the CLI list is empty or failed. */
+  agentModelsListHint: string | null;
   /** When true, re-render the thread without scrolling to the bottom (note add/edit/delete). */
   preserveThreadScroll?: boolean;
 };
@@ -228,6 +243,7 @@ type FromWebview =
   | { type: "refresh" }
   | { type: "cancel" }
   | { type: "resend" }
+  | { type: "setAgentModel"; model: string }
   | { type: "copy"; text: string }
   | { type: "copyThread"; text: string }
   | {
@@ -421,6 +437,10 @@ export function createConversationPanelController(
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
   /** Consumed once in {@link postState} to fill the main composer. */
   let pendingComposerPrefill: ComposerPrefillPayload | null = null;
+  /** Latest `agent models` listing (refreshed when the webview becomes ready). */
+  let cachedAgentModels: string[] = [];
+  let cachedAgentModelsHint: string | null = null;
+  let agentModelsRefreshInFlight: Promise<void> | undefined;
   /** Inline side-chat rows + rendered rows for same-tab drawer. */
   let inlineSideChatRows: SideChatMessageOut[] = [];
   /** Image data URLs keyed by side-chat message id (incremental fetches per row). */
@@ -1043,6 +1063,80 @@ export function createConversationPanelController(
     lastSelectedEventIdByConversation.set(convId, id);
   }
 
+  function cliModelForConversationRuns(): string | undefined {
+    if (!conversationId) {
+      return undefined;
+    }
+    const map = readAgentModelByConversationMap(context.workspaceState);
+    return agentModelCliFlag(readSelectedAgentModelForConversation(map, conversationId));
+  }
+
+  function agentModelFieldsForWebview(): {
+    agentModelOptions: string[];
+    agentModelSelected: string;
+    agentModelsListHint: string | null;
+  } {
+    const map = readAgentModelByConversationMap(context.workspaceState);
+    const selected = conversationId
+      ? readSelectedAgentModelForConversation(map, conversationId)
+      : AGENT_MODEL_AUTO;
+    const options = [...cachedAgentModels];
+    if (selected !== AGENT_MODEL_AUTO && !options.includes(selected)) {
+      options.unshift(selected);
+    }
+    return {
+      agentModelOptions: options,
+      agentModelSelected: selected,
+      agentModelsListHint: cachedAgentModelsHint,
+    };
+  }
+
+  async function refreshCachedAgentModels(): Promise<void> {
+    const cfg = vscode.workspace.getConfiguration("colcoor");
+    const mode = cfg.get<string>("agentMode") ?? "auto";
+    if (mode === "stub") {
+      cachedAgentModels = [];
+      cachedAgentModelsHint = "Agent mode is stub — model list unavailable.";
+      return;
+    }
+    const executable = (cfg.get<string>("agentExecutable") ?? "agent").trim() || "agent";
+    const storedKey = (await context.secrets.get(SECRET_CURSOR_AGENT_API_KEY))?.trim();
+    const { models, stderr, exitCode } = await listCursorAgentModels({
+      executable,
+      storedCursorApiKey: storedKey || undefined,
+    });
+    cachedAgentModels = models;
+    if (models.length > 0) {
+      cachedAgentModelsHint = null;
+      return;
+    }
+    if (exitCode !== 0) {
+      cachedAgentModelsHint =
+        stderr.trim() ||
+        "`agent models` failed — check Cursor CLI install and API key.";
+    } else {
+      cachedAgentModelsHint =
+        stderr.trim() || "No models returned for this account — Automatic is still available.";
+    }
+  }
+
+  function scheduleRefreshCachedAgentModels(): void {
+    if (agentModelsRefreshInFlight) {
+      return;
+    }
+    agentModelsRefreshInFlight = refreshCachedAgentModels()
+      .catch(() => {
+        cachedAgentModels = [];
+        cachedAgentModelsHint = "Could not list Cursor CLI models.";
+      })
+      .finally(() => {
+        agentModelsRefreshInFlight = undefined;
+        if (panel && conversationId && webviewReady) {
+          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        }
+      });
+  }
+
   function ensureSelectedEventInTree(
     events: GraphEventNode[],
     lineageById: ReadonlyMap<string, GraphEventNode>,
@@ -1198,6 +1292,7 @@ export function createConversationPanelController(
         sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
         pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
         ...(pendingComposerPrefill ? { composerPrefill: pendingComposerPrefill } : {}),
+        ...agentModelFieldsForWebview(),
         ...(options?.preserveThreadScroll ? { preserveThreadScroll: true } : {}),
       };
       pendingComposerPrefill = null;
@@ -1278,6 +1373,7 @@ export function createConversationPanelController(
           sideChatMyMentionTargets: mentionTargetsForMe(myProfileForSideChat ?? null),
           sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
           pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
+          ...agentModelFieldsForWebview(),
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -1605,6 +1701,7 @@ export function createConversationPanelController(
             privateBranch: item.kind === "new_branch" ? item.privateBranch : false,
             signal: sig,
             onAssistantTextDelta: (t) => stream.pushDelta(t),
+            cliModel: cliModelForConversationRuns(),
             ...(userMediaContentJson ? { userMediaContentJson } : {}),
             onUserMessagePersisted: async ({ userEventId }) => {
               selectedEventId = userEventId;
@@ -1773,6 +1870,7 @@ export function createConversationPanelController(
           privateBranch,
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
+          cliModel: cliModelForConversationRuns(),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
@@ -1848,6 +1946,7 @@ export function createConversationPanelController(
         {
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
+          cliModel: cliModelForConversationRuns(),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
@@ -1989,7 +2088,17 @@ export function createConversationPanelController(
       if (msg.type === "ready") {
         webviewReady = true;
         webviewAudioUnlocked = false;
+        scheduleRefreshCachedAgentModels();
         await loadTreeAndPush(false, null);
+        return;
+      }
+      if (msg.type === "setAgentModel" && typeof msg.model === "string" && conversationId) {
+        await writeSelectedAgentModelForConversation(
+          context.workspaceState,
+          conversationId,
+          msg.model,
+        );
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
         return;
       }
       if (msg.type === "audioUnlocked") {

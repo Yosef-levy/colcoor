@@ -56,6 +56,20 @@ describe("buildAgentPrintArgs", () => {
       prompt,
     ]);
   });
+
+  it("includes --model when provided", () => {
+    expect(buildAgentPrintArgs(ws, prompt, "text", "gpt-5.2")).toEqual([
+      "-p",
+      "--output-format",
+      "text",
+      "--model",
+      "gpt-5.2",
+      "--trust",
+      "--workspace",
+      ws,
+      prompt,
+    ]);
+  });
 });
 
 describe("buildEnvForAgentSpawn", () => {

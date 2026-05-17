@@ -40,6 +40,8 @@ export class AgentRunner {
     signal?: AbortSignal;
     /** Full assistant text so far (CLI stdout grows incrementally). Stub mode invokes once with the full body. */
     onTextDelta?: (textSoFar: string) => void;
+    /** Cursor CLI `--model`; omit for automatic model selection. */
+    cliModel?: string;
   }): Promise<AgentRunResult> {
     const config = vscode.workspace.getConfiguration("colcoor");
     const rawMode = config.get<string>("agentMode") ?? "auto";
@@ -79,6 +81,7 @@ export class AgentRunner {
         signal: input.signal,
         onStdoutAccumulated: input.onTextDelta,
         outputMode,
+        cliModel: input.cliModel?.trim() || undefined,
       });
       if (cancelled) {
         return {

@@ -25,6 +25,8 @@ export type RunResendAssistantOptions = {
   onAssistantTextDelta?: (textSoFar: string) => void;
   /** When set (e.g. from the conversation panel), skips the initial tree + notes round-trip. */
   prefetchedGraph?: PrefetchedConversationGraph;
+  /** Cursor CLI `--model`; omit for automatic model selection. */
+  cliModel?: string;
 };
 
 /**
@@ -102,6 +104,7 @@ export async function runResendAssistant(
       workspaceContextAppendix: appendix.length > 0 ? appendix : undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
+      cliModel: options?.cliModel,
     });
     return appendAssistantFromAgentResult(api, conversationId, resolvedUserEventId, runResult);
   } catch (e) {

@@ -61,6 +61,8 @@ export type RunUserTurnOptions = {
   userMediaContentJson?: Record<string, unknown> | null;
   /** When set (e.g. from the conversation panel), skips the initial tree + notes round-trip. */
   prefetchedGraph?: PrefetchedConversationGraph;
+  /** Cursor CLI `--model`; omit for automatic model selection. */
+  cliModel?: string;
 };
 
 export type UserTurnResult = {
@@ -159,6 +161,7 @@ export async function runColcoorUserTurn(
       workspaceContextAppendix: appendix.length > 0 ? appendix : undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
+      cliModel: options?.cliModel,
     });
     return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult);
   } catch (e) {

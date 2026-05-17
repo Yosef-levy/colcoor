@@ -19,16 +19,18 @@ export function buildAgentPrintArgs(
   workspaceRoot: string,
   prompt: string,
   mode: AgentCliOutputMode,
+  model?: string,
 ): string[] {
   const cwd = workspaceRoot.trim() || process.cwd();
+  const modelFlag = model?.trim() ? (["--model", model.trim()] as const) : [];
   const tail = ["--trust", "--workspace", cwd, prompt] as const;
   switch (mode) {
     case "text":
-      return ["-p", "--output-format", "text", ...tail];
+      return ["-p", "--output-format", "text", ...modelFlag, ...tail];
     case "stream-json":
-      return ["-p", "--output-format", "stream-json", ...tail];
+      return ["-p", "--output-format", "stream-json", ...modelFlag, ...tail];
     default:
-      return ["-p", "--output-format", "stream-json", "--stream-partial-output", ...tail];
+      return ["-p", "--output-format", "stream-json", "--stream-partial-output", ...modelFlag, ...tail];
   }
 }
 
@@ -75,11 +77,13 @@ export function spawnCursorAgentPrint(params: {
   onStdoutAccumulated?: (stdoutSoFar: string) => void;
   /** Defaults to stream-json + partial deltas. Use `text` if your `agent` build rejects streaming flags. */
   outputMode?: AgentCliOutputMode;
+  /** When set, passed as `--model` (omit for Cursor default / automatic). */
+  cliModel?: string;
 }): Promise<CursorCliSpawnResult> {
   const cwd = params.workspaceRoot.trim() || process.cwd();
   const env = buildEnvForAgentSpawn(params.storedCursorApiKey);
   const outputMode = params.outputMode ?? "stream-json-partial";
-  const args = buildAgentPrintArgs(params.workspaceRoot, params.prompt, outputMode);
+  const args = buildAgentPrintArgs(params.workspaceRoot, params.prompt, outputMode, params.cliModel);
   const useJsonFeed = outputMode !== "text";
 
   if (params.signal?.aborted) {

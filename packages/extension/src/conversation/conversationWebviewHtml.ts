@@ -526,6 +526,20 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       padding: 6px;
     }
     .composer .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .composer select.agent-model-select {
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      color: var(--vscode-foreground);
+      background: var(--vscode-dropdown-background, var(--vscode-input-background));
+      border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
+      border-radius: 3px;
+      padding: 4px 6px;
+      max-width: 14rem;
+      min-width: 7rem;
+    }
+    .composer select.agent-model-select:disabled {
+      opacity: 0.65;
+    }
     .composer .composer-waiting-row {
       display: flex;
       gap: 8px;
@@ -1640,6 +1654,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <span class="hint" id="queuedSendBadge" style="display:none"></span>
         </div>
         <div class="row">
+          <label class="hint" for="agentModel" style="margin:0">Model</label>
+          <select id="agentModel" class="agent-model-select" title="Cursor CLI model for this conversation">
+            <option value="auto">Automatic</option>
+          </select>
           <button id="send" type="button" disabled>Send</button>
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
           <span class="hint" id="busy" style="display:none">Working…</span>
@@ -2026,6 +2044,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       sideChatMyMentionTargets: [],
       sideChatSoundVolume: 0.7,
       pendingSideChatGraphReferenceSummary: null,
+      agentModelOptions: [],
+      agentModelSelected: "auto",
+      agentModelsListHint: null,
     };
     wireInlineSideChatAudioUnlockFromUserGesture();
 
@@ -3853,6 +3874,56 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
     }
 
+    function updateAgentModelSelect() {
+      var sel = document.getElementById("agentModel");
+      if (!sel) return;
+      var selected =
+        state.agentModelSelected === "auto" || !state.agentModelSelected
+          ? "auto"
+          : String(state.agentModelSelected);
+      var options = Array.isArray(state.agentModelOptions) ? state.agentModelOptions : [];
+      var want = ["auto"].concat(options.filter(function (id) {
+        return id && String(id).trim() && String(id) !== "auto";
+      }));
+      var currentVals = Array.prototype.map.call(sel.options, function (o) {
+        return o.value;
+      });
+      var same =
+        currentVals.length === want.length &&
+        currentVals.every(function (v, i) {
+          return v === want[i];
+        });
+      if (!same) {
+        sel.replaceChildren();
+        var autoOpt = document.createElement("option");
+        autoOpt.value = "auto";
+        autoOpt.textContent = "Automatic";
+        sel.appendChild(autoOpt);
+        for (var wi = 1; wi < want.length; wi++) {
+          var id = want[wi];
+          var o = document.createElement("option");
+          o.value = id;
+          o.textContent = id;
+          sel.appendChild(o);
+        }
+      }
+      if (Array.prototype.some.call(sel.options, function (o) { return o.value === selected; })) {
+        sel.value = selected;
+      } else {
+        sel.value = "auto";
+      }
+      sel.disabled = !!state.busy;
+      var hint =
+        state.agentModelsListHint != null && String(state.agentModelsListHint).trim()
+          ? String(state.agentModelsListHint).trim()
+          : "";
+      sel.title = hint
+        ? "Cursor CLI model for this conversation. " + hint
+        : selected === "auto"
+          ? "Cursor CLI picks the model automatically"
+          : "Use model " + selected + " for sends in this conversation";
+    }
+
     function updateComposerSendEnabled() {
       var sendBtn = document.getElementById("send");
       var ta = document.getElementById("input");
@@ -4128,6 +4199,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (refBtn) refBtn.disabled = state.busy;
         if (ta) ta.disabled = state.busy && !wf;
         if (priv) priv.disabled = state.busy && !wf;
+        updateAgentModelSelect();
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
           busyEl.textContent =
@@ -4978,6 +5050,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       updateComposerSendEnabled();
       scheduleComposerFocus(ta);
     }
+
+    (function wireAgentModelSelect() {
+      var modelSel = document.getElementById("agentModel");
+      if (!modelSel) return;
+      modelSel.addEventListener("change", function () {
+        vscode.postMessage({ type: "setAgentModel", model: modelSel.value || "auto" });
+      });
+    })();
 
     document.getElementById("send").addEventListener("click", () => {
       emitMainComposerSend(undefined);
