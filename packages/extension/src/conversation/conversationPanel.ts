@@ -408,6 +408,8 @@ export function createConversationPanelController(
   let staleTreePromptedForEventId: string | null = null;
   /** Dedupe for “remote collaborator posted” growth prompt ([ui-features.md] §11). */
   let staleTreePromptedForGrowthFingerprint: string | null = null;
+  /** Last valid tree selection per conversation (restored when switching back). */
+  const lastSelectedEventIdByConversation = new Map<string, string>();
   /** Cached GET /me id — avoids repeated calls when checking collaborative tree growth. */
   let viewerUserIdMemo: string | undefined;
   /** Set while a main-thread send is in flight until the user message exists on the tree ([ui-features.md] §7). */
@@ -1029,6 +1031,51 @@ export function createConversationPanelController(
     return L;
   }
 
+  function rememberSelectionForConversation(
+    convId: string,
+    eventId: string | undefined,
+    events: readonly GraphEventNode[],
+  ): void {
+    const id = eventId?.trim();
+    if (!id || !events.some((e) => e.id === id)) {
+      return;
+    }
+    lastSelectedEventIdByConversation.set(convId, id);
+  }
+
+  function ensureSelectedEventInTree(
+    events: GraphEventNode[],
+    lineageById: ReadonlyMap<string, GraphEventNode>,
+    hintIds: readonly (string | undefined)[],
+  ): void {
+    if (events.length === 0) {
+      selectedEventId = undefined;
+      return;
+    }
+    const visibleIds = new Set(events.map((e) => e.id));
+    for (const raw of hintIds) {
+      const hint = raw?.trim();
+      if (!hint) {
+        continue;
+      }
+      if (visibleIds.has(hint)) {
+        selectedEventId = hint;
+        return;
+      }
+      const resolved = lowestUndeletedAncestorId(hint, visibleIds, lineageById);
+      if (resolved) {
+        selectedEventId = resolved;
+        return;
+      }
+    }
+    try {
+      selectedEventId = findBranchTipOrUndeletedAncestor(events, lineageById, hintIds[0]).id;
+    } catch {
+      const rootEv = events.find((e) => e.parent_event_id === null);
+      selectedEventId = rootEv?.id ?? events[0]?.id;
+    }
+  }
+
   function postState(
     events: GraphEventNode[],
     busy: boolean,
@@ -1063,6 +1110,9 @@ export function createConversationPanelController(
           }
           selectedEventId = sel;
         }
+      }
+      if (conversationId && sel && ids.has(sel)) {
+        rememberSelectionForConversation(conversationId, sel, events);
       }
       maybeRecordVisitedSelectionAfterPost(sel ?? "");
       const nav = visitedSelectionNavFlags();
@@ -1263,13 +1313,16 @@ export function createConversationPanelController(
       let treePrefetch: GraphEventNode[] | undefined = opts?.prefetchedTreeEvents;
       let notesPrefetch: NoteOut[] | undefined = opts?.prefetchedNotes;
       conversationTreeLoading = !busy;
-      if (!busy) {
+      if (!busy && lastTreeEvents.length > 0) {
         postState(lastTreeEvents, lastPostedBusy, null);
       }
       for (;;) {
         try {
           const hadInlineSideChatOpenAtTreeLoad = inlineSideChatVisible;
           const previousSelectedEventId = selectedEventId;
+          const cachedSelectionForConversation = conversationId
+            ? lastSelectedEventIdByConversation.get(conversationId)
+            : undefined;
           const previousEventIds = new Set(lastTreeEvents.map((e) => e.id));
           const treeP =
             treePrefetch !== undefined
@@ -1419,6 +1472,16 @@ export function createConversationPanelController(
             } catch {
               selectedEventId = events.at(-1)?.id;
             }
+          } else if (
+            !selectedEventId ||
+            !events.some((e) => e.id === selectedEventId)
+          ) {
+            ensureSelectedEventInTree(events, lineageById, [
+              cachedSelectionForConversation,
+              selectedEventId,
+              caller?.active_event_id ?? undefined,
+              previousSelectedEventId,
+            ]);
           }
           const imageFetchP = buildUserImageDataUrlsByEventId(api, conversationId, events).catch(
             () => new Map<string, string[]>(),
@@ -2936,6 +2999,9 @@ export function createConversationPanelController(
         skipStaleSelectionPrompt: true,
         ...(parentAfterDelete ? { selectEventId: parentAfterDelete } : { finalizeToDefaultBranchTip: true }),
       });
+      if (parentAfterDelete) {
+        void syncActiveToBackend(parentAfterDelete, { needsContextRebuild: false });
+      }
     };
     try {
       const out = await api.deleteEventSubtree(conversationId, deletedEventId);
@@ -3018,6 +3084,9 @@ export function createConversationPanelController(
         return;
       }
       if (conversationId !== cid) {
+        if (conversationId && selectedEventId && lastTreeEvents.some((e) => e.id === selectedEventId)) {
+          rememberSelectionForConversation(conversationId, selectedEventId, lastTreeEvents);
+        }
         stopInlineSideChatSse();
         inlineSideChatNotifiedMessageIds.clear();
         inlineSideChatLastNotificationAtMs = null;
@@ -3036,7 +3105,7 @@ export function createConversationPanelController(
       staleTreePromptedForGrowthFingerprint = null;
       viewerUserIdMemo = undefined;
       resetVisitedSelectionHistory();
-      selectedEventId = undefined;
+      selectedEventId = lastSelectedEventIdByConversation.get(cid);
       lastNotes = [];
       lastNeedsContextRebuild = false;
       lastTreeEvents = [];
@@ -3069,6 +3138,9 @@ export function createConversationPanelController(
         return;
       }
       if (conversationId !== cid) {
+        if (conversationId && selectedEventId && lastTreeEvents.some((e) => e.id === selectedEventId)) {
+          rememberSelectionForConversation(conversationId, selectedEventId, lastTreeEvents);
+        }
         stopInlineSideChatSse();
         inlineSideChatNotifiedMessageIds.clear();
         inlineSideChatLastNotificationAtMs = null;
