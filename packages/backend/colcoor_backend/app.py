@@ -4,16 +4,22 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from colcoor_backend.api.router import api_router
 from colcoor_backend.core.config import get_settings
-from colcoor_backend.core.readiness import ping_database, ping_redis_if_configured
+from colcoor_backend.core.readiness import (
+    ping_database,
+    ping_image_storage,
+    ping_redis_if_configured,
+)
 from colcoor_backend.core.validation import validate_cors_origins_non_wildcard, validate_production_settings
 import colcoor_backend.db.models  # noqa: F401 — register ORM mappers
 from colcoor_backend.db.session import create_engine, create_session_factory
 from colcoor_backend.logging_config import configure_logging
+from colcoor_backend.observability import metrics_content_type, render_metrics
+from colcoor_backend.observability.middleware import RequestContextMiddleware
 from colcoor_backend.services.event_purge import spawn_event_purge_scheduler
 from colcoor_backend.services.side_chat_wake.factory import create_side_chat_wake_hub
 from colcoor_backend.storage.factory import create_image_blob_storage
@@ -54,10 +60,11 @@ async def lifespan(app: FastAPI):
             )
 
     logger.info(
-        "startup complete env=%s database_configured=%s cors_origins=%s",
+        "startup complete env=%s database_configured=%s cors_origins=%s metrics=%s",
         settings.env,
         bool(settings.database_url),
         len(settings.cors_origin_list()),
+        settings.metrics_enabled,
     )
 
     yield
@@ -89,6 +96,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    application.add_middleware(RequestContextMiddleware)
+
     @application.get("/health", include_in_schema=False)
     def root_health() -> dict[str, str]:
         """Liveness: process up (no external dependencies)."""
@@ -96,7 +105,7 @@ def create_app() -> FastAPI:
 
     @application.get("/ready", include_in_schema=False)
     async def root_ready(request: Request) -> dict[str, str]:
-        """Readiness: database reachable when DATABASE_URL is configured."""
+        """Readiness: database, Redis, and image storage when configured."""
         settings = get_settings()
         engine = getattr(request.app.state, "db_engine", None)
         if engine is None:
@@ -105,13 +114,14 @@ def create_app() -> FastAPI:
                     status_code=503,
                     detail="database engine not configured",
                 )
-            return {"status": "ready", "database": "not_configured"}
-
-        try:
-            await ping_database(engine)
-        except Exception:
-            logger.exception("readiness: database ping failed")
-            raise HTTPException(status_code=503, detail="database not ready") from None
+            db_status = "not_configured"
+        else:
+            try:
+                await ping_database(engine)
+            except Exception:
+                logger.exception("readiness: database ping failed")
+                raise HTTPException(status_code=503, detail="database not ready") from None
+            db_status = "ok"
 
         wake_hub = getattr(request.app.state, "side_chat_wake_hub", None)
         try:
@@ -120,7 +130,38 @@ def create_app() -> FastAPI:
             logger.exception("readiness: redis ping failed")
             raise HTTPException(status_code=503, detail="redis not ready") from None
 
-        return {"status": "ready", "database": "ok", "redis": redis_status}
+        storage = getattr(request.app.state, "image_blob_storage", None)
+        if storage is None:
+            if settings.is_production():
+                raise HTTPException(
+                    status_code=503,
+                    detail="image storage not configured",
+                )
+            storage_status = "not_configured"
+        else:
+            try:
+                storage_status = await ping_image_storage(settings, storage)
+            except Exception:
+                logger.exception("readiness: image storage ping failed")
+                raise HTTPException(status_code=503, detail="image storage not ready") from None
+
+        return {
+            "status": "ready",
+            "database": db_status,
+            "redis": redis_status,
+            "storage": storage_status,
+        }
+
+    if settings.metrics_enabled:
+
+        @application.get("/metrics", include_in_schema=False)
+        async def prometheus_metrics(request: Request) -> Response:
+            engine = getattr(request.app.state, "db_engine", None)
+            wake_hub = getattr(request.app.state, "side_chat_wake_hub", None)
+            if hasattr(wake_hub, "refresh_observability_metrics"):
+                wake_hub.refresh_observability_metrics()
+            body = render_metrics(engine)
+            return Response(content=body, media_type=metrics_content_type())
 
     origins = settings.cors_origin_list()
     if origins:
@@ -129,7 +170,13 @@ def create_app() -> FastAPI:
             allow_origins=origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "Accept", "Cache-Control"],
+            allow_headers=[
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "Cache-Control",
+                "X-Request-ID",
+            ],
         )
 
     application.include_router(api_router, prefix="/api/v1")

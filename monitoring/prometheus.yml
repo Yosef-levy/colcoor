@@ -1,0 +1,15 @@
+# Colcoor — scrape the API on the Compose internal network.
+# Usage:
+#   docker compose -f docker-compose.prod.yml --profile monitoring up -d
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: colcoor-backend
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8000"]
+        labels:
+          service: colcoor-backend

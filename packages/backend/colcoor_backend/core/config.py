@@ -181,6 +181,19 @@ class Settings(BaseSettings):
         ),
         description="Root directory when image storage backend is local.",
     )
+    metrics_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "COLCOOR_METRICS_ENABLED",
+            "METRICS_ENABLED",
+        ),
+        description="Expose Prometheus /metrics endpoint.",
+    )
+    log_format: str = Field(
+        default="",
+        validation_alias=AliasChoices("COLCOOR_LOG_FORMAT", "LOG_FORMAT"),
+        description="json | text. Empty: json in production, text otherwise.",
+    )
 
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"

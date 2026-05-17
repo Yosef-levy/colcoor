@@ -118,6 +118,8 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `CORS_ORIGINS` | Optional | Empty = **no** CORS middleware (not allow-all). Comma-separated explicit origins only; `*` is rejected |
 | `WEB_CONCURRENCY` | Optional | Gunicorn workers; default **2** (conservative for small VMs) |
 | `COLCOOR_LOG_LEVEL` | Optional | `INFO` default; `DEBUG` / `WARNING` / `ERROR` |
+| `COLCOOR_LOG_FORMAT` | Optional | `json` (default in production) or `text` |
+| `COLCOOR_METRICS_ENABLED` | Optional | Expose `/metrics` (default **true**) |
 | `PORT` | Fixed in Compose | Backend listens on **8000** inside the stack; must match nginx upstream |
 | `DOMAIN` | Optional | Reserved for future use / docs |
 | `CURSOR_AUTH_PROVIDER_ORDER` | Optional | Comma list: `github`, `microsoft`, `google` — order used when `provider_hint` is `auto` on **`POST /api/v1/auth/cursor`** (default `github,microsoft,google`) |
@@ -137,12 +139,15 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET`, `DATABASE_UR
 | Endpoint | Via nginx | Purpose |
 |----------|-----------|---------|
 | **`GET /health`** | Yes (unthrottled) | **Liveness** — process is up; no DB check |
-| **`GET /ready`** | Yes (unthrottled) | **Readiness** — `SELECT 1` against Postgres; Redis `PING` when `REDIS_URL` is set |
+| **`GET /ready`** | Yes (unthrottled) | **Readiness** — Postgres, Redis, and image storage (GCS or local) |
+| **`GET /metrics`** | Internal only (scrape from Docker network) | Prometheus metrics ([monitoring.md](monitoring.md)) |
 
 - **Docker Compose** marks the backend **healthy** using **`/ready`** so dependent services (nginx) start only after the database is reachable.
 - **nginx** edge healthcheck uses **`/health`** (shallow).
 
-**Limitations:** `/ready` does not verify migrations, disk space, or application-level invariants—only that the API can open a DB connection and run `SELECT 1`.
+**Limitations:** `/ready` does not verify migrations, disk space, or application-level invariants—only configured dependencies (DB, Redis, storage).
+
+**Monitoring:** optional Prometheus + Grafana via `docker compose -f docker-compose.prod.yml --profile monitoring up -d`. See [monitoring.md](monitoring.md).
 
 ---
 
@@ -300,6 +305,7 @@ Customer VM (typical): `00-load-image` → `01-setup-env` → `02-stack-up` → 
 
 ## Related docs
 
+- [monitoring.md](monitoring.md) — metrics, logs, Grafana, alerts
 - [pgbouncer.md](pgbouncer.md) — connection pooling, sizing, env vars
 - [database.md](database.md) — PostgreSQL schema (DDL)
 - [architecture.md](architecture.md) — backend role vs extension vs Cursor

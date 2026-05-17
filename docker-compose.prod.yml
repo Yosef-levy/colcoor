@@ -106,6 +106,8 @@ services:
       PORT: "8000"
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       COLCOOR_LOG_LEVEL: ${COLCOOR_LOG_LEVEL:-INFO}
+      COLCOOR_LOG_FORMAT: ${COLCOOR_LOG_FORMAT:-}
+      COLCOOR_METRICS_ENABLED: ${COLCOOR_METRICS_ENABLED:-true}
       COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED: ${COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED:-true}
       DATABASE_URL: ${DATABASE_URL}
       DATABASE_MIGRATION_URL: ${DATABASE_MIGRATION_URL:-}
@@ -166,10 +168,51 @@ services:
     networks:
       - internal
 
+  prometheus:
+    profiles: [monitoring]
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "9090:9090"
+    networks:
+      - internal
+
+  grafana:
+    profiles: [monitoring]
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    networks:
+      - internal
+
 networks:
   internal:
     driver: bridge
 
 volumes:
+  prometheus_data: {}
+  grafana_data: {}
   postgres_data:
     name: colcoor_postgres_data

@@ -30,6 +30,11 @@ from colcoor_backend.services.side_chat_wake.channels import (
     encode_wake_payload,
     side_chat_redis_channel,
 )
+from colcoor_backend.observability.metrics import (
+    REDIS_PUBLISH_TOTAL,
+    REDIS_SSE_WAITERS,
+    REDIS_SUBSCRIBED_CHANNELS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +122,9 @@ class RedisSideChatWakeHub:
         channel = side_chat_redis_channel(conversation_id)
         try:
             await self._redis.publish(channel, encode_wake_payload(seq=seq))
+            REDIS_PUBLISH_TOTAL.labels(result="ok").inc()
         except Exception:
+            REDIS_PUBLISH_TOTAL.labels(result="error").inc()
             logger.exception("side_chat wake hub: publish failed channel=%s", channel)
 
     @contextlib.asynccontextmanager
@@ -134,6 +141,7 @@ class RedisSideChatWakeHub:
                 if not self._waiters[channel]:
                     del self._waiters[channel]
                 raise
+            self.refresh_observability_metrics()
         try:
             yield wake
         finally:
@@ -145,6 +153,12 @@ class RedisSideChatWakeHub:
                     if not waiters:
                         del self._waiters[channel]
                         await self._unsubscribe_channel(channel)
+            self.refresh_observability_metrics()
+
+    def refresh_observability_metrics(self) -> None:
+        """Update Prometheus gauges (call before /metrics scrape)."""
+        REDIS_SUBSCRIBED_CHANNELS.set(len(self._subscribed_channels))
+        REDIS_SSE_WAITERS.set(sum(len(waiters) for waiters in self._waiters.values()))
 
     async def ping(self) -> None:
         if self._redis is None:

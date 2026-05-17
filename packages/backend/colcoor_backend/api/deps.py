@@ -53,16 +53,23 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
 async def get_current_user_id(
+    request: Request,
     token: BearerToken,
     settings: SettingsDep,
 ) -> uuid.UUID:
     try:
-        return decode_access_token(token, settings)
+        user_id = decode_access_token(token, settings)
     except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         ) from None
+    uid = str(user_id)
+    request.state.user_id = uid
+    from colcoor_backend.observability import context as obs_ctx
+
+    obs_ctx.user_id_ctx.set(uid)
+    return user_id
 
 
 CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]

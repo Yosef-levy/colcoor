@@ -17,6 +17,7 @@ dependencies = [
   "httpx>=0.28.0",
   "redis>=5.2.0",
   "google-cloud-storage>=2.18.0",
+  "prometheus-client>=0.21.0",
 ]
 
 [project.optional-dependencies]

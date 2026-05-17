@@ -27,6 +27,7 @@ from colcoor_backend.services.side_chat import (
     load_users_by_ids,
     side_chat_message_to_out,
 )
+from colcoor_backend.observability.metrics import SSE_CONNECTIONS_ACTIVE
 from colcoor_backend.services.side_chat_wake.hub import SideChatWakeHub
 
 logger = logging.getLogger(__name__)
@@ -105,10 +106,27 @@ async def iter_side_chat_sse(
 
     last = after_seq
     t0 = time.monotonic()
+    SSE_CONNECTIONS_ACTIVE.inc()
 
-    if use_redis:
-        assert wake_hub is not None
-        async with wake_hub.subscribe(conversation_id) as wake:
+    try:
+        if use_redis:
+            assert wake_hub is not None
+            async with wake_hub.subscribe(conversation_id) as wake:
+                async for chunk in _run_sse_loop(
+                    factory,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    last=last,
+                    poll_idle=poll_idle,
+                    max_sec=max_sec,
+                    t0=t0,
+                    wake=wake,
+                ):
+                    if isinstance(chunk, int):
+                        last = chunk
+                    else:
+                        yield chunk
+        else:
             async for chunk in _run_sse_loop(
                 factory,
                 conversation_id=conversation_id,
@@ -117,27 +135,14 @@ async def iter_side_chat_sse(
                 poll_idle=poll_idle,
                 max_sec=max_sec,
                 t0=t0,
-                wake=wake,
+                wake=None,
             ):
                 if isinstance(chunk, int):
                     last = chunk
                 else:
                     yield chunk
-    else:
-        async for chunk in _run_sse_loop(
-            factory,
-            conversation_id=conversation_id,
-            user_id=user_id,
-            last=last,
-            poll_idle=poll_idle,
-            max_sec=max_sec,
-            t0=t0,
-            wake=None,
-        ):
-            if isinstance(chunk, int):
-                last = chunk
-            else:
-                yield chunk
+    finally:
+        SSE_CONNECTIONS_ACTIVE.dec()
 
 
 async def _run_sse_loop(

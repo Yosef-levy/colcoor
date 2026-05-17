@@ -48,6 +48,17 @@ class LocalImageBlobStorage:
 
         await asyncio.to_thread(_unlink)
 
+    async def ping(self) -> None:
+        """Verify root directory exists and is writable (readiness)."""
+
+        def _check() -> None:
+            self._root.mkdir(parents=True, exist_ok=True)
+            probe = self._root / ".colcoor_ready"
+            probe.write_text("ok")
+            probe.unlink(missing_ok=True)
+
+        await asyncio.to_thread(_check)
+
     def signed_download_url(self, object_key: str) -> str | None:
         del object_key
         return None

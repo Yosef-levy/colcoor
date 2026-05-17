@@ -48,6 +48,15 @@ class GcsImageBlobStorage:
 
         await asyncio.to_thread(_delete)
 
+    async def ping(self) -> None:
+        """Verify bucket metadata is reachable (readiness)."""
+
+        def _check() -> None:
+            if not self._bucket.exists():
+                raise RuntimeError(f"GCS bucket not found: {self._bucket_name}")
+
+        await asyncio.to_thread(_check)
+
     def signed_download_url(self, object_key: str) -> str:
         blob = self._blob(object_key)
         return blob.generate_signed_url(
