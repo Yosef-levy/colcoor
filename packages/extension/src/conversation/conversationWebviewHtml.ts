@@ -1656,7 +1656,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         <div class="row">
           <label class="hint" for="agentModel" style="margin:0">Model</label>
           <select id="agentModel" class="agent-model-select" title="Cursor CLI model for this conversation">
-            <option value="auto">Automatic</option>
+            <option value="auto">Auto</option>
           </select>
           <button id="send" type="button" disabled>Send</button>
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
@@ -3874,6 +3874,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
     }
 
+    var AGENT_MODEL_PICKER_ALL = "__all_models__";
+
     function updateAgentModelSelect() {
       var sel = document.getElementById("agentModel");
       if (!sel) return;
@@ -3881,31 +3883,38 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         state.agentModelSelected === "auto" || !state.agentModelSelected
           ? "auto"
           : String(state.agentModelSelected);
-      var options = Array.isArray(state.agentModelOptions) ? state.agentModelOptions : [];
-      var want = ["auto"].concat(options.filter(function (id) {
-        return id && String(id).trim() && String(id) !== "auto";
-      }));
-      var currentVals = Array.prototype.map.call(sel.options, function (o) {
-        return o.value;
-      });
-      var same =
-        currentVals.length === want.length &&
-        currentVals.every(function (v, i) {
-          return v === want[i];
-        });
-      if (!same) {
+      var raw = Array.isArray(state.agentModelOptions) ? state.agentModelOptions : [];
+      var entries = [];
+      for (var i = 0; i < raw.length; i++) {
+        var row = raw[i];
+        if (!row) continue;
+        var id = typeof row === "string" ? row : row.id;
+        if (!id || id === "auto") continue;
+        var label = typeof row === "string" ? row : row.label || row.id;
+        entries.push({ id: id, label: label });
+      }
+      var wantSig =
+        "auto|" +
+        entries.map(function (e) { return e.id; }).join(",") +
+        "|all";
+      if (sel.getAttribute("data-options-sig") !== wantSig) {
+        sel.setAttribute("data-options-sig", wantSig);
         sel.replaceChildren();
         var autoOpt = document.createElement("option");
         autoOpt.value = "auto";
-        autoOpt.textContent = "Automatic";
+        autoOpt.textContent = "Auto";
         sel.appendChild(autoOpt);
-        for (var wi = 1; wi < want.length; wi++) {
-          var id = want[wi];
+        for (var j = 0; j < entries.length; j++) {
+          var ent = entries[j];
           var o = document.createElement("option");
-          o.value = id;
-          o.textContent = id;
+          o.value = ent.id;
+          o.textContent = ent.label;
           sel.appendChild(o);
         }
+        var allOpt = document.createElement("option");
+        allOpt.value = AGENT_MODEL_PICKER_ALL;
+        allOpt.textContent = "All models…";
+        sel.appendChild(allOpt);
       }
       if (Array.prototype.some.call(sel.options, function (o) { return o.value === selected; })) {
         sel.value = selected;
@@ -3920,7 +3929,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       sel.title = hint
         ? "Cursor CLI model for this conversation. " + hint
         : selected === "auto"
-          ? "Cursor CLI picks the model automatically"
+          ? "Cursor CLI picks the model (same as auto in the CLI list)"
           : "Use model " + selected + " for sends in this conversation";
     }
 
@@ -5055,6 +5064,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var modelSel = document.getElementById("agentModel");
       if (!modelSel) return;
       modelSel.addEventListener("change", function () {
+        if (modelSel.value === AGENT_MODEL_PICKER_ALL) {
+          vscode.postMessage({ type: "openAgentModelPicker" });
+          updateAgentModelSelect();
+          return;
+        }
         vscode.postMessage({ type: "setAgentModel", model: modelSel.value || "auto" });
       });
     })();

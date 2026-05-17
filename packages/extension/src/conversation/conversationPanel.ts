@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
-import { listCursorAgentModels } from "../agent/cursorAgentModels";
-import { SECRET_CURSOR_AGENT_API_KEY } from "../agent/cursorAgentApiKey";
+import {
+  getAgentModelCatalog,
+  scheduleRefreshAgentModelCatalog,
+} from "../agent/agentModelCatalogCache";
+import type { CursorAgentModelEntry } from "../agent/cursorAgentModelCatalog";
 import type {
   ColcoorApiClient,
   ConversationMember,
@@ -202,9 +205,9 @@ type WebviewStateMessage = {
   pendingSideChatGraphReferenceSummary: string | null;
   /** One-shot composer fill after “Edit message” (consumed on next state post). */
   composerPrefill?: ComposerPrefillPayload | null;
-  /** Cursor CLI model ids from `agent models` (plus the per-conversation selection when not listed). */
-  agentModelOptions: string[];
-  /** `auto` or a model id from {@link agentModelOptions}. */
+  /** Curated Cursor CLI models for the composer dropdown (`id` + display `label`). */
+  agentModelOptions: CursorAgentModelEntry[];
+  /** `auto` or a model id from {@link agentModelOptions} / full picker. */
   agentModelSelected: string;
   /** Shown as the model dropdown title when the CLI list is empty or failed. */
   agentModelsListHint: string | null;
@@ -244,6 +247,7 @@ type FromWebview =
   | { type: "cancel" }
   | { type: "resend" }
   | { type: "setAgentModel"; model: string }
+  | { type: "openAgentModelPicker" }
   | { type: "copy"; text: string }
   | { type: "copyThread"; text: string }
   | {
@@ -437,10 +441,6 @@ export function createConversationPanelController(
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
   /** Consumed once in {@link postState} to fill the main composer. */
   let pendingComposerPrefill: ComposerPrefillPayload | null = null;
-  /** Latest `agent models` listing (refreshed when the webview becomes ready). */
-  let cachedAgentModels: string[] = [];
-  let cachedAgentModelsHint: string | null = null;
-  let agentModelsRefreshInFlight: Promise<void> | undefined;
   /** Inline side-chat rows + rendered rows for same-tab drawer. */
   let inlineSideChatRows: SideChatMessageOut[] = [];
   /** Image data URLs keyed by side-chat message id (incremental fetches per row). */
@@ -1072,7 +1072,7 @@ export function createConversationPanelController(
   }
 
   function agentModelFieldsForWebview(): {
-    agentModelOptions: string[];
+    agentModelOptions: CursorAgentModelEntry[];
     agentModelSelected: string;
     agentModelsListHint: string | null;
   } {
@@ -1080,61 +1080,73 @@ export function createConversationPanelController(
     const selected = conversationId
       ? readSelectedAgentModelForConversation(map, conversationId)
       : AGENT_MODEL_AUTO;
-    const options = [...cachedAgentModels];
-    if (selected !== AGENT_MODEL_AUTO && !options.includes(selected)) {
-      options.unshift(selected);
+    const catalog = getAgentModelCatalog();
+    const options = [...catalog.curated];
+    if (selected !== AGENT_MODEL_AUTO && !options.some((o) => o.id === selected)) {
+      const fromAll = catalog.all.find((e) => e.id === selected);
+      options.unshift(fromAll ?? { id: selected, label: selected });
     }
     return {
       agentModelOptions: options,
       agentModelSelected: selected,
-      agentModelsListHint: cachedAgentModelsHint,
+      agentModelsListHint: catalog.hint,
     };
   }
 
-  async function refreshCachedAgentModels(): Promise<void> {
-    const cfg = vscode.workspace.getConfiguration("colcoor");
-    const mode = cfg.get<string>("agentMode") ?? "auto";
-    if (mode === "stub") {
-      cachedAgentModels = [];
-      cachedAgentModelsHint = "Agent mode is stub — model list unavailable.";
+  async function showFullAgentModelPicker(): Promise<void> {
+    const catalog = getAgentModelCatalog();
+    if (catalog.all.length === 0) {
+      scheduleRefreshAgentModelCatalog(context.secrets);
+      void vscode.window.showInformationMessage(
+        "Colcoor: loading Cursor CLI models… Try again in a moment, or check API key / `agent` on PATH.",
+      );
       return;
     }
-    const executable = (cfg.get<string>("agentExecutable") ?? "agent").trim() || "agent";
-    const storedKey = (await context.secrets.get(SECRET_CURSOR_AGENT_API_KEY))?.trim();
-    const { models, stderr, exitCode } = await listCursorAgentModels({
-      executable,
-      storedCursorApiKey: storedKey || undefined,
+    if (!conversationId) {
+      return;
+    }
+    const current = readSelectedAgentModelForConversation(
+      readAgentModelByConversationMap(context.workspaceState),
+      conversationId,
+    );
+    type PickItem = vscode.QuickPickItem & { modelId: string };
+    const items: PickItem[] = [
+      {
+        label: "Auto",
+        description: "Cursor picks the model",
+        modelId: AGENT_MODEL_AUTO,
+        picked: current === AGENT_MODEL_AUTO,
+      },
+      ...catalog.all.map((e) => ({
+        label: e.label,
+        description: e.id,
+        modelId: e.id,
+        picked: e.id === current,
+      })),
+    ];
+    const pick = await vscode.window.showQuickPick(items, {
+      title: "Colcoor — Cursor CLI model",
+      placeHolder: "Full list from `agent models`",
+      matchOnDescription: true,
     });
-    cachedAgentModels = models;
-    if (models.length > 0) {
-      cachedAgentModelsHint = null;
+    if (!pick) {
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
       return;
     }
-    if (exitCode !== 0) {
-      cachedAgentModelsHint =
-        stderr.trim() ||
-        "`agent models` failed — check Cursor CLI install and API key.";
-    } else {
-      cachedAgentModelsHint =
-        stderr.trim() || "No models returned for this account — Automatic is still available.";
-    }
+    await writeSelectedAgentModelForConversation(
+      context.workspaceState,
+      conversationId,
+      pick.modelId,
+    );
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError);
   }
 
   function scheduleRefreshCachedAgentModels(): void {
-    if (agentModelsRefreshInFlight) {
-      return;
-    }
-    agentModelsRefreshInFlight = refreshCachedAgentModels()
-      .catch(() => {
-        cachedAgentModels = [];
-        cachedAgentModelsHint = "Could not list Cursor CLI models.";
-      })
-      .finally(() => {
-        agentModelsRefreshInFlight = undefined;
-        if (panel && conversationId && webviewReady) {
-          postState(lastTreeEvents, lastPostedBusy, lastPostedError);
-        }
-      });
+    scheduleRefreshAgentModelCatalog(context.secrets, () => {
+      if (panel && conversationId && webviewReady) {
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+      }
+    });
   }
 
   function ensureSelectedEventInTree(
@@ -2099,6 +2111,10 @@ export function createConversationPanelController(
           msg.model,
         );
         postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        return;
+      }
+      if (msg.type === "openAgentModelPicker") {
+        await showFullAgentModelPicker();
         return;
       }
       if (msg.type === "audioUnlocked") {

@@ -382,8 +382,10 @@ describe("getConversationWebviewHtml", () => {
   it("includes per-conversation Cursor CLI model selector near Send", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="agentModel"');
-    expect(html).toContain('<option value="auto">Automatic</option>');
+    expect(html).toContain('<option value="auto">Auto</option>');
+    expect(html).toContain("All models…");
     expect(html).toContain('type: "setAgentModel"');
+    expect(html).toContain('type: "openAgentModelPicker"');
     expect(html).toContain("updateAgentModelSelect");
   });
 

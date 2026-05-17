@@ -8,6 +8,7 @@ import {
 import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
+import { refreshAgentModelCatalogWhenSignedIn } from "./agent/agentModelCatalogCache";
 import { AgentRunner } from "./agent/agentRunner";
 import { SECRET_CURSOR_AGENT_API_KEY } from "./agent/cursorAgentApiKey";
 import {
@@ -148,12 +149,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   async function refreshConversationsWelcomeContext(): Promise<void> {
     await syncConversationsWelcomeContextKeys(context.secrets, session);
+    refreshAgentModelCatalogWhenSignedIn(
+      context.secrets,
+      Boolean(await session.getBackendAccessToken()),
+    );
   }
   void refreshConversationsWelcomeContext();
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
       if (e.key === SECRET_CURSOR_AGENT_API_KEY) {
-        void refreshConversationsWelcomeContext();
+        void (async () => {
+          await refreshConversationsWelcomeContext();
+          refreshAgentModelCatalogWhenSignedIn(
+            context.secrets,
+            Boolean(await session.getBackendAccessToken()),
+          );
+        })();
       }
     }),
   );
