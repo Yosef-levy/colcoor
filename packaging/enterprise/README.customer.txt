@@ -68,6 +68,7 @@ Day-2 operations
   ./scripts/04-stack-restart.sh       Recreate containers (keeps Postgres volume).
   ./scripts/03-stack-down.sh          Stop stack (data kept unless --remove-volumes).
   ./scripts/06-backup-postgres.sh     Logical dump to ./backups/
+  ./scripts/07-restore-postgres.sh    Restore from backup (destructive; see docs)
   ./scripts/07-rotate-jwt-secret.sh   New JWT signing secret + backend recreate; users re-sign in (data unchanged).
 
 

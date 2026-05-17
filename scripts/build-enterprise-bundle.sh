@@ -124,6 +124,10 @@ cp -a "$ROOT/packaging/enterprise/README.customer.txt" "$OUT/"
 cp -a "$ROOT/nginx/nginx.conf" "$OUT/nginx/nginx.conf"
 cp -a "$ROOT/pgbouncer/"* "$OUT/pgbouncer/"
 cp -a "$ROOT/packaging/enterprise/scripts/"*.sh "$OUT/scripts/"
+mkdir -p "$OUT/scripts/lib"
+cp -a "$ROOT/scripts/backup-postgres.sh" "$ROOT/scripts/restore-postgres.sh" \
+  "$ROOT/scripts/verify-backup-postgres.sh" "$OUT/scripts/"
+cp -a "$ROOT/scripts/lib/postgres-backup-lib.sh" "$OUT/scripts/lib/"
 chmod +x "$OUT/scripts/"*.sh "$OUT/pgbouncer/docker-entrypoint.sh"
 
 echo ""

@@ -33,6 +33,10 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
+# Local backup dumps (scripts write here)
+backups/
+credentials.generated.txt
+
 # Logs
 *.log
 npm-debug.log*

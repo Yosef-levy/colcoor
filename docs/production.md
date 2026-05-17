@@ -170,7 +170,7 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET`, `DATABASE_UR
 
 ## Backups and upgrades
 
-- **Backups:** use your preferred approach (`pg_dump` from a one-off container on the same network, or volume snapshots). Document retention and restore drills outside this file.
+- **Backups:** daily logical dumps via [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh); GCS image bytes separately. Full runbook: [backup-and-restore.md](backup-and-restore.md).
 - **Upgrades:** pull new images or rebuild `backend`, run `docker compose -f docker-compose.prod.yml up -d --build`, watch logs and `/ready`.
 
 ---
