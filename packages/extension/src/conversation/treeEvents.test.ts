@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { GraphEventNode } from "../api/client";
 import {
   findBranchTip,
+  findBranchTipOrUndeletedAncestor,
   graphPathToTranscriptTurns,
   indexNotesByEventId,
+  lowestUndeletedAncestorId,
+  mergeEventLineageById,
   pathFromRootToTip,
   trimmedGraphCheckpointLabel,
 } from "./treeEvents";
@@ -68,6 +71,71 @@ describe("findBranchTip", () => {
       created_at: "2026-01-01T00:00:00Z",
     });
     expect(() => findBranchTip([orphan])).toThrow(/no root event/);
+  });
+});
+
+describe("lowestUndeletedAncestorId", () => {
+  it("returns the event itself when still visible", () => {
+    const root = node({
+      id: "r",
+      parent_event_id: null,
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:00Z",
+    });
+    const lineage = mergeEventLineageById([root]);
+    expect(lowestUndeletedAncestorId("r", new Set(["r"]), lineage)).toBe("r");
+  });
+
+  it("walks up to the lowest visible parent when the tip was deleted", () => {
+    const root = node({
+      id: "r",
+      parent_event_id: null,
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:00Z",
+    });
+    const user = node({
+      id: "u",
+      parent_event_id: "r",
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:01Z",
+    });
+    const tip = node({
+      id: "tip",
+      parent_event_id: "u",
+      kind: "assistant_output",
+      created_at: "2026-01-01T00:00:02Z",
+      actor_type: "assistant",
+    });
+    const full = mergeEventLineageById([root, user, tip]);
+    const visible = new Set(["r", "u"]);
+    expect(lowestUndeletedAncestorId("tip", visible, full)).toBe("u");
+  });
+});
+
+describe("findBranchTipOrUndeletedAncestor", () => {
+  it("uses the visible parent when the prior branch tip was deleted", () => {
+    const root = node({
+      id: "r",
+      parent_event_id: null,
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:00Z",
+    });
+    const user = node({
+      id: "u",
+      parent_event_id: "r",
+      kind: "user_input",
+      created_at: "2026-01-01T00:00:01Z",
+    });
+    const tip = node({
+      id: "tip",
+      parent_event_id: "u",
+      kind: "assistant_output",
+      created_at: "2026-01-01T00:00:02Z",
+      actor_type: "assistant",
+    });
+    const visible = [root, user];
+    const lineage = mergeEventLineageById([root, user, tip]);
+    expect(findBranchTipOrUndeletedAncestor(visible, lineage, "tip").id).toBe("u");
   });
 });
 

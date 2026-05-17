@@ -48,7 +48,12 @@ import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { evaluateEditUserMessageGate } from "./editUserMessageGate";
 import { buildComposerPrefillFromUserEvent, type ComposerPrefillPayload } from "./buildComposerPrefillFromUserEvent";
 import { mergeUserMediaImageRefs } from "./mergeUserMediaImageRefs";
-import { findBranchTip, trimmedGraphCheckpointLabel } from "./treeEvents";
+import {
+  findBranchTipOrUndeletedAncestor,
+  lowestUndeletedAncestorId,
+  mergeEventLineageById,
+  trimmedGraphCheckpointLabel,
+} from "./treeEvents";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import {
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
@@ -1038,14 +1043,23 @@ export function createConversationPanelController(
       lastPostedBusy = busy;
       lastPostedError = lastError;
       const ids = new Set(events.map((e) => e.id));
+      const lineageById = mergeEventLineageById(lastTreeEvents, events);
       let sel = selectedEventId;
       if (!sel || !ids.has(sel)) {
         // During send/stream the tree snapshot may lag behind selection (new user/assistant ids).
         if (!(busy && sel)) {
-          try {
-            sel = events.length > 0 ? findBranchTip(events).id : "";
-          } catch {
-            sel = events[0]?.id ?? "";
+          const resolved =
+            sel != null && String(sel).trim()
+              ? lowestUndeletedAncestorId(String(sel), ids, lineageById)
+              : undefined;
+          if (resolved) {
+            sel = resolved;
+          } else {
+            try {
+              sel = findBranchTipOrUndeletedAncestor(events, lineageById, sel).id;
+            } catch {
+              sel = events[0]?.id ?? "";
+            }
           }
           selectedEventId = sel;
         }
@@ -1307,6 +1321,7 @@ export function createConversationPanelController(
             }
           }
           lastNotes = notes;
+          const lineageById = mergeEventLineageById(lastTreeEvents, events);
           viewerConversationRole = null;
           if (caller) {
             lastNeedsContextRebuild = Boolean(caller.needs_context_rebuild);
@@ -1321,9 +1336,14 @@ export function createConversationPanelController(
             lastSideChatReadSeq =
               typeof lr === "number" && Number.isFinite(lr) ? Math.max(0, Math.floor(lr)) : 0;
             if (!busy && !explicitSelectEventId) {
-              const aid = caller.active_event_id;
-              if (events.some((e) => e.id === aid)) {
-                selectedEventId = aid;
+              const aidRaw = caller.active_event_id;
+              const aid =
+                typeof aidRaw === "string" && aidRaw.trim() ? aidRaw.trim() : "";
+              if (aid) {
+                const resolved = lowestUndeletedAncestorId(aid, nextEventIds, lineageById);
+                if (resolved) {
+                  selectedEventId = resolved;
+                }
               }
             }
           } else {
@@ -1333,16 +1353,27 @@ export function createConversationPanelController(
             viewerConversationRole = null;
           }
           if (selectedEventId && !events.some((e) => e.id === selectedEventId)) {
-            const aidRaw = caller?.active_event_id;
-            const aid =
-              typeof aidRaw === "string" && aidRaw.trim() && events.some((e) => e.id === aidRaw.trim())
-                ? aidRaw.trim()
-                : undefined;
-            if (aid) {
-              selectedEventId = aid;
+            const reconciled = lowestUndeletedAncestorId(
+              selectedEventId,
+              nextEventIds,
+              lineageById,
+            );
+            if (reconciled) {
+              selectedEventId = reconciled;
             } else {
-              const rootEv = events.find((e) => e.parent_event_id === null);
-              selectedEventId = rootEv?.id ?? events.at(-1)?.id;
+              const aidRaw = caller?.active_event_id;
+              const aid =
+                typeof aidRaw === "string" && aidRaw.trim() ? aidRaw.trim() : "";
+              const fromActive =
+                aid !== ""
+                  ? lowestUndeletedAncestorId(aid, nextEventIds, lineageById)
+                  : undefined;
+              if (fromActive) {
+                selectedEventId = fromActive;
+              } else {
+                const rootEv = events.find((e) => e.parent_event_id === null);
+                selectedEventId = rootEv?.id ?? events.at(-1)?.id;
+              }
             }
           }
           if (members.length > 1 && !dismissedInlineSideChatByConversationId.has(conversationId)) {
@@ -1380,7 +1411,11 @@ export function createConversationPanelController(
             selectedEventId = explicitSelectEventId;
           } else if (finalizeToDefaultBranchTip && events.length > 0) {
             try {
-              selectedEventId = findBranchTip(events).id;
+              selectedEventId = findBranchTipOrUndeletedAncestor(
+                events,
+                lineageById,
+                previousSelectedEventId,
+              ).id;
             } catch {
               selectedEventId = events.at(-1)?.id;
             }
@@ -2886,9 +2921,12 @@ export function createConversationPanelController(
       }
     }
     const deletedEventId = selectedEventId;
-    const deletedEv = lastTreeEvents.find((e) => e.id === deletedEventId);
+    const lineageBeforeDelete = mergeEventLineageById(lastTreeEvents);
+    const visibleAfterDelete = new Set(
+      lastTreeEvents.filter((e) => e.id !== deletedEventId).map((e) => e.id),
+    );
     const parentAfterDelete =
-      deletedEv?.parent_event_id != null ? String(deletedEv.parent_event_id).trim() : "";
+      lowestUndeletedAncestorId(deletedEventId, visibleAfterDelete, lineageBeforeDelete) ?? "";
     const reloadAfterSubtreeDelete = async (): Promise<void> => {
       if (staleTreePromptedForEventId === deletedEventId) {
         staleTreePromptedForEventId = null;

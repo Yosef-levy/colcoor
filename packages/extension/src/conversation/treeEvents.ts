@@ -28,6 +28,71 @@ export function indexNotesByEventId(notes: readonly NoteOut[]): Map<string, Tran
 
 const ROOT_KEY = "__root__";
 
+/** Merge event rows (newer layers override) for parent walks across tree refreshes. */
+export function mergeEventLineageById(
+  ...layers: readonly (readonly GraphEventNode[])[]
+): Map<string, GraphEventNode> {
+  const map = new Map<string, GraphEventNode>();
+  for (const layer of layers) {
+    for (const e of layer) {
+      map.set(e.id, e);
+    }
+  }
+  return map;
+}
+
+/**
+ * When `eventId` is soft-deleted (absent from `visibleIds`), walk parents in `lineageById` and return
+ * the deepest still-visible ancestor.
+ */
+export function lowestUndeletedAncestorId(
+  eventId: string,
+  visibleIds: ReadonlySet<string>,
+  lineageById: ReadonlyMap<string, GraphEventNode>,
+): string | undefined {
+  let cur = eventId.trim();
+  if (!cur) {
+    return undefined;
+  }
+  const seen = new Set<string>();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    if (visibleIds.has(cur)) {
+      return cur;
+    }
+    const row = lineageById.get(cur);
+    if (!row) {
+      return undefined;
+    }
+    const p = row.parent_event_id;
+    cur = p != null && String(p).trim() ? String(p).trim() : "";
+  }
+  return undefined;
+}
+
+/** Default branch tip, or the lowest visible ancestor of `preferredEventId` when that node was deleted. */
+export function findBranchTipOrUndeletedAncestor(
+  visibleEvents: readonly GraphEventNode[],
+  lineageById: ReadonlyMap<string, GraphEventNode>,
+  preferredEventId?: string | null,
+): GraphEventNode {
+  if (visibleEvents.length === 0) {
+    throw new Error("empty tree");
+  }
+  const visibleIds = new Set(visibleEvents.map((e) => e.id));
+  const pref = preferredEventId?.trim();
+  if (pref) {
+    const resolved = lowestUndeletedAncestorId(pref, visibleIds, lineageById);
+    if (resolved) {
+      const hit = visibleEvents.find((e) => e.id === resolved);
+      if (hit) {
+        return hit;
+      }
+    }
+  }
+  return findBranchTip([...visibleEvents]);
+}
+
 /** Follow the default branch: at each node, pick the child with latest `created_at`. */
 export function findBranchTip(events: GraphEventNode[]): GraphEventNode {
   if (events.length === 0) {
