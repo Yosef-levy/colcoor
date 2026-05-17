@@ -147,7 +147,7 @@ class TreeResponse(BaseModel):
 
 
 class ConversationImageUploadOut(BaseModel):
-    """Response from POST …/conversations/{id}/images after persisting bytes."""
+    """Response from POST …/conversations/{id}/images after blob upload + metadata persist."""
 
     id: UUID
     mime_type: str

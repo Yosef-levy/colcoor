@@ -330,11 +330,17 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 For `user_input`, `content` may be empty after trim when `content_json.colcoor_user_media` includes at least one image ref (image-only turns).
 
-### 6.2 Conversation images (binary storage for `colcoor_user_media`)
+### 6.2 Conversation images (GCS blob storage for `colcoor_user_media`)
 
-**`POST /api/v1/conversations/{conversation_id}/images`** — multipart field `file` (member-only). Returns `{ id, mime_type, byte_size }` to embed under `content_json.colcoor_user_media.images[]` on a subsequent `append-event` or side-chat `POST …/messages`.
+Image bytes live in **Google Cloud Storage** (or local filesystem in development). Postgres stores metadata only (`object_key`, `mime_type`, `byte_size`).
 
-**`GET /api/v1/conversations/{conversation_id}/images/{image_id}`** — returns raw bytes with `Content-Type` from upload (member-only).
+**`POST /api/v1/conversations/{conversation_id}/images`** — multipart field `file` (**owner or editor**; viewers forbidden). Uploads to blob storage; returns `{ id, mime_type, byte_size }` to embed under `content_json.colcoor_user_media.images[]` on a subsequent `append-event` or side-chat `POST …/messages`.
+
+**`GET /api/v1/conversations/{conversation_id}/images/{image_id}`** — member-only (membership verified before redirect). Production (GCS): **302 redirect** to a short-lived signed HTTPS URL (`GCS_SIGNED_URL_TTL_SECONDS`, default 5 min). Local dev: raw bytes with `Content-Type` from upload.
+
+**`DELETE /api/v1/conversations/{conversation_id}/images/{image_id}`** — **owner or editor** only; removes metadata and blob (**204**).
+
+Upload limits: MIME types `image/png`, `image/jpeg`, `image/webp`, `image/gif` only; max size `COLCOOR_MAX_IMAGE_BYTES` (default 8 MiB).
 
 ---
 

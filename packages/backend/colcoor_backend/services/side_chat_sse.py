@@ -1,11 +1,12 @@
 """Server-Sent Events for side chat (api-contracts §10.6).
 
-Wakes idle streams via PostgreSQL ``LISTEN``/``NOTIFY`` (migration ``006_side_chat_pg_notify``)
-so new rows appear without waiting for a long poll interval. When ``LISTEN`` is unavailable,
-falls back to polling only.
+Idle streams are woken via Redis pub/sub (``SideChatWakeHub``) so replicas stay
+stateless and do not hold a Postgres ``LISTEN`` connection per SSE client. When
+Redis is unavailable or ``COLCOOR_SIDE_CHAT_SSE_DISABLE_NOTIFY=1``, falls back to
+polling only.
 
-Also **burst-drains**: after yielding any rows, polls again immediately (no sleep) until an empty
-read, so back-to-back messages ship in one sweep.
+Also **burst-drains**: after yielding any rows, polls again immediately (no sleep)
+until an empty read, so back-to-back messages ship in one sweep.
 """
 
 from __future__ import annotations
@@ -16,10 +17,9 @@ import logging
 import os
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from colcoor_backend.db.models import SideChatMessage, User
 from colcoor_backend.services.side_chat import (
@@ -27,10 +27,9 @@ from colcoor_backend.services.side_chat import (
     load_users_by_ids,
     side_chat_message_to_out,
 )
+from colcoor_backend.services.side_chat_wake.hub import SideChatWakeHub
 
 logger = logging.getLogger(__name__)
-
-SIDE_CHAT_NOTIFY_CHANNEL = "colcoor_side_chat"
 
 
 def format_side_chat_sse_event(row: SideChatMessage, author: User | None) -> str:
@@ -44,10 +43,48 @@ def format_side_chat_sse_event(row: SideChatMessage, author: User | None) -> str
     return f"data: {line}\n\n"
 
 
+async def _poll_and_yield(
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    last: int,
+) -> tuple[list[bytes], int]:
+    """Load rows with ``seq > last``; return encoded SSE frames and updated cursor."""
+    async with factory() as session:
+        rows = await list_side_chat_messages(
+            session,
+            conversation_id,
+            user_id,
+            after_seq=last,
+            include_deleted=True,
+        )
+        author_ids = [r.author_user_id for r in rows if r.author_user_id is not None]
+        authors = await load_users_by_ids(session, author_ids)
+    frames: list[bytes] = []
+    cursor = last
+    for row in rows:
+        cursor = row.seq
+        au = authors.get(row.author_user_id) if row.author_user_id is not None else None
+        frames.append(format_side_chat_sse_event(row, au).encode("utf-8"))
+    return frames, cursor
+
+
+async def _idle_wait(wake: asyncio.Event | None, poll_idle: float) -> None:
+    if wake is not None:
+        wake.clear()
+        try:
+            await asyncio.wait_for(wake.wait(), timeout=poll_idle)
+        except asyncio.TimeoutError:
+            pass
+    else:
+        await asyncio.sleep(poll_idle)
+
+
 async def iter_side_chat_sse(
     factory: async_sessionmaker[AsyncSession],
     *,
-    engine: AsyncEngine | None,
+    wake_hub: SideChatWakeHub | None,
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
     after_seq: int,
@@ -55,107 +92,80 @@ async def iter_side_chat_sse(
     """
     Emit new ``side_chat_messages`` rows as SSE frames.
 
-    ``COLCOOR_SIDE_CHAT_SSE_POLL_SEC`` — max seconds to wait when idle (default ``0.12``); used as
-    ``asyncio.wait_for`` timeout when ``LISTEN`` is active, or as ``asyncio.sleep`` when not.
+    ``COLCOOR_SIDE_CHAT_SSE_POLL_SEC`` — max seconds to wait when idle (default ``0.12``).
 
     ``COLCOOR_SIDE_CHAT_SSE_MAX_SECONDS`` — if ``> 0``, stop after this wall time (tests only).
 
-    ``COLCOOR_SIDE_CHAT_SSE_DISABLE_NOTIFY`` — if ``1``, skip ``LISTEN``/``NOTIFY`` and poll only.
+    ``COLCOOR_SIDE_CHAT_SSE_DISABLE_NOTIFY`` — if ``1``, skip Redis wakeups and poll only.
     """
     poll_idle = float(os.environ.get("COLCOOR_SIDE_CHAT_SSE_POLL_SEC", "0.12") or "0.12")
     max_sec = float(os.environ.get("COLCOOR_SIDE_CHAT_SSE_MAX_SECONDS", "0") or "0")
-    disable_notify = os.environ.get("COLCOOR_SIDE_CHAT_SSE_DISABLE_NOTIFY", "").strip() == "1"
+    poll_only = os.environ.get("COLCOOR_SIDE_CHAT_SSE_DISABLE_NOTIFY", "").strip() == "1"
+    use_redis = wake_hub is not None and not poll_only
 
     last = after_seq
     t0 = time.monotonic()
-    conv_key = str(conversation_id)
 
-    listen_conn = None
-    wake: asyncio.Event | None = None
-    ag_listener: Callable[..., None] | None = None
-    ag_conn = None
-
-    async def _setup_listen() -> None:
-        nonlocal listen_conn, wake, ag_listener, ag_conn
-        if engine is None or disable_notify:
-            return
-        try:
-            listen_conn = await engine.connect()
-            wake = asyncio.Event()
-
-            def _listener(_connection: object, _pid: int, _channel: str, payload: str | None) -> None:
-                if not payload:
-                    return
-                try:
-                    d = json.loads(payload)
-                    if d.get("c") == conv_key:
-                        wake.set()
-                except Exception:
-                    pass
-
-            ag_listener = _listener
-            # AsyncConnection.execution_options is awaitable (unlike AsyncEngine.execution_options).
-            listen_conn = await listen_conn.execution_options(isolation_level="AUTOCOMMIT")
-            raw = await listen_conn.get_raw_connection()
-            ag_conn = raw.driver_connection
-            await ag_conn.add_listener(SIDE_CHAT_NOTIFY_CHANNEL, ag_listener)
-            await listen_conn.execute(text("LISTEN colcoor_side_chat"))
-        except Exception:
-            logger.exception("side_chat_sse: LISTEN unavailable, using poll-only fallback")
-            if listen_conn is not None:
-                try:
-                    await listen_conn.close()
-                except Exception:
-                    pass
-            listen_conn = None
-            wake = None
-            ag_listener = None
-            ag_conn = None
-
-    await _setup_listen()
-
-    try:
-        while True:
-            async with factory() as session:
-                rows = await list_side_chat_messages(
-                    session,
-                    conversation_id,
-                    user_id,
-                    after_seq=last,
-                    include_deleted=True,
-                )
-                author_ids = [r.author_user_id for r in rows if r.author_user_id is not None]
-                authors = await load_users_by_ids(session, author_ids)
-            for row in rows:
-                last = row.seq
-                au = authors.get(row.author_user_id) if row.author_user_id is not None else None
-                yield format_side_chat_sse_event(row, au).encode("utf-8")
-            if rows:
-                continue
-
-            if wake is not None:
-                wake.clear()
-                try:
-                    await asyncio.wait_for(wake.wait(), timeout=poll_idle)
-                except asyncio.TimeoutError:
-                    pass
+    if use_redis:
+        assert wake_hub is not None
+        async with wake_hub.subscribe(conversation_id) as wake:
+            async for chunk in _run_sse_loop(
+                factory,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                last=last,
+                poll_idle=poll_idle,
+                max_sec=max_sec,
+                t0=t0,
+                wake=wake,
+            ):
+                if isinstance(chunk, int):
+                    last = chunk
+                else:
+                    yield chunk
+    else:
+        async for chunk in _run_sse_loop(
+            factory,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            last=last,
+            poll_idle=poll_idle,
+            max_sec=max_sec,
+            t0=t0,
+            wake=None,
+        ):
+            if isinstance(chunk, int):
+                last = chunk
             else:
-                await asyncio.sleep(poll_idle)
+                yield chunk
 
-            if max_sec > 0 and (time.monotonic() - t0) >= max_sec:
-                break
-    finally:
-        if ag_conn is not None and ag_listener is not None:
-            try:
-                await ag_conn.remove_listener(SIDE_CHAT_NOTIFY_CHANNEL, ag_listener)
-            except Exception:
-                logger.debug("side_chat_sse: remove_listener", exc_info=True)
-        if listen_conn is not None:
-            try:
-                await listen_conn.execute(text("UNLISTEN colcoor_side_chat"))
-            except Exception:
-                logger.debug("side_chat_sse: UNLISTEN", exc_info=True)
-            try:
-                await listen_conn.close()
-            except Exception:
-                pass
+
+async def _run_sse_loop(
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    last: int,
+    poll_idle: float,
+    max_sec: float,
+    t0: float,
+    wake: asyncio.Event | None,
+) -> AsyncIterator[bytes | int]:
+    cursor = last
+    while True:
+        frames, cursor = await _poll_and_yield(
+            factory,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            last=cursor,
+        )
+        for frame in frames:
+            yield frame
+        if frames:
+            yield cursor
+            continue
+
+        await _idle_wait(wake, poll_idle)
+
+        if max_sec > 0 and (time.monotonic() - t0) >= max_sec:
+            break

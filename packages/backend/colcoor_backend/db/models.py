@@ -12,7 +12,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    LargeBinary,
     Text,
     UniqueConstraint,
     Uuid,
@@ -166,7 +165,7 @@ class ConversationUserState(Base):
 
 
 class ConversationImage(Base):
-    """User-uploaded image bytes; referenced from events/side_chat via ``content_json``."""
+    """User-uploaded image metadata; bytes live in GCS (``object_key``)."""
 
     __tablename__ = "conversation_images"
     __table_args__ = (Index("idx_conversation_images_conversation_id", "conversation_id"),)
@@ -182,7 +181,7 @@ class ConversationImage(Base):
     )
     mime_type: Mapped[str] = mapped_column(Text, nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    image_bytes: Mapped[bytes] = mapped_column("bytes", LargeBinary, nullable=False)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )

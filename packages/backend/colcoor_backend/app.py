@@ -9,12 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from colcoor_backend.api.router import api_router
 from colcoor_backend.core.config import get_settings
-from colcoor_backend.core.readiness import ping_database
+from colcoor_backend.core.readiness import ping_database, ping_redis_if_configured
 from colcoor_backend.core.validation import validate_cors_origins_non_wildcard, validate_production_settings
 import colcoor_backend.db.models  # noqa: F401 — register ORM mappers
 from colcoor_backend.db.session import create_engine, create_session_factory
 from colcoor_backend.logging_config import configure_logging
 from colcoor_backend.services.event_purge import spawn_event_purge_scheduler
+from colcoor_backend.services.side_chat_wake.factory import create_side_chat_wake_hub
+from colcoor_backend.storage.factory import create_image_blob_storage
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,13 @@ async def lifespan(app: FastAPI):
         app.state.db_engine = None
         app.state.session_factory = None
 
+    wake_hub = create_side_chat_wake_hub(settings)
+    await wake_hub.start()
+    app.state.side_chat_wake_hub = wake_hub
+
+    image_storage = create_image_blob_storage(settings)
+    app.state.image_blob_storage = image_storage
+
     purge_task: asyncio.Task[None] | None = None
     if app.state.session_factory is not None and settings.event_purge_scheduler_enabled:
         purge_task = spawn_event_purge_scheduler(app.state.session_factory, settings)
@@ -52,6 +61,8 @@ async def lifespan(app: FastAPI):
     )
 
     yield
+
+    await wake_hub.stop()
 
     if purge_task is not None:
         purge_task.cancel()
@@ -102,7 +113,14 @@ def create_app() -> FastAPI:
             logger.exception("readiness: database ping failed")
             raise HTTPException(status_code=503, detail="database not ready") from None
 
-        return {"status": "ready", "database": "ok"}
+        wake_hub = getattr(request.app.state, "side_chat_wake_hub", None)
+        try:
+            redis_status = await ping_redis_if_configured(settings, wake_hub)
+        except Exception:
+            logger.exception("readiness: redis ping failed")
+            raise HTTPException(status_code=503, detail="redis not ready") from None
+
+        return {"status": "ready", "database": "ok", "redis": redis_status}
 
     origins = settings.cors_origin_list()
     if origins:

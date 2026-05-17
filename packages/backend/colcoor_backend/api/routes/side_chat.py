@@ -22,8 +22,13 @@ from colcoor_backend.services.side_chat import (
     soft_delete_side_chat_message,
 )
 from colcoor_backend.services.side_chat_sse import iter_side_chat_sse
+from colcoor_backend.services.side_chat_wake.notify import notify_side_chat_changed
 
 router = APIRouter()
+
+
+def _wake_hub(request: Request):
+    return getattr(request.app.state, "side_chat_wake_hub", None)
 
 
 @router.get("/{conversation_id}/side-chat/stream")
@@ -43,7 +48,7 @@ async def side_chat_event_stream(
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     factory = getattr(request.app.state, "session_factory", None)
-    engine = getattr(request.app.state, "db_engine", None)
+    wake_hub = getattr(request.app.state, "side_chat_wake_hub", None)
     if factory is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -52,7 +57,7 @@ async def side_chat_event_stream(
     return StreamingResponse(
         iter_side_chat_sse(
             factory,
-            engine=engine,
+            wake_hub=wake_hub,
             conversation_id=conversation_id,
             user_id=user_id,
             after_seq=after_seq,
@@ -90,6 +95,7 @@ async def get_side_chat_messages(
 
 @router.post("/{conversation_id}/side-chat/messages", response_model=SideChatMessageOut)
 async def post_side_chat_message(
+    request: Request,
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
@@ -114,6 +120,7 @@ async def post_side_chat_message(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     out = await side_chat_message_to_out_fetched(session, msg)
     await session.commit()
+    await notify_side_chat_changed(_wake_hub(request), conversation_id, seq=msg.seq)
     return out
 
 
@@ -122,6 +129,7 @@ async def post_side_chat_message(
     response_model=SideChatMessageOut,
 )
 async def patch_side_chat_message_route(
+    request: Request,
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
@@ -142,6 +150,7 @@ async def patch_side_chat_message_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     out = await side_chat_message_to_out_fetched(session, msg)
     await session.commit()
+    await notify_side_chat_changed(_wake_hub(request), conversation_id, seq=msg.seq)
     return out
 
 
@@ -150,6 +159,7 @@ async def patch_side_chat_message_route(
     response_model=SideChatMessageOut,
 )
 async def delete_side_chat_message_route(
+    request: Request,
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
@@ -165,6 +175,7 @@ async def delete_side_chat_message_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     out = await side_chat_message_to_out_fetched(session, msg)
     await session.commit()
+    await notify_side_chat_changed(_wake_hub(request), conversation_id, seq=msg.seq)
     return out
 
 

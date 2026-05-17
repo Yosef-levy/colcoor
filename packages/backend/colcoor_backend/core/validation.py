@@ -37,6 +37,24 @@ def _jwt_secret_invalid(secret: str | None) -> str | None:
     return None
 
 
+def _gcs_bucket_invalid(bucket: str | None) -> str | None:
+    if not bucket or not bucket.strip():
+        return "GCS_BUCKET is missing or empty in production (required for conversation images)"
+    if _contains_placeholder(bucket):
+        return "GCS_BUCKET appears to be a placeholder"
+    return None
+
+
+def _redis_url_invalid(url: str | None) -> str | None:
+    if not url or not url.strip():
+        return "REDIS_URL is missing or empty in production (required for side-chat SSE wakeups)"
+    if _contains_placeholder(url):
+        return "REDIS_URL appears to contain placeholder credentials"
+    if not re.match(r"^rediss?://", url.strip()):
+        return "REDIS_URL must start with redis:// or rediss://"
+    return None
+
+
 def _database_url_invalid(url: str | None) -> str | None:
     if not url or not url.strip():
         return "DATABASE_URL is missing or empty in production"
@@ -56,6 +74,17 @@ def validate_production_settings(settings: Settings) -> None:
         raise RuntimeError(f"Production misconfiguration: {msg}")
 
     if msg := _database_url_invalid(settings.database_url):
+        raise RuntimeError(f"Production misconfiguration: {msg}")
+
+    if msg := _redis_url_invalid(settings.redis_url_normalized()):
+        raise RuntimeError(f"Production misconfiguration: {msg}")
+
+    if settings.resolved_image_storage_backend() != "gcs":
+        raise RuntimeError(
+            "Production misconfiguration: image storage must be gcs "
+            "(set COLCOOR_IMAGE_STORAGE=gcs or GCS_BUCKET)"
+        )
+    if msg := _gcs_bucket_invalid(settings.gcs_bucket_normalized()):
         raise RuntimeError(f"Production misconfiguration: {msg}")
 
     for origin in settings.cors_origin_list():

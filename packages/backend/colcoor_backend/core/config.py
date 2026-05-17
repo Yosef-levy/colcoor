@@ -32,6 +32,11 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("DATABASE_URL", "COLCOOR_DATABASE_URL"),
     )
+    redis_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("REDIS_URL", "COLCOOR_REDIS_URL"),
+        description="Redis for side-chat SSE wakeups (pub/sub). Required in production.",
+    )
     jwt_secret: str | None = Field(
         default=None,
         validation_alias=AliasChoices("JWT_SECRET", "COLCOOR_JWT_SECRET"),
@@ -103,8 +108,71 @@ class Settings(BaseSettings):
         description="Only the user who soft-deleted may undo within this window (same ``deletion_group_id``).",
     )
 
+    image_storage_backend: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "COLCOOR_IMAGE_STORAGE",
+            "IMAGE_STORAGE",
+        ),
+        description="gcs | local. Empty: gcs when GCS_BUCKET set, else local.",
+    )
+    gcs_bucket: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GCS_BUCKET", "COLCOOR_GCS_BUCKET"),
+        description="GCS bucket for conversation images (required in production).",
+    )
+    gcs_signed_url_ttl_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        validation_alias=AliasChoices(
+            "GCS_SIGNED_URL_TTL_SECONDS",
+            "COLCOOR_GCS_SIGNED_URL_TTL_SECONDS",
+        ),
+        description="TTL for GET image signed URLs (default 5 minutes; max 1 hour).",
+    )
+    max_image_bytes: int = Field(
+        default=8 * 1024 * 1024,
+        ge=1024,
+        le=32 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "COLCOOR_MAX_IMAGE_BYTES",
+            "MAX_IMAGE_BYTES",
+        ),
+        description="Max upload size per conversation image (default 8 MiB).",
+    )
+    local_image_storage_path: str = Field(
+        default="/tmp/colcoor-images",
+        validation_alias=AliasChoices(
+            "COLCOOR_LOCAL_IMAGE_STORAGE_PATH",
+            "LOCAL_IMAGE_STORAGE_PATH",
+        ),
+        description="Root directory when image storage backend is local.",
+    )
+
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"
+
+    def redis_url_normalized(self) -> str | None:
+        if not self.redis_url or not self.redis_url.strip():
+            return None
+        return self.redis_url.strip()
+
+    def gcs_bucket_normalized(self) -> str | None:
+        if not self.gcs_bucket or not self.gcs_bucket.strip():
+            return None
+        return self.gcs_bucket.strip()
+
+    def local_image_storage_path_normalized(self) -> str:
+        return self.local_image_storage_path.strip() or "/tmp/colcoor-images"
+
+    def resolved_image_storage_backend(self) -> str:
+        explicit = self.image_storage_backend.strip().lower()
+        if explicit in ("gcs", "local"):
+            return explicit
+        if self.gcs_bucket_normalized():
+            return "gcs"
+        return "local"
 
     def cors_origin_list(self) -> list[str]:
         """Explicit origins only. Empty => do not install CORS middleware (no allow-all)."""

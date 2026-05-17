@@ -16,7 +16,7 @@ Product boundaries (no main-thread LLM on the server, no transcript-over-HTTP) a
 | **backend** | FastAPI under `/api/v1`, `/health`, `/ready` | **No** (`expose` only on the Docker network) |
 | **postgres** | Application data | **No** |
 
-Traffic flow: **Internet → nginx → backend:8000 → postgres:5432** (service DNS names on the Compose network).
+Traffic flow: **Internet → nginx → backend:8000 → postgres:5432** (service DNS names on the Compose network). Side-chat SSE wakeups use **Redis pub/sub** (`REDIS_URL`); see [side-chat-realtime.md](side-chat-realtime.md).
 
 ---
 
@@ -97,6 +97,11 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `NODE_ENV` | Set by Compose | `production`; informational for tooling |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Yes | Used by the Postgres container |
 | `DATABASE_URL` | Yes | Async SQLAlchemy URL; hostname **`postgres`**, credentials must match Postgres |
+| `REDIS_URL` | Yes | Side-chat SSE pub/sub; hostname **`redis`** in Compose (`redis://redis:6379/0`) |
+| `GCS_BUCKET` | Yes | Conversation images; VM service account needs object access ([image-storage.md](image-storage.md)) |
+| `COLCOOR_IMAGE_STORAGE` | Optional | Default `gcs` when bucket set |
+| `GCS_SIGNED_URL_TTL_SECONDS` | Optional | Signed GET URL lifetime (default 300, max 3600) |
+| `COLCOOR_MAX_IMAGE_BYTES` | Optional | Max image upload size (default 8388608) |
 | `JWT_SECRET` | Yes | Min length and placeholder checks at API startup |
 | `CORS_ORIGINS` | Optional | Empty = **no** CORS middleware (not allow-all). Comma-separated explicit origins only; `*` is rejected |
 | `WEB_CONCURRENCY` | Optional | Gunicorn workers; default **2** (conservative for small VMs) |
@@ -111,7 +116,7 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `COLCOOR_EVENT_PURGE_INTERVAL_SECONDS` | Optional | Sleep between purge runs (default **86400**; min **3600**) |
 | `COLCOOR_EVENT_PURGE_INITIAL_DELAY_SECONDS` | Optional | Delay before the first purge after startup (default **300**; avoids immediate load on boot / tests) |
 
-Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_URL` is missing, too short, or matches obvious placeholder patterns (see `colcoor_backend.core.validation`).
+Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET`, `DATABASE_URL`, or `REDIS_URL` is missing, too short, or matches obvious placeholder patterns (see `colcoor_backend.core.validation`).
 
 ---
 
@@ -120,7 +125,7 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET` or `DATABASE_
 | Endpoint | Via nginx | Purpose |
 |----------|-----------|---------|
 | **`GET /health`** | Yes (unthrottled) | **Liveness** — process is up; no DB check |
-| **`GET /ready`** | Yes (unthrottled) | **Readiness** — `SELECT 1` against Postgres when `DATABASE_URL` is set |
+| **`GET /ready`** | Yes (unthrottled) | **Readiness** — `SELECT 1` against Postgres; Redis `PING` when `REDIS_URL` is set |
 
 - **Docker Compose** marks the backend **healthy** using **`/ready`** so dependent services (nginx) start only after the database is reachable.
 - **nginx** edge healthcheck uses **`/health`** (shallow).

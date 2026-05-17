@@ -2,7 +2,8 @@ from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import RedirectResponse
 
 from colcoor_backend.api.deps import CurrentUserId, DbSession
 from colcoor_backend.core.config import get_settings
@@ -58,15 +59,28 @@ from colcoor_backend.services.graph import (
     update_note_content,
 )
 from colcoor_backend.services.conversation_images import (
+    delete_conversation_image,
+    get_conversation_image_row,
     load_conversation_image_bytes,
     store_conversation_image,
 )
+from colcoor_backend.storage.protocol import ImageBlobStorage
 from colcoor_backend.services.side_chat import (
     get_user_side_chat_last_read_seq,
     side_chat_unread_count_by_conversation_ids,
 )
 
 router = APIRouter()
+
+
+def _image_storage(request: Request) -> ImageBlobStorage:
+    storage = getattr(request.app.state, "image_blob_storage", None)
+    if storage is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="image storage not configured",
+        )
+    return storage
 
 
 def _conversation_out(
@@ -247,17 +261,20 @@ async def append_event(
 
 @router.post("/{conversation_id}/images", response_model=ConversationImageUploadOut)
 async def post_conversation_image(
+    request: Request,
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
     file: Annotated[UploadFile, File()],
 ) -> ConversationImageUploadOut:
-    """Upload image bytes for later reference from a ``user_input`` or side-chat ``content_json``."""
+    """Upload image to blob storage (owner or editor only)."""
+    storage = _image_storage(request)
     try:
         raw = await file.read()
         mime = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
         row = await store_conversation_image(
             session,
+            storage,
             conversation_id=conversation_id,
             user_id=user_id,
             mime_type=mime,
@@ -279,14 +296,16 @@ async def post_conversation_image(
 
 @router.get("/{conversation_id}/images/{image_id}")
 async def get_conversation_image(
+    request: Request,
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
     image_id: UUID,
 ) -> Response:
-    """Return raw image bytes for conversation members (Authorization: Bearer)."""
+    """Member-only: redirect to a GCS signed URL, or stream bytes (local dev)."""
+    storage = _image_storage(request)
     try:
-        got = await load_conversation_image_bytes(
+        row = await get_conversation_image_row(
             session,
             conversation_id=conversation_id,
             user_id=user_id,
@@ -296,10 +315,55 @@ async def get_conversation_image(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+
+    signed = storage.signed_download_url(row.object_key)
+    if signed:
+        return RedirectResponse(url=signed, status_code=status.HTTP_302_FOUND)
+
+    try:
+        got = await load_conversation_image_bytes(
+            session,
+            storage,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            image_id=image_id,
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     if got is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
     data, mime = got
     return Response(content=data, media_type=mime)
+
+
+@router.delete("/{conversation_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation_image_route(
+    request: Request,
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    image_id: UUID,
+) -> Response:
+    """Remove image metadata and blob (owner or editor only)."""
+    storage = _image_storage(request)
+    try:
+        deleted = await delete_conversation_image(
+            session,
+            storage,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            image_id=image_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found")
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{conversation_id}/tree", response_model=TreeResponse)

@@ -1,4 +1,4 @@
-"""Persisted conversation images (BYTEA) + optional side_chat_messages.content_json.
+"""Conversation image metadata (GCS object_key) + optional side_chat_messages.content_json.
 
 Revision ID: 005_conversation_images
 Revises: 004_checkpoint_label
@@ -8,7 +8,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import BYTEA
 
 revision: str = "005_conversation_images"
 down_revision: Union[str, None] = "004_checkpoint_label"
@@ -17,7 +16,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 001_initial uses Base.metadata.create_all(), so newer ORM tables may already exist.
     bind = op.get_bind()
     insp = sa.inspect(bind)
     if not insp.has_table("conversation_images"):
@@ -38,7 +36,7 @@ def upgrade() -> None:
             ),
             sa.Column("mime_type", sa.Text(), nullable=False),
             sa.Column("byte_size", sa.Integer(), nullable=False),
-            sa.Column("bytes", BYTEA(), nullable=False),
+            sa.Column("object_key", sa.Text(), nullable=False),
             sa.Column(
                 "created_at",
                 sa.DateTime(timezone=True),

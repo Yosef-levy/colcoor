@@ -6,6 +6,19 @@
 # Postgres is NOT published to the host. The API is NOT published; only nginx exposes 80/443.
 
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - internal
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -63,11 +76,17 @@ services:
       COLCOOR_LOG_LEVEL: ${COLCOOR_LOG_LEVEL:-INFO}
       COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED: ${COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED:-true}
       DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      GCS_BUCKET: ${GCS_BUCKET}
+      COLCOOR_IMAGE_STORAGE: ${COLCOOR_IMAGE_STORAGE:-gcs}
+      GCS_SIGNED_URL_TTL_SECONDS: ${GCS_SIGNED_URL_TTL_SECONDS:-900}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
     expose:
       - "8000"
     depends_on:
+      redis:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     # Readiness: verifies DB via /ready (compose + nginx depend on this). Dockerfile image
