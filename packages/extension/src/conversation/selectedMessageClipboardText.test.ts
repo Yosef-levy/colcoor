@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { GraphEventNode } from "../api/client";
-import { clipboardTextForSelectedTreeMessage } from "./selectedMessageClipboardText";
+import { clipboardTextForTreeMessage } from "./selectedMessageClipboardText";
 
 const conv = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
@@ -22,37 +22,60 @@ function node(
 
 const t0 = "2020-01-01T00:00:00Z";
 
-describe("clipboardTextForSelectedTreeMessage", () => {
+describe("clipboardTextForTreeMessage", () => {
   it("returns undefined when the event id is not in the list", () => {
     expect(
-      clipboardTextForSelectedTreeMessage(
+      clipboardTextForTreeMessage(
         [node({ id: "a", parent_event_id: null, kind: "user_input", created_at: t0 })],
         "missing",
       ),
     ).toBeUndefined();
   });
 
-  it("returns empty string when content_text is null", () => {
+  it("returns undefined when content_text is empty and no media", () => {
     expect(
-      clipboardTextForSelectedTreeMessage(
+      clipboardTextForTreeMessage(
         [node({ id: "a", parent_event_id: null, kind: "user_input", created_at: t0, content_text: null })],
         "a",
       ),
-    ).toBe("");
+    ).toBeUndefined();
   });
 
-  it("returns raw content_text including whitespace", () => {
+  it("returns normalized content_text", () => {
     expect(
-      clipboardTextForSelectedTreeMessage(
+      clipboardTextForTreeMessage(
         [node({ id: "a", parent_event_id: null, kind: "user_input", created_at: t0, content_text: "  hi\n" })],
         "a",
       ),
-    ).toBe("  hi\n");
+    ).toBe("hi");
+  });
+
+  it("appends image metadata lines when colcoor_user_media is present", () => {
+    expect(
+      clipboardTextForTreeMessage(
+        [
+          node({
+            id: "a",
+            parent_event_id: null,
+            kind: "user_input",
+            created_at: t0,
+            content_text: "",
+            content_json: {
+              colcoor_user_media: {
+                version: 1,
+                images: [{ id: "img-1", mime_type: "image/png", byte_size: 9 }],
+              },
+            },
+          }),
+        ],
+        "a",
+      ),
+    ).toContain("conversation_image_id=img-1");
   });
 
   it("trims only the lookup id, not event ids", () => {
     expect(
-      clipboardTextForSelectedTreeMessage(
+      clipboardTextForTreeMessage(
         [node({ id: "a", parent_event_id: null, kind: "user_input", created_at: t0, content_text: "x" })],
         "  a  ",
       ),

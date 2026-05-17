@@ -1705,6 +1705,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <span class="composer-ctx-label">Select All</span><span class="composer-ctx-shortcut" data-k="selectAll"></span>
     </button>
   </div>
+  <div id="messageCtxMenu" class="composer-ctx-menu" role="menu" hidden aria-label="Message actions">
+    <button type="button" class="composer-ctx-row" data-msg-action="copy" role="menuitem">
+      <span class="composer-ctx-label">Copy</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="edit" role="menuitem">
+      <span class="composer-ctx-label">Edit</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="star" role="menuitem">
+      <span class="composer-ctx-label" data-msg-star-label>Star</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="title" role="menuitem">
+      <span class="composer-ctx-label">Add/edit title…</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="resend" role="menuitem">
+      <span class="composer-ctx-label">Resend assistant</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="addNote" role="menuitem">
+      <span class="composer-ctx-label">Add note…</span>
+    </button>
+  </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let hasReceivedState = false;
@@ -3976,6 +3996,146 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
     }
 
+    var messageCtxTargetEventId = "";
+
+    /** Keep in sync with messageContextMenuGate.ts */
+    function messageContextMenuOptions(eventId) {
+      var id = eventId != null ? String(eventId).trim() : "";
+      if (!id) return null;
+      var evs = Array.isArray(state.events) ? state.events : [];
+      var ev = null;
+      for (var i = 0; i < evs.length; i++) {
+        if (evs[i] && String(evs[i].id || "") === id) {
+          ev = evs[i];
+          break;
+        }
+      }
+      if (!ev) return null;
+      var text = String(ev.content_text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+      var hasMedia = false;
+      var cj = ev.content_json;
+      if (cj && typeof cj === "object" && cj.colcoor_user_media) {
+        var w = cj.colcoor_user_media;
+        hasMedia = !!(w && Array.isArray(w.images) && w.images.length);
+      }
+      var isUser = ev.kind === "user_input";
+      var isAsst = ev.kind === "assistant_output";
+      var parentId =
+        ev.parent_event_id != null && String(ev.parent_event_id).trim()
+          ? String(ev.parent_event_id).trim()
+          : "";
+      var edit = isUser && parentId && (text.length > 0 || hasMedia);
+      var resend = isUser && text.length > 0;
+      var title = isUser || isAsst;
+      var viewer = state.sideChatViewerRole;
+      var addNote = viewer !== "viewer";
+      return {
+        copy: text.length > 0 || hasMedia,
+        edit: edit,
+        star: true,
+        title: title,
+        resend: resend,
+        addNote: addNote,
+        starLabel: ev.starred === true ? "Unstar" : "Star",
+      };
+    }
+
+    function selectTreeNodeInWebview(eventId) {
+      var root = document.getElementById("tree");
+      if (!root) return;
+      state.selectedEventId = eventId;
+      try {
+        var prev = root.querySelector(".node.selected");
+        if (prev) prev.classList.remove("selected");
+        var node = root.querySelector('.node[data-id="' + String(eventId).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"]');
+        if (node) node.classList.add("selected");
+      } catch (e0) {}
+      vscode.postMessage({ type: "select", id: eventId });
+    }
+
+    (function wireMessageContextMenu() {
+      var menu = document.getElementById("messageCtxMenu");
+      if (!menu || menu.dataset.wired === "1") return;
+      menu.dataset.wired = "1";
+      function closeMessageCtxMenu() {
+        menu.hidden = true;
+        messageCtxTargetEventId = "";
+      }
+      function positionMessageCtxMenu(x, y) {
+        menu.hidden = false;
+        menu.style.left = "0px";
+        menu.style.top = "0px";
+        var mw = menu.offsetWidth;
+        var mh = menu.offsetHeight;
+        var left = Math.max(4, Math.min(x, window.innerWidth - mw - 4));
+        var top = Math.max(4, Math.min(y, window.innerHeight - mh - 4));
+        menu.style.left = left + "px";
+        menu.style.top = top + "px";
+      }
+      function applyMessageCtxMenuVisibility(opts) {
+        menu.querySelectorAll("[data-msg-action]").forEach(function (btn) {
+          var act = btn.getAttribute("data-msg-action");
+          var show =
+            act === "copy"
+              ? opts.copy
+              : act === "edit"
+                ? opts.edit
+                : act === "star"
+                  ? opts.star
+                  : act === "title"
+                    ? opts.title
+                    : act === "resend"
+                      ? opts.resend
+                      : act === "addNote"
+                        ? opts.addNote
+                        : false;
+          btn.hidden = !show;
+          btn.disabled = state.busy === true && act !== "copy" && act !== "star";
+        });
+        var starLbl = menu.querySelector("[data-msg-star-label]");
+        if (starLbl) starLbl.textContent = opts.starLabel || "Star";
+      }
+      function openMessageContextMenu(clientX, clientY, eventId) {
+        var opts = messageContextMenuOptions(eventId);
+        if (!opts) return;
+        if (!opts.copy && !opts.edit && !opts.star && !opts.title && !opts.resend && !opts.addNote) {
+          return;
+        }
+        closeAllMenus();
+        messageCtxTargetEventId = eventId;
+        applyMessageCtxMenuVisibility(opts);
+        positionMessageCtxMenu(clientX, clientY);
+      }
+      window.openMessageContextMenuForEvent = openMessageContextMenu;
+      menu.addEventListener("click", function (ev) {
+        var btn = ev.target.closest && ev.target.closest("[data-msg-action]");
+        if (!btn || btn.disabled || btn.hidden) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        var act = btn.getAttribute("data-msg-action");
+        var eid = messageCtxTargetEventId;
+        closeMessageCtxMenu();
+        if (!act || !eid) return;
+        vscode.postMessage({ type: "messageContextAction", eventId: eid, action: act });
+      });
+      document.addEventListener(
+        "pointerdown",
+        function (ev) {
+          if (menu.hidden) return;
+          if (menu.contains(ev.target)) return;
+          closeMessageCtxMenu();
+        },
+        true,
+      );
+      document.addEventListener(
+        "keydown",
+        function (ev) {
+          if (!menu.hidden && ev.key === "Escape") closeMessageCtxMenu();
+        },
+        true,
+      );
+    })();
+
     (function wireTreeRootDelegation() {
       var root = document.getElementById("tree");
       if (!root) return;
@@ -4023,7 +4183,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var nid = node.getAttribute("data-id");
         if (!nid) return;
         ev.preventDefault();
-        vscode.postMessage({ type: "treeContextMenu", id: nid });
+        ev.stopPropagation();
+        selectTreeNodeInWebview(nid);
+        if (typeof window.openMessageContextMenuForEvent === "function") {
+          window.openMessageContextMenuForEvent(ev.clientX, ev.clientY, nid);
+        }
       });
     })();
 
@@ -4858,6 +5022,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       });
     }
 
+    (function wireThreadContextMenu() {
+      var thread = document.getElementById("thread");
+      if (!thread || thread.dataset.ctxWired === "1") return;
+      thread.dataset.ctxWired = "1";
+      thread.addEventListener("contextmenu", function (ev) {
+        if (ev.target.closest && ev.target.closest(".note-edit, .note-delete, .code-copy")) return;
+        var msg = ev.target.closest && ev.target.closest(".msg[data-event-id]");
+        if (!msg) return;
+        if (msg.classList.contains("pending-send") || msg.classList.contains("streaming")) return;
+        var eid = msg.getAttribute("data-event-id");
+        if (!eid || !String(eid).trim()) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        selectTreeNodeInWebview(String(eid).trim());
+        if (typeof window.openMessageContextMenuForEvent === "function") {
+          window.openMessageContextMenuForEvent(ev.clientX, ev.clientY, String(eid).trim());
+        }
+      });
+    })();
+
     document.getElementById("thread").addEventListener("click", function (ev) {
       var del = ev.target && ev.target.closest && ev.target.closest(".note-delete");
       if (del) {
@@ -5041,7 +5225,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             positionComposerCtxMenu(ev.clientX, ev.clientY);
             return;
           }
+          if (ev.target.closest && ev.target.closest("#messageCtxMenu")) return;
           if (ev.target.closest && ev.target.closest("#tree .node")) return;
+          if (ev.target.closest && ev.target.closest("#thread .msg[data-event-id]")) return;
           if (ev.target.closest && ev.target.closest(".inline-sidechat-msg")) return;
           ev.preventDefault();
         },

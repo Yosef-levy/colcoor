@@ -198,6 +198,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("composerPrefill");
   });
 
+  it("tree and thread use in-webview message context menu", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="messageCtxMenu"');
+    expect(html).toContain("messageContextMenuOptions");
+    expect(html).toContain('type: "messageContextAction"');
+    expect(html).toContain("wireThreadContextMenu");
+    expect(html).toContain("openMessageContextMenuForEvent");
+  });
+
   it("renders Private badge in thread rows when segment has privateScope", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("s.privateScope === true");
@@ -296,9 +305,9 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("scrollThreadToBottom();");
   });
 
-  it("posts treeContextMenu on tree node contextmenu ([tree-ui-contract.md] §5.2)", () => {
+  it("opens message context menu on tree node contextmenu ([tree-ui-contract.md] §5.2)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('vscode.postMessage({ type: "treeContextMenu", id: nid });');
+    expect(html).toContain("openMessageContextMenuForEvent(ev.clientX, ev.clientY, nid)");
     expect(html).toContain('addEventListener("contextmenu"');
   });
 

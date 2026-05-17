@@ -43,7 +43,7 @@ import {
   clampComposerTextareaHeightPx,
 } from "./composerLayoutPersistence";
 import { evaluateContinueFromHere } from "./continueFromHereGate";
-import { clipboardTextForSelectedTreeMessage } from "./selectedMessageClipboardText";
+import { clipboardTextForTreeMessage } from "./selectedMessageClipboardText";
 import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { evaluateEditUserMessageGate } from "./editUserMessageGate";
 import { buildComposerPrefillFromUserEvent, type ComposerPrefillPayload } from "./buildComposerPrefillFromUserEvent";
@@ -212,6 +212,11 @@ type FromWebview =
   | { type: "selectionHistoryBack" }
   | { type: "selectionHistoryForward" }
   | { type: "treeContextMenu"; id: string }
+  | {
+      type: "messageContextAction";
+      eventId: string;
+      action: "copy" | "edit" | "star" | "title" | "resend" | "addNote";
+    }
   | { type: "selectTip" }
   | { type: "refresh" }
   | { type: "cancel" }
@@ -1513,8 +1518,22 @@ export function createConversationPanelController(
     }
   }
 
-  async function handleEditUserMessage(): Promise<void> {
-    const gate = evaluateEditUserMessageGate(conversationId, selectedEventId, lastTreeEvents);
+  function applyWebviewSelection(eventId: string): void {
+    const id = eventId.trim();
+    if (!id || !lastTreeEvents.some((e) => e.id === id)) {
+      return;
+    }
+    const prevSel = selectedEventId;
+    selectedEventId = id;
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+    void syncActiveToBackend(id, {
+      needsContextRebuild: prevSel !== undefined && prevSel !== id,
+    });
+  }
+
+  async function handleEditUserMessage(targetEventId?: string): Promise<void> {
+    const eventId = (targetEventId ?? selectedEventId)?.trim();
+    const gate = evaluateEditUserMessageGate(conversationId, eventId, lastTreeEvents);
     if (gate === "no_context") {
       void vscode.window.showWarningMessage(
         "Colcoor: open a conversation and select a user message in the tree.",
@@ -1545,7 +1564,7 @@ export function createConversationPanelController(
       );
       return;
     }
-    const userEv = lastTreeEvents.find((e) => e.id === selectedEventId);
+    const userEv = lastTreeEvents.find((e) => e.id === eventId);
     if (!userEv || userEv.kind !== "user_input") {
       return;
     }
@@ -1690,8 +1709,9 @@ export function createConversationPanelController(
     }
   }
 
-  async function handleResend(): Promise<void> {
-    if (!conversationId || !selectedEventId) {
+  async function handleResend(targetEventId?: string): Promise<void> {
+    const eventId = (targetEventId ?? selectedEventId)?.trim();
+    if (!conversationId || !eventId) {
       return;
     }
     pendingMainSendQueue = [];
@@ -1709,7 +1729,7 @@ export function createConversationPanelController(
         agent,
         conversationId,
         conversationTitle,
-        selectedEventId,
+        eventId,
         ws,
         {
           signal,
@@ -2016,6 +2036,22 @@ export function createConversationPanelController(
       }
       if (msg.type === "editUserMessage") {
         await handleEditUserMessage();
+        return;
+      }
+      if (msg.type === "messageContextAction") {
+        const eventId = typeof msg.eventId === "string" ? msg.eventId.trim() : "";
+        const action = msg.action;
+        if (
+          eventId &&
+          (action === "copy" ||
+            action === "edit" ||
+            action === "star" ||
+            action === "title" ||
+            action === "resend" ||
+            action === "addNote")
+        ) {
+          await handleMessageContextAction(eventId, action);
+        }
         return;
       }
       if (msg.type === "referenceInSideChat") {
@@ -2450,50 +2486,7 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "editMessageTitle") {
-        if (!conversationId || !selectedEventId) {
-          void vscode.window.showWarningMessage(
-            "Colcoor: open a conversation and select a message in the tree.",
-          );
-          return;
-        }
-        const exists = lastTreeEvents.some((e) => e.id === selectedEventId);
-        if (!exists) {
-          void vscode.window.showWarningMessage(
-            `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
-          );
-          return;
-        }
-        const ev = lastTreeEvents.find((e) => e.id === selectedEventId);
-        const current = ev ? trimmedGraphCheckpointLabel(ev) ?? "" : "";
-        const next = await vscode.window.showInputBox({
-          title: "Colcoor — message title",
-          value: current,
-          prompt:
-            "Optional title for this message (display-only). Leave empty to clear. Max 256 characters.",
-          ignoreFocusOut: true,
-          validateInput: (v) => {
-            const t = normalizePersistedUserInputText(v ?? "");
-            if (t.length > 256) {
-              return "Title must be at most 256 characters.";
-            }
-            return undefined;
-          },
-        });
-        if (next === undefined) {
-          return;
-        }
-        const trimmed = normalizePersistedUserInputText(next);
-        const payload = trimmed.length > 0 ? trimmed.slice(0, 256) : null;
-        try {
-          await api.patchEventCheckpointLabel(conversationId, selectedEventId, payload);
-          void vscode.window.setStatusBarMessage(
-            payload ? "Colcoor: title saved." : "Colcoor: title cleared.",
-            2500,
-          );
-          await loadTreeAndPush(false, null, { skipConversationsList: true });
-        } catch (e) {
-          void showColcoorApiFailure(e);
-        }
+        await editMessageTitleForEvent();
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {
@@ -2604,12 +2597,13 @@ export function createConversationPanelController(
     return p;
   }
 
-  async function toggleStarSelectedMessage(): Promise<void> {
-    if (!conversationId || !selectedEventId) {
+  async function toggleStarForEvent(targetEventId?: string): Promise<void> {
+    const eventId = (targetEventId ?? selectedEventId)?.trim();
+    if (!conversationId || !eventId) {
       void vscode.window.showWarningMessage("Colcoor: open a conversation and select a message in the tree.");
       return;
     }
-    const ev = lastTreeEvents.find((e) => e.id === selectedEventId);
+    const ev = lastTreeEvents.find((e) => e.id === eventId);
     if (!ev) {
       void vscode.window.showWarningMessage(
         `Colcoor: selection not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
@@ -2619,14 +2613,14 @@ export function createConversationPanelController(
     try {
       const nextStarred = ev.starred === true ? false : true;
       if (ev.starred === true) {
-        await api.deleteStar(conversationId, selectedEventId);
+        await api.deleteStar(conversationId, eventId);
         void vscode.window.setStatusBarMessage("Colcoor: star removed.", 2000);
       } else {
-        await api.putStar(conversationId, selectedEventId);
+        await api.putStar(conversationId, eventId);
         void vscode.window.setStatusBarMessage("Colcoor: message starred.", 2000);
       }
       lastTreeEvents = lastTreeEvents.map((e) =>
-        e.id === selectedEventId ? { ...e, starred: nextStarred } : e,
+        e.id === eventId ? { ...e, starred: nextStarred } : e,
       );
       postState(lastTreeEvents, lastPostedBusy, lastPostedError);
     } catch (e) {
@@ -2634,12 +2628,17 @@ export function createConversationPanelController(
     }
   }
 
-  async function addNoteToSelectedMessage(): Promise<void> {
-    if (!conversationId || !selectedEventId) {
+  async function toggleStarSelectedMessage(): Promise<void> {
+    await toggleStarForEvent();
+  }
+
+  async function addNoteToEvent(targetEventId?: string): Promise<void> {
+    const eventId = (targetEventId ?? selectedEventId)?.trim();
+    if (!conversationId || !eventId) {
       void vscode.window.showWarningMessage("Colcoor: open a conversation and select a message in the tree.");
       return;
     }
-    if (!lastTreeEvents.some((e) => e.id === selectedEventId)) {
+    if (!lastTreeEvents.some((e) => e.id === eventId)) {
       void vscode.window.showWarningMessage(
         `Colcoor: selection not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
       );
@@ -2647,7 +2646,7 @@ export function createConversationPanelController(
     }
     const text = await vscode.window.showInputBox({
       title: "Colcoor — add note",
-      prompt: "Note text (attached to the selected message; viewers cannot add notes).",
+      prompt: "Note text (attached to this message; viewers cannot add notes).",
       ignoreFocusOut: true,
     });
     if (text === undefined) {
@@ -2658,7 +2657,7 @@ export function createConversationPanelController(
       return;
     }
     try {
-      const created = await api.createNote(conversationId, { event_id: selectedEventId, content: noteContent });
+      const created = await api.createNote(conversationId, { event_id: eventId, content: noteContent });
       void vscode.window.setStatusBarMessage("Colcoor: note added.", 2500);
       lastNotes = [...lastNotes, created];
       const counts = noteCountsByEventId(lastNotes);
@@ -2669,6 +2668,121 @@ export function createConversationPanelController(
       postState(lastTreeEvents, lastPostedBusy, lastPostedError);
     } catch (e) {
       void showColcoorApiFailure(e);
+    }
+  }
+
+  async function addNoteToSelectedMessage(): Promise<void> {
+    await addNoteToEvent();
+  }
+
+  async function editMessageTitleForEvent(targetEventId?: string): Promise<void> {
+    const eventId = (targetEventId ?? selectedEventId)?.trim();
+    if (!conversationId || !eventId) {
+      void vscode.window.showWarningMessage(
+        "Colcoor: open a conversation and select a message in the tree.",
+      );
+      return;
+    }
+    if (!lastTreeEvents.some((e) => e.id === eventId)) {
+      void vscode.window.showWarningMessage(
+        `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+      );
+      return;
+    }
+    const ev = lastTreeEvents.find((e) => e.id === eventId);
+    if (ev && ev.kind !== "user_input" && ev.kind !== "assistant_output") {
+      void vscode.window.showWarningMessage("Colcoor: titles apply only to user or assistant messages.");
+      return;
+    }
+    const current = ev ? trimmedGraphCheckpointLabel(ev) ?? "" : "";
+    const next = await vscode.window.showInputBox({
+      title: "Colcoor — message title",
+      value: current,
+      prompt:
+        "Optional title for this message (display-only). Leave empty to clear. Max 256 characters.",
+      ignoreFocusOut: true,
+      validateInput: (v) => {
+        const t = normalizePersistedUserInputText(v ?? "");
+        if (t.length > 256) {
+          return "Title must be at most 256 characters.";
+        }
+        return undefined;
+      },
+    });
+    if (next === undefined) {
+      return;
+    }
+    const trimmed = normalizePersistedUserInputText(next);
+    const payload = trimmed.length > 0 ? trimmed.slice(0, 256) : null;
+    try {
+      await api.patchEventCheckpointLabel(conversationId, eventId, payload);
+      void vscode.window.setStatusBarMessage(
+        payload ? "Colcoor: title saved." : "Colcoor: title cleared.",
+        2500,
+      );
+      await loadTreeAndPush(false, null, { skipConversationsList: true });
+    } catch (e) {
+      void showColcoorApiFailure(e);
+    }
+  }
+
+  async function copyMessageForEvent(targetEventId: string): Promise<void> {
+    const text = clipboardTextForTreeMessage(lastTreeEvents, targetEventId);
+    if (text === undefined) {
+      void vscode.window.showWarningMessage(
+        `Colcoor: message is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+      );
+      return;
+    }
+    if (text.trim().length === 0) {
+      void vscode.window.showInformationMessage("Colcoor: the message has no text to copy.");
+      return;
+    }
+    await vscode.env.clipboard.writeText(text);
+    void vscode.window.setStatusBarMessage("Colcoor: message copied to clipboard.", 2500);
+  }
+
+  async function handleMessageContextAction(
+    eventId: string,
+    action: "copy" | "edit" | "star" | "title" | "resend" | "addNote",
+  ): Promise<void> {
+    const id = eventId.trim();
+    if (!id || !lastTreeEvents.some((e) => e.id === id)) {
+      void vscode.window.showWarningMessage(
+        `Colcoor: message is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+      );
+      return;
+    }
+    applyWebviewSelection(id);
+    if (action === "copy") {
+      await copyMessageForEvent(id);
+      return;
+    }
+    if (action === "edit") {
+      await handleEditUserMessage(id);
+      return;
+    }
+    if (action === "star") {
+      await toggleStarForEvent(id);
+      return;
+    }
+    if (action === "title") {
+      await editMessageTitleForEvent(id);
+      return;
+    }
+    if (action === "resend") {
+      const gate = evaluateResendAssistantGate(conversationId, id, lastTreeEvents);
+      if (gate !== "ok") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: resend only applies to a user message with text.",
+        );
+        return;
+      }
+      await handleResend(id);
+      return;
+    }
+    if (action === "addNote") {
+      await addNoteToEvent(id);
     }
   }
 
@@ -3024,7 +3138,7 @@ export function createConversationPanelController(
       if (!selectedEventId) {
         return;
       }
-      const text = clipboardTextForSelectedTreeMessage(lastTreeEvents, selectedEventId);
+      const text = clipboardTextForTreeMessage(lastTreeEvents, selectedEventId);
       if (text === undefined) {
         void vscode.window.showWarningMessage(
           `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
