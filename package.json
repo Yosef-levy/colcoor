@@ -11,6 +11,7 @@
     "package:extension": "bash scripts/package-extension-to-enterprise-dist.sh",
     "ship:artifacts": "bash scripts/ship-artifacts.sh",
     "bundle:enterprise": "bash scripts/build-enterprise-bundle.sh",
-    "bundle:enterprise:skip-vsix": "bash scripts/build-enterprise-bundle.sh --skip-vsix"
+    "bundle:enterprise:skip-vsix": "bash scripts/build-enterprise-bundle.sh --skip-vsix",
+    "compose:self-host": "docker compose -f docker-compose.self-host.yml up -d --build"
   }
 }

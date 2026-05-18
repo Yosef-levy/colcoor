@@ -34,12 +34,14 @@ def test_production_rejects_short_jwt_secret(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_production_rejects_missing_gcs_bucket(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COLCOOR_ENV", "production")
+    monkeypatch.setenv("COLCOOR_DEPLOYMENT_PROFILE", "hosted")
     monkeypatch.setenv("JWT_SECRET", "a" * 40)
     monkeypatch.setenv(
         "DATABASE_URL",
         "postgresql+asyncpg://u:VeryLongRandomPassw0rdxxxxxxxxxxxx@postgres:5432/db",
     )
     monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    monkeypatch.setenv("COLCOOR_IMAGE_STORAGE", "gcs")
     monkeypatch.delenv("GCS_BUCKET", raising=False)
     monkeypatch.delenv("COLCOOR_GCS_BUCKET", raising=False)
     get_settings.cache_clear()
@@ -61,6 +63,49 @@ def test_production_rejects_missing_redis_url(monkeypatch: pytest.MonkeyPatch) -
     get_settings.cache_clear()
     with pytest.raises(RuntimeError, match="REDIS_URL"):
         validate_production_settings(get_settings())
+    get_settings.cache_clear()
+
+
+def test_production_self_host_free_allows_local_storage(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COLCOOR_ENV", "production")
+    monkeypatch.setenv("COLCOOR_DEPLOYMENT_PROFILE", "free")
+    monkeypatch.setenv("JWT_SECRET", "a" * 40)
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://u:VeryLongRandomPassw0rdxxxxxxxxxxxx@postgres:5432/db",
+    )
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    monkeypatch.setenv("COLCOOR_IMAGE_STORAGE", "local")
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    get_settings.cache_clear()
+    validate_production_settings(get_settings())
+    get_settings.cache_clear()
+
+
+def test_production_hosted_requires_gcs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COLCOOR_ENV", "production")
+    monkeypatch.setenv("COLCOOR_DEPLOYMENT_PROFILE", "hosted")
+    monkeypatch.setenv("JWT_SECRET", "a" * 40)
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://u:VeryLongRandomPassw0rdxxxxxxxxxxxx@postgres:5432/db",
+    )
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    monkeypatch.setenv("COLCOOR_IMAGE_STORAGE", "local")
+    monkeypatch.delenv("GCS_BUCKET", raising=False)
+    get_settings.cache_clear()
+    with pytest.raises(RuntimeError, match="local image storage"):
+        validate_production_settings(get_settings())
+    get_settings.cache_clear()
+
+
+def test_invalid_license_type_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COLCOOR_LICENSE_TYPE", "platinum")
+    get_settings.cache_clear()
+    from colcoor_backend.core.validation import validate_license_and_deployment_settings
+
+    with pytest.raises(RuntimeError, match="COLCOOR_LICENSE_TYPE"):
+        validate_license_and_deployment_settings(get_settings())
     get_settings.cache_clear()
 
 

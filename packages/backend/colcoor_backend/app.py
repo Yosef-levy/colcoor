@@ -14,7 +14,11 @@ from colcoor_backend.core.readiness import (
     ping_image_storage,
     ping_redis_if_configured,
 )
-from colcoor_backend.core.validation import validate_cors_origins_non_wildcard, validate_production_settings
+from colcoor_backend.core.validation import (
+    validate_cors_origins_non_wildcard,
+    validate_license_and_deployment_settings,
+    validate_production_settings,
+)
 from colcoor_backend.errors import register_exception_handlers
 import colcoor_backend.db.models  # noqa: F401 — register ORM mappers
 from colcoor_backend.db.session import create_engine, create_session_factory
@@ -34,6 +38,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     configure_logging()
     settings = get_settings()
+    validate_license_and_deployment_settings(settings)
     validate_production_settings(settings)
 
     if settings.database_url:
@@ -63,8 +68,13 @@ async def lifespan(app: FastAPI):
             )
 
     logger.info(
-        "startup complete env=%s database_configured=%s cors_origins=%s metrics=%s",
+        "startup complete env=%s deployment_profile=%s license_type=%s max_users=%s "
+        "license_key_present=%s database_configured=%s cors_origins=%s metrics=%s",
         settings.env,
+        settings.deployment_profile_normalized(),
+        settings.license_type_normalized(),
+        settings.resolved_license_max_users(),
+        settings.license_key_present(),
         bool(settings.database_url),
         len(settings.cors_origin_list()),
         settings.metrics_enabled,
@@ -90,6 +100,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     validate_cors_origins_non_wildcard(settings)
+    validate_license_and_deployment_settings(settings)
 
     application = FastAPI(
         title="Colcoor Extension API",

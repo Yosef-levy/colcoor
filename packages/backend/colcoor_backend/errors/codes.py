@@ -18,6 +18,7 @@ DATABASE_UNAVAILABLE = "database_unavailable"
 REDIS_UNAVAILABLE = "redis_unavailable"
 TIMEOUT = "timeout"
 BAD_GATEWAY = "bad_gateway"
+LICENSE_USER_LIMIT_REACHED = "license_user_limit_reached"
 
 _STATUS_DEFAULT_CODE: dict[int, str] = {
     400: "bad_request",

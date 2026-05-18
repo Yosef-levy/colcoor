@@ -67,6 +67,19 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class LicenseStatusResponse(BaseModel):
+    """Safe license summary (no raw license key)."""
+
+    license_type: str
+    deployment_profile: str
+    max_users: int = Field(
+        ...,
+        description="Licensed seat cap (0 = unlimited).",
+    )
+    current_users: int
+    license_key_present: bool
+
+
 class ConversationCreate(BaseModel):
     title: str | None = None
 

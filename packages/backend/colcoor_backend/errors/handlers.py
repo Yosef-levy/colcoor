@@ -14,6 +14,7 @@ from colcoor_backend.errors import codes
 from colcoor_backend.errors.infra import classify_exception
 from colcoor_backend.errors.logging_utils import log_event, log_unhandled_exception
 from colcoor_backend.errors.responses import error_response
+from colcoor_backend.licensing.exceptions import LicenseUserLimitReached
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,27 @@ def _detail_to_message(detail: Any) -> str:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    @app.exception_handler(LicenseUserLimitReached)
+    async def license_user_limit_handler(
+        request: Request, exc: LicenseUserLimitReached
+    ) -> Any:
+        message = str(exc)
+        log_event(
+            logger,
+            logging.WARNING,
+            "license_user_limit_reached",
+            message,
+            request=request,
+            status=403,
+            error_code=codes.LICENSE_USER_LIMIT_REACHED,
+        )
+        return error_response(
+            request,
+            status_code=403,
+            code=codes.LICENSE_USER_LIMIT_REACHED,
+            message=message,
+        )
+
     @app.exception_handler(HTTPException)
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException | StarletteHTTPException) -> Any:

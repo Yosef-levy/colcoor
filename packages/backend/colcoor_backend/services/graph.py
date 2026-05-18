@@ -20,6 +20,8 @@ from colcoor_backend.db.models import (
     Note,
     User,
 )
+from colcoor_backend.core.config import Settings, get_settings
+from colcoor_backend.licensing.service import assert_can_register_new_user
 from colcoor_backend.services.cursor_identity import VerifiedCursorIdentity
 
 
@@ -32,8 +34,11 @@ class SoftDeleteSubtreeResult:
 async def upsert_user_from_verified_identity(
     session: AsyncSession,
     identity: VerifiedCursorIdentity,
+    *,
+    settings: Settings | None = None,
 ) -> uuid.UUID:
     """Create or update user from IdP-verified Cursor / VS Code account (cursor_sub + profile)."""
+    cfg = settings or get_settings()
     now = datetime.now(tz=UTC)
     res = await session.execute(select(User).where(User.cursor_sub == identity.cursor_sub))
     user = res.scalar_one_or_none()
@@ -44,6 +49,7 @@ async def upsert_user_from_verified_identity(
             user.avatar_url = identity.avatar_url
         user.last_login_at = now
     else:
+        await assert_can_register_new_user(session, cfg)
         user = User(
             cursor_sub=identity.cursor_sub,
             email=identity.email,

@@ -242,6 +242,41 @@ class Settings(BaseSettings):
         description="Honor X-Forwarded-For for anonymous IP buckets (true behind nginx).",
     )
 
+    deployment_profile: str = Field(
+        default="free",
+        validation_alias=AliasChoices(
+            "COLCOOR_DEPLOYMENT_PROFILE",
+            "DEPLOYMENT_PROFILE",
+        ),
+        description="free | team | business | hosted | enterprise — deployment topology, not a separate backend.",
+    )
+    license_type: str = Field(
+        default="free",
+        validation_alias=AliasChoices(
+            "COLCOOR_LICENSE_TYPE",
+            "LICENSE_TYPE",
+        ),
+        description="free | team | business | enterprise — entitlement tier (Lemon Squeezy later).",
+    )
+    license_max_users: int | None = Field(
+        default=None,
+        ge=0,
+        le=1_000_000,
+        validation_alias=AliasChoices(
+            "COLCOOR_LICENSE_MAX_USERS",
+            "LICENSE_MAX_USERS",
+        ),
+        description="Seat cap override. Unset uses defaults by license_type (0 = unlimited).",
+    )
+    license_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "COLCOOR_LICENSE_KEY",
+            "LICENSE_KEY",
+        ),
+        description="Optional license key (Lemon Squeezy). Never log the raw value.",
+    )
+
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"
 
@@ -271,6 +306,30 @@ class Settings(BaseSettings):
         if not self.cors_origins.strip():
             return []
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    def deployment_profile_normalized(self) -> str:
+        return self.deployment_profile.strip().lower()
+
+    def license_type_normalized(self) -> str:
+        return self.license_type.strip().lower()
+
+    def license_key_present(self) -> bool:
+        return bool(self.license_key and self.license_key.strip())
+
+    def resolved_license_max_users(self) -> int:
+        from colcoor_backend.licensing.types import DEFAULT_MAX_USERS_BY_LICENSE_TYPE
+
+        if self.license_max_users is not None:
+            return self.license_max_users
+        return DEFAULT_MAX_USERS_BY_LICENSE_TYPE.get(
+            self.license_type_normalized(),
+            DEFAULT_MAX_USERS_BY_LICENSE_TYPE["free"],
+        )
+
+    def is_self_host_deployment_profile(self) -> bool:
+        from colcoor_backend.licensing.types import SELF_HOST_DEPLOYMENT_PROFILES
+
+        return self.deployment_profile_normalized() in SELF_HOST_DEPLOYMENT_PROFILES
 
 
 @lru_cache

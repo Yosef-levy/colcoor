@@ -10,17 +10,32 @@ from starlette.requests import Request
 
 from colcoor_backend.observability import context as obs_ctx
 
-_SENSITIVE_RE = re.compile(
-    r"(Bearer\s+)[^\s]+|"
-    r"(authorization['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+|"
-    r"(token['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+|"
+_BEARER_RE = re.compile(r"(Bearer\s+)[^\s]+", re.IGNORECASE)
+_AUTH_HEADER_RE = re.compile(
+    r"(authorization['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+",
+    re.IGNORECASE,
+)
+_TOKEN_KV_RE = re.compile(
+    r"(\btoken['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+",
+    re.IGNORECASE,
+)
+_PASSWORD_KV_RE = re.compile(
     r"(password['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+",
     re.IGNORECASE,
 )
+_LICENSE_KEY_RE = re.compile(r"(COLCOOR_LICENSE_KEY\s*=\s*)[^\s]+", re.IGNORECASE)
 
 
 def redact_secrets(text: str) -> str:
-    return _SENSITIVE_RE.sub(r"\1***", text)
+    for pattern in (
+        _BEARER_RE,
+        _AUTH_HEADER_RE,
+        _TOKEN_KV_RE,
+        _PASSWORD_KV_RE,
+        _LICENSE_KEY_RE,
+    ):
+        text = pattern.sub(r"\1***", text)
+    return text
 
 
 def _request_context(request: Request | None) -> dict[str, Any]:

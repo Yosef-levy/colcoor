@@ -34,7 +34,7 @@ async def exchange_cursor_token(
             detail="Invalid or expired account token",
         ) from None
 
-    uid = await upsert_user_from_verified_identity(session, verified)
+    uid = await upsert_user_from_verified_identity(session, verified, settings=settings)
     await session.commit()
     token = create_access_token(uid, settings)
     return AuthResponse(access_token=token)

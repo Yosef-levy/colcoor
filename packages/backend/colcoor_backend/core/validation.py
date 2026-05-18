@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from colcoor_backend.core.config import Settings
+from colcoor_backend.licensing.types import DEPLOYMENT_PROFILES, LICENSE_TYPES
 
 # Substrings that strongly suggest copy-paste placeholders (not exhaustive).
 _PLACEHOLDER_MARKERS: tuple[str, ...] = (
@@ -65,8 +66,38 @@ def _database_url_invalid(url: str | None) -> str | None:
     return None
 
 
+def _normalize_enum(value: str, env_name: str, allowed: frozenset[str]) -> str:
+    normalized = value.strip().lower()
+    if normalized not in allowed:
+        allowed_list = ", ".join(sorted(allowed))
+        raise RuntimeError(
+            f"Invalid {env_name}: {value!r}. Must be one of: {allowed_list}"
+        )
+    return normalized
+
+
+def validate_license_and_deployment_settings(settings: Settings) -> None:
+    """Fail fast on unknown deployment profile or license tier."""
+    _normalize_enum(
+        settings.deployment_profile,
+        "COLCOOR_DEPLOYMENT_PROFILE",
+        DEPLOYMENT_PROFILES,
+    )
+    _normalize_enum(
+        settings.license_type,
+        "COLCOOR_LICENSE_TYPE",
+        LICENSE_TYPES,
+    )
+    if settings.license_max_users is not None and settings.license_max_users < 0:
+        raise RuntimeError(
+            "Invalid COLCOOR_LICENSE_MAX_USERS: must be >= 0 (0 means unlimited)"
+        )
+
+
 def validate_production_settings(settings: Settings) -> None:
     """Raise RuntimeError if production configuration is unsafe."""
+    validate_license_and_deployment_settings(settings)
+
     if not settings.is_production():
         return
 
@@ -79,13 +110,22 @@ def validate_production_settings(settings: Settings) -> None:
     if msg := _redis_url_invalid(settings.redis_url_normalized()):
         raise RuntimeError(f"Production misconfiguration: {msg}")
 
-    if settings.resolved_image_storage_backend() != "gcs":
+    storage_backend = settings.resolved_image_storage_backend()
+    if storage_backend == "gcs":
+        if msg := _gcs_bucket_invalid(settings.gcs_bucket_normalized()):
+            raise RuntimeError(f"Production misconfiguration: {msg}")
+    elif storage_backend == "local":
+        if not settings.is_self_host_deployment_profile():
+            raise RuntimeError(
+                "Production misconfiguration: local image storage is only allowed for "
+                "self-host deployment profiles (free, team, business). "
+                "Use COLCOOR_IMAGE_STORAGE=gcs for hosted/enterprise, or set "
+                "COLCOOR_DEPLOYMENT_PROFILE to a self-host value."
+            )
+    else:
         raise RuntimeError(
-            "Production misconfiguration: image storage must be gcs "
-            "(set COLCOOR_IMAGE_STORAGE=gcs or GCS_BUCKET)"
+            "Production misconfiguration: COLCOOR_IMAGE_STORAGE must be gcs or local"
         )
-    if msg := _gcs_bucket_invalid(settings.gcs_bucket_normalized()):
-        raise RuntimeError(f"Production misconfiguration: {msg}")
 
     for origin in settings.cors_origin_list():
         if origin.strip() == "*":
