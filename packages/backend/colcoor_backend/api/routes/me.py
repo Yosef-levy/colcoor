@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=MeOut, response_model_exclude_none=True)
-async def get_me_route(session: DbSession, user_id: CurrentUserId) -> MeOut:
+async def get_me_route(user_id: CurrentUserId, session: DbSession) -> MeOut:
     """Return the authenticated user’s profile (same shape as PATCH …/me)."""
     user = await get_me_user(session, user_id)
     if user is None:
@@ -24,8 +24,8 @@ async def get_me_route(session: DbSession, user_id: CurrentUserId) -> MeOut:
 
 @router.patch("", response_model=MeOut, response_model_exclude_none=True)
 async def patch_me_route(
-    session: DbSession,
     user_id: CurrentUserId,
+    session: DbSession,
     body: MePatchBody,
 ) -> MeOut:
     try:

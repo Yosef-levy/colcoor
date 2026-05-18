@@ -1,3 +1,4 @@
+import { parseApiErrorBody } from "./apiErrorFormatting";
 import { ColcoorApiHttpError } from "./colcoorApiHttpError";
 import { parseRetryAfterSeconds } from "./retryAfterHeader";
 import { parseCompleteSseDataJsonBlocks } from "./sideChatSseParse";
@@ -210,11 +211,21 @@ export class ColcoorApiClient {
     if (res.ok) {
       return;
     }
+    const parsed = parseApiErrorBody(bodyText);
     const retryAfterSeconds =
       res.status === 429 || res.status === 503
         ? parseRetryAfterSeconds(res.headers.get("Retry-After"))
         : null;
-    throw new ColcoorApiHttpError(operation, res.status, bodyText, { retryAfterSeconds });
+    const hdr =
+      res.headers && typeof res.headers.get === "function"
+        ? res.headers.get("X-Request-ID")
+        : null;
+    const requestId = parsed.requestId ?? (hdr && hdr.trim() ? hdr.trim() : null);
+    throw new ColcoorApiHttpError(operation, res.status, bodyText, {
+      retryAfterSeconds,
+      requestId,
+      errorCode: parsed.code ?? null,
+    });
   }
 
   private async fetchOrThrow(url: string, init: RequestInit): Promise<Response> {

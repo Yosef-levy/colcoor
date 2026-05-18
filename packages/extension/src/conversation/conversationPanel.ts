@@ -17,7 +17,7 @@ import type {
 } from "../api/client";
 import { confirmDestructiveActionByTypingDelete } from "./destructiveDeleteConfirm";
 import { countSubtreeNodes, SUBTREE_TYPED_DELETE_THRESHOLD } from "./destructiveDeleteCount";
-import { isPlanLimitColcoorApiError } from "../api/colcoorApiHttpError";
+import { reportPanelApiError } from "../util/reportPanelApiError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import {
   COLCOOR_CONVERSATION_PANEL_OPEN_CONTEXT,
@@ -550,9 +550,7 @@ export function createConversationPanelController(
       }));
       postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
     } catch (e) {
-      if (isPlanLimitColcoorApiError(e)) {
-        void showColcoorApiFailure(e);
-      }
+      reportPanelApiError(e);
       const msg = e instanceof Error ? e.message : String(e);
       await loadTreeAndPush(lastPostedBusy, msg);
     }
@@ -891,9 +889,7 @@ export function createConversationPanelController(
         void vscode.commands.executeCommand("colcoor.refreshConversations");
       }, 1500);
     } catch (e) {
-      if (isPlanLimitColcoorApiError(e)) {
-        void showColcoorApiFailure(e);
-      }
+      reportPanelApiError(e);
     }
   }
 
@@ -907,9 +903,7 @@ export function createConversationPanelController(
       await refreshInlineSideChat();
       await markInlineSideChatReadFromCache(true);
     } catch (e) {
-      if (isPlanLimitColcoorApiError(e)) {
-        void showColcoorApiFailure(e);
-      }
+      reportPanelApiError(e);
     }
     postState(lastTreeEvents, sendAbort != null, null);
   }
@@ -1641,9 +1635,7 @@ export function createConversationPanelController(
           }
           return;
         } catch (e) {
-          if (isPlanLimitColcoorApiError(e)) {
-            void showColcoorApiFailure(e);
-          }
+      reportPanelApiError(e);
           const msg = e instanceof Error ? e.message : String(e);
           lastNotes = [];
           lastNeedsContextRebuild = false;
@@ -1758,9 +1750,7 @@ export function createConversationPanelController(
         }
       } catch (e) {
         stream.dispose();
-        if (isPlanLimitColcoorApiError(e)) {
-          void showColcoorApiFailure(e);
-        }
+      reportPanelApiError(e);
         const msg = e instanceof Error ? e.message : String(e);
         await loadTreeAndPush(false, msg);
         break;
@@ -1941,9 +1931,7 @@ export function createConversationPanelController(
         );
       }
     } catch (e) {
-      if (isPlanLimitColcoorApiError(e)) {
-        void showColcoorApiFailure(e);
-      }
+      reportPanelApiError(e);
       const msg = e instanceof Error ? e.message : String(e);
       stream.dispose();
       await loadTreeAndPush(false, msg);
@@ -2003,9 +1991,7 @@ export function createConversationPanelController(
         );
       }
     } catch (e) {
-      if (isPlanLimitColcoorApiError(e)) {
-        void showColcoorApiFailure(e);
-      }
+      reportPanelApiError(e);
       const msg = e instanceof Error ? e.message : String(e);
       stream.dispose();
       await loadTreeAndPush(false, msg);
@@ -2405,9 +2391,7 @@ export function createConversationPanelController(
           try {
             await refreshInlineSideChat();
           } catch (e) {
-            if (isPlanLimitColcoorApiError(e)) {
-              void showColcoorApiFailure(e);
-            }
+      reportPanelApiError(e);
           }
           postState(lastTreeEvents, lastPostedBusy, lastPostedError);
           try {
@@ -2513,9 +2497,7 @@ export function createConversationPanelController(
           try {
             await refreshInlineSideChat();
           } catch (e) {
-            if (isPlanLimitColcoorApiError(e)) {
-              void showColcoorApiFailure(e);
-            }
+      reportPanelApiError(e);
           }
           postState(lastTreeEvents, lastPostedBusy, lastPostedError);
           try {
@@ -2544,9 +2526,7 @@ export function createConversationPanelController(
           await refreshInlineSideChat();
           await markInlineSideChatReadFromCache(true);
         } catch (e) {
-          if (isPlanLimitColcoorApiError(e)) {
-            void showColcoorApiFailure(e);
-          }
+      reportPanelApiError(e);
         }
         postState(lastTreeEvents, sendAbort != null, null);
         return;

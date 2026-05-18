@@ -15,6 +15,7 @@ from colcoor_backend.core.readiness import (
     ping_redis_if_configured,
 )
 from colcoor_backend.core.validation import validate_cors_origins_non_wildcard, validate_production_settings
+from colcoor_backend.errors import register_exception_handlers
 import colcoor_backend.db.models  # noqa: F401 — register ORM mappers
 from colcoor_backend.db.session import create_engine, create_session_factory
 from colcoor_backend.logging_config import configure_logging
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
         "No main-thread LLM; no transcript assembly over HTTP (see docs/).",
         lifespan=lifespan,
     )
+    register_exception_handlers(application)
 
     application.state.rate_limit_store = InMemoryRateLimitStore()
     # Starlette wraps last-added middleware on the outside. RequestContext must be

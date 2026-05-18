@@ -4,7 +4,23 @@ Normative HTTP API under base path **`/api/v1`**. All JSON bodies use **`Content
 
 **Authentication:** every endpoint in §2–§7 except §1 **MUST** reject unauthenticated callers with **401** unless stated otherwise.
 
-**Error envelope (4xx / 5xx):** response body **MUST** be JSON **`{ "detail": string | array }`** (FastAPI-compatible). **`detail`** is a human-readable string, or an array of validation objects for **422** only.
+**Error envelope (4xx / 5xx):** response body **MUST** be JSON:
+
+```json
+{
+  "error": {
+    "code": "unauthorized",
+    "message": "Missing or invalid Authorization header",
+    "request_id": "uuid-or-client-supplied"
+  }
+}
+```
+
+- **`code`**: stable machine-readable identifier (e.g. `validation_error`, `rate_limited`, `not_found`).
+- **`message`**: human-readable text (no stack traces in production).
+- **`request_id`**: correlates with **`X-Request-ID`** on the response.
+
+Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** during rollout.
 
 **Success:** response body as specified per route; **204 No Content** where noted means an empty body.
 

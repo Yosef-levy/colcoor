@@ -138,4 +138,18 @@ def spawn_event_purge_scheduler(
                 logger.exception("scheduled event purge failed")
             await asyncio.sleep(interval)
 
-    return asyncio.create_task(_worker(), name="colcoor_event_purge_scheduler")
+    task = asyncio.create_task(_worker(), name="colcoor_event_purge_scheduler")
+
+    def _log_task_failure(done: asyncio.Task[None]) -> None:
+        if done.cancelled():
+            return
+        exc = done.exception()
+        if exc is not None:
+            logger.exception(
+                "background task %s failed",
+                done.get_name(),
+                exc_info=exc,
+            )
+
+    task.add_done_callback(_log_task_failure)
+    return task

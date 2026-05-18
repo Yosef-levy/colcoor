@@ -39,7 +39,10 @@ def test_same_user_exceeding_limit_gets_429(monkeypatch) -> None:
         assert client.get("/api/v1/health", headers=headers).status_code == 200
         response = client.get("/api/v1/health", headers=headers)
         assert response.status_code == 429
-        assert response.json() == {"detail": "Rate limit exceeded. Try again shortly."}
+        body = response.json()
+        assert body["error"]["code"] == "rate_limited"
+        assert "Rate limit exceeded" in body["error"]["message"]
+        assert body["error"]["request_id"]
 
 
 def test_different_users_counted_separately(monkeypatch) -> None:

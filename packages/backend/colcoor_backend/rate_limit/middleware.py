@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
 from colcoor_backend.core.config import Settings, get_settings
+from colcoor_backend.errors import codes
+from colcoor_backend.errors.responses import error_response
 from colcoor_backend.rate_limit.backends import InMemoryRateLimitStore, RateLimitBackend
 from colcoor_backend.rate_limit.keys import rate_limit_key
 
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 RATE_LIMIT_SKIP_PATHS = frozenset({"/health", "/ready"})
 
-_RATE_LIMIT_DETAIL = "Rate limit exceeded. Try again shortly."
+_RATE_LIMIT_MESSAGE = "Rate limit exceeded. Try again shortly."
 
 
 def _limits_for_key(
@@ -67,9 +69,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 key.split(":", 1)[0],
                 path,
             )
-            return JSONResponse(
+            return error_response(
+                request,
                 status_code=429,
-                content={"detail": _RATE_LIMIT_DETAIL},
+                code=codes.RATE_LIMITED,
+                message=_RATE_LIMIT_MESSAGE,
             )
 
         return await call_next(request)

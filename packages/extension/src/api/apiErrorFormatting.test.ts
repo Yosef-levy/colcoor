@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatColcoorApiError, parseApiErrorDetail } from "./apiErrorFormatting";
+import { formatColcoorApiError, parseApiErrorBody, parseApiErrorDetail } from "./apiErrorFormatting";
 
 describe("parseApiErrorDetail", () => {
   it("returns undefined for empty body", () => {
@@ -125,5 +125,35 @@ describe("formatColcoorApiError", () => {
   it("does not append Retry-After for 429 when seconds are null", () => {
     const msg = formatColcoorApiError("send", 429, "", null);
     expect(msg).toBe('send failed (HTTP 429): (no response body)');
+  });
+
+  it("reads Colcoor error envelope with request_id", () => {
+    const msg = formatColcoorApiError(
+      "load tree",
+      500,
+      JSON.stringify({
+        error: {
+          code: "internal_error",
+          message: "An unexpected error occurred.",
+          request_id: "rid-123",
+        },
+      }),
+    );
+    expect(msg).toContain("An unexpected error occurred.");
+    expect(msg).toContain("request id: rid-123");
+  });
+});
+
+describe("parseApiErrorBody", () => {
+  it("prefers error.message over legacy detail", () => {
+    const parsed = parseApiErrorBody(
+      JSON.stringify({
+        error: { code: "forbidden", message: "nope", request_id: "abc" },
+        detail: "legacy",
+      }),
+    );
+    expect(parsed.message).toBe("nope");
+    expect(parsed.requestId).toBe("abc");
+    expect(parsed.code).toBe("forbidden");
   });
 });

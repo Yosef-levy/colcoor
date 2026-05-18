@@ -4,6 +4,12 @@
 
 import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";
 
+export type ParsedApiErrorBody = {
+  message: string | undefined;
+  requestId: string | undefined;
+  code: string | undefined;
+};
+
 function validationItemMessage(x: Record<string, unknown>): string | null {
   const msg = x.msg;
   if (typeof msg === "string") {
@@ -22,20 +28,33 @@ function validationItemMessage(x: Record<string, unknown>): string | null {
   return null;
 }
 
-/** Extract a short message from JSON `{ "detail": ... }` or fall back to raw body. */
-export function parseApiErrorDetail(bodyText: string): string | undefined {
+/** Parse Colcoor `{ error: { code, message, request_id } }` or FastAPI `{ detail }`. */
+export function parseApiErrorBody(bodyText: string): ParsedApiErrorBody {
   const t = normalizePersistedUserInputText(bodyText);
   if (!t) {
-    return undefined;
+    return { message: undefined, requestId: undefined, code: undefined };
   }
   try {
     const j = JSON.parse(t) as unknown;
     if (j && typeof j === "object") {
-      const detail = (j as Record<string, unknown>).detail;
+      const root = j as Record<string, unknown>;
+      const err = root.error;
+      if (err && typeof err === "object") {
+        const e = err as Record<string, unknown>;
+        const message =
+          typeof e.message === "string" ? normalizePersistedUserInputText(e.message) : undefined;
+        const requestId =
+          typeof e.request_id === "string" ? normalizePersistedUserInputText(e.request_id) : undefined;
+        const code = typeof e.code === "string" ? e.code : undefined;
+        if (message) {
+          return { message, requestId, code };
+        }
+      }
+      const detail = root.detail;
       if (typeof detail === "string") {
         const d = normalizePersistedUserInputText(detail);
         if (d) {
-          return d;
+          return { message: d, requestId: undefined, code: undefined };
         }
       }
       if (Array.isArray(detail)) {
@@ -44,14 +63,19 @@ export function parseApiErrorDetail(bodyText: string): string | undefined {
           .map((x) => validationItemMessage(x))
           .filter((x): x is string => Boolean(x));
         if (parts.length > 0) {
-          return parts.join("; ");
+          return { message: parts.join("; "), requestId: undefined, code: undefined };
         }
       }
     }
   } catch {
     /* not JSON */
   }
-  return t.length > 280 ? `${t.slice(0, 280)}…` : t;
+  return { message: t.length > 280 ? `${t.slice(0, 280)}…` : t, requestId: undefined, code: undefined };
+}
+
+/** @deprecated Use {@link parseApiErrorBody}; returns message only. */
+export function parseApiErrorDetail(bodyText: string): string | undefined {
+  return parseApiErrorBody(bodyText).message;
 }
 
 /**
@@ -64,13 +88,17 @@ export function formatColcoorApiError(
   bodyText: string,
   retryAfterSeconds?: number | null,
 ): string {
-  const detail = parseApiErrorDetail(bodyText);
+  const parsed = parseApiErrorBody(bodyText);
+  const detail = parsed.message;
   if (status === 402) {
     const extra = detail ? ` ${detail}` : "";
     return `Plan or usage limit — ${operation}.${extra} Check billing or upgrade your plan.`;
   }
   const tail = detail ?? "(no response body)";
   let base = `${operation} failed (HTTP ${status}): ${tail}`;
+  if (parsed.requestId) {
+    base += ` (request id: ${parsed.requestId})`;
+  }
   if (
     (status === 429 || status === 503) &&
     retryAfterSeconds != null &&

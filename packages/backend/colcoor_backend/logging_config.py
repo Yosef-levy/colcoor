@@ -34,7 +34,16 @@ class JsonLogFormatter(logging.Formatter):
         if user_id:
             payload["user_id"] = user_id
 
-        for key in ("request_id", "route", "method", "status", "latency_ms", "user_id"):
+        for key in (
+            "request_id",
+            "route",
+            "method",
+            "status",
+            "latency_ms",
+            "user_id",
+            "event_type",
+            "error_code",
+        ):
             if hasattr(record, key):
                 value = getattr(record, key)
                 if value is not None:

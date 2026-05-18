@@ -3,6 +3,10 @@ import { formatColcoorApiError } from "./apiErrorFormatting";
 export type ColcoorApiHttpErrorExtras = {
   /** From `Retry-After` when the client parsed it (HTTP 429 / 503). */
   retryAfterSeconds?: number | null;
+  /** From API `{ error.request_id }` when present. */
+  requestId?: string | null;
+  /** From API `{ error.code }` when present. */
+  errorCode?: string | null;
 };
 
 /**
@@ -16,6 +20,8 @@ export class ColcoorApiHttpError extends Error {
   readonly bodyText: string;
   /** Seconds suggested by `Retry-After`, when present and parseable; otherwise `null`. */
   readonly retryAfterSeconds: number | null;
+  readonly requestId: string | null;
+  readonly errorCode: string | null;
 
   constructor(operation: string, status: number, bodyText: string, extras?: ColcoorApiHttpErrorExtras) {
     const retryAfterSeconds = extras?.retryAfterSeconds ?? null;
@@ -24,6 +30,8 @@ export class ColcoorApiHttpError extends Error {
     this.operation = operation;
     this.bodyText = bodyText;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.requestId = extras?.requestId ?? null;
+    this.errorCode = extras?.errorCode ?? null;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
