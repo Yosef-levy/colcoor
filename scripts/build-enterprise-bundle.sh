@@ -130,6 +130,25 @@ cp -a "$ROOT/scripts/backup-postgres.sh" "$ROOT/scripts/restore-postgres.sh" \
 cp -a "$ROOT/scripts/lib/postgres-backup-lib.sh" "$OUT/scripts/lib/"
 chmod +x "$OUT/scripts/"*.sh "$OUT/pgbouncer/docker-entrypoint.sh"
 
+cat >"$OUT/VERSION.txt" <<EOF
+backend=${BACKEND_VERSION}
+extension=${EXT_VERSION}
+bundle=${BUNDLE_NAME}
+profile=enterprise-gcs
+EOF
+
+for doc in release-quickstart.md release-smoke-test.md release-versions.md self-host.md deployment-profiles.md; do
+  if [[ -f "$ROOT/docs/$doc" ]]; then
+    mkdir -p "$OUT/docs"
+    cp -a "$ROOT/docs/$doc" "$OUT/docs/"
+  fi
+done
+if [[ -f "$ROOT/RELEASE_NOTES.md" ]]; then
+  cp -a "$ROOT/RELEASE_NOTES.md" "$OUT/"
+fi
+
+bash "$ROOT/scripts/generate-release-checksums.sh" "$OUT"
+
 echo ""
 echo "Enterprise bundle ready:"
 echo "  $OUT"

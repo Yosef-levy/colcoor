@@ -26,7 +26,10 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 | [authentication.md](authentication.md) | **`cursor_sub`**; **`POST /api/v1/auth/cursor`** |
 | [monetization.md](monetization.md) | Tokens on every request; links **billing-usage** |
 | [architecture.md](architecture.md) | Components and boundaries |
-| [production.md](production.md) | Docker, nginx, Postgres, env, health, release artifacts, enterprise bundle (`npm run bundle:enterprise`) |
+| [production.md](production.md) | Docker, nginx, Postgres, env, health, release builds (`bundle:enterprise`, `bundle:release`) |
+| [release-quickstart.md](release-quickstart.md) | Install self-host bundle + VSIX (first external user) |
+| [release-smoke-test.md](release-smoke-test.md) | Post-build / post-install verification checklist |
+| [release-versions.md](release-versions.md) | Backend ↔ extension version pairing |
 | [enterprise-handoff-checklist.md](enterprise-handoff-checklist.md) | Copy-paste checklist for customer IT / security rollout |
 | [git-integration.md](git-integration.md) | Optional Git metadata |
 | [ui-features.md](ui-features.md) | User-visible UI checklist (thread, tree, drawers / in-conversation search, side-chat settings, 401 handling) |

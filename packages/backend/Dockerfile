@@ -35,7 +35,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     COLCOOR_LOG_LEVEL=INFO \
     COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED=true
 
-RUN groupadd --gid 10001 colcoor \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends util-linux \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 colcoor \
     && useradd --uid 10001 --gid colcoor --shell /usr/sbin/nologin --create-home --home-dir /var/lib/colcoor colcoor
 
 COPY --from=builder /opt/venv /opt/venv
@@ -43,14 +46,16 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY alembic.ini ./
 COPY alembic ./alembic
-RUN chown -R colcoor:colcoor /app
-
-USER colcoor
+COPY colcoor-entrypoint.sh /usr/local/bin/colcoor-entrypoint.sh
+RUN chown -R colcoor:colcoor /app \
+    && chmod +x /usr/local/bin/colcoor-entrypoint.sh
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import os, urllib.request; p=os.environ.get('PORT', '8000'); urllib.request.urlopen(f'http://127.0.0.1:{p}/health', timeout=4)" || exit 1
+
+ENTRYPOINT ["/usr/local/bin/colcoor-entrypoint.sh"]
 
 # Migrations: DATABASE_MIGRATION_URL (direct postgres) when set; app uses DATABASE_URL via PgBouncer.
 CMD ["sh", "-c", "alembic upgrade head && exec gunicorn colcoor_backend.main:app -k uvicorn.workers.UvicornWorker -w \"${WEB_CONCURRENCY:-2}\" -b \"0.0.0.0:${PORT:-8000}\" --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]

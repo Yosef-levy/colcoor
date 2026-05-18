@@ -1,12 +1,7 @@
-# Self-host MVP — same backend image and codebase as production; tier via env only.
+# Colcoor self-host release bundle — pre-loaded images (no build context).
+# Run from the bundle directory after: ./scripts/00-load-image.sh && ./scripts/01-setup-env.sh
 #
-# Quick start (repo root):
-#   cp .env.example .env
-#   ./scripts/generate-self-host-secrets.sh >> .env   # or set JWT_SECRET / POSTGRES_PASSWORD manually
-#   docker compose -f docker-compose.self-host.yml up -d --build
-#
-# API: http://localhost:8080/health  (nginx → backend)
-# Future profiles: docker-compose.team.yml, docker-compose.business.yml, Helm — not separate backends.
+# API on host port 8080 by default (nginx → backend). Same backend image as enterprise.
 
 services:
   redis:
@@ -52,10 +47,8 @@ services:
       - internal
 
   pgbouncer:
-    build:
-      context: ./pgbouncer
-      dockerfile: Dockerfile
     image: colcoor-pgbouncer:1.23.1
+    pull_policy: never
     restart: unless-stopped
     env_file:
       - .env
@@ -80,10 +73,8 @@ services:
       - internal
 
   backend:
-    build:
-      context: ./packages/backend
-      dockerfile: Dockerfile
-    image: colcoor-backend:latest
+    image: colcoor-backend:prod
+    pull_policy: never
     restart: unless-stopped
     stop_grace_period: 35s
     env_file:

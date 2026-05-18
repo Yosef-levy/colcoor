@@ -12,6 +12,9 @@
     "ship:artifacts": "bash scripts/ship-artifacts.sh",
     "bundle:enterprise": "bash scripts/build-enterprise-bundle.sh",
     "bundle:enterprise:skip-vsix": "bash scripts/build-enterprise-bundle.sh --skip-vsix",
+    "bundle:self-host-release": "bash scripts/build-self-host-bundle.sh",
+    "bundle:release": "bash scripts/build-self-host-bundle.sh",
+    "checksums:release": "bash scripts/generate-release-checksums.sh",
     "compose:self-host": "docker compose -f docker-compose.self-host.yml up -d --build"
   }
 }

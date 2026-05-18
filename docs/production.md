@@ -329,6 +329,37 @@ This writes **`dist/colcoor-enterprise-BE<py-version>-EXT<ext-version>/`** conta
 
 Customer VM (typical): `00-load-image` → `01-setup-env` → `02-stack-up` → `05-health-check` (paths relative to the bundle directory; see that README).
 
+### Self-host release bundle (first external install)
+
+For **free-tier self-host** (local images, 3-user license, port 8080), build the same `dist/colcoor-enterprise-BE<backend>-EXT<extension>/` layout with self-host compose and operator docs:
+
+```bash
+npm run bundle:release
+# equivalent:
+npm run bundle:self-host-release
+```
+
+Runs extension typecheck + tests, backend tests, Docker image build/save, VSIX package, and checksums. Flags (via the underlying script):
+
+```bash
+bash scripts/build-self-host-bundle.sh --skip-tests
+bash scripts/build-self-host-bundle.sh --skip-docker --skip-vsix
+```
+
+Regenerate checksums only after copying files into an existing bundle:
+
+```bash
+npm run checksums:release -- dist/colcoor-enterprise-BE0.1.0-EXT0.0.1
+```
+
+| Command | Output |
+|---------|--------|
+| `bundle:release` | `dist/colcoor-enterprise-BE…-EXT…/` — self-host `docker-compose.yml`, image tarballs, VSIX, scripts, `SHA256SUMS`, `MANIFEST.txt`, release docs |
+| `bundle:enterprise` | Same folder name pattern; **GCS-oriented** compose (see enterprise section above) |
+| `compose:self-host` | Dev stack from repo source (`docker-compose.self-host.yml`), not the offline bundle |
+
+Install and smoke-test: [release-quickstart.md](release-quickstart.md), [release-smoke-test.md](release-smoke-test.md), [release-versions.md](release-versions.md).
+
 ---
 
 ## Related docs

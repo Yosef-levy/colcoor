@@ -109,6 +109,18 @@ def test_invalid_license_type_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
 
 
+def test_empty_license_max_users_env_treated_as_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Docker Compose ${VAR:-} can inject ''; must not fail int parsing."""
+    monkeypatch.setenv("COLCOOR_LICENSE_MAX_USERS", "")
+    get_settings.cache_clear()
+    settings = get_settings()
+    assert settings.license_max_users is None
+    assert settings.resolved_license_max_users() == 3
+    get_settings.cache_clear()
+
+
 def test_production_rejects_placeholder_database_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COLCOOR_ENV", "production")
     monkeypatch.setenv("JWT_SECRET", "a" * 40)

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -276,6 +276,20 @@ class Settings(BaseSettings):
         ),
         description="Optional license key (Lemon Squeezy). Never log the raw value.",
     )
+
+    @field_validator("license_max_users", mode="before")
+    @classmethod
+    def _empty_license_max_users_is_none(cls, value: object) -> object:
+        if value == "" or value is None:
+            return None
+        return value
+
+    @field_validator("license_key", mode="before")
+    @classmethod
+    def _empty_license_key_is_none(cls, value: object) -> object:
+        if value == "" or value is None:
+            return None
+        return value
 
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"
