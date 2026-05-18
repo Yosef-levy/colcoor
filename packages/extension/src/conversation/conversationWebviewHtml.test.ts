@@ -489,6 +489,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("drawersTodos: []");
   });
 
+  it("includes onboarding banners and collaborator hint regions", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce-onboard");
+    expect(html).toContain('id="gettingStartedBanner"');
+    expect(html).toContain('id="tryThisNextBanner"');
+    expect(html).toContain('id="collaboratorHint"');
+    expect(html).toContain("gettingStartedVisible");
+    expect(html).toContain("Invite collaborator");
+  });
+
   it("includes Members and Add member under Conversation menu (data-conv-action)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('data-conv-action="openMembers"');

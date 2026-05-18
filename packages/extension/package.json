@@ -2,7 +2,7 @@
   "name": "colcoor-extension",
   "displayName": "Colcoor",
   "icon": "media/icon.png",
-  "description": "Colcoor conversation orchestrator for Cursor (see repo docs/).",
+  "description": "Collaborative Conversation Orchestrator for Cursor.",
   "version": "0.0.1",
   "publisher": "colcoor",
   "engines": {
@@ -238,7 +238,7 @@
       {
         "view": "colcoor.conversations",
         "when": "colcoor.backendSignedIn",
-        "contents": "You’re signed in. When no conversations exist yet, use **Add conversation** (or the **+** in the view title) to create one.\n[Add conversation](command:colcoor.newConversation)\n[Sign out](command:colcoor.signOut)\n[Colcoor menu…](command:colcoor.showColcoorMenu)\n[Help…](command:colcoor.openAbout)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n\nAfter a thread exists, it appears in this list. To delete a conversation, use the row’s ⋯ menu or the Command Palette (search “Colcoor delete”)."
+        "contents": "You’re signed in. **Create a conversation** to start — then branch the thread, invite a collaborator, and use side chat.\n[Add conversation](command:colcoor.newConversation)\n[Help — how Colcoor works](command:colcoor.openAbout)\n[Sign out](command:colcoor.signOut)\n[Colcoor menu…](command:colcoor.showColcoorMenu)\n[Toggle sidebar](command:colcoor.toggleConversationsSidebar)\n\nOpen a conversation from this list. Use **Conversation → Add member…** to invite someone (they must sign in once first). Delete via the row ⋯ menu or Command Palette (“Colcoor delete”)."
       },
       {
         "view": "colcoor.conversations",

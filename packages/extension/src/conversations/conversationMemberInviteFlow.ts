@@ -5,7 +5,11 @@ import {
   normalizeMemberInviteLookupQuery,
   validateMemberInviteLookupQuery,
 } from "./conversationMemberInvite";
-import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
+import {
+  formatInviteSuccessMessage,
+  showInviteApiFailure,
+  showInviteSearchNoMatchMessage,
+} from "./inviteApiErrors";
 
 function formatMemberLastLogin(iso: string): string {
   const d = new Date(iso);
@@ -59,14 +63,12 @@ export async function runAddConversationMemberFlow(
   try {
     candidates = await api.searchConversationMemberInviteCandidates(conversationId, q);
   } catch (e) {
-    await showColcoorApiFailure(e);
+    await showInviteApiFailure(e);
     return;
   }
 
   if (candidates.length === 0) {
-    await vscode.window.showWarningMessage(
-      "Colcoor: no matching users found. Check spelling, or they may already be in this conversation.",
-    );
+    await showInviteSearchNoMatchMessage(q);
     return;
   }
 
@@ -104,9 +106,9 @@ export async function runAddConversationMemberFlow(
     await api.postConversationMember(conversationId, { user_id: chosen.user_id, role: rolePick.role });
     refreshTree();
     await vscode.window.showInformationMessage(
-      `Colcoor: added member (${rolePick.role}). They will see this conversation after refresh.`,
+      formatInviteSuccessMessage(chosen.display_name, chosen.email, rolePick.role),
     );
   } catch (e) {
-    await showColcoorApiFailure(e);
+    await showInviteApiFailure(e);
   }
 }

@@ -38,6 +38,10 @@ import {
   listConversationsCached,
 } from "./conversations/conversationsListCache";
 import { syncConversationsWelcomeContextKeys } from "./conversations/conversationsWelcomeContext";
+import {
+  markHasSignedIn,
+  maybeOfferFirstSignInHint,
+} from "./onboarding/gettingStarted";
 import { conversationIdAndTitleFromOpenSideChatArg } from "./sidechat/openSideChatCommandArg";
 import {
   isPrivateBranchFromPrivacyPick,
@@ -344,9 +348,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           provider_hint: pick.provider,
         });
         await session.setBackendAccessToken(backendJwt);
+        const firstSignIn = await markHasSignedIn(context.globalState);
         await offerCursorAgentApiKeyAfterSignIn(context.secrets);
         await refreshConversationsWelcomeContext();
         refreshTree();
+        void maybeOfferFirstSignInHint(firstSignIn);
       } catch (e) {
         await showColcoorApiFailure(e);
       }
@@ -383,6 +389,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const conv = await api.createConversation({ title: normalizedConversationTitle(title) });
         refreshTree();
         await conversationPanel.reveal(conv.id, conv.title);
+        await conversationPanel.armTryThisNextForConversation(conv.id);
         if (firstMessage) {
           const result = await runColcoorUserTurn(
             api,

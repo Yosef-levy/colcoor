@@ -1,6 +1,11 @@
 /** HTML document for the Colcoor conversation webview (tree + thread + composer). */
 
 import {
+  GETTING_STARTED_LINES,
+  TRY_THIS_NEXT_STEPS,
+  WEBVIEW_EMPTY_COPY,
+} from "../onboarding/emptyStateCopy";
+import {
   PRIVATE_BRANCH_DESCRIPTION,
   PRIVATE_BRANCH_LABEL_TITLE,
   PRIVATE_BRANCH_LEAD,
@@ -14,6 +19,10 @@ import {
 import { SIDE_CHAT_BROADCAST_MENTION } from "../sidechat/sideChatMentions";
 
 export function getConversationWebviewHtml(cspSource: string, nonce: string): string {
+  const emptyCopyJson = JSON.stringify(WEBVIEW_EMPTY_COPY);
+  const gettingStartedLinesJson = JSON.stringify(GETTING_STARTED_LINES);
+  const tryThisNextStepsJson = JSON.stringify(TRY_THIS_NEXT_STEPS);
+
   const csp = [
     "default-src 'none'",
     `img-src ${cspSource} https: data:`,
@@ -1427,6 +1436,59 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-list-activeSelectionBackground);
       color: var(--vscode-list-activeSelectionForeground);
     }
+    .ux-hint-banner {
+      flex-shrink: 0;
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-editor-inactiveSelectionBackground, var(--vscode-sideBar-background));
+      font-size: 0.92em;
+      line-height: 1.45;
+    }
+    .ux-hint-banner[hidden] { display: none !important; }
+    .ux-hint-banner-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .ux-hint-banner-title { font-weight: 600; margin: 0; }
+    .ux-hint-dismiss {
+      flex-shrink: 0;
+      font-family: inherit;
+      font-size: 0.85em;
+      padding: 2px 8px;
+      cursor: pointer;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .ux-hint-list { margin: 4px 0 0 1.1em; padding: 0; }
+    .ux-hint-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .ux-hint-actions button {
+      font-family: inherit;
+      font-size: 0.88em;
+      padding: 4px 10px;
+      cursor: pointer;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .empty-state-card { padding: 8px 4px; }
+    .empty-state-title { font-weight: 600; margin: 0 0 4px 0; font-style: normal; color: var(--vscode-foreground); }
+    .empty-state-body { margin: 0 0 8px 0; color: var(--vscode-descriptionForeground); font-style: normal; }
+    .empty-state-action {
+      font-family: inherit;
+      font-size: 0.9em;
+      padding: 4px 10px;
+      cursor: pointer;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+    }
+    #collaboratorHint.ux-hint-compact { margin-bottom: 6px; padding: 6px 10px; }
   </style>
 </head>
 <body>
@@ -1442,12 +1504,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     <span class="conversation-loading-spinner" aria-hidden="true"></span>
     <span>Loading conversation…</span>
   </div>
+  <div id="gettingStartedBanner" class="ux-hint-banner" hidden>
+    <div class="ux-hint-banner-header">
+      <p class="ux-hint-banner-title">Getting started with Colcoor</p>
+      <button type="button" class="ux-hint-dismiss" id="btnDismissGettingStarted" aria-label="Dismiss getting started">Dismiss</button>
+    </div>
+    <ul id="gettingStartedList" class="ux-hint-list"></ul>
+  </div>
+  <div id="tryThisNextBanner" class="ux-hint-banner" hidden>
+    <div class="ux-hint-banner-header">
+      <p class="ux-hint-banner-title">Try this next</p>
+      <button type="button" class="ux-hint-dismiss" id="btnDismissTryThisNext" aria-label="Dismiss suggestions">Dismiss</button>
+    </div>
+    <p style="margin:0;color:var(--vscode-descriptionForeground)">Optional ideas for your new conversation:</p>
+    <div id="tryThisNextActions" class="ux-hint-actions"></div>
+  </div>
   <div class="menubar" role="menubar" aria-label="Colcoor">
         <div class="menu-root">
           <button type="button" class="menu-root-btn" id="menuBtnConversation" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelConversation">Conversation</button>
           <div class="menu-panel" id="menuPanelConversation" role="menu" hidden>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="openMembers" title="Show conversation members">Members</button>
-            <button type="button" class="menu-item" role="menuitem" data-conv-action="addMember" title="Invite an editor/viewer to this conversation">Add member…</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="addMember" title="Invite a collaborator (editor or viewer)">Invite collaborator…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="changeMemberRole" title="Change a member role">Change role…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="removeMember" title="Remove a member from this conversation">Remove member…</button>
             <hr class="menu-sep" role="separator" />
@@ -1611,6 +1688,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       </div>
     </div>
     <div class="col-center">
+      <div id="collaboratorHint" class="ux-hint-banner ux-hint-compact" hidden role="status"></div>
       <div class="thread">
         <div class="hint thread-hint">Thread (root → selected)</div>
         <div class="thread-visit-nav" role="group" aria-label="Visited tree selection">
@@ -2071,7 +2149,112 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       agentModelSelected: "auto",
       agentModelsListHint: null,
       pendingAssistantModelLabel: null,
+      gettingStartedVisible: false,
+      tryThisNextVisible: false,
+      conversationMembers: [],
     };
+    const EMPTY_COPY = ${emptyCopyJson};
+    const GETTING_STARTED_LINES = ${gettingStartedLinesJson};
+    const TRY_THIS_NEXT_STEPS = ${tryThisNextStepsJson};
+
+    function emptyStateHtml(copy) {
+      if (!copy) return '<p class="empty">Nothing here yet.</p>';
+      var html =
+        '<div class="empty-state-card"><p class="empty-state-title">' +
+        esc(copy.title) +
+        '</p><p class="empty-state-body">' +
+        esc(copy.body) +
+        "</p>";
+      if (copy.actionLabel && copy.action) {
+        html +=
+          '<button type="button" class="empty-state-action" data-empty-action="' +
+          esc(copy.action) +
+          '">' +
+          esc(copy.actionLabel) +
+          "</button>";
+      }
+      html += "</div>";
+      return html;
+    }
+
+    function wireEmptyStateActions(container) {
+      if (!container || container.getAttribute("data-empty-wired") === "1") return;
+      container.setAttribute("data-empty-wired", "1");
+      container.addEventListener("click", function (ev) {
+        var btn = ev.target && ev.target.closest ? ev.target.closest("[data-empty-action]") : null;
+        if (!btn) return;
+        var action = btn.getAttribute("data-empty-action");
+        if (action === "addMember") vscode.postMessage({ type: "addMember" });
+        else if (action === "openSideChat") vscode.postMessage({ type: "openSideChat" });
+        else if (action === "focusComposer") {
+          var ta = document.getElementById("input");
+          if (ta) ta.focus();
+        }
+      });
+    }
+
+    function memberRoleLabel(role) {
+      if (role === "owner") return "Owner";
+      if (role === "editor") return "Editor";
+      if (role === "viewer") return "Viewer";
+      return role ? String(role) : "Member";
+    }
+
+    function renderUxHints() {
+      var gs = document.getElementById("gettingStartedBanner");
+      var gsList = document.getElementById("gettingStartedList");
+      if (gs && gsList) {
+        if (state.gettingStartedVisible) {
+          gs.hidden = false;
+          gsList.innerHTML = GETTING_STARTED_LINES.map(function (line) {
+            return "<li>" + esc(line) + "</li>";
+          }).join("");
+        } else {
+          gs.hidden = true;
+        }
+      }
+      var tt = document.getElementById("tryThisNextBanner");
+      var ttActions = document.getElementById("tryThisNextActions");
+      if (tt && ttActions) {
+        if (state.tryThisNextVisible) {
+          tt.hidden = false;
+          ttActions.innerHTML = TRY_THIS_NEXT_STEPS.map(function (step) {
+            return (
+              '<button type="button" data-try-step="' +
+              esc(step.id) +
+              '">' +
+              esc(step.label) +
+              "</button>"
+            );
+          }).join("");
+        } else {
+          tt.hidden = true;
+          ttActions.innerHTML = "";
+        }
+      }
+      var collab = document.getElementById("collaboratorHint");
+      if (collab) {
+        var members = Array.isArray(state.conversationMembers) ? state.conversationMembers : [];
+        if (!state.conversationId || state.conversationLoading) {
+          collab.hidden = true;
+        } else if (members.length <= 1) {
+          collab.hidden = false;
+          collab.innerHTML = emptyStateHtml(EMPTY_COPY.soloCollaborator);
+          wireEmptyStateActions(collab);
+        } else {
+          collab.hidden = false;
+          var parts = members.map(function (m) {
+            var name =
+              (m.display_name && String(m.display_name).trim()) ||
+              (m.email && String(m.email).trim()) ||
+              "User";
+            return esc(name) + " (" + esc(memberRoleLabel(m.role)) + ")";
+          });
+          collab.textContent = "Collaborators: " + parts.join(", ");
+        }
+      }
+    }
+
     wireInlineSideChatAudioUnlockFromUserGesture();
 
     var openColcoorListsDrawer = function (tab) {
@@ -2968,7 +3151,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!root) return;
       const ctx = buildVisibleTreeContext();
       if (!ctx.evs.length) {
-        root.innerHTML = '<p class="empty">No events yet.</p>';
+        root.innerHTML = emptyStateHtml(EMPTY_COPY.tree);
+        wireEmptyStateActions(root);
         return;
       }
       function walk(parentKey, depth) {
@@ -3227,7 +3411,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var wasAtBottom = captured.wasAtBottom;
       const segs = visibleThreadSegmentsForUi();
       if (!segs.length && !state.pendingUserHtml && !state.streamingHtml && !state.busy) {
-        el.innerHTML = '<p class="empty">Select an event in the tree.</p>';
+        el.innerHTML = emptyStateHtml(EMPTY_COPY.thread);
+        wireEmptyStateActions(el);
         applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom);
         return;
       }
@@ -3315,7 +3500,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           '<p class="pending-hint">Preparing reply…</p>' +
           "</div>";
       }
-      el.innerHTML = html || '<p class="empty">Nothing to show on this path.</p>';
+      el.innerHTML = html || emptyStateHtml(EMPTY_COPY.threadEmptyPath);
+      if (!html) wireEmptyStateActions(el);
       wireThreadCopyButtons(el);
       applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom);
     }
@@ -3779,10 +3965,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       banner.hidden = false;
       if (st === "reconnecting") {
-        banner.textContent = "Reconnecting…";
+        banner.textContent = "Side chat reconnecting — your messages are saved. Use ↻ to refresh.";
         banner.setAttribute("data-status", "reconnecting");
       } else if (st === "restored") {
-        banner.textContent = "Connection restored";
+        banner.textContent = "Side chat connection restored";
         banner.setAttribute("data-status", "restored");
       } else {
         banner.hidden = true;
@@ -3821,7 +4007,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       inlineSideChatCloseMsgMenu();
       var rows = Array.isArray(state.sideChatMessages) ? state.sideChatMessages : [];
       if (!rows.length) {
-        list.innerHTML = '<p class="empty">No side-chat messages yet.</p>';
+        list.innerHTML = emptyStateHtml(EMPTY_COPY.sideChat);
+        wireEmptyStateActions(list);
         maybeScrollInlineSideChatAfterLocalSend();
         inlineSideChatUpdateReplyHint();
         inlineSideChatUpdateGraphRefHint();
@@ -4336,6 +4523,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         renderThread({ mode: threadScrollMode });
         lastThreadScrollSnapshot = threadScrollSnapshotFromState(state);
         renderInlineSideChat();
+        renderUxHints();
         renderDetailBar();
         updateThreadVisitNav();
         applyTreeWidth();
@@ -5005,6 +5193,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         playInlineSideChatSound(m.kind, m.volume);
         return;
       }
+      if (m && m.type === "focusComposer") {
+        var composerTa = document.getElementById("input");
+        if (composerTa) composerTa.focus();
+        return;
+      }
       if (m && m.type === "focusSideChatSeq") {
         var fs = typeof m.seq === "number" && Number.isFinite(m.seq) ? Math.floor(m.seq) : 0;
         if (fs > 0) {
@@ -5061,6 +5254,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             m.pendingSideChatGraphReferenceSummary.trim()
               ? m.pendingSideChatGraphReferenceSummary.trim()
               : null,
+          gettingStartedVisible: m.gettingStartedVisible === true,
+          tryThisNextVisible: m.tryThisNextVisible === true,
+          conversationMembers: Array.isArray(m.conversationMembers)
+            ? m.conversationMembers
+            : [],
         };
         render({ preserveThreadScroll: m.preserveThreadScroll === true });
         if (m.composerPrefill) {
@@ -5400,6 +5598,31 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       scheduleComposerFocus(ta);
     });
     wireMenubar();
+
+    (function wireOnboardingBanners() {
+      var dgs = document.getElementById("btnDismissGettingStarted");
+      if (dgs) {
+        dgs.addEventListener("click", function () {
+          vscode.postMessage({ type: "dismissGettingStarted" });
+        });
+      }
+      var dtt = document.getElementById("btnDismissTryThisNext");
+      if (dtt) {
+        dtt.addEventListener("click", function () {
+          vscode.postMessage({ type: "dismissTryThisNext" });
+        });
+      }
+      var ttActions = document.getElementById("tryThisNextActions");
+      if (ttActions && ttActions.getAttribute("data-wired") !== "1") {
+        ttActions.setAttribute("data-wired", "1");
+        ttActions.addEventListener("click", function (ev) {
+          var btn = ev.target && ev.target.closest ? ev.target.closest("[data-try-step]") : null;
+          if (!btn) return;
+          var step = btn.getAttribute("data-try-step");
+          if (step) vscode.postMessage({ type: "tryThisNext", step: step });
+        });
+      }
+    })();
 
     var btnJump = document.getElementById("btnJumpTip");
     if (btnJump) {

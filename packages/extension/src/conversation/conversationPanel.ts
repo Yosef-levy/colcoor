@@ -26,6 +26,13 @@ import {
 } from "./colcoorContextKeys";
 import { isSafeHttpUrlForWebview, listLegalPolicyLinksFromColcoorWorkspaceSection } from "./legalPolicySection";
 import { getConversationWebviewHtml } from "./conversationWebviewHtml";
+import {
+  armTryThisNextForConversation as persistTryThisNextConversation,
+  dismissOnboarding,
+  dismissTryThisNext,
+  isGettingStartedVisibleSync,
+  isTryThisNextVisibleSync,
+} from "../onboarding/gettingStarted";
 import { buildConversationDrawersModel, type TodoDrawerRow, type StarredDrawerRow } from "./drawersModel";
 import { runResendAssistant } from "./resendAssistant";
 import {
@@ -219,6 +226,18 @@ type WebviewStateMessage = {
   pendingAssistantModelLabel: string | null;
   /** When true, re-render the thread without scrolling to the bottom (note add/edit/delete). */
   preserveThreadScroll?: boolean;
+  /** Inline getting-started banner (first-run). */
+  gettingStartedVisible?: boolean;
+  /** Dismissible suggestions after creating a conversation. */
+  tryThisNextVisible?: boolean;
+  /** Collaborators for roster / solo-invite hint. */
+  conversationMembers?: {
+    user_id: string;
+    role: string;
+    display_name?: string | null;
+    email?: string | null;
+    handle?: string | null;
+  }[];
 };
 
 type FromWebview =
@@ -270,6 +289,9 @@ type FromWebview =
   | { type: "selectSideChatReference"; kind: "reply"; seq: number }
   | { type: "openMembers" }
   | { type: "addMember" }
+  | { type: "dismissGettingStarted" }
+  | { type: "dismissTryThisNext" }
+  | { type: "tryThisNext"; step: "invite" | "branch" | "sideChat" }
   | { type: "changeMemberRole" }
   | { type: "removeMember" }
   | { type: "openSideChat" }
@@ -388,6 +410,8 @@ export function createConversationPanelController(
   restoreMessageBranchFromPalette: () => Promise<void>;
   /** Show inline side-chat drawer in this conversation tab. */
   openInlineSideChat: () => Promise<void>;
+  /** Show dismissible “try this next” hints in the open conversation panel. */
+  armTryThisNextForConversation: (conversationId: string) => Promise<void>;
   /** Attach main-thread message/note ids to the next inline side-chat send (cleared after send or conversation switch). */
   queueSideChatGraphReferenceForNextSend: (eventId: string | null, noteId: string | null) => void;
   /** Play side-chat sound preview in the open webview. */
@@ -478,6 +502,7 @@ export function createConversationPanelController(
   let inlineSideChatSseSessionId: string | undefined;
   let inlineSideChatSseStatus: "reconnecting" | "restored" | null = null;
   let inlineSideChatSseWasReconnecting = false;
+  let sideChatSseRefreshAfterRestoreTimer: ReturnType<typeof setTimeout> | undefined;
   let sideChatSseReconnectUiTimer: ReturnType<typeof setTimeout> | undefined;
   let sideChatSseRestoredUiTimer: ReturnType<typeof setTimeout> | undefined;
   const SIDE_CHAT_SSE_RECONNECT_UI_DELAY_MS = 600;
@@ -715,6 +740,15 @@ export function createConversationPanelController(
         sideChatSseRestoredUiTimer = undefined;
         refreshSideChatSseBannerInWebview();
       }, SIDE_CHAT_SSE_RESTORED_UI_MS);
+      if (sideChatSseRefreshAfterRestoreTimer != null) {
+        clearTimeout(sideChatSseRefreshAfterRestoreTimer);
+      }
+      sideChatSseRefreshAfterRestoreTimer = setTimeout(() => {
+        sideChatSseRefreshAfterRestoreTimer = undefined;
+        if (conversationId && inlineSideChatVisible) {
+          void refreshInlineSideChat().catch((e) => reportPanelApiError(e));
+        }
+      }, 400);
     } else {
       inlineSideChatSseStatus = null;
     }
@@ -1410,6 +1444,15 @@ export function createConversationPanelController(
         ...(pendingComposerPrefill ? { composerPrefill: pendingComposerPrefill } : {}),
         ...agentModelFieldsForWebview(),
         pendingAssistantModelLabel: pendingAssistantModelLabelForWebview(),
+        gettingStartedVisible: isGettingStartedVisibleSync(context.globalState),
+        tryThisNextVisible: isTryThisNextVisibleSync(context.globalState, conversationId),
+        conversationMembers: lastConversationMembers.map((m) => ({
+          user_id: m.user_id,
+          role: m.role,
+          display_name: m.display_name ?? null,
+          email: m.email ?? null,
+          handle: m.handle ?? null,
+        })),
         ...(options?.preserveThreadScroll ? { preserveThreadScroll: true } : {}),
       };
       pendingComposerPrefill = null;
@@ -2512,6 +2555,33 @@ export function createConversationPanelController(
         });
         return;
       }
+      if (msg.type === "dismissGettingStarted") {
+        await dismissOnboarding(context.globalState);
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        return;
+      }
+      if (msg.type === "dismissTryThisNext") {
+        await dismissTryThisNext(context.globalState);
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        return;
+      }
+      if (msg.type === "tryThisNext") {
+        if (msg.step === "invite") {
+          await vscode.commands.executeCommand("colcoor.addConversationMember", {
+            conv: { id: conversationId, title: conversationTitle ?? null },
+          });
+        } else if (msg.step === "sideChat") {
+          await openInlineSideChatDrawer();
+        } else if (msg.step === "branch") {
+          void vscode.window.showInformationMessage(
+            "Colcoor: select a message in the tree, choose Message → Edit message…, change it, and send to create a branch.",
+          );
+          if (panel && webviewReady) {
+            void panel.webview.postMessage({ type: "focusComposer" });
+          }
+        }
+        return;
+      }
       if (msg.type === "changeMemberRole") {
         if (!conversationId) {
           return;
@@ -3539,6 +3609,12 @@ export function createConversationPanelController(
     },
     queueSideChatGraphReferenceForNextSend(eventId: string | null, noteId: string | null): void {
       applyPendingSideChatGraphReference(eventId, noteId);
+    },
+    async armTryThisNextForConversation(conversationIdToArm: string): Promise<void> {
+      await persistTryThisNextConversation(context.globalState, conversationIdToArm);
+      if (conversationId === conversationIdToArm) {
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+      }
     },
     async previewSideChatSound(kind: "message" | "mention"): Promise<boolean> {
       if (!panel || !webviewReady) {
