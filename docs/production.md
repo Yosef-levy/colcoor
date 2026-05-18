@@ -120,6 +120,12 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `COLCOOR_LOG_LEVEL` | Optional | `INFO` default; `DEBUG` / `WARNING` / `ERROR` |
 | `COLCOOR_LOG_FORMAT` | Optional | `json` (default in production) or `text` |
 | `COLCOOR_METRICS_ENABLED` | Optional | Expose `/metrics` (default **true**) |
+| `RATE_LIMIT_ENABLED` | Optional | Per-user token-bucket limiting in the API (default **true**). **`/health`** and **`/ready`** are exempt |
+| `RATE_LIMIT_RPS_PER_USER` | Optional | Steady refill rate per authenticated user (JWT `sub`; default **10**) |
+| `RATE_LIMIT_BURST_PER_USER` | Optional | Burst capacity per user (default **20**) |
+| `RATE_LIMIT_RPS_ANON` | Optional | Steady refill for unauthenticated requests keyed by client IP (default **5**) |
+| `RATE_LIMIT_BURST_ANON` | Optional | Burst for anonymous/IP buckets (default **10**) |
+| `RATE_LIMIT_TRUST_PROXY` | Yes in Compose | **`true`** behind nginx so anonymous limits use the client IP from `X-Forwarded-For`; keep **`false`** if the API is reachable without a trusted proxy |
 | `PORT` | Fixed in Compose | Backend listens on **8000** inside the stack; must match nginx upstream |
 | `DOMAIN` | Optional | Reserved for future use / docs |
 | `CURSOR_AUTH_PROVIDER_ORDER` | Optional | Comma list: `github`, `microsoft`, `google` — order used when `provider_hint` is `auto` on **`POST /api/v1/auth/cursor`** (default `github,microsoft,google`) |
@@ -151,9 +157,31 @@ Startup **fails fast** in `COLCOOR_ENV=production` if `JWT_SECRET`, `DATABASE_UR
 
 ---
 
+## Rate limiting (API)
+
+The backend applies **per-user** limits using the JWT **`sub`** claim when `Authorization: Bearer` is present. Traffic without a valid token is limited **per client IP** (shared corporate NAT shares one bucket). **`GET /health`** and **`GET /ready`** are never limited.
+
+| Variable | Default | Role |
+|----------|---------|------|
+| `RATE_LIMIT_ENABLED` | `true` | Turn API rate limiting on or off |
+| `RATE_LIMIT_RPS_PER_USER` | `10` | Tokens/sec refill per authenticated user |
+| `RATE_LIMIT_BURST_PER_USER` | `20` | Max burst per user |
+| `RATE_LIMIT_RPS_ANON` | `5` | Tokens/sec refill per IP (no/invalid Bearer) |
+| `RATE_LIMIT_BURST_ANON` | `10` | Max burst per IP |
+
+Exceeded limits return **HTTP 429** with `{"detail":"Rate limit exceeded. Try again shortly."}`.
+
+**Proxy header:** set `RATE_LIMIT_TRUST_PROXY=true` in production Compose so anonymous buckets use the client IP nginx sends in `X-Forwarded-For`. With the flag off (default), only `request.client.host` is used so clients cannot spoof IPs when hitting the API directly.
+
+**Memory:** in-memory buckets for idle keys are dropped after **1 hour** without traffic (per worker).
+
+**Multi-replica:** limits are **in-memory per process** today. Each Gunicorn worker maintains its own buckets; nginx edge limits still apply per IP. For strict global limits across replicas, plan a shared backend (e.g. Redis) behind the same `RateLimitBackend` interface.
+
+---
+
 ## nginx
 
-- **Rate limiting:** `location /` uses `limit_req` (~**10 req/s** per client IP, **burst=20**). **`/health`** and **`/ready`** are separate `location =` blocks and are **not** rate-limited.
+- **Edge rate limiting:** `location /` uses `limit_req` (~**10 req/s** per client IP, **burst=20**). Complements API per-user limits; **`/health`** and **`/ready`** are separate `location =` blocks and are **not** rate-limited at nginx.
 - **TLS:** commented `server { listen 443 ssl ... }` block and Compose volume hints live in [`nginx/nginx.conf`](../nginx/nginx.conf). After obtaining certificates (e.g. Certbot on the host), mount them read-only, uncomment **443** in Compose, and align `server_name`.
 
 ---

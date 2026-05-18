@@ -194,6 +194,53 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("COLCOOR_LOG_FORMAT", "LOG_FORMAT"),
         description="json | text. Empty: json in production, text otherwise.",
     )
+    rate_limit_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "RATE_LIMIT_ENABLED",
+            "COLCOOR_RATE_LIMIT_ENABLED",
+        ),
+    )
+    rate_limit_rps_per_user: float = Field(
+        default=10.0,
+        ge=0.0,
+        validation_alias=AliasChoices(
+            "RATE_LIMIT_RPS_PER_USER",
+            "COLCOOR_RATE_LIMIT_RPS_PER_USER",
+        ),
+    )
+    rate_limit_burst_per_user: float = Field(
+        default=20.0,
+        ge=1.0,
+        validation_alias=AliasChoices(
+            "RATE_LIMIT_BURST_PER_USER",
+            "COLCOOR_RATE_LIMIT_BURST_PER_USER",
+        ),
+    )
+    rate_limit_rps_anon: float = Field(
+        default=5.0,
+        ge=0.0,
+        validation_alias=AliasChoices(
+            "RATE_LIMIT_RPS_ANON",
+            "COLCOOR_RATE_LIMIT_RPS_ANON",
+        ),
+    )
+    rate_limit_burst_anon: float = Field(
+        default=10.0,
+        ge=1.0,
+        validation_alias=AliasChoices(
+            "RATE_LIMIT_BURST_ANON",
+            "COLCOOR_RATE_LIMIT_BURST_ANON",
+        ),
+    )
+    rate_limit_trust_proxy: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "RATE_LIMIT_TRUST_PROXY",
+            "COLCOOR_RATE_LIMIT_TRUST_PROXY",
+        ),
+        description="Honor X-Forwarded-For for anonymous IP buckets (true behind nginx).",
+    )
 
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"

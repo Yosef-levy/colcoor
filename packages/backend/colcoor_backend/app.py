@@ -20,6 +20,8 @@ from colcoor_backend.db.session import create_engine, create_session_factory
 from colcoor_backend.logging_config import configure_logging
 from colcoor_backend.observability import metrics_content_type, render_metrics
 from colcoor_backend.observability.middleware import RequestContextMiddleware
+from colcoor_backend.rate_limit.backends import InMemoryRateLimitStore
+from colcoor_backend.rate_limit.middleware import RateLimitMiddleware
 from colcoor_backend.services.event_purge import spawn_event_purge_scheduler
 from colcoor_backend.services.side_chat_wake.factory import create_side_chat_wake_hub
 from colcoor_backend.storage.factory import create_image_blob_storage
@@ -96,6 +98,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    application.state.rate_limit_store = InMemoryRateLimitStore()
+    # Starlette wraps last-added middleware on the outside. RequestContext must be
+    # outer so 429 responses from RateLimitMiddleware still get X-Request-ID.
+    application.add_middleware(RateLimitMiddleware)
     application.add_middleware(RequestContextMiddleware)
 
     @application.get("/health", include_in_schema=False)
