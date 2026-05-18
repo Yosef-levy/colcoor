@@ -4,7 +4,6 @@ import {
   KEY_HAS_SIGNED_IN,
   KEY_ONBOARDING_DISMISSED,
   KEY_TRY_THIS_NEXT,
-  isGettingStartedVisibleSync,
   isTryThisNextVisibleSync,
 } from "./gettingStartedFlags";
 
