@@ -17,6 +17,7 @@ import type {
 } from "../api/client";
 import { confirmDestructiveActionByTypingDelete } from "./destructiveDeleteConfirm";
 import { countSubtreeNodes, SUBTREE_TYPED_DELETE_THRESHOLD } from "./destructiveDeleteCount";
+import { getColcoorOutputLog } from "../util/colcoorOutputLog";
 import { reportPanelApiError } from "../util/reportPanelApiError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
 import {
@@ -172,6 +173,8 @@ type WebviewStateMessage = {
   pendingUserHtml: string | null;
   /** Inline side-chat drawer in the same conversation tab. */
   sideChatVisible: boolean;
+  /** SSE connection banner in the side-chat column (`reconnecting` | `restored` | hidden). */
+  sideChatSseStatus?: "reconnecting" | "restored" | null;
   sideChatMessages: SideChatRenderMessage[];
   /** Server read cursor for inline side-chat unread markers (seq strictly greater than this). */
   sideChatLastReadSeq: number;
@@ -472,6 +475,13 @@ export function createConversationPanelController(
   let pendingSideChatReferencedNoteId: string | null = null;
   let sideChatSseAbort: AbortController | undefined;
   let inlineSideChatSseConversationId: string | undefined;
+  let inlineSideChatSseSessionId: string | undefined;
+  let inlineSideChatSseStatus: "reconnecting" | "restored" | null = null;
+  let inlineSideChatSseWasReconnecting = false;
+  let sideChatSseReconnectUiTimer: ReturnType<typeof setTimeout> | undefined;
+  let sideChatSseRestoredUiTimer: ReturnType<typeof setTimeout> | undefined;
+  const SIDE_CHAT_SSE_RECONNECT_UI_DELAY_MS = 600;
+  const SIDE_CHAT_SSE_RESTORED_UI_MS = 2_500;
   const inlineSideChatNotifiedMessageIds = new Set<string>();
   let inlineSideChatLastNotificationAtMs: number | null = null;
   let inlineSideChatListRefreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -671,10 +681,76 @@ export function createConversationPanelController(
     }
   }
 
+  function clearSideChatSseUiTimers(): void {
+    if (sideChatSseReconnectUiTimer != null) {
+      clearTimeout(sideChatSseReconnectUiTimer);
+      sideChatSseReconnectUiTimer = undefined;
+    }
+    if (sideChatSseRestoredUiTimer != null) {
+      clearTimeout(sideChatSseRestoredUiTimer);
+      sideChatSseRestoredUiTimer = undefined;
+    }
+  }
+
+  function refreshSideChatSseBannerInWebview(): void {
+    if (!panel || !webviewReady) {
+      return;
+    }
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+  }
+
+  function onSideChatSseStreamActivity(): void {
+    if (sideChatSseReconnectUiTimer != null) {
+      clearTimeout(sideChatSseReconnectUiTimer);
+      sideChatSseReconnectUiTimer = undefined;
+    }
+    if (inlineSideChatSseWasReconnecting) {
+      inlineSideChatSseWasReconnecting = false;
+      inlineSideChatSseStatus = "restored";
+      if (sideChatSseRestoredUiTimer != null) {
+        clearTimeout(sideChatSseRestoredUiTimer);
+      }
+      sideChatSseRestoredUiTimer = setTimeout(() => {
+        inlineSideChatSseStatus = null;
+        sideChatSseRestoredUiTimer = undefined;
+        refreshSideChatSseBannerInWebview();
+      }, SIDE_CHAT_SSE_RESTORED_UI_MS);
+    } else {
+      inlineSideChatSseStatus = null;
+    }
+    refreshSideChatSseBannerInWebview();
+  }
+
+  function onSideChatSseReconnect(info: { attempt: number; delayMs: number; reason: string }): void {
+    const cid = inlineSideChatSseConversationId;
+    const session = inlineSideChatSseSessionId ?? "unknown";
+    getColcoorOutputLog().appendLine(
+      `[side-chat SSE] session=${session} conversation=${cid ?? "?"} attempt=${info.attempt} delayMs=${info.delayMs} — ${info.reason}`,
+    );
+    if (info.delayMs <= 0) {
+      return;
+    }
+    inlineSideChatSseWasReconnecting = true;
+    if (sideChatSseReconnectUiTimer != null) {
+      return;
+    }
+    sideChatSseReconnectUiTimer = setTimeout(() => {
+      sideChatSseReconnectUiTimer = undefined;
+      if (inlineSideChatSseWasReconnecting) {
+        inlineSideChatSseStatus = "reconnecting";
+        refreshSideChatSseBannerInWebview();
+      }
+    }, SIDE_CHAT_SSE_RECONNECT_UI_DELAY_MS);
+  }
+
   function stopInlineSideChatSse(): void {
     sideChatSseAbort?.abort();
     sideChatSseAbort = undefined;
     inlineSideChatSseConversationId = undefined;
+    inlineSideChatSseSessionId = undefined;
+    inlineSideChatSseStatus = null;
+    inlineSideChatSseWasReconnecting = false;
+    clearSideChatSseUiTimers();
   }
 
   function ensureInlineSideChatSseForConversation(): void {
@@ -693,14 +769,21 @@ export function createConversationPanelController(
     const ac = new AbortController();
     sideChatSseAbort = ac;
     inlineSideChatSseConversationId = cid;
+    inlineSideChatSseSessionId = `${cid.slice(0, 8)}-${Date.now().toString(36)}`;
+    inlineSideChatSseStatus = null;
+    inlineSideChatSseWasReconnecting = false;
+    clearSideChatSseUiTimers();
 
     void runInlineSideChatSseLoop({
       api,
       conversationId: cid,
+      sseSessionId: inlineSideChatSseSessionId,
       getAfterSeq: () => maxSideChatSeq(inlineSideChatRows),
       signal: ac.signal,
       stopped: () =>
         inlineSideChatSseConversationId !== cid || conversationId !== cid || panel == null,
+      onReconnect: onSideChatSseReconnect,
+      onStreamActivity: onSideChatSseStreamActivity,
       onJsonPayload: async (payload: unknown) => {
         if (conversationId !== cid || panel == null) {
           return;
@@ -764,6 +847,11 @@ export function createConversationPanelController(
         inlineSideChatNotifiedMessageIds.add(incoming.id);
         await incorporateInlineSideChatFromRemote(incoming);
       },
+    }).catch((e) => {
+      if (ac.signal.aborted || inlineSideChatSseConversationId !== cid) {
+        return;
+      }
+      reportPanelApiError(e);
     });
   }
 
@@ -1295,6 +1383,7 @@ export function createConversationPanelController(
         sideChatUnreadCount,
         pendingUserHtml,
         sideChatVisible: inlineSideChatVisible,
+        sideChatSseStatus: inlineSideChatVisible ? inlineSideChatSseStatus : null,
         sideChatMessages: inlineSideChatRendered,
         sideChatLastReadSeq: effectiveSideChatLastReadSeqForWebview(),
         viewerUserId:
@@ -1378,6 +1467,7 @@ export function createConversationPanelController(
           sideChatUnreadCount,
           pendingUserHtml: null,
           sideChatVisible: inlineSideChatVisible,
+          sideChatSseStatus: inlineSideChatVisible ? inlineSideChatSseStatus : null,
           sideChatMessages: inlineSideChatRendered,
           sideChatLastReadSeq: effectiveSideChatLastReadSeqForWebview(),
           viewerUserId:
@@ -1613,10 +1703,11 @@ export function createConversationPanelController(
           );
           const sideChatRefreshP =
             inlineSideChatVisible && !skipInlineSideChatRefresh
-              ? refreshInlineSideChat().catch(() => {
+              ? refreshInlineSideChat().catch((e) => {
                   inlineSideChatRows = [];
                   inlineSideChatUrlsByMessageId = new Map();
                   inlineSideChatRendered = [];
+                  reportPanelApiError(e);
                 })
               : Promise.resolve();
           const [imageMap] = await Promise.all([imageFetchP, sideChatRefreshP]);
@@ -1635,7 +1726,7 @@ export function createConversationPanelController(
           }
           return;
         } catch (e) {
-      reportPanelApiError(e);
+          reportPanelApiError(e);
           const msg = e instanceof Error ? e.message : String(e);
           lastNotes = [];
           lastNeedsContextRebuild = false;
@@ -1750,7 +1841,7 @@ export function createConversationPanelController(
         }
       } catch (e) {
         stream.dispose();
-      reportPanelApiError(e);
+        reportPanelApiError(e);
         const msg = e instanceof Error ? e.message : String(e);
         await loadTreeAndPush(false, msg);
         break;
@@ -2391,7 +2482,7 @@ export function createConversationPanelController(
           try {
             await refreshInlineSideChat();
           } catch (e) {
-      reportPanelApiError(e);
+            reportPanelApiError(e);
           }
           postState(lastTreeEvents, lastPostedBusy, lastPostedError);
           try {
@@ -2497,7 +2588,7 @@ export function createConversationPanelController(
           try {
             await refreshInlineSideChat();
           } catch (e) {
-      reportPanelApiError(e);
+            reportPanelApiError(e);
           }
           postState(lastTreeEvents, lastPostedBusy, lastPostedError);
           try {
@@ -2526,7 +2617,7 @@ export function createConversationPanelController(
           await refreshInlineSideChat();
           await markInlineSideChatReadFromCache(true);
         } catch (e) {
-      reportPanelApiError(e);
+          reportPanelApiError(e);
         }
         postState(lastTreeEvents, sendAbort != null, null);
         return;

@@ -13,6 +13,11 @@ HTTP_REQUESTS_TOTAL = Counter(
     "HTTP requests",
     ["method", "route", "status"],
 )
+HTTP_ERRORS_TOTAL = Counter(
+    "colcoor_http_errors_total",
+    "HTTP responses with status >= 400",
+    ["method", "route", "status"],
+)
 HTTP_REQUEST_DURATION_SECONDS = Histogram(
     "colcoor_http_request_duration_seconds",
     "HTTP request latency",
@@ -22,6 +27,15 @@ HTTP_REQUEST_DURATION_SECONDS = Histogram(
 SSE_CONNECTIONS_ACTIVE = Gauge(
     "colcoor_sse_connections_active",
     "Active side-chat SSE streams on this worker",
+)
+SSE_STREAM_OPENS_TOTAL = Counter(
+    "colcoor_sse_stream_opens_total",
+    "Side-chat SSE stream connections opened",
+    ["reconnect"],
+)
+SSE_RECONNECTS_TOTAL = Counter(
+    "colcoor_sse_reconnects_total",
+    "Side-chat SSE opens with X-Colcoor-SSE-Attempt > 0",
 )
 REDIS_PUBLISH_TOTAL = Counter(
     "colcoor_redis_publish_total",

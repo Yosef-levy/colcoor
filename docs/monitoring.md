@@ -58,8 +58,11 @@ Self-hosted operators can skip the profile and scrape `/metrics` with any Promet
 | Metric | Type | Labels | Meaning |
 |--------|------|--------|---------|
 | `colcoor_http_requests_total` | Counter | `method`, `route`, `status` | Request count (route = FastAPI template path) |
+| `colcoor_http_errors_total` | Counter | `method`, `route`, `status` | Responses with status ≥ 400 |
 | `colcoor_http_request_duration_seconds` | Histogram | `method`, `route` | Latency |
 | `colcoor_sse_connections_active` | Gauge | — | Open side-chat SSE streams **per worker** |
+| `colcoor_sse_stream_opens_total` | Counter | `reconnect` | SSE stream opens (`true` when `X-Colcoor-SSE-Attempt` > 0) |
+| `colcoor_sse_reconnects_total` | Counter | — | Client reconnect opens (extension sends attempt > 0) |
 | `colcoor_redis_publish_total` | Counter | `result` | Side-chat Redis publishes (`ok` / `error`) |
 | `colcoor_redis_subscribed_channels` | Gauge | — | Redis channels subscribed on this worker |
 | `colcoor_redis_sse_waiters` | Gauge | — | Local SSE waiters multiplexed onto Redis |

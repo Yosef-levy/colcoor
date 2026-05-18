@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -21,10 +22,24 @@ from colcoor_backend.services.side_chat import (
     side_chat_messages_to_outs,
     soft_delete_side_chat_message,
 )
+from colcoor_backend.errors.logging_utils import log_event
+from colcoor_backend.observability.metrics import SSE_RECONNECTS_TOTAL, SSE_STREAM_OPENS_TOTAL
 from colcoor_backend.services.side_chat_sse import iter_side_chat_sse
 from colcoor_backend.services.side_chat_wake.notify import notify_side_chat_changed
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _sse_client_headers(request: Request) -> tuple[int, str]:
+    raw_attempt = request.headers.get("X-Colcoor-SSE-Attempt", "0").strip()
+    try:
+        attempt = max(0, int(raw_attempt))
+    except ValueError:
+        attempt = 0
+    session_id = request.headers.get("X-Colcoor-SSE-Session", "").strip()[:128]
+    return attempt, session_id
 
 
 def _wake_hub(request: Request):
@@ -54,6 +69,22 @@ async def side_chat_event_stream(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="database not configured",
         )
+    sse_attempt, sse_session = _sse_client_headers(request)
+    is_reconnect = sse_attempt > 0
+    SSE_STREAM_OPENS_TOTAL.labels(reconnect=str(is_reconnect).lower()).inc()
+    if is_reconnect:
+        SSE_RECONNECTS_TOTAL.inc()
+    log_event(
+        logger,
+        logging.INFO,
+        "sse_stream_open",
+        "side-chat SSE stream opened",
+        request=request,
+        conversation_id=str(conversation_id),
+        sse_attempt=sse_attempt,
+        sse_session=sse_session or None,
+        reconnect=is_reconnect,
+    )
     return StreamingResponse(
         iter_side_chat_sse(
             factory,

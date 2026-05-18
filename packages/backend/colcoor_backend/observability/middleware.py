@@ -13,6 +13,7 @@ from starlette.responses import Response
 
 from colcoor_backend.observability import context as obs_ctx
 from colcoor_backend.observability.metrics import (
+    HTTP_ERRORS_TOTAL,
     HTTP_REQUEST_DURATION_SECONDS,
     HTTP_REQUESTS_TOTAL,
     SKIP_HTTP_METRICS_PATHS,
@@ -72,6 +73,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 HTTP_REQUESTS_TOTAL.labels(
                     method=method, route=route, status=str(status)
                 ).inc()
+                if status >= 400:
+                    HTTP_ERRORS_TOTAL.labels(
+                        method=method, route=route, status=str(status)
+                    ).inc()
                 HTTP_REQUEST_DURATION_SECONDS.labels(method=method, route=route).observe(
                     elapsed_ms / 1000
                 )

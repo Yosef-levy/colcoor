@@ -1,5 +1,6 @@
 import { parseApiErrorBody } from "./apiErrorFormatting";
 import { ColcoorApiHttpError } from "./colcoorApiHttpError";
+import { fetchWithRetries } from "./fetchWithRetries";
 import { parseRetryAfterSeconds } from "./retryAfterHeader";
 import { parseCompleteSseDataJsonBlocks } from "./sideChatSseParse";
 
@@ -229,8 +230,12 @@ export class ColcoorApiClient {
   }
 
   private async fetchOrThrow(url: string, init: RequestInit): Promise<Response> {
+    const method = init.method ?? "GET";
     try {
-      return await fetch(url, init);
+      return await fetchWithRetries(() => fetch(url, init), {
+        method,
+        signal: init.signal ?? undefined,
+      });
     } catch (e) {
       throw new Error(networkErrorDetail(url, e));
     }
@@ -661,17 +666,29 @@ export class ColcoorApiClient {
    */
   async *streamSideChatSseEvents(
     conversationId: string,
-    options?: { afterSeq?: number; signal?: AbortSignal },
+    options?: {
+      afterSeq?: number;
+      signal?: AbortSignal;
+      sseAttempt?: number;
+      sseSession?: string;
+    },
   ): AsyncGenerator<unknown, void, unknown> {
     const q =
       options?.afterSeq !== undefined && options.afterSeq > 0
         ? `?after_seq=${encodeURIComponent(String(options.afterSeq))}`
         : "";
+    const headers: Record<string, string> = {
+      Accept: "text/event-stream",
+      "X-Colcoor-SSE-Attempt": String(options?.sseAttempt ?? 0),
+    };
+    if (options?.sseSession?.trim()) {
+      headers["X-Colcoor-SSE-Session"] = options.sseSession.trim();
+    }
     const res = await this.fetchStreamingUnbuffered(
       `/conversations/${conversationId}/side-chat/stream${q}`,
       {
         method: "GET",
-        headers: { Accept: "text/event-stream" },
+        headers,
         signal: options?.signal,
       },
     );

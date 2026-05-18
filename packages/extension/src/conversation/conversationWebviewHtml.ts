@@ -218,6 +218,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow-y: auto;
       overflow-x: hidden;
     }
+    .inline-sidechat-sse-banner {
+      flex-shrink: 0;
+      font-size: 0.8em;
+      padding: 4px 8px;
+      margin: 0 0 6px 0;
+      border-radius: 4px;
+      color: var(--vscode-descriptionForeground);
+      background: var(--vscode-editor-inactiveSelectionBackground, rgba(128, 128, 128, 0.15));
+    }
+    .inline-sidechat-sse-banner[data-status="reconnecting"] {
+      color: var(--vscode-editorWarning-foreground, var(--vscode-charts-yellow, #cca700));
+    }
+    .inline-sidechat-sse-banner[data-status="restored"] {
+      color: var(--vscode-testing-iconPassed, var(--vscode-terminal-ansiGreen, #73c991));
+    }
     .inline-sidechat {
       flex: 1;
       min-height: 0;
@@ -1681,6 +1696,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </span>
       </div>
       <div id="inlineSideChat" class="inline-sidechat">
+        <div
+          id="inlineSideChatSseBanner"
+          class="inline-sidechat-sse-banner"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></div>
         <div id="inlineSideChatList" class="inline-sidechat-list"></div>
         <div id="inlineSideChatMsgMenu" class="inline-sidechat-msg-menu" role="menu" hidden></div>
         <div id="inlineSideChatReplyRow" class="row inline-sidechat-reply-row" style="display:none">
@@ -2027,6 +2049,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       viewerUserId: null,
       sideChatViewerRole: null,
       sideChatVisible: false,
+      sideChatSseStatus: null,
       sideChatMessages: [],
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
@@ -3743,11 +3766,37 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       });
     }
 
+
+    function updateInlineSideChatSseBanner() {
+      var banner = document.getElementById("inlineSideChatSseBanner");
+      if (!banner) return;
+      var st = state.sideChatSseStatus;
+      if (!state.sideChatVisible || !st) {
+        banner.hidden = true;
+        banner.textContent = "";
+        banner.removeAttribute("data-status");
+        return;
+      }
+      banner.hidden = false;
+      if (st === "reconnecting") {
+        banner.textContent = "Reconnecting…";
+        banner.setAttribute("data-status", "reconnecting");
+      } else if (st === "restored") {
+        banner.textContent = "Connection restored";
+        banner.setAttribute("data-status", "restored");
+      } else {
+        banner.hidden = true;
+        banner.textContent = "";
+        banner.removeAttribute("data-status");
+      }
+    }
+
     function renderInlineSideChat() {
       var col = document.getElementById("colSideChat");
       var wrap = document.getElementById("inlineSideChat");
       var list = document.getElementById("inlineSideChatList");
       if (!col || !wrap || !list) return;
+      updateInlineSideChatSseBanner();
       if (!state.sideChatVisible) {
         col.style.display = "none";
         col.setAttribute("aria-hidden", "true");
