@@ -75,6 +75,8 @@ Self-hosted operators can skip the profile and scrape `/metrics` with any Promet
 
 **Multi-worker:** Gunicorn runs multiple processes; each exposes its own `/metrics`. Prometheus scrapes one target per backend container — sum gauges across workers mentally, or add `honor_labels` / per-pod discovery later.
 
+**Multi-VM:** [`monitoring/prometheus.yml`](../monitoring/prometheus.yml) lists a single `backend:8000` target (one Compose stack). With several API VMs, add one scrape target per instance (or use service discovery) and set **`COLCOOR_INSTANCE_ID`** on each node so JSON logs are distinguishable — [multi-vm-deploy.md](multi-vm-deploy.md).
+
 Sample config: [`monitoring/prometheus.yml`](../monitoring/prometheus.yml).
 
 ---
@@ -94,9 +96,12 @@ Production (`COLCOOR_ENV=production`) emits **one JSON object per line**:
   "method": "GET",
   "status": 200,
   "latency_ms": 42.5,
-  "user_id": "…"
+  "user_id": "…",
+  "instance_id": "colcoor-api-1"
 }
 ```
+
+`instance_id` appears when **`COLCOOR_INSTANCE_ID`** is set (e.g. by `deploy-multi-vm.sh` on each VM).
 
 Errors include an `error` field with stack traces. Uvicorn/Gunicorn access logs are suppressed in favour of `colcoor.access`.
 

@@ -47,8 +47,9 @@ WORKDIR /app
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY colcoor-entrypoint.sh /usr/local/bin/colcoor-entrypoint.sh
+COPY colcoor-start.sh /usr/local/bin/colcoor-start.sh
 RUN chown -R colcoor:colcoor /app \
-    && chmod +x /usr/local/bin/colcoor-entrypoint.sh
+    && chmod +x /usr/local/bin/colcoor-entrypoint.sh /usr/local/bin/colcoor-start.sh
 
 EXPOSE 8000
 
@@ -57,5 +58,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 
 ENTRYPOINT ["/usr/local/bin/colcoor-entrypoint.sh"]
 
-# Migrations: DATABASE_MIGRATION_URL (direct postgres) when set; app uses DATABASE_URL via PgBouncer.
-CMD ["sh", "-c", "alembic upgrade head && exec gunicorn colcoor_backend.main:app -k uvicorn.workers.UvicornWorker -w \"${WEB_CONCURRENCY:-2}\" -b \"0.0.0.0:${PORT:-8000}\" --timeout 120 --graceful-timeout 30 --keep-alive 5 --access-logfile - --error-logfile -"]
+# Migrations: COLCOOR_RUN_MIGRATIONS (default true); set false on API replicas. See docs/multi-vm-deploy.md.
+CMD ["/usr/local/bin/colcoor-start.sh"]

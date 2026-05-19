@@ -24,6 +24,9 @@ class JsonLogFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        instance_id = os.environ.get("COLCOOR_INSTANCE_ID", "").strip()
+        if instance_id:
+            payload["instance_id"] = instance_id
         request_id = obs_ctx.request_id_ctx.get()
         if request_id:
             payload["request_id"] = request_id

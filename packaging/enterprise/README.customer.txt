@@ -63,6 +63,15 @@ Backend URL for the extension (important)
   Keep it as origin only: no trailing slash and no /api/v1 path.
 
 
+Multiple API VMs (advanced)
+---------------------------
+  This bundle installs one stack per directory (single nginx + backend by default). To run
+  several API VMs behind a load balancer with shared Postgres, Redis, and GCS, see the full
+  repository docs/multi-vm-deploy.md and scripts/deploy-multi-vm.sh (shared.env,
+  COLCOOR_RUN_MIGRATIONS=false on replicas, migrate once per release). Not automated in
+  these bundle scripts.
+
+
 Day-2 operations
 ----------------
   ./scripts/04-stack-restart.sh       Recreate containers (keeps Postgres volume).

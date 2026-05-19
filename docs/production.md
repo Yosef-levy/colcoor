@@ -1,6 +1,8 @@
 # Production deployment — extension backend
 
-This document describes how to run the **Colcoor extension-dedicated API** on a **single Linux VM** using **Docker Compose**, **nginx** as the only public entrypoint, and **PostgreSQL** for persistence.
+This document describes how to run the **Colcoor extension-dedicated API** on a **Linux VM** using **Docker Compose**, **nginx** as the only public entrypoint, and **PostgreSQL** for persistence. The default layout is **one VM** with Postgres and Redis in Compose; the same image also runs on **multiple API VMs** behind a load balancer when Postgres, Redis, and GCS are shared — see [multi-vm-deploy.md](multi-vm-deploy.md) and [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh).
+
+> **Scaling to multiple API VMs:** use a shared `shared.env` (secrets + `DATABASE_URL` + `REDIS_URL` + GCS), `write-env --role=primary|replica`, run **`migrate` once per release**, and set **`COLCOOR_RUN_MIGRATIONS=false`** on replicas. Full sequence: [multi-vm-deploy.md](multi-vm-deploy.md).
 
 **Runtime:** the HTTP API is **Python 3.12 + FastAPI + Gunicorn (Uvicorn workers)** in [`packages/backend/`](../packages/backend/). The repo root [`package.json`](../package.json) is for the **VS Code/Cursor extension** only, not the API server.
 
@@ -18,7 +20,7 @@ Product boundaries (no main-thread LLM on the server, no transcript-over-HTTP) a
 | **postgres** | Application data | **No** |
 | **redis** | Side-chat SSE pub/sub | **No** |
 
-Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postgres:5432**. Alembic migrations use **`DATABASE_MIGRATION_URL`** (direct Postgres) on container start. Side-chat SSE wakeups use **Redis** (`REDIS_URL`); see [side-chat-realtime.md](side-chat-realtime.md). Pool sizing and scaling: [pgbouncer.md](pgbouncer.md).
+Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postgres:5432**. On container start, **`colcoor-start.sh`** runs **`alembic upgrade head`** when **`COLCOOR_RUN_MIGRATIONS=true`** (default on a single node); set **`false`** on horizontal replicas and run migrations once per deploy ([multi-vm-deploy.md](multi-vm-deploy.md)). DDL uses **`DATABASE_MIGRATION_URL`** (direct Postgres). Side-chat SSE wakeups use **Redis** (`REDIS_URL`); see [side-chat-realtime.md](side-chat-realtime.md). Pool sizing and scaling: [pgbouncer.md](pgbouncer.md).
 
 ---
 
@@ -30,7 +32,9 @@ Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postg
 | [`pgbouncer/`](../pgbouncer/) | PgBouncer config, entrypoint, Alpine-based image |
 | [`docs/pgbouncer.md`](pgbouncer.md) | Connection scaling, pool env vars, sizing examples |
 | [`nginx/nginx.conf`](../nginx/nginx.conf) | Full nginx main config (proxy, rate limits, `/health` + `/ready`) |
-| [`packages/backend/Dockerfile`](../packages/backend/Dockerfile) | Multi-stage image, non-root user, Gunicorn |
+| [`packages/backend/Dockerfile`](../packages/backend/Dockerfile) | Multi-stage image, `colcoor-start.sh` (migrations + Gunicorn) |
+| [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh) | `shared.env`, primary/replica `.env`, one-shot `migrate` |
+| [`docs/multi-vm-deploy.md`](multi-vm-deploy.md) | Multi-API-VM runbook (shared Cloud SQL / Redis / GCS) |
 | [`.env.example`](../.env.example) | Template for root `.env` (secrets must be replaced) |
 | [`docker-compose.yml`](../docker-compose.yml) | **Dev-only** Postgres with host port (not for public production) |
 
@@ -130,6 +134,8 @@ Copy [`.env.example`](../.env.example) to `.env` at the repo root. Compose reads
 | `DOMAIN` | Optional | Reserved for future use / docs |
 | `CURSOR_AUTH_PROVIDER_ORDER` | Optional | Comma list: `github`, `microsoft`, `google` — order used when `provider_hint` is `auto` on **`POST /api/v1/auth/cursor`** (default `github,microsoft,google`) |
 | `CURSOR_AUTH_HTTP_TIMEOUT_SECONDS` | Optional | Timeout for upstream IdP HTTP calls (default **12**, min **2**, max **60**) |
+| `COLCOOR_RUN_MIGRATIONS` | Optional | When **`true`** (default), container start runs **`alembic upgrade head`** before Gunicorn. Set **`false`** on horizontal API replicas; run migrations once per deploy via [`deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh) or on the primary node. See [multi-vm-deploy.md](multi-vm-deploy.md) |
+| `COLCOOR_INSTANCE_ID` | Optional | Node label in JSON logs (e.g. hostname). Set by `deploy-multi-vm.sh` |
 | `COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED` | Optional | When **`true`**, the backend runs a background task (per process) that **hard-deletes** main-thread **`events`** whose **`deleted_at`** is older than the retention window. Compose defaults this to **`true`** for production; use **`false`** if you run a separate purge job. Multiple Gunicorn workers coordinate with a **Postgres advisory lock** so only one worker purges at a time |
 | `COLCOOR_EVENT_SOFT_DELETE_RETENTION_HOURS` | Optional | Minimum age of **`deleted_at`** before a row is eligible for hard delete (default **336** = 14 days, max **8760**) |
 | `COLCOOR_EVENT_DELETE_UNDO_WINDOW_MINUTES` | Optional | Only **`deleted_by_user_id`** may call undo within this many minutes after delete (default **5**) |
@@ -196,10 +202,16 @@ Exceeded limits return **HTTP 429** with `{"detail":"Rate limit exceeded. Try ag
 
 ---
 
+## Multi-VM scale-out
+
+To run **multiple API VMs** behind a load balancer with shared Postgres, Redis, and GCS, follow [multi-vm-deploy.md](multi-vm-deploy.md) and use [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh). Set **`COLCOOR_RUN_MIGRATIONS=false`** on replica nodes.
+
+---
+
 ## Backups and upgrades
 
 - **Backups:** daily logical dumps via [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh); GCS image bytes separately. Full runbook: [backup-and-restore.md](backup-and-restore.md).
-- **Upgrades:** pull new images or rebuild `backend`, run `docker compose -f docker-compose.prod.yml up -d --build`, watch logs and `/ready`.
+- **Upgrades:** pull new images or rebuild `backend`, run `docker compose -f docker-compose.prod.yml up -d --build`, watch logs and `/ready`. With multiple API VMs, run **`./scripts/deploy-multi-vm.sh migrate`** once per release before rolling replicas.
 
 ---
 

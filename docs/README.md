@@ -27,6 +27,7 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 | [monetization.md](monetization.md) | Tokens on every request; links **billing-usage** |
 | [architecture.md](architecture.md) | Components and boundaries |
 | [production.md](production.md) | Docker, nginx, Postgres, env, health, release builds (`bundle:enterprise`, `bundle:release`) |
+| [multi-vm-deploy.md](multi-vm-deploy.md) | Multiple API VMs, `shared.env`, `deploy-multi-vm.sh`, `COLCOOR_RUN_MIGRATIONS` |
 | [release-quickstart.md](release-quickstart.md) | Install self-host bundle + VSIX (first external user) |
 | [release-smoke-test.md](release-smoke-test.md) | Post-build / post-install verification checklist |
 | [release-versions.md](release-versions.md) | Backend ↔ extension version pairing |

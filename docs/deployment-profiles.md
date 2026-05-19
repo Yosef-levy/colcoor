@@ -58,4 +58,5 @@ Paid self-host will set `COLCOOR_LICENSE_KEY` after purchase. Integration hooks 
 
 - [Self-host installation](self-host.md)
 - [Production Compose](../docker-compose.prod.yml)
+- [Multi-VM deployment](multi-vm-deploy.md) (shared Postgres / Redis / GCS, `deploy-multi-vm.sh`)
 - [Enterprise bundle](enterprise.md) (offline VSIX + preloaded images — separate packaging, same API)

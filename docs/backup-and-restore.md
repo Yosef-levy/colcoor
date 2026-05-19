@@ -134,10 +134,13 @@ Use a **clean staging VM** (or local machine) to prove you can recover. Do **not
    If the dump is from an **older** schema than the backend image you deployed:
 
    ```bash
+   # Single VM, or once per release before restarting multiple API VMs:
    docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
+   # Or (recommended with shared.env / multi-VM): see docs/multi-vm-deploy.md
+   ./scripts/deploy-multi-vm.sh migrate --shared-env ./shared.env
    ```
 
-   If the dump already matches the deployed image version, skip this step.
+   If the dump already matches the deployed image version, skip this step. With **multiple API VMs**, run migrations **once** (primary or `deploy-multi-vm.sh migrate`); replicas should use **`COLCOOR_RUN_MIGRATIONS=false`** — [multi-vm-deploy.md](multi-vm-deploy.md).
 
 4. **Start the backend** (if not already up from `--stop-stack`)
 

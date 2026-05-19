@@ -95,6 +95,24 @@ class Settings(BaseSettings):
         ),
     )
 
+    run_migrations_on_startup: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "COLCOOR_RUN_MIGRATIONS",
+            "RUN_MIGRATIONS",
+        ),
+        description="When true, container start runs `alembic upgrade head` before Gunicorn. "
+        "Set false on horizontal API replicas (run migrations once per deploy on primary).",
+    )
+    instance_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "COLCOOR_INSTANCE_ID",
+            "INSTANCE_ID",
+        ),
+        description="Optional node label for logs (e.g. hostname). Not used for routing.",
+    )
+
     #: When true, the API process runs a daily loop that **hard-deletes** events whose
     #: ``deleted_at`` is older than ``event_soft_delete_retention_hours`` (Postgres advisory lock).
     event_purge_scheduler_enabled: bool = Field(

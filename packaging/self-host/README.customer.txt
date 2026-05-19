@@ -42,4 +42,10 @@ Debug / advanced
   Non-standard HTTP port: set SELF_HOST_HTTP_PORT=8080 in .env before stack up
   Docs: docs/release-quickstart.md, docs/self-host.md
 
+Multiple API VMs (advanced)
+---------------------------
+  This bundle targets one VM. Running several API servers with shared data needs GCS (not
+  local image storage), shared Postgres/Redis, and docs/multi-vm-deploy.md plus
+  scripts/deploy-multi-vm.sh from the full Colcoor repository (not included in this tarball).
+
 Do not commit or share: .env, credentials.generated.txt

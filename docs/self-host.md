@@ -105,6 +105,7 @@ After Lemon Squeezy integration, set `COLCOOR_LICENSE_KEY` and matching `COLCOOR
 
 - **Team / business:** Same image; override env or future `docker-compose.team.yml` / `docker-compose.business.yml`
 - **Hosted:** `docker-compose.prod.yml` + GCS + managed Postgres/Redis
+- **Multiple API VMs:** Same backend image behind a load balancer; requires **shared Postgres, Redis, and object storage** (default **local** image volume is **not** shared across VMs — use **GCS** or equivalent). Use [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh) and [multi-vm-deploy.md](multi-vm-deploy.md) (`shared.env`, `COLCOOR_RUN_MIGRATIONS=false` on replicas).
 - **Kubernetes:** Helm charts (not in MVP)
 
 See [deployment-profiles.md](deployment-profiles.md).
