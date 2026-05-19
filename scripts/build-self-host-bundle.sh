@@ -80,7 +80,9 @@ cp -a "$ROOT/scripts/generate-self-host-secrets.sh" "$OUT/scripts/"
 cp -a "$ROOT/packaging/self-host/scripts/"*.sh "$OUT/scripts/"
 cp -a "$ROOT/nginx/nginx.conf" "$OUT/nginx/nginx.conf"
 cp -a "$ROOT/pgbouncer/"* "$OUT/pgbouncer/"
-chmod +x "$OUT/scripts/"*.sh "$OUT/pgbouncer/docker-entrypoint.sh" 2>/dev/null || true
+# shellcheck source=lib/ensure-bundle-script-permissions.sh
+source "$ROOT/scripts/lib/ensure-bundle-script-permissions.sh"
+ensure_bundle_script_permissions "$OUT"
 
 cp -a "$ROOT/docs/self-host.md" "$ROOT/docs/deployment-profiles.md" \
   "$ROOT/docs/release-quickstart.md" "$ROOT/docs/release-smoke-test.md" \
@@ -97,10 +99,16 @@ EOF
 
 bash "$ROOT/scripts/generate-release-checksums.sh" "$OUT"
 
+ARCHIVE="$ROOT/dist/${BUNDLE_BASENAME}.tar.gz"
+bash "$ROOT/scripts/archive-release-bundle.sh" "$OUT"
+bash "$ROOT/scripts/validate-release-bundle.sh" "$OUT" "$ARCHIVE"
+
 echo ""
 echo "Self-host release bundle ready:"
 echo "  $OUT"
+echo "  $ARCHIVE  (recommended for Linux — preserves script permissions)"
+echo "  ${ARCHIVE}.sha256"
 echo ""
-echo "Optional archive:"
-echo "  (cd dist && zip -r \"${BUNDLE_BASENAME}.zip\" \"${BUNDLE_BASENAME}\")"
+echo "Do not ship a plain zip of the folder; unzip often drops +x on scripts."
 ls -la "$OUT"
+ls -la "$ARCHIVE" "${ARCHIVE}.sha256" 2>/dev/null || true

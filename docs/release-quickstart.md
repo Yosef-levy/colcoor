@@ -1,11 +1,31 @@
 # Colcoor release quick-start
 
-For a first external install from the `dist/colcoor-enterprise-BE…-EXT…/` bundle (self-host variant).
+For a first external install from the self-host release bundle.
+
+## 0. Unpack (use the tarball)
+
+**Recommended:** ship and extract the **`.tar.gz`** next to the bundle folder (created by `npm run bundle:release`). It preserves executable bits on `scripts/*.sh`.
+
+```bash
+sha256sum -c colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz.sha256
+tar -xzf colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz
+cd colcoor-enterprise-BE0.1.0-EXT0.0.1
+sha256sum -c SHA256SUMS
+```
+
+**Avoid** distributing a **zip** of the bundle folder — many tools (including default zip on Windows and some Linux unzip flows) **do not preserve `+x`** on shell scripts, and `./scripts/00-load-image.sh` will fail with `Permission denied`.
+
+If you already extracted from zip (or scripts are not executable):
+
+```bash
+bash scripts/ensure-executable.sh
+# or:
+chmod +x scripts/*.sh pgbouncer/docker-entrypoint.sh
+```
 
 ## 1. Load images (offline / air-gapped)
 
 ```bash
-cd /path/to/colcoor-enterprise-BE0.1.0-EXT0.0.1
 ./scripts/00-load-image.sh
 ```
 
@@ -43,13 +63,6 @@ Settings → search `colcoor.backendBaseUrl` → set to your origin, e.g. `http:
 2. **Add conversation** → send a message.
 3. **Conversation → Invite collaborator…** (invitees must sign in once before you can add them).
 4. Open **side chat** when two or more members are present.
-
-## Verify integrity
-
-```bash
-sha256sum -c SHA256SUMS
-cat MANIFEST.txt VERSION.txt
-```
 
 ## More help
 

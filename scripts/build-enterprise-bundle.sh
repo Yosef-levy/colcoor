@@ -128,7 +128,9 @@ mkdir -p "$OUT/scripts/lib"
 cp -a "$ROOT/scripts/backup-postgres.sh" "$ROOT/scripts/restore-postgres.sh" \
   "$ROOT/scripts/verify-backup-postgres.sh" "$OUT/scripts/"
 cp -a "$ROOT/scripts/lib/postgres-backup-lib.sh" "$OUT/scripts/lib/"
-chmod +x "$OUT/scripts/"*.sh "$OUT/pgbouncer/docker-entrypoint.sh"
+# shellcheck source=lib/ensure-bundle-script-permissions.sh
+source "$ROOT/scripts/lib/ensure-bundle-script-permissions.sh"
+ensure_bundle_script_permissions "$OUT"
 
 cat >"$OUT/VERSION.txt" <<EOF
 backend=${BACKEND_VERSION}
@@ -149,10 +151,16 @@ fi
 
 bash "$ROOT/scripts/generate-release-checksums.sh" "$OUT"
 
+ARCHIVE="$ROOT/dist/${BUNDLE_NAME}.tar.gz"
+bash "$ROOT/scripts/archive-release-bundle.sh" "$OUT"
+bash "$ROOT/scripts/validate-release-bundle.sh" "$OUT" "$ARCHIVE"
+
 echo ""
 echo "Enterprise bundle ready:"
 echo "  $OUT"
+echo "  $ARCHIVE  (recommended for Linux — preserves script permissions)"
+echo "  ${ARCHIVE}.sha256"
 echo ""
-echo "Give the company the folder (or zip it):"
-echo "  (cd dist && zip -r \"${BUNDLE_NAME}.zip\" \"${BUNDLE_NAME}\")"
+echo "Do not ship a plain zip of the folder; unzip often drops +x on scripts."
 ls -la "$OUT"
+ls -la "$ARCHIVE" "${ARCHIVE}.sha256" 2>/dev/null || true

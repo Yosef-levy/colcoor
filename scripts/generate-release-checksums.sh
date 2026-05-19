@@ -45,8 +45,13 @@ Docker image tags (after load):
   colcoor-pgbouncer:1.23.1
 Backend image ID: ${BACKEND_DIGEST:-not built on this machine}
 
-Verify checksums:
+Verify bundle file checksums:
   cd $(basename "$BUNDLE_DIR") && sha256sum -c SHA256SUMS
+
+Distribution (recommended for Linux):
+  Ship $(basename "$BUNDLE_DIR").tar.gz from the parent dist/ folder (not a zip).
+  Extract: tar -xzf $(basename "$BUNDLE_DIR").tar.gz
+  Verify archive: sha256sum -c $(basename "$BUNDLE_DIR").tar.gz.sha256
 EOF
 
 echo "Wrote $SUMS and $MANIFEST"

@@ -4,6 +4,19 @@ Colcoor self-host release (backend + extension + Docker Compose)
 This folder is for a first install on a VM or laptop. It uses the **free self-host**
 profile (3 users, local image storage, no cloud license check).
 
+Unpacking
+---------
+  Prefer the release **.tar.gz** (sibling file in dist/), not a zip of this folder:
+
+    sha256sum -c colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz.sha256
+    tar -xzf colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz
+    cd colcoor-enterprise-BE0.1.0-EXT0.0.1
+
+  Zip archives often drop executable permission on scripts. If ./scripts/*.sh
+  fails with "Permission denied", run once:
+
+    bash scripts/ensure-executable.sh
+
 Contents
 --------
   colcoor-backend-*.tar.gz       Pre-built API image (load with ./scripts/00-load-image.sh)
@@ -12,7 +25,7 @@ Contents
   docker-compose.yml             Self-host stack (nginx, backend, Postgres, Redis)
   .env.example                   Template (no secrets) — see scripts/01-setup-env.sh
   docs/                          self-host.md, deployment-profiles.md, release-quickstart.md
-  scripts/                       Operator helpers
+  scripts/                       Operator helpers (including ensure-executable.sh)
   SHA256SUMS / MANIFEST.txt      Integrity and version metadata
 
 Prerequisites

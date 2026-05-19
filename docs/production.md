@@ -296,7 +296,7 @@ Customers can point `docker-compose.prod.yml` at your registry by changing the `
 
 ### Enterprise bundle (image tarball + VSIX + operator scripts)
 
-For **air-gapped or registry-free** handoffs, build a single folder you can zip and send to the customer’s VM team:
+For **air-gapped or registry-free** handoffs, build a bundle folder and ship the **`.tar.gz`** archive (see below — avoid zip for script permissions):
 
 ```bash
 npm run bundle:enterprise
@@ -339,7 +339,7 @@ npm run bundle:release
 npm run bundle:self-host-release
 ```
 
-Runs extension typecheck + tests, backend tests, Docker image build/save, VSIX package, and checksums. Flags (via the underlying script):
+Runs extension typecheck + tests, backend tests, Docker image build/save, VSIX package, checksums, a **`.tar.gz` distribution archive** (preserves script `+x`), and **`npm run validate:release`**. Flags (via the underlying script):
 
 ```bash
 bash scripts/build-self-host-bundle.sh --skip-tests
@@ -354,9 +354,12 @@ npm run checksums:release -- dist/colcoor-enterprise-BE0.1.0-EXT0.0.1
 
 | Command | Output |
 |---------|--------|
-| `bundle:release` | `dist/colcoor-enterprise-BE…-EXT…/` — self-host `docker-compose.yml`, image tarballs, VSIX, scripts, `SHA256SUMS`, `MANIFEST.txt`, release docs |
-| `bundle:enterprise` | Same folder name pattern; **GCS-oriented** compose (see enterprise section above) |
+| `bundle:release` | `dist/colcoor-enterprise-BE…-EXT…/` plus **`dist/colcoor-enterprise-BE…-EXT….tar.gz`** (ship this on Linux) and **`.tar.gz.sha256`** |
+| `validate:release` | Fails if bundle scripts are not executable or if extracting the `.tar.gz` drops `+x` |
+| `bundle:enterprise` | Same folder + `.tar.gz`; **GCS-oriented** compose (see enterprise section above) |
 | `compose:self-host` | Dev stack from repo source (`docker-compose.self-host.yml`), not the offline bundle |
+
+**Zip vs tar.gz:** For self-host handoffs, use the **`.tar.gz`** produced by the build. A **zip** of the bundle folder often strips executable bits on `scripts/*.sh` (`Permission denied` on Ubuntu). If users must use zip, document `bash scripts/ensure-executable.sh` after extract.
 
 Install and smoke-test: [release-quickstart.md](release-quickstart.md), [release-smoke-test.md](release-smoke-test.md), [release-versions.md](release-versions.md).
 

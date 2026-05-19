@@ -1,15 +1,39 @@
 # Release smoke-test checklist
 
-Run after building or receiving a `dist/colcoor-enterprise-BE…-EXT…/` bundle.
+Run after building or receiving a release bundle.
 
 ## Automated (build machine)
 
-From repo root:
+From repo root (full release build runs these plus bundle validation):
 
 ```bash
 npm run typecheck -w colcoor-extension
 npm run test:extension
 npm run test:backend
+npm run bundle:release
+```
+
+`bundle:release` ends with **`validate:release`**, which checks:
+
+- Every `scripts/*.sh` in the bundle directory is executable
+- Extracting **`dist/colcoor-enterprise-BE…-EXT….tar.gz`** into a temp dir leaves scripts executable
+- `SHA256SUMS` inside the bundle verifies
+
+Re-run validation only:
+
+```bash
+npm run validate:release
+```
+
+## Unpack (customer VM)
+
+Use the **`.tar.gz`**, not a zip of the folder:
+
+```bash
+sha256sum -c colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz.sha256
+tar -xzf colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz
+cd colcoor-enterprise-BE0.1.0-EXT0.0.1
+test -x scripts/00-load-image.sh || bash scripts/ensure-executable.sh
 ```
 
 ## Backend (bundle directory)
