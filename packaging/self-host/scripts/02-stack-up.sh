@@ -20,4 +20,4 @@ if ! docker image inspect colcoor-pgbouncer:1.23.1 >/dev/null 2>&1; then
 fi
 
 docker compose -f "$ROOT/docker-compose.yml" up -d
-echo "Stack is up. Check: ./scripts/05-health-check.sh"
+echo "Stack is up. Check: ./scripts/05-health-check.sh  or re-run ./install-colcoor.sh"

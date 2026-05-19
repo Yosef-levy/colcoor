@@ -1,73 +1,45 @@
 Colcoor self-host release (backend + extension + Docker Compose)
 ===========================================================
 
-This folder is for a first install on a VM or laptop. It uses the **free self-host**
-profile (3 users, local image storage, no cloud license check).
+Free self-host profile: 3 users, local image storage, no cloud license check.
 
-Unpacking
----------
-  Prefer the release **.tar.gz** (sibling file in dist/), not a zip of this folder:
+Prerequisites
+-------------
+  - Linux VM (Ubuntu 22.04+ recommended) with inbound TCP 80 open (443 later)
+  - Docker Engine + Docker Compose v2
+  - curl, openssl
+
+One-command install
+-------------------
+  Prefer the release .tar.gz (not zip — zip may drop script permissions):
 
     sha256sum -c colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz.sha256
     tar -xzf colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz
     cd colcoor-enterprise-BE0.1.0-EXT0.0.1
 
-  Zip archives often drop executable permission on scripts. If ./scripts/*.sh
-  fails with "Permission denied", run once:
+  If scripts fail with "Permission denied" after zip extract:
 
     bash scripts/ensure-executable.sh
 
-Contents
---------
-  colcoor-backend-*.tar.gz       Pre-built API image (load with ./scripts/00-load-image.sh)
-  colcoor-pgbouncer-*.tar.gz     Pre-built PgBouncer image
-  colcoor-extension-*.vsix       Cursor / VS Code extension
-  docker-compose.yml             Self-host stack (nginx, backend, Postgres, Redis)
-  .env.example                   Template (no secrets) — see scripts/01-setup-env.sh
-  docs/                          self-host.md, deployment-profiles.md, release-quickstart.md
-  scripts/                       Operator helpers (including ensure-executable.sh)
-  SHA256SUMS / MANIFEST.txt      Integrity and version metadata
+  Install and start:
 
-Prerequisites
--------------
-  Docker Engine + Docker Compose v2
-  openssl (for ./scripts/01-setup-env.sh)
-  curl (for health checks)
+    ./install-colcoor.sh
 
-Quick start (about 10 minutes)
-------------------------------
-  cd /path/to/this-bundle
+  The installer loads images, creates secrets, starts the stack, runs health checks,
+  and prints your URL (e.g. http://203.0.113.10).
 
-  ./scripts/00-load-image.sh
-  ./scripts/01-setup-env.sh
-  ./scripts/02-stack-up.sh
-  ./scripts/05-health-check.sh
+  Then install colcoor-extension-*.vsix in Cursor and set Backend base URL to that URL
+  (no trailing slash). Sign in from the Colcoor sidebar.
 
-  Install colcoor-extension-*.vsix in Cursor (Extensions → … → Install from VSIX).
-  Settings → Colcoor → Backend base URL:  http://YOUR_HOST:8080
-  (no trailing slash). Reload the window if you change the URL.
+HTTPS / custom domain
+---------------------
+  Not included in this release. Use plain HTTP on port 80 for now; TLS and domain
+  setup are planned next.
 
-  Sign in, create a conversation, invite a collaborator (they must sign in once).
-
-Extension install (Cursor)
---------------------------
-  1. Command Palette → "Extensions: Install from VSIX…"
-  2. Select colcoor-extension-*.vsix in this folder
-  3. Reload window when prompted
-
-Backend URL
------------
-  Use the host-visible origin only, e.g. http://203.0.113.10:8080 or http://localhost:8080
-  when Cursor runs on the same machine. Not http://backend:8000 (Docker internal).
-
-Free tier
----------
-  Up to 3 Colcoor users on this instance (license enforced at sign-up). See docs/deployment-profiles.md.
-
-More detail
------------
-  docs/release-quickstart.md   — full release steps
-  docs/self-host.md            — operations and troubleshooting
-  docs/release-smoke-test.md   — verification checklist
+Debug / advanced
+----------------
+  Step-by-step scripts: ./scripts/00-load-image.sh through 05-health-check.sh
+  Non-standard HTTP port: set SELF_HOST_HTTP_PORT=8080 in .env before stack up
+  Docs: docs/release-quickstart.md, docs/self-host.md
 
 Do not commit or share: .env, credentials.generated.txt

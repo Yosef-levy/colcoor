@@ -17,4 +17,7 @@ ensure_bundle_script_permissions() {
   if [[ -f "$bundle_dir/pgbouncer/docker-entrypoint.sh" ]]; then
     chmod +x "$bundle_dir/pgbouncer/docker-entrypoint.sh"
   fi
+  if [[ -f "$bundle_dir/install-colcoor.sh" ]]; then
+    chmod +x "$bundle_dir/install-colcoor.sh"
+  fi
 }

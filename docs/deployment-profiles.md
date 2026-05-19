@@ -15,7 +15,7 @@ There are **no** separate `free-backend` / `enterprise-backend` repositories or 
 
 - **Target:** Single VM, homelab, or developer machine
 - **Orchestration:** `docker-compose.self-host.yml`
-- **Defaults:** Local image storage, Postgres + Redis in Compose, nginx on port 8080
+- **Defaults:** Local image storage, Postgres + Redis in Compose, nginx on port 80 (`SELF_HOST_HTTP_PORT=8080` for debug)
 - **Seats:** 3 users (`COLCOOR_LICENSE_TYPE=free`)
 - **Support:** Community / best-effort
 

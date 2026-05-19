@@ -31,6 +31,7 @@ Install the VSIX and backend image from the **same** bundle folder. See [docs/re
 
 - Self-host bundle: `dist/colcoor-enterprise-BE0.1.0-EXT0.0.1/` with offline images, VSIX, compose, scripts, and `SHA256SUMS`
 - **Ship `colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz`** (not zip) so script permissions survive extraction on Linux
+- **One-command install:** `./install-colcoor.sh` — HTTP on port **80** (use `http://<VM-IP>` in the extension; HTTPS planned next)
 - `scripts/ensure-executable.sh` fallback if permissions were lost; `npm run validate:release` catches this at build time
 - Fixes: empty `COLCOOR_LICENSE_MAX_USERS` no longer crashes startup; local image volume permissions for `/ready`
 

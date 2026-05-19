@@ -42,6 +42,11 @@ assert_scripts_executable() {
     bad=1
   fi
 
+  if [[ -f "$dir/install-colcoor.sh" && ! -x "$dir/install-colcoor.sh" ]]; then
+    echo "ERROR [$label] not executable: $dir/install-colcoor.sh" >&2
+    bad=1
+  fi
+
   return "$bad"
 }
 

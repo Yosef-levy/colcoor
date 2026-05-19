@@ -16,7 +16,7 @@ Same steps: Extensions → `…` → **Install from VSIX…**
 
 ## After install
 
-1. Set **Colcoor: Backend base URL** to your API origin (e.g. `http://localhost:8080`).
+1. Set **Colcoor: Backend base URL** to your API origin (e.g. `http://203.0.113.10` or `http://localhost` on the VM).
 2. Open the Colcoor sidebar → **Sign in**.
 
 Command line (optional, if `cursor` CLI is installed):

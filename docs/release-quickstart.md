@@ -2,9 +2,14 @@
 
 For a first external install from the self-host release bundle.
 
+## Prerequisites
+
+- Linux VM with **inbound TCP port 80** open (firewall / security group)
+- Docker Engine + Docker Compose v2, `curl`, `openssl`
+
 ## 0. Unpack (use the tarball)
 
-**Recommended:** ship and extract the **`.tar.gz`** next to the bundle folder (created by `npm run bundle:release`). It preserves executable bits on `scripts/*.sh`.
+**Recommended:** ship and extract the **`.tar.gz`** (preserves executable bits on scripts).
 
 ```bash
 sha256sum -c colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz.sha256
@@ -13,59 +18,58 @@ cd colcoor-enterprise-BE0.1.0-EXT0.0.1
 sha256sum -c SHA256SUMS
 ```
 
-**Avoid** distributing a **zip** of the bundle folder — many tools (including default zip on Windows and some Linux unzip flows) **do not preserve `+x`** on shell scripts, and `./scripts/00-load-image.sh` will fail with `Permission denied`.
-
-If you already extracted from zip (or scripts are not executable):
+If `./install-colcoor.sh` fails with `Permission denied` (common after zip extract):
 
 ```bash
 bash scripts/ensure-executable.sh
-# or:
-chmod +x scripts/*.sh pgbouncer/docker-entrypoint.sh
 ```
 
-## 1. Load images (offline / air-gapped)
+## 1. Install (one command)
+
+```bash
+./install-colcoor.sh
+```
+
+This loads Docker images, creates `.env` and secrets if needed, starts the stack (nginx on **port 80**), runs health checks, and prints your URL (e.g. `http://203.0.113.10`).
+
+## 2. Install the extension
+
+**Cursor:** Extensions → `…` → **Install from VSIX…** → `colcoor-extension-0.0.1.vsix` → reload window.
+
+See [install-vsix.md](install-vsix.md).
+
+## 3. Point the extension at your API
+
+Settings → **Colcoor: Backend base URL** → `http://<VM-public-ip>` (no trailing slash, **no `:8080`** on the default install).
+
+Same machine as the VM: `http://localhost` is fine.
+
+## 4. Sign in and try the product
+
+1. Colcoor sidebar → **Sign in**
+2. **Add conversation** → send a message
+3. **Invite collaborator…** (invitees must sign in once first)
+4. Open **side chat** with two or more members
+
+## HTTPS
+
+TLS and custom domain setup are **not** in this release. Plan for HTTP on port 80 for now; HTTPS support is next.
+
+## Debug / advanced (optional)
+
+Manual steps instead of `install-colcoor.sh`:
 
 ```bash
 ./scripts/00-load-image.sh
-```
-
-## 2. Configure secrets
-
-```bash
 ./scripts/01-setup-env.sh
-# Archive credentials.generated.txt, then remove from the server if required.
-```
-
-Or manually: `cp .env.example .env` and run `./scripts/generate-self-host-secrets.sh >> .env`.
-
-## 3. Start the stack
-
-```bash
 ./scripts/02-stack-up.sh
 ./scripts/05-health-check.sh
 ```
 
-API base URL (extension setting): `http://<host>:8080` (default nginx port).
-
-## 4. Install the extension
-
-**Cursor:** Extensions view → `…` → **Install from VSIX…** → select `colcoor-extension-0.0.1.vsix` → reload window.
-
-**VS Code:** Extensions → `…` → **Install from VSIX…** (same file).
-
-## 5. Point the extension at your API
-
-Settings → search `colcoor.backendBaseUrl` → set to your origin, e.g. `http://localhost:8080` (no trailing slash).
-
-## 6. Sign in and try the product
-
-1. Colcoor sidebar → **Sign in** (same account type as Cursor).
-2. **Add conversation** → send a message.
-3. **Conversation → Invite collaborator…** (invitees must sign in once before you can add them).
-4. Open **side chat** when two or more members are present.
+Use port **8080** instead of 80 (e.g. when port 80 is taken): set `SELF_HOST_HTTP_PORT=8080` in `.env` before `./scripts/02-stack-up.sh`, then use `http://<host>:8080` in the extension.
 
 ## More help
 
-- [self-host.md](self-host.md) — troubleshooting
-- [release-smoke-test.md](release-smoke-test.md) — full checklist
+- [self-host.md](self-host.md) — operations and troubleshooting
+- [release-smoke-test.md](release-smoke-test.md) — verification checklist
 - [release-versions.md](release-versions.md) — version pairing

@@ -4,7 +4,7 @@ Run after building or receiving a release bundle.
 
 ## Automated (build machine)
 
-From repo root (full release build runs these plus bundle validation):
+From repo root:
 
 ```bash
 npm run typecheck -w colcoor-extension
@@ -13,58 +13,49 @@ npm run test:backend
 npm run bundle:release
 ```
 
-`bundle:release` ends with **`validate:release`**, which checks:
-
-- Every `scripts/*.sh` in the bundle directory is executable
-- Extracting **`dist/colcoor-enterprise-BE…-EXT….tar.gz`** into a temp dir leaves scripts executable
-- `SHA256SUMS` inside the bundle verifies
-
-Re-run validation only:
-
-```bash
-npm run validate:release
-```
+`bundle:release` runs **`validate:release`** (script permissions + tarball extract).
 
 ## Unpack (customer VM)
-
-Use the **`.tar.gz`**, not a zip of the folder:
 
 ```bash
 sha256sum -c colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz.sha256
 tar -xzf colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz
 cd colcoor-enterprise-BE0.1.0-EXT0.0.1
-test -x scripts/00-load-image.sh || bash scripts/ensure-executable.sh
+test -x install-colcoor.sh || bash scripts/ensure-executable.sh
 ```
 
-## Backend (bundle directory)
+## Install (happy path)
+
+| Step | Command | Expected |
+|------|---------|----------|
+| One-shot install | `./install-colcoor.sh` | Images loaded, stack up, health OK, URL printed |
+| Firewall | Inbound TCP **80** open on VM | `curl http://<VM-IP>/health` from another host returns `{"status":"ok"}` |
+
+## Backend (after install)
 
 | Step | Command / action | Expected |
 |------|------------------|----------|
-| Load images | `./scripts/00-load-image.sh` | `colcoor-backend:prod`, `colcoor-pgbouncer:1.23.1` listed |
-| Secrets | `./scripts/01-setup-env.sh` | `.env` + `credentials.generated.txt` created |
-| Start | `./scripts/02-stack-up.sh` | All services healthy |
-| Health | `./scripts/05-health-check.sh` | `/health`, `/ready`, `/api/v1/health` return OK |
-| License (auth) | Sign in via extension, then `curl -H "Authorization: Bearer $JWT" http://localhost:8080/api/v1/system/license` | JSON with `license_type`, `max_users`, `current_users` |
-| Free limit | Create 4 distinct users (4th new sign-in) | HTTP 403, `license_user_limit_reached` |
+| Local health | `curl -fsS http://localhost/health` | `{"status":"ok"}` |
+| Local ready | `curl -fsS http://localhost/ready` | `"status":"ready"` |
+| VM health | `curl -fsS http://<VM-IP>/health` | `{"status":"ok"}` |
+| License (auth) | Sign in via extension, then `curl -H "Authorization: Bearer $JWT" http://localhost/api/v1/system/license` | JSON with `license_type`, `max_users`, `current_users` |
+| Free limit | 4th new user sign-in | HTTP 403, `license_user_limit_reached` |
+
+Debug port **8080** (optional): set `SELF_HOST_HTTP_PORT=8080` in `.env`, recreate stack, use `http://localhost:8080/health`.
+
+Backend container listens on **8000** internally only (not published to the host).
 
 ## Extension
 
 | Step | Action | Expected |
 |------|--------|----------|
-| VSIX install | Install from VSIX in bundle | Extension activates without errors |
-| Backend URL | Set `colcoor.backendBaseUrl` | Matches nginx origin (e.g. `http://host:8080`) |
-| Sign-in | Colcoor: Sign in | Conversations list loads |
-| Conversation | Add conversation + message | Tree shows messages |
-| Invite | Conversation → Invite collaborator… | Search + add editor/viewer; success toast with role |
-| Side chat | Open side chat with 2+ members | Messages send; SSE reconnect banner on brief network blip |
-| Onboarding | First open | Getting started / try-this-next banners (dismissible) |
-
-## Integrity
-
-```bash
-cd dist/colcoor-enterprise-BE0.1.0-EXT0.0.1
-sha256sum -c SHA256SUMS
-```
+| VSIX install | Install from bundle VSIX | Extension activates |
+| Backend URL | `colcoor.backendBaseUrl` | `http://<VM-IP>` (port 80, no suffix) |
+| Sign-in | Colcoor: Sign in | Conversations load |
+| Conversation | Add + message | Tree shows messages |
+| Invite | Invite collaborator | Success toast with role |
+| Side chat | 2+ members | SSE works; reconnect banner on blip |
+| Onboarding | First open | Getting started / try-this-next (dismissible) |
 
 ## Manual compose (developers, repo root)
 
@@ -72,12 +63,12 @@ sha256sum -c SHA256SUMS
 cp .env.example .env
 ./scripts/generate-self-host-secrets.sh >> .env
 docker compose -f docker-compose.self-host.yml up -d --build
-curl -sS http://localhost:8080/health
-curl -sS http://localhost:8080/ready
+curl -sS http://localhost/health
+curl -sS http://localhost/ready
 ```
 
 ## Not in this checklist
 
+- HTTPS / Let's Encrypt / custom domain
 - Production GCS image uploads (enterprise compose)
 - Lemon Squeezy license activation
-- TLS / public DNS (add nginx certs separately)

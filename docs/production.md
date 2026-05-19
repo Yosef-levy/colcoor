@@ -331,7 +331,7 @@ Customer VM (typical): `00-load-image` → `01-setup-env` → `02-stack-up` → 
 
 ### Self-host release bundle (first external install)
 
-For **free-tier self-host** (local images, 3-user license, port 8080), build the same `dist/colcoor-enterprise-BE<backend>-EXT<extension>/` layout with self-host compose and operator docs:
+For **free-tier self-host** (local images, 3-user license, nginx on port 80), build the same `dist/colcoor-enterprise-BE<backend>-EXT<extension>/` layout with self-host compose, `install-colcoor.sh`, and operator docs:
 
 ```bash
 npm run bundle:release

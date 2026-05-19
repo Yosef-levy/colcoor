@@ -75,9 +75,11 @@ fi
 
 cp -a "$ROOT/packaging/self-host/docker-compose.yml" "$OUT/"
 cp -a "$ROOT/packaging/self-host/README.customer.txt" "$OUT/"
+cp -a "$ROOT/packaging/self-host/install-colcoor.sh" "$OUT/"
 cp -a "$ROOT/.env.example" "$OUT/.env.example"
 cp -a "$ROOT/scripts/generate-self-host-secrets.sh" "$OUT/scripts/"
-cp -a "$ROOT/packaging/self-host/scripts/"*.sh "$OUT/scripts/"
+mkdir -p "$OUT/scripts"
+cp -a "$ROOT/packaging/self-host/scripts/." "$OUT/scripts/"
 cp -a "$ROOT/nginx/nginx.conf" "$OUT/nginx/nginx.conf"
 cp -a "$ROOT/pgbouncer/"* "$OUT/pgbouncer/"
 # shellcheck source=lib/ensure-bundle-script-permissions.sh
