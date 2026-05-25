@@ -33,8 +33,9 @@ Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postg
 | [`docs/pgbouncer.md`](pgbouncer.md) | Connection scaling, pool env vars, sizing examples |
 | [`nginx/nginx.conf`](../nginx/nginx.conf) | Full nginx main config (proxy, rate limits, `/health` + `/ready`) |
 | [`packages/backend/Dockerfile`](../packages/backend/Dockerfile) | Multi-stage image, `colcoor-start.sh` (migrations + Gunicorn) |
-| [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh) | `shared.env`, primary/replica `.env`, one-shot `migrate` |
-| [`docs/multi-vm-deploy.md`](multi-vm-deploy.md) | Multi-API-VM runbook (shared Cloud SQL / Redis / GCS) |
+| [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh) | Multi-VM: `provision-gcp`, `deploy-primary`, `deploy-replica`, migrate |
+| [`scripts/gcp/`](../scripts/gcp/) | GCP: Cloud SQL, Memorystore, GCS, LB, pool sizing — [gcp-provisioning.md](gcp-provisioning.md) |
+| [`docker-compose.prod.gcp.yml`](../docker-compose.prod.gcp.yml) | Overlay: managed Postgres/Redis (no bundled containers) |
 | [`.env.example`](../.env.example) | Template for root `.env` (secrets must be replaced) |
 | [`docker-compose.yml`](../docker-compose.yml) | **Dev-only** Postgres with host port (not for public production) |
 
@@ -204,7 +205,10 @@ Exceeded limits return **HTTP 429** with `{"detail":"Rate limit exceeded. Try ag
 
 ## Multi-VM scale-out
 
-To run **multiple API VMs** behind a load balancer with shared Postgres, Redis, and GCS, follow [multi-vm-deploy.md](multi-vm-deploy.md) and use [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh). Set **`COLCOOR_RUN_MIGRATIONS=false`** on replica nodes.
+To run **multiple API VMs** behind a load balancer with shared Postgres, Redis, and GCS:
+
+- **GCP (automated):** [gcp-provisioning.md](gcp-provisioning.md) — `./scripts/deploy-multi-vm.sh deploy-primary`
+- **Manual / other clouds:** [multi-vm-deploy.md](multi-vm-deploy.md)
 
 ---
 

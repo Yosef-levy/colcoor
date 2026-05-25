@@ -2,119 +2,119 @@
 
 This runbook implements the practical scale-out path for Colcoor: **one codebase, one backend image**, multiple API VMs behind a load balancer, with **shared Cloud SQL (or Postgres)**, **shared Redis**, and **GCS** for images.
 
-For gap analysis and architecture notes, see the multi-VM scaling review in the repo history. This document is the **operator sequence**.
+**GCP automation:** [gcp-provisioning.md](gcp-provisioning.md) and **`./scripts/deploy-multi-vm.sh deploy-primary`**.
 
 ---
 
-## Prerequisites (Profile A → Profile B)
+## From scratch on GCP (automated)
 
-### Step 1 — Single VM + managed data (Profile A)
+### 0. Prerequisites
 
-Before adding a second API VM, move shared services off the app box when possible:
+- Two (or more) GCE VMs in the same VPC, Docker + Compose installed
+- `gcloud` on the machine where you run provisioning (can be primary VM or laptop)
+- Copy and edit **`scripts/gcp/gcp.env`** from [`scripts/gcp/gcp.env.example`](../scripts/gcp/gcp.env.example)
 
-| Service | Recommendation |
-|---------|----------------|
-| **Postgres** | Cloud SQL / RDS; app uses **PgBouncer** or provider pooler (`DATABASE_URL` → pooler, `DATABASE_MIGRATION_URL` → direct) |
-| **Redis** | Memorystore / ElastiCache; `REDIS_URL` required in production |
-| **Images** | `COLCOOR_IMAGE_STORAGE=gcs` + `GCS_BUCKET` (required for multi-VM; local disk is single-node only) |
-| **Secrets** | Strong `JWT_SECRET`; identical on every API VM |
+### 1. Primary VM — one command
 
-Size pools using [pgbouncer.md](pgbouncer.md): roughly  
-`client_connections ≈ API_VMs × WEB_CONCURRENCY × (DB_POOL_SIZE + DB_MAX_OVERFLOW)`.
+```bash
+./scripts/deploy-multi-vm.sh deploy-primary \
+  --config scripts/gcp/gcp.env \
+  --shared-env ./shared.env
+```
 
-### Step 2 — Operationalize migrations
+Runs: **GCP infra** (Cloud SQL, Redis, GCS, pool sizing) → **write-env (primary)** → **migrate** → **compose up** (with [`docker-compose.prod.gcp.yml`](../docker-compose.prod.gcp.yml)).
 
-Do **not** run `alembic upgrade head` on every replica at the same time.
+Optional load balancer (API VMs must exist and serve nginx :80):
 
-| Node | `COLCOOR_RUN_MIGRATIONS` | Behavior |
-|------|--------------------------|----------|
-| **Primary** API VM | `true` (default) | Runs migrations on container start |
-| **Replica** API VMs | `false` | Skips migrations; starts Gunicorn only |
+```bash
+./scripts/deploy-multi-vm.sh deploy-primary \
+  --config scripts/gcp/gcp.env \
+  --shared-env ./shared.env \
+  --with-lb
+```
 
-For releases, prefer a **one-shot migrate** before roll-out:
+### 2. Replica VM(s)
+
+Copy **`shared.env`** securely, then:
+
+```bash
+./scripts/deploy-multi-vm.sh deploy-replica --shared-env ./shared.env
+```
+
+### 3. Extension
+
+Set **`colcoor.backendBaseUrl`** to the load balancer IP (or primary VM URL until LB exists).
+
+---
+
+## Manual / step-by-step (any cloud)
+
+### Step 1 — Shared services
+
+| Service | GCP script | Manual |
+|---------|------------|--------|
+| Postgres | `./scripts/gcp/provision-cloudsql.sh` | Cloud SQL / RDS |
+| Redis | `./scripts/gcp/provision-redis.sh` | Memorystore / ElastiCache |
+| Images | `./scripts/gcp/provision-gcs.sh` | GCS + IAM ([image-storage.md](image-storage.md)) |
+| Pool sizing | `./scripts/gcp/size-db-pools.sh --shared-env ./shared.env` | [pgbouncer.md](pgbouncer.md) |
+| Load balancer | `./scripts/gcp/provision-load-balancer.sh` | Provider LB → `/ready` |
+
+Or all GCP services at once:
+
+```bash
+./scripts/deploy-multi-vm.sh provision-gcp \
+  --config scripts/gcp/gcp.env \
+  --shared-env ./shared.env
+```
+
+### Step 2 — Migrations
+
+| Node | `COLCOOR_RUN_MIGRATIONS` |
+|------|--------------------------|
+| Primary | `true` (default) |
+| Replica | `false` |
 
 ```bash
 ./scripts/deploy-multi-vm.sh migrate --shared-env ./shared.env
 ```
 
-Then start or restart backends (replicas with `COLCOOR_RUN_MIGRATIONS=false`).
-
-### Step 3 — Shared env file
-
-All API VMs must use the **same** `shared.env` for secrets and service URLs. Only per-node keys differ (see [deploy script](#deploy-script)).
+### Step 3 — Shared env
 
 ```bash
-# On primary, from a working single-VM .env:
-./scripts/deploy-multi-vm.sh extract-shared -o ./shared.env
+./scripts/deploy-multi-vm.sh extract-shared -o ./shared.env   # from existing .env
+./scripts/deploy-multi-vm.sh write-env --role=primary --shared-env ./shared.env
 ```
 
-Copy `shared.env` to replica VMs over SSH or a secret manager (mode `600`, never commit).
+Copy **`shared.env`** to every API VM (mode `600`, never commit).
 
-### Step 4 — Add VM #2 behind a load balancer
+### Step 4 — Compose on each VM
 
-1. LB health check: **`GET /ready`** on each backend instance (not only nginx `/health`).
-2. Point both VMs at the same `DATABASE_URL`, `REDIS_URL`, `GCS_BUCKET`, `JWT_SECRET`.
-3. `RATE_LIMIT_TRUST_PROXY=true` behind the LB/nginx.
-4. Optional: increase LB/nginx **`proxy_read_timeout`** for side-chat SSE (extension reconnects if shorter; see [side-chat-realtime.md](side-chat-realtime.md)).
+**GCP (managed DB/Redis):**
 
-### Step 5 — Monitoring
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.gcp.yml up -d --build
+```
 
-- Scrape **`/metrics` on each API instance** (Compose `monitoring/prometheus.yml` uses a single `backend:8000` target — extend for multi-VM).
-- JSON logs include optional **`instance_id`** when `COLCOOR_INSTANCE_ID` is set (deploy script sets hostname).
+**Bundled Postgres/Redis (single-VM / lab only):**
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
 ---
 
-## Deploy script
+## Deploy script commands
 
-[`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh) commands:
+[`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh):
 
 | Command | Purpose |
 |---------|---------|
-| `extract-shared` | Build `shared.env` from `.env` (removes per-node keys) |
-| `write-env --role=primary\|replica` | Write `.env` = shared + role overrides |
-| `migrate` | One-shot `alembic upgrade head` using `DATABASE_MIGRATION_URL` |
-| `role-vars` | Print role snippet |
-
-### Primary VM (first API node)
-
-```bash
-cd /path/to/colcoor
-
-# 1. Create shared.env (edit Cloud SQL / Redis / GCS / JWT before deploy)
-cp .env.example shared.env
-# ... edit shared.env ...
-
-# 2. Node .env for primary
-./scripts/deploy-multi-vm.sh write-env --role=primary --shared-env ./shared.env
-
-# 3. Migrations once per release (recommended even if primary runs them on start)
-./scripts/deploy-multi-vm.sh migrate --shared-env ./shared.env
-
-# 4. Start stack
-docker compose -f docker-compose.prod.yml up -d --build
-curl -fsS http://127.0.0.1/ready
-```
-
-### Replica VM (second+ API node)
-
-```bash
-# Copy shared.env from primary (secure channel)
-./scripts/deploy-multi-vm.sh write-env --role=replica --shared-env ./shared.env
-
-docker compose -f docker-compose.prod.yml up -d --build
-curl -fsS http://127.0.0.1/ready
-```
-
-### Upgrade workflow (new backend version)
-
-```bash
-# On any one machine with shared.env and compose:
-./scripts/deploy-multi-vm.sh migrate --shared-env ./shared.env
-
-# Rolling: update primary, then replicas (or LB drain)
-# Primary .env: COLCOOR_RUN_MIGRATIONS=true (or rely on migrate above + false everywhere)
-docker compose -f docker-compose.prod.yml up -d --build
-```
+| `provision-gcp` | Cloud SQL + Redis + GCS + pools → `shared.env` |
+| `deploy-primary` | `provision-gcp` (optional skip) + write-env + migrate + compose |
+| `deploy-replica` | write-env (replica) + compose |
+| `write-env` | Merge `shared.env` + role overrides → `.env` |
+| `migrate` | One-shot Alembic |
+| `extract-shared` | Strip per-node keys from `.env` |
 
 ---
 
@@ -122,44 +122,27 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 | Variable | Primary | Replica |
 |----------|---------|---------|
-| `COLCOOR_NODE_ROLE` | `primary` | `replica` |
 | `COLCOOR_RUN_MIGRATIONS` | `true` | `false` |
 | `COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED` | `true` | `false` |
 | `COLCOOR_INSTANCE_ID` | hostname | hostname |
 
-**Must be identical on all nodes:** `JWT_SECRET`, `DATABASE_URL`, `DATABASE_MIGRATION_URL`, `REDIS_URL`, `GCS_*`, license vars.
-
-Purge scheduler on replicas is optional to disable (advisory lock already prevents duplicate work); the deploy script disables it on replicas to reduce idle wakeups.
+**Identical on all nodes:** `JWT_SECRET`, `DATABASE_URL`, `DATABASE_MIGRATION_URL`, `REDIS_URL`, `GCS_*`, license vars.
 
 ---
 
-## nginx / Compose notes
+## Upgrade workflow
 
-- Current [`nginx/nginx.conf`](../nginx/nginx.conf) has a **single** upstream (`backend:8000`). On one VM with two containers, add multiple `server` lines or use an external LB targeting each VM’s nginx/backend port.
-- [`docker-compose.prod.yml`](../docker-compose.prod.yml) defines one `backend` service; multi-VM usually means **one compose stack per VM** (backend + nginx) or LB → backend port directly without per-VM Postgres/Redis containers.
-- Remove bundled `postgres` / `redis` services from compose on cloud deployments; set URLs in `shared.env` to managed services.
-
----
-
-## What is already multi-VM safe
-
-- JWT auth (no sticky sessions)
-- Side-chat SSE + Redis pub/sub
-- GCS images
-- PgBouncer-friendly asyncpg settings
-- Event purge (Postgres advisory lock)
-
-## Deferred improvements
-
-- **Redis-backed rate limits** — today limits are per worker ([production.md](production.md))
-- **Stricter license seat cap** — rare race at exact seat limit
-- **Prometheus service discovery** for N backends
+```bash
+./scripts/deploy-multi-vm.sh migrate --shared-env ./shared.env
+# Rolling restart primary, then replicas
+docker compose -f docker-compose.prod.yml -f docker-compose.prod.gcp.yml up -d --build
+```
 
 ---
 
 ## Related docs
 
-- [production.md](production.md) — single-VM Compose baseline
-- [pgbouncer.md](pgbouncer.md) — pool sizing with multiple API VMs
-- [deployment-profiles.md](deployment-profiles.md) — `COLCOOR_DEPLOYMENT_PROFILE` / license tiers
-- [side-chat-realtime.md](side-chat-realtime.md) — Redis + SSE scaling
+- [gcp-provisioning.md](gcp-provisioning.md) — GCP scripts detail
+- [production.md](production.md) — Compose baseline
+- [pgbouncer.md](pgbouncer.md) — pool theory
+- [side-chat-realtime.md](side-chat-realtime.md) — Redis + SSE

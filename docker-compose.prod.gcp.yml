@@ -1,0 +1,34 @@
+# GCP hosted API stack overlay: disable bundled Postgres/Redis; PgBouncer → Cloud SQL private IP.
+#
+# Usage (after scripts/gcp/provision-infra.sh):
+#   docker compose -f docker-compose.prod.yml -f docker-compose.prod.gcp.yml up -d --build
+#
+# Requires in .env / shared.env:
+#   PGBOUNCER_POSTGRES_HOST, DATABASE_URL, DATABASE_MIGRATION_URL, REDIS_URL, GCS_BUCKET
+
+services:
+  # Assign profiles so bundled DB/Redis do not start (merged with docker-compose.prod.yml).
+  postgres:
+    profiles: ["bundled-postgres"]
+
+  redis:
+    profiles: ["bundled-redis"]
+
+  pgbouncer:
+    environment:
+      PGBOUNCER_POSTGRES_HOST: ${PGBOUNCER_POSTGRES_HOST}
+      PGBOUNCER_POSTGRES_PORT: ${PGBOUNCER_POSTGRES_PORT:-5432}
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-}
+    depends_on: {}
+
+  backend:
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  nginx:
+    depends_on:
+      backend:
+        condition: service_healthy

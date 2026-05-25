@@ -15,6 +15,10 @@ chmod 600 "$USERLIST"
 INI_WORK=/tmp/pgbouncer.ini
 cp /etc/pgbouncer/pgbouncer.ini "$INI_WORK"
 
+PG_HOST="${PGBOUNCER_POSTGRES_HOST:-postgres}"
+PG_PORT="${PGBOUNCER_POSTGRES_PORT:-5432}"
+sed -i "s|^\\* = host=.* port=.*|\\* = host=${PG_HOST} port=${PG_PORT}|" "$INI_WORK"
+
 if [ -n "${PGBOUNCER_MAX_CLIENT_CONN:-}" ]; then
   sed -i "s/^max_client_conn = .*/max_client_conn = ${PGBOUNCER_MAX_CLIENT_CONN}/" "$INI_WORK"
 fi

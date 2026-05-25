@@ -66,8 +66,8 @@ Do **not** grant `roles/storage.admin` on the project unless required for bucket
 
 ### Configure the VM
 
-1. Create bucket (e.g. `colcoor-prod-images`) in the same region as the VM.
-2. Set `.env`: `GCS_BUCKET=colcoor-prod-images`, `COLCOOR_IMAGE_STORAGE=gcs`.
+1. Create bucket — **or** run `./scripts/gcp/provision-gcs.sh --config scripts/gcp/gcp.env --shared-env ./shared.env` ([gcp-provisioning.md](gcp-provisioning.md)).
+2. Set `.env`: `GCS_BUCKET=…`, `COLCOOR_IMAGE_STORAGE=gcs` (done automatically by the GCS script).
 3. Optional: `COLCOOR_MAX_IMAGE_BYTES`, `GCS_SIGNED_URL_TTL_SECONDS`.
 4. ADC on GCE uses the attached service account automatically.
 

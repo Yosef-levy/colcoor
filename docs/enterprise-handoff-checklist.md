@@ -2,7 +2,7 @@
 
 Send this to **security**, **network**, **identity**, and **endpoint management** before users install the Colcoor extension. Copy the blocks below into your ticket or runbook.
 
-**Related:** [production.md](production.md) (full stack deploy, release + enterprise bundle), [multi-vm-deploy.md](multi-vm-deploy.md) (multiple API VMs, shared Postgres/Redis/GCS), [authentication.md](authentication.md) (Cursor sign-in → JWT).
+**Related:** [production.md](production.md), [multi-vm-deploy.md](multi-vm-deploy.md), [gcp-provisioning.md](gcp-provisioning.md) (Cloud SQL / Redis / GCS / LB scripts), [authentication.md](authentication.md).
 
 ---
 

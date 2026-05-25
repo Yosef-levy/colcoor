@@ -47,7 +47,7 @@ GitHub Actions runs lint/build for the extension and ruff/pytest for the backend
 
 ## Production (Linux VM, Docker Compose + nginx)
 
-Full runbook: **[`docs/production.md`](docs/production.md)** (architecture, env, health, nginx, backups checklist). **Multiple API VMs** (shared Postgres, Redis, GCS): **[`docs/multi-vm-deploy.md`](docs/multi-vm-deploy.md)** and **`./scripts/deploy-multi-vm.sh`**.
+Full runbook: **[`docs/production.md`](docs/production.md)**. **Multi-VM / GCP:** **[`docs/gcp-provisioning.md`](docs/gcp-provisioning.md)** — `./scripts/deploy-multi-vm.sh deploy-primary`.
 
 Quick start from repo root:
 

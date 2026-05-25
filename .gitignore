@@ -36,6 +36,7 @@ Thumbs.db
 # Local backup dumps (scripts write here)
 backups/
 credentials.generated.txt
+scripts/gcp/gcp.env
 
 # Logs
 *.log
