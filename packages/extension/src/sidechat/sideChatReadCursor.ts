@@ -15,3 +15,10 @@ export function maxSideChatSeq(messages: readonly { seq: number }[]): number {
   }
   return m;
 }
+
+/** Max seq excluding optimistic (not-yet-persisted) rows — safe for SSE ``after_seq`` on reconnect. */
+export function maxStableSideChatSeq(
+  messages: readonly { seq: number; id: string }[],
+): number {
+  return maxSideChatSeq(messages.filter((m) => !m.id.startsWith("optimistic:")));
+}

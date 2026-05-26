@@ -27,7 +27,7 @@ from colcoor_backend.services.side_chat import (
     load_users_by_ids,
     side_chat_message_to_out,
 )
-from colcoor_backend.observability.metrics import SSE_CONNECTIONS_ACTIVE
+from colcoor_backend.observability.metrics import SSE_CONNECTIONS_ACTIVE, SSE_STREAM_DISCONNECTS_TOTAL
 from colcoor_backend.services.side_chat_wake.hub import SideChatWakeHub
 
 logger = logging.getLogger(__name__)
@@ -143,6 +143,7 @@ async def iter_side_chat_sse(
                     yield chunk
     finally:
         SSE_CONNECTIONS_ACTIVE.dec()
+        SSE_STREAM_DISCONNECTS_TOTAL.labels(reason="closed").inc()
 
 
 async def _run_sse_loop(

@@ -1,6 +1,8 @@
 # Colcoor — scrape the API on the Compose internal network.
 # Usage:
 #   docker compose -f docker-compose.prod.yml --profile monitoring up -d
+#
+# Multi-VM: see prometheus-multi-vm.example.yml (one target per API VM/nginx).
 
 global:
   scrape_interval: 15s

@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import Protocol
 
+from colcoor_backend.observability.metrics import RATE_LIMIT_REJECTED_TOTAL
 from colcoor_backend.rate_limit.token_bucket import TokenBucket
 
 # Evict buckets idle longer than this (limits memory growth across many users/IPs).
@@ -38,7 +39,11 @@ class InMemoryRateLimitStore:
                 self._buckets[key] = bucket
             else:
                 bucket.configure(rate=rate, capacity=burst)
-            return bucket.try_consume(1.0)
+            if bucket.try_consume(1.0):
+                return True
+            key_type = key.split(":", 1)[0] if ":" in key else "unknown"
+            RATE_LIMIT_REJECTED_TOTAL.labels(key_type=key_type).inc()
+            return False
 
     def _maybe_purge_idle_buckets(self) -> None:
         self._checks_since_cleanup += 1

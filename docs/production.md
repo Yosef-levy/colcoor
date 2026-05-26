@@ -182,7 +182,9 @@ Exceeded limits return **HTTP 429** with `{"detail":"Rate limit exceeded. Try ag
 
 **Memory:** in-memory buckets for idle keys are dropped after **1 hour** without traffic (per worker).
 
-**Multi-replica:** limits are **in-memory per process** today. Each Gunicorn worker maintains its own buckets; nginx edge limits still apply per IP. For strict global limits across replicas, plan a shared backend (e.g. Redis) behind the same `RateLimitBackend` interface.
+**Multi-replica:** when **`REDIS_URL`** is set (required in production), rate limits use **Redis token buckets** cluster-wide (`colcoor:ratelimit:*` keys). Without Redis (local dev only), limits fall back to **in-memory per process**.
+
+**Metrics:** rejected requests increment `colcoor_rate_limit_rejected_total{key_type="user|ip"}`.
 
 ---
 

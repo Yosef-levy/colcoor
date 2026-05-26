@@ -31,9 +31,14 @@ from colcoor_backend.api.schemas import (
     TreeResponse,
     UndoEventDeletionBody,
 )
+from colcoor_backend.services.append_event_idempotency import (
+    IDEMPOTENCY_KEY_HEADER,
+    IdempotencyKeyError,
+    append_graph_event_idempotent,
+    normalize_idempotency_key,
+)
 from colcoor_backend.services.graph import (
     add_conversation_member,
-    append_graph_event,
     create_conversation_with_owner,
     create_note_on_event,
     restore_soft_deleted_conversation_graph,
@@ -224,21 +229,27 @@ async def restore_deleted_conversation(
 
 @router.post("/{conversation_id}/append-event")
 async def append_event(
+    request: Request,
     session: DbSession,
     user_id: CurrentUserId,
     conversation_id: UUID,
     body: AppendEventBody,
-) -> dict[str, str]:
+) -> dict[str, str | bool]:
     if body.kind == EventKind.assistant_output and body.private_branch:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="private_branch applies to user_input only",
         )
     try:
-        ev = await append_graph_event(
+        idempotency_key = normalize_idempotency_key(request.headers.get(IDEMPOTENCY_KEY_HEADER))
+    except IdempotencyKeyError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    try:
+        ev, replayed = await append_graph_event_idempotent(
             session,
             conversation_id=conversation_id,
             user_id=user_id,
+            idempotency_key=idempotency_key,
             kind=body.kind.value,
             parent_event_id=body.parent_event_id,
             content=body.content,
@@ -255,8 +266,13 @@ async def append_event(
         ) from None
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    except TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="idempotency key in flight; retry shortly",
+        ) from None
     await session.commit()
-    return {"id": str(ev.id)}
+    return {"id": str(ev.id), "replayed": replayed}
 
 
 @router.post("/{conversation_id}/images", response_model=ConversationImageUploadOut)

@@ -1,0 +1,25 @@
+# Multi-VM Prometheus scrape example.
+# Copy to monitoring/prometheus-multi-vm.yml and set target hostnames/ports for each API VM.
+#
+# Each VM exposes nginx → backend /metrics. Scrape via the internal hostname or LB
+# only if you aggregate per-instance metrics (recommended: one target per VM).
+#
+# Set COLCOOR_INSTANCE_ID on each backend VM so colcoor_deployment_info matches logs.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: colcoor-backend
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api-vm-1:80
+          - api-vm-2:80
+        labels:
+          service: colcoor-backend
+    relabel_configs:
+      # Promote host:port to instance label for dashboards/alerts.
+      - source_labels: [__address__]
+        target_label: instance

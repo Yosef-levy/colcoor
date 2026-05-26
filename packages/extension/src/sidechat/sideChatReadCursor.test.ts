@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { maxSideChatSeq } from "./sideChatReadCursor";
+import { maxSideChatSeq, maxStableSideChatSeq } from "./sideChatReadCursor";
 
 describe("maxSideChatSeq", () => {
   it("returns 0 for an empty list", () => {
@@ -13,5 +13,16 @@ describe("maxSideChatSeq", () => {
 
   it("handles a single row", () => {
     expect(maxSideChatSeq([{ seq: 42 }])).toBe(42);
+  });
+});
+
+describe("maxStableSideChatSeq", () => {
+  it("ignores optimistic rows when computing SSE after_seq", () => {
+    expect(
+      maxStableSideChatSeq([
+        { id: "real-1", seq: 8 },
+        { id: "optimistic:temp", seq: 9 },
+      ]),
+    ).toBe(8);
   });
 });

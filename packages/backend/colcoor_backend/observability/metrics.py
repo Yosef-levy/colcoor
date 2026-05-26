@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from prometheus_client import Counter, Gauge, Histogram, generate_latest
+import os
+
+from prometheus_client import Counter, Gauge, Histogram, Info, generate_latest
 from prometheus_client import CONTENT_TYPE_LATEST
 
 # Paths excluded from HTTP request metrics (scrapers / probes).
@@ -37,10 +39,23 @@ SSE_RECONNECTS_TOTAL = Counter(
     "colcoor_sse_reconnects_total",
     "Side-chat SSE opens with X-Colcoor-SSE-Attempt > 0",
 )
+SSE_STREAM_DISCONNECTS_TOTAL = Counter(
+    "colcoor_sse_stream_disconnects_total",
+    "Side-chat SSE streams that ended (client close, timeout, or error)",
+    ["reason"],
+)
 REDIS_PUBLISH_TOTAL = Counter(
     "colcoor_redis_publish_total",
     "Side-chat Redis PUBLISH attempts",
     ["result"],
+)
+REDIS_LISTENER_RECONNECTS_TOTAL = Counter(
+    "colcoor_redis_listener_reconnects_total",
+    "Side-chat Redis pub/sub listener reconnect cycles",
+)
+REDIS_LISTENER_ERRORS_TOTAL = Counter(
+    "colcoor_redis_listener_errors_total",
+    "Side-chat Redis pub/sub listener errors before reconnect",
 )
 REDIS_SUBSCRIBED_CHANNELS = Gauge(
     "colcoor_redis_subscribed_channels",
@@ -49,6 +64,16 @@ REDIS_SUBSCRIBED_CHANNELS = Gauge(
 REDIS_SSE_WAITERS = Gauge(
     "colcoor_redis_sse_waiters",
     "Local SSE waiter events registered for Redis wakeups",
+)
+APPEND_EVENT_IDEMPOTENCY_TOTAL = Counter(
+    "colcoor_append_event_idempotency_total",
+    "Append-event idempotency outcomes",
+    ["result"],
+)
+RATE_LIMIT_REJECTED_TOTAL = Counter(
+    "colcoor_rate_limit_rejected_total",
+    "Requests rejected by rate limiting",
+    ["key_type"],
 )
 DB_POOL_SIZE = Gauge(
     "colcoor_db_pool_size",
@@ -66,13 +91,25 @@ DB_POOL_CHECKED_IN = Gauge(
     "colcoor_db_pool_checked_in",
     "Idle connections in the pool",
 )
+DEPLOYMENT_INFO = Info(
+    "colcoor_deployment",
+    "Deployment labels for multi-VM scrape aggregation (instance_id, node_role)",
+)
 
 
 def metrics_content_type() -> str:
     return CONTENT_TYPE_LATEST
 
 
+def refresh_deployment_info() -> None:
+    """Set static deployment labels from environment (safe to call on each /metrics scrape)."""
+    instance_id = os.environ.get("COLCOOR_INSTANCE_ID", "").strip() or "unknown"
+    node_role = os.environ.get("COLCOOR_NODE_ROLE", "").strip() or "unknown"
+    DEPLOYMENT_INFO.info({"instance_id": instance_id, "node_role": node_role})
+
+
 def render_metrics(engine: object | None = None) -> bytes:
+    refresh_deployment_info()
     if engine is not None:
         update_db_pool_gauges(engine)
     return generate_latest()

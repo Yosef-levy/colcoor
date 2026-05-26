@@ -63,9 +63,15 @@ Self-hosted operators can skip the profile and scrape `/metrics` with any Promet
 | `colcoor_sse_connections_active` | Gauge | — | Open side-chat SSE streams **per worker** |
 | `colcoor_sse_stream_opens_total` | Counter | `reconnect` | SSE stream opens (`true` when `X-Colcoor-SSE-Attempt` > 0) |
 | `colcoor_sse_reconnects_total` | Counter | — | Client reconnect opens (extension sends attempt > 0) |
+| `colcoor_sse_stream_disconnects_total` | Counter | `reason` | SSE streams closed (`closed` on normal generator exit) |
 | `colcoor_redis_publish_total` | Counter | `result` | Side-chat Redis publishes (`ok` / `error`) |
+| `colcoor_redis_listener_reconnects_total` | Counter | — | Side-chat Redis pub/sub listener reconnect cycles |
+| `colcoor_redis_listener_errors_total` | Counter | — | Listener exceptions before reconnect |
 | `colcoor_redis_subscribed_channels` | Gauge | — | Redis channels subscribed on this worker |
 | `colcoor_redis_sse_waiters` | Gauge | — | Local SSE waiters multiplexed onto Redis |
+| `colcoor_append_event_idempotency_total` | Counter | `result` | Append-event dedup (`created` / `replayed`) |
+| `colcoor_rate_limit_rejected_total` | Counter | `key_type` | Rate-limited requests (`user` / `ip`) |
+| `colcoor_deployment_info` | Info | — | Static labels: `instance_id`, `node_role` (from env) |
 | `colcoor_db_pool_checked_out` | Gauge | — | SQLAlchemy connections in use |
 | `colcoor_db_pool_size` | Gauge | — | Configured pool size |
 | `colcoor_db_pool_overflow` | Gauge | — | Overflow connections |
@@ -75,7 +81,7 @@ Self-hosted operators can skip the profile and scrape `/metrics` with any Promet
 
 **Multi-worker:** Gunicorn runs multiple processes; each exposes its own `/metrics`. Prometheus scrapes one target per backend container — sum gauges across workers mentally, or add `honor_labels` / per-pod discovery later.
 
-**Multi-VM:** [`monitoring/prometheus.yml`](../monitoring/prometheus.yml) lists a single `backend:8000` target (one Compose stack). With several API VMs, add one scrape target per instance (or use service discovery) and set **`COLCOOR_INSTANCE_ID`** on each node so JSON logs are distinguishable — [multi-vm-deploy.md](multi-vm-deploy.md).
+**Multi-VM:** [`monitoring/prometheus.yml`](../monitoring/prometheus.yml) lists a single `backend:8000` target (one Compose stack). For several API VMs, use [`monitoring/prometheus-multi-vm.example.yml`](../monitoring/prometheus-multi-vm.example.yml) — one scrape target per VM/nginx — and set **`COLCOOR_INSTANCE_ID`** / **`COLCOOR_NODE_ROLE`** on each backend so `colcoor_deployment_info` and JSON logs align — [multi-vm-deploy.md](multi-vm-deploy.md).
 
 Sample config: [`monitoring/prometheus.yml`](../monitoring/prometheus.yml).
 
@@ -133,6 +139,9 @@ Errors include an `error` field with stack traces. Uvicorn/Gunicorn access logs 
 3. **`colcoor_db_pool_checked_out` / `colcoor_db_pool_size`** — connection pool pressure (with PgBouncer, also watch PgBouncer server pool)
 4. **`colcoor_sse_connections_active`** — long-lived streams (memory / file descriptors)
 5. **`rate(colcoor_redis_publish_total{result="error"}[5m])`** — side-chat wake failures
+6. **`rate(colcoor_redis_listener_errors_total[5m])`** — Redis pub/sub listener instability
+7. **`rate(colcoor_append_event_idempotency_total{result="replayed"}[5m])`** — client retries successfully deduped
+8. **`rate(colcoor_rate_limit_rejected_total[5m])`** — API rate limit pressure
 
 ---
 

@@ -220,9 +220,11 @@ class RedisSideChatWakeHub:
             except asyncio.CancelledError:
                 raise
             except Exception:
+                REDIS_LISTENER_ERRORS_TOTAL.inc()
                 logger.exception(
                     "side_chat wake hub: listener error, reconnecting in %.2fs", backoff
                 )
+            REDIS_LISTENER_RECONNECTS_TOTAL.inc()
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 5.0)
             try:

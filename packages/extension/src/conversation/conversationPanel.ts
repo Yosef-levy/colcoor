@@ -95,7 +95,7 @@ import {
   isOptimisticSideChatMessageId,
   newOptimisticSideChatMessageId,
 } from "../sidechat/optimisticSideChatUserMessage";
-import { maxSideChatSeq } from "../sidechat/sideChatReadCursor";
+import { maxSideChatSeq, maxStableSideChatSeq } from "../sidechat/sideChatReadCursor";
 import { nextSideChatReadSeqToPatch } from "../sidechat/sideChatReadPatchPlan";
 import { buildSideChatSendPayload } from "../sidechat/sideChatSendPayload";
 import { toSideChatRenderMessages, type SideChatRenderMessage } from "../sidechat/sideChatRenderMessages";
@@ -812,7 +812,7 @@ export function createConversationPanelController(
       api,
       conversationId: cid,
       sseSessionId: inlineSideChatSseSessionId,
-      getAfterSeq: () => maxSideChatSeq(inlineSideChatRows),
+      getAfterSeq: () => maxStableSideChatSeq(inlineSideChatRows),
       signal: ac.signal,
       stopped: () =>
         inlineSideChatSseConversationId !== cid || conversationId !== cid || panel == null,

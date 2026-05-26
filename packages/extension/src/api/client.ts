@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { parseApiErrorBody } from "./apiErrorFormatting";
 import { ColcoorApiHttpError } from "./colcoorApiHttpError";
 import { fetchWithRetries } from "./fetchWithRetries";
@@ -116,6 +118,8 @@ export type AppendEventBody = {
 
 export type AppendEventResponse = {
   id: string;
+  /** True when the server returned an existing event for this Idempotency-Key. */
+  replayed?: boolean;
 };
 
 export type NoteOut = {
@@ -754,7 +758,12 @@ export class ColcoorApiClient {
     this.assertOkResponse(res, text, "patch event checkpoint label");
   }
 
-  async appendEvent(conversationId: string, body: AppendEventBody): Promise<AppendEventResponse> {
+  async appendEvent(
+    conversationId: string,
+    body: AppendEventBody,
+    options?: { idempotencyKey?: string },
+  ): Promise<AppendEventResponse> {
+    const idempotencyKey = options?.idempotencyKey ?? randomUUID();
     const payload: Record<string, unknown> = {
       kind: body.kind,
       parent_event_id: body.parent_event_id,
@@ -773,7 +782,10 @@ export class ColcoorApiClient {
     }
     const res = await this.fetchApi(`/conversations/${conversationId}/append-event`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
       body: JSON.stringify(payload),
     });
     const text = await res.text();

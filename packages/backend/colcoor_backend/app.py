@@ -25,7 +25,7 @@ from colcoor_backend.db.session import create_engine, create_session_factory
 from colcoor_backend.logging_config import configure_logging
 from colcoor_backend.observability import metrics_content_type, render_metrics
 from colcoor_backend.observability.middleware import RequestContextMiddleware
-from colcoor_backend.rate_limit.backends import InMemoryRateLimitStore
+from colcoor_backend.rate_limit.factory import create_rate_limit_store
 from colcoor_backend.rate_limit.middleware import RateLimitMiddleware
 from colcoor_backend.services.event_purge import spawn_event_purge_scheduler
 from colcoor_backend.services.side_chat_wake.factory import create_side_chat_wake_hub
@@ -53,6 +53,11 @@ async def lifespan(app: FastAPI):
     wake_hub = create_side_chat_wake_hub(settings)
     await wake_hub.start()
     app.state.side_chat_wake_hub = wake_hub
+
+    rate_limit_store = create_rate_limit_store(settings)
+    if hasattr(rate_limit_store, "start"):
+        await rate_limit_store.start()
+    app.state.rate_limit_store = rate_limit_store
 
     image_storage = create_image_blob_storage(settings)
     app.state.image_blob_storage = image_storage
@@ -84,6 +89,10 @@ async def lifespan(app: FastAPI):
 
     await wake_hub.stop()
 
+    rate_limit_store = getattr(app.state, "rate_limit_store", None)
+    if rate_limit_store is not None and hasattr(rate_limit_store, "stop"):
+        await rate_limit_store.stop()
+
     if purge_task is not None:
         purge_task.cancel()
         try:
@@ -111,7 +120,7 @@ def create_app() -> FastAPI:
     )
     register_exception_handlers(application)
 
-    application.state.rate_limit_store = InMemoryRateLimitStore()
+    # Rate limit store is created in lifespan (Redis cluster-wide or in-memory for dev).
     # Starlette wraps last-added middleware on the outside. RequestContext must be
     # outer so 429 responses from RateLimitMiddleware still get X-Request-ID.
     application.add_middleware(RateLimitMiddleware)
@@ -195,6 +204,7 @@ def create_app() -> FastAPI:
                 "Accept",
                 "Cache-Control",
                 "X-Request-ID",
+                "Idempotency-Key",
             ],
         )
 

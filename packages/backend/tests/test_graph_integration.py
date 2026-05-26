@@ -28,6 +28,7 @@ from colcoor_backend.services.graph import (
     list_events_for_tree,
     soft_delete_event_subtree,
 )
+from colcoor_backend.services.append_event_idempotency import IDEMPOTENCY_KEY_HEADER
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
@@ -55,6 +56,10 @@ async def _seed_user_and_mint_jwt(postgres_url: str) -> str:
         token = create_access_token(u.id, get_settings())
     await eng.dispose()
     return token
+
+
+def _append_event_headers(auth: dict[str, str], idempotency_key: str | None = None) -> dict[str, str]:
+    return {**auth, IDEMPOTENCY_KEY_HEADER: idempotency_key or str(uuid.uuid4())}
 
 
 @pytest.fixture(scope="module")
@@ -293,7 +298,7 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
 
         r = client.post(
             f"/api/v1/conversations/{cid}/append-event",
-            headers=auth,
+            headers=_append_event_headers(auth),
             json={
                 "kind": "user_input",
                 "parent_event_id": root["id"],
@@ -308,7 +313,7 @@ def test_append_event_http_roundtrip(monkeypatch: pytest.MonkeyPatch, postgres_u
 
         r = client.post(
             f"/api/v1/conversations/{cid}/append-event",
-            headers=auth,
+            headers=_append_event_headers(auth),
             json={
                 "kind": "assistant_output",
                 "parent_event_id": user_ev_id,
@@ -994,7 +999,7 @@ def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgre
 
         r = client.post(
             f"/api/v1/conversations/{cid}/append-event",
-            headers=auth,
+            headers=_append_event_headers(auth),
             json={
                 "kind": "user_input",
                 "parent_event_id": root["id"],
@@ -1008,7 +1013,7 @@ def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgre
 
         r = client.post(
             f"/api/v1/conversations/{cid}/append-event",
-            headers=auth,
+            headers=_append_event_headers(auth),
             json={
                 "kind": "assistant_output",
                 "parent_event_id": head_id,
@@ -1022,7 +1027,7 @@ def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgre
 
         r = client.post(
             f"/api/v1/conversations/{cid}/append-event",
-            headers=auth,
+            headers=_append_event_headers(auth),
             json={
                 "kind": "user_input",
                 "parent_event_id": root["id"],

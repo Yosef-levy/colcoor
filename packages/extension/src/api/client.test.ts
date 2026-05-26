@@ -495,6 +495,8 @@ describe("ColcoorApiClient note mutations", () => {
       checkpoint_label: "  Milestone A\r\n",
     });
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Headers;
+    expect(headers.get("Idempotency-Key")).toBeTruthy();
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     expect(body.checkpoint_label).toBe("Milestone A");
     expect(body.content).toBe("hi");

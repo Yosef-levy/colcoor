@@ -325,7 +325,8 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 | | |
 |--|--|
 | **Auth** | Bearer JWT |
-| **200** | `{"id":"<uuid of new event>"}` |
+| **Headers** | **`Idempotency-Key`** (required) — client-generated unique key (UUID recommended). Retries with the same key return the original event without creating a duplicate row. |
+| **200** | `{"id":"<uuid of new event>","replayed":false}` on first success; `replayed:true` when the key was already processed |
 | **401** | missing/invalid token |
 | **403** | forbidden (membership or role) |
 | **404** | conversation or parent event not found |

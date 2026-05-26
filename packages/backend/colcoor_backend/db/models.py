@@ -142,6 +142,30 @@ class Event(Base):
     )
 
 
+class AppendEventIdempotency(Base):
+    """Dedupes ``POST …/append-event`` when the client retries with the same ``Idempotency-Key``."""
+
+    __tablename__ = "append_event_idempotency"
+    __table_args__ = (
+        Index("idx_append_event_idempotency_event_id", "event_id"),
+        Index("idx_append_event_idempotency_created_at", "created_at"),
+    )
+
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    event_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class ConversationUserState(Base):
     __tablename__ = "conversation_user_state"
     __table_args__ = (

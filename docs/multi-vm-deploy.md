@@ -138,6 +138,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml -f docker-compose.prod.gcp.yml up -d --build
 ```
 
+Migration **`011_append_event_idempotency`** adds the append-event idempotency table (required for `Idempotency-Key` on `POST …/append-event`). Run **`migrate`** once before rolling out backend + extension builds that send the header.
+
 ---
 
 ## Related docs
