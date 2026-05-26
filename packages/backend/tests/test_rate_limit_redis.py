@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from colcoor_backend.rate_limit.redis_backend import RedisRateLimitStore
 
 

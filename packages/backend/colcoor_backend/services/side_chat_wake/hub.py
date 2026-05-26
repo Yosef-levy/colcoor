@@ -31,6 +31,8 @@ from colcoor_backend.services.side_chat_wake.channels import (
     side_chat_redis_channel,
 )
 from colcoor_backend.observability.metrics import (
+    REDIS_LISTENER_ERRORS_TOTAL,
+    REDIS_LISTENER_RECONNECTS_TOTAL,
     REDIS_PUBLISH_TOTAL,
     REDIS_SSE_WAITERS,
     REDIS_SUBSCRIBED_CHANNELS,
