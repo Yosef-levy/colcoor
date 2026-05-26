@@ -68,7 +68,7 @@ class JsonLogFormatter(logging.Formatter):
 
 def configure_logging(settings: Settings | None = None) -> None:
     """Reconfigure root and library loggers to stdout (idempotent per worker)."""
-    from colcoor_backend.core.config import Settings, get_settings
+    from colcoor_backend.core.config import get_settings
 
     settings = settings or get_settings()
     level_name = os.environ.get("COLCOOR_LOG_LEVEL", "INFO").upper()
