@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configure_logging()
     settings = get_settings()
+    configure_logging(settings)
     validate_license_and_deployment_settings(settings)
     validate_production_settings(settings)
 

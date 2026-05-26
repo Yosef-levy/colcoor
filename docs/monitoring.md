@@ -109,7 +109,13 @@ Production (`COLCOOR_ENV=production`) emits **one JSON object per line**:
 
 `instance_id` appears when **`COLCOOR_INSTANCE_ID`** is set (e.g. by `deploy-multi-vm.sh` on each VM).
 
-Errors include an `error` field with stack traces. Uvicorn/Gunicorn access logs are suppressed in favour of `colcoor.access`.
+Errors include an `error` field with stack traces.
+
+**HTTP access logs:** The API emits one structured line per request on **`colcoor.access`** (via `RequestContextMiddleware`). Gunicorn **`--access-logfile` is not enabled** in `colcoor-start.sh` (avoids duplicate CLF lines). Uvicorn access logging is disabled; use `colcoor.access` for request tracing. **`COLCOOR_LOG_FORMAT`** is resolved through app settings (`json` in production when unset).
+
+**Log level:** Keep **`COLCOOR_LOG_LEVEL=INFO`** (default) if you need HTTP access lines. Values above `INFO` (e.g. `WARNING`) suppress successful `colcoor.access` entries.
+
+**nginx:** The reverse proxy may still write its own `access.log` at the edge; that is separate from backend stdout JSON.
 
 ---
 

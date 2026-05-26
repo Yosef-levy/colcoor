@@ -2,13 +2,11 @@ import uvicorn
 
 from colcoor_backend.app import create_app
 from colcoor_backend.core.config import get_settings
-from colcoor_backend.logging_config import configure_logging
 
 app = create_app()
 
 
 def main() -> None:
-    configure_logging()
     settings = get_settings()
     reload = not settings.is_production()
     uvicorn.run(

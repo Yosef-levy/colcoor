@@ -1,4 +1,9 @@
-"""Stdout logging for Docker-friendly operation."""
+"""Stdout logging for Docker-friendly operation.
+
+NDJSON on stdout is the log aggregation contract. HTTP access lines come from
+``colcoor.access`` (RequestContextMiddleware). Domain events should use
+``colcoor_backend.errors.logging_utils.log_event()`` in later observability work.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +14,12 @@ import os
 import sys
 import traceback
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from colcoor_backend.observability import context as obs_ctx
+
+if TYPE_CHECKING:
+    from colcoor_backend.core.config import Settings
 
 
 class JsonLogFormatter(logging.Formatter):
@@ -58,23 +66,14 @@ class JsonLogFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
-def _resolve_log_format(settings_env: str | None) -> str:
-    explicit = os.environ.get("COLCOOR_LOG_FORMAT", "").strip().lower()
-    if explicit in ("json", "text"):
-        return explicit
-    if explicit:
-        return "text"
-    env = (settings_env or os.environ.get("COLCOOR_ENV", "development")).strip().lower()
-    if env == "production":
-        return "json"
-    return "text"
+def configure_logging(settings: Settings | None = None) -> None:
+    """Reconfigure root and library loggers to stdout (idempotent per worker)."""
+    from colcoor_backend.core.config import Settings, get_settings
 
-
-def configure_logging() -> None:
-    """Idempotent-ish: reconfigure root + common library loggers to stdout."""
+    settings = settings or get_settings()
     level_name = os.environ.get("COLCOOR_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-    log_format = _resolve_log_format(os.environ.get("COLCOOR_ENV"))
+    log_format = settings.resolved_log_format()
 
     if log_format == "json":
         formatter_name = "json"
@@ -119,7 +118,18 @@ def configure_logging() -> None:
     logging.config.dictConfig(config)
     logging.captureWarnings(True)
 
+    # Canonical HTTP access is colcoor.access; never emit Uvicorn CLF lines.
+    logging.getLogger("uvicorn.access").disabled = True
+
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(line_buffering=True)  # type: ignore[attr-defined]
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(line_buffering=True)  # type: ignore[attr-defined]
+
+    explicit = settings.log_format.strip().lower()
+    if explicit and explicit not in ("json", "text"):
+        logging.getLogger(__name__).warning(
+            "Invalid COLCOOR_LOG_FORMAT=%r; using %s",
+            explicit,
+            log_format,
+        )

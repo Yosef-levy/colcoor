@@ -15,6 +15,7 @@ _run_migrations() {
 
 _run_migrations
 
+# HTTP access: colcoor.access (structured JSON). Do not pass --access-logfile (duplicate CLF).
 exec gunicorn colcoor_backend.main:app \
   -k uvicorn.workers.UvicornWorker \
   -w "${WEB_CONCURRENCY:-2}" \
@@ -22,5 +23,4 @@ exec gunicorn colcoor_backend.main:app \
   --timeout 120 \
   --graceful-timeout 30 \
   --keep-alive 5 \
-  --access-logfile - \
   --error-logfile -

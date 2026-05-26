@@ -312,6 +312,15 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.env.strip().lower() == "production"
 
+    def resolved_log_format(self) -> str:
+        """json | text. Explicit COLCOOR_LOG_FORMAT wins; else json in production."""
+        explicit = self.log_format.strip().lower()
+        if explicit in ("json", "text"):
+            return explicit
+        if self.is_production():
+            return "json"
+        return "text"
+
     def redis_url_normalized(self) -> str | None:
         if not self.redis_url or not self.redis_url.strip():
             return None
