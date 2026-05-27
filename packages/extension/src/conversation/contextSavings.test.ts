@@ -3,7 +3,11 @@ import type { GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import {
   buildContextSavingsTurn,
+  currentLinearContextTokens,
+  estimateLinearMessageTokens,
+  estimateLinearNoteTokens,
   mergeConversationContextSavingsMetadata,
+  mergeConversationLinearContextTokenIncrement,
   readConversationContextSavingsAggregate,
 } from "./contextSavings";
 import { graphPathToTranscriptTurns, indexNotesByEventId, pathFromRootToTip } from "./treeEvents";
@@ -26,7 +30,7 @@ function node(
 }
 
 describe("context savings", () => {
-  it("estimates saved context against a linearized conversation", () => {
+  it("estimates saved context against an incremental linear baseline", () => {
     const root = node({
       id: "root",
       parent_event_id: null,
@@ -39,14 +43,14 @@ describe("context savings", () => {
       parent_event_id: "root",
       kind: "user_input",
       created_at: "2026-01-01T00:00:01Z",
-      content_text: "A".repeat(200),
+      content_text: "A".repeat(1000),
     });
     const branchAReply = node({
       id: "branch-a-reply",
       parent_event_id: "branch-a",
       kind: "assistant_output",
       created_at: "2026-01-01T00:00:02Z",
-      content_text: "B".repeat(200),
+      content_text: "B".repeat(1000),
     });
     const branchB = node({
       id: "branch-b",
@@ -66,11 +70,11 @@ describe("context savings", () => {
 
     const turn = buildContextSavingsTurn({
       kind: "send",
-      conversationTitle: "Test",
-      visibleEventsBeforeRun: events,
-      visibleNotes: notes,
+      linearContextTokensBeforeRun:
+        estimateLinearMessageTokens(branchA.content_text) +
+        estimateLinearMessageTokens(branchAReply.content_text),
+      linearPromptTokens: estimateLinearMessageTokens("next"),
       actualTranscriptText,
-      finalUserMessage: "next",
     });
 
     expect(turn.linear_context_tokens).toBeGreaterThan(turn.actual_context_tokens);
@@ -85,16 +89,28 @@ describe("context savings", () => {
         version: 1,
         estimator: "chars_div_4",
         kind: "send",
+        linear_prompt_tokens: 5,
         actual_context_tokens: 10,
         linear_context_tokens: 40,
         tokens_saved: 30,
         percent_saved: 75,
       },
+      15,
     );
     const aggregate = readConversationContextSavingsAggregate(metadata);
     expect(metadata.other).toBe(true);
     expect(aggregate?.counted_generations).toBe(1);
+    expect(aggregate?.current_linear_context_tokens).toBe(15);
     expect(aggregate?.total_tokens_saved).toBe(30);
     expect(aggregate?.percent_saved).toBe(75);
+  });
+
+  it("increments linear baseline for notes without counting a generation", () => {
+    const metadata = mergeConversationLinearContextTokenIncrement(
+      undefined,
+      estimateLinearNoteTokens("A note gets treated like a message."),
+    );
+    expect(currentLinearContextTokens(metadata)).toBeGreaterThan(0);
+    expect(readConversationContextSavingsAggregate(metadata)?.counted_generations).toBe(0);
   });
 });

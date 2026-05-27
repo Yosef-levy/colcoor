@@ -13,7 +13,11 @@ import {
   normalizeOptionalGraphEventId,
   normalizePersistedUserInputText,
 } from "./normalizeUserInputText";
-import { buildContextSavingsTurn, type ContextSavingsTurn } from "./contextSavings";
+import {
+  buildContextSavingsTurn,
+  estimateLinearMessageTokens,
+  type ContextSavingsTurn,
+} from "./contextSavings";
 import {
   findBranchTip,
   graphPathToTranscriptTurns,
@@ -67,6 +71,8 @@ export type RunUserTurnOptions = {
   prefetchedGraph?: PrefetchedConversationGraph;
   /** Cursor CLI `--model`; omit for automatic model selection. */
   cliModel?: string;
+  /** Incremental linear-chat token baseline before this pending user message. */
+  linearContextTokensBeforeRun?: number;
 };
 
 export type UserTurnResult = {
@@ -140,12 +146,9 @@ export async function runColcoorUserTurn(
   });
   const contextSavings = buildContextSavingsTurn({
     kind: "send",
-    conversationTitle,
-    visibleEventsBeforeRun: events,
-    visibleNotes: notes,
+    linearContextTokensBeforeRun: options?.linearContextTokensBeforeRun ?? 0,
+    linearPromptTokens: estimateLinearMessageTokens(trimmed || null, mediaJson),
     actualTranscriptText: transcriptText,
-    finalUserMessage: trimmed || null,
-    finalUserMediaContentJson: mediaJson,
   });
 
   const cp = normalizeOptionalCheckpointLabel(options?.checkpointLabel);
@@ -182,7 +185,7 @@ export async function runColcoorUserTurn(
     return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult, contextSavings);
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
-      return { userEventId: userRes.id, cancelled: true };
+      return { userEventId: userRes.id, contextSavings, cancelled: true };
     }
     throw e;
   } finally {

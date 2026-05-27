@@ -31,6 +31,8 @@ export type RunResendAssistantOptions = {
   prefetchedGraph?: PrefetchedConversationGraph;
   /** Cursor CLI `--model`; omit for automatic model selection. */
   cliModel?: string;
+  /** Incremental linear-chat token baseline before this resend. */
+  linearContextTokensBeforeRun?: number;
 };
 
 /**
@@ -94,9 +96,8 @@ export async function runResendAssistant(
   });
   const contextSavings = buildContextSavingsTurn({
     kind: "resend",
-    conversationTitle,
-    visibleEventsBeforeRun: events,
-    visibleNotes: notes,
+    linearContextTokensBeforeRun: options?.linearContextTokensBeforeRun ?? 0,
+    linearPromptTokens: 0,
     actualTranscriptText: transcriptText,
   });
 

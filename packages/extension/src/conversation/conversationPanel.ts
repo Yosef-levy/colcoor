@@ -72,7 +72,11 @@ import { evaluateEditUserMessageGate } from "./editUserMessageGate";
 import { buildComposerPrefillFromUserEvent, type ComposerPrefillPayload } from "./buildComposerPrefillFromUserEvent";
 import { mergeUserMediaImageRefs } from "./mergeUserMediaImageRefs";
 import {
+  currentLinearContextTokens,
+  estimateLinearMessageTokens,
+  estimateLinearNoteTokens,
   mergeConversationContextSavingsMetadata,
+  mergeConversationLinearContextTokenIncrement,
   readConversationContextSavingsAggregate,
   type ContextSavingsTurn,
 } from "./contextSavings";
@@ -659,17 +663,43 @@ export function createConversationPanelController(
     };
   }
 
-  async function persistConversationContextSavings(turn: ContextSavingsTurn | undefined): Promise<void> {
+  async function persistConversationContextSavings(
+    turn: ContextSavingsTurn | undefined,
+    assistantText: string | null | undefined,
+  ): Promise<void> {
     if (!conversationId || !turn) {
       return;
     }
-    const nextMetadata = mergeConversationContextSavingsMetadata(conversationMetadataJson, turn);
+    const assistantTokens = estimateLinearMessageTokens(assistantText ?? null);
+    const nextMetadata = mergeConversationContextSavingsMetadata(
+      conversationMetadataJson,
+      turn,
+      turn.linear_prompt_tokens + assistantTokens,
+    );
     try {
       const out = await api.patchConversation(conversationId, { metadata_json: nextMetadata });
       applyConversationMetaFromListRow(out);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       getColcoorOutputLog().appendLine(`Context savings metadata update failed: ${msg}`);
+      conversationMetadataJson = nextMetadata;
+    }
+  }
+
+  async function incrementConversationLinearContextTokens(tokensToAdd: number): Promise<void> {
+    if (!conversationId || tokensToAdd <= 0) {
+      return;
+    }
+    const nextMetadata = mergeConversationLinearContextTokenIncrement(
+      conversationMetadataJson,
+      tokensToAdd,
+    );
+    try {
+      const out = await api.patchConversation(conversationId, { metadata_json: nextMetadata });
+      applyConversationMetaFromListRow(out);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      getColcoorOutputLog().appendLine(`Linear context metadata update failed: ${msg}`);
       conversationMetadataJson = nextMetadata;
     }
   }
@@ -1914,6 +1944,7 @@ export function createConversationPanelController(
             onAssistantTextDelta: (t) => stream.pushDelta(t),
             onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
             cliModel: cliModelForConversationRuns(),
+            linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
             ...(userMediaContentJson ? { userMediaContentJson } : {}),
             onUserMessagePersisted: async ({ userEventId }) => {
               selectedEventId = userEventId;
@@ -1926,7 +1957,7 @@ export function createConversationPanelController(
           },
         );
         stream.dispose();
-        await persistConversationContextSavings(result.contextSavings);
+        await persistConversationContextSavings(result.contextSavings, result.assistantText);
         postState(lastTreeEvents, true, lastPostedError);
         if (result.cancelled) {
           break;
@@ -2083,6 +2114,7 @@ export function createConversationPanelController(
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
+          linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
@@ -2099,7 +2131,7 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
-      await persistConversationContextSavings(result.contextSavings);
+      await persistConversationContextSavings(result.contextSavings, result.assistantText);
       let assistantTipId = result.assistantEventId;
       if (!result.cancelled) {
         assistantTipId = (await drainMainSendQueue(result.assistantEventId)) ?? assistantTipId;
@@ -2169,13 +2201,14 @@ export function createConversationPanelController(
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
+          linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
         },
       );
       stream.dispose();
-      await persistConversationContextSavings(result.contextSavings);
+      await persistConversationContextSavings(result.contextSavings, result.assistantText);
       await loadTreeAndPush(
         false,
         null,
@@ -3032,6 +3065,7 @@ export function createConversationPanelController(
             return;
           }
           const updated = await api.patchNote(conversationId, msg.noteId, { content: trimmed });
+          await incrementConversationLinearContextTokens(estimateLinearNoteTokens(updated.content));
           void vscode.window.setStatusBarMessage("Colcoor: note updated.", 2000);
           if (lastNotes.some((n) => n.id === updated.id)) {
             lastNotes = lastNotes.map((n) => (n.id === updated.id ? updated : n));
@@ -3146,6 +3180,7 @@ export function createConversationPanelController(
     }
     try {
       const created = await api.createNote(conversationId, { event_id: eventId, content: noteContent });
+      await incrementConversationLinearContextTokens(estimateLinearNoteTokens(created.content));
       void vscode.window.setStatusBarMessage("Colcoor: note added.", 2500);
       lastNotes = [...lastNotes, created];
       const counts = noteCountsByEventId(lastNotes);

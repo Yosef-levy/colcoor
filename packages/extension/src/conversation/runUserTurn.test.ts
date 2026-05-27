@@ -305,7 +305,8 @@ describe("runColcoorUserTurn", () => {
     } as unknown as ColcoorApiClient;
 
     const out = await runColcoorUserTurn(api, agent, "conv1", null, "x", "");
-    expect(out).toEqual({ userEventId: "u-abort", cancelled: true });
+    expect(out).toMatchObject({ userEventId: "u-abort", cancelled: true });
+    expect(out.contextSavings?.linear_prompt_tokens).toBeGreaterThan(0);
     expect(appendEvent).toHaveBeenCalledTimes(1);
     expect(appendEvent.mock.calls[0][1].kind).toBe("user_input");
   });
