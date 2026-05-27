@@ -3,14 +3,27 @@
 set -euo pipefail
 
 BASE="${COLCOOR_HEALTH_BASE:-http://127.0.0.1}"
+FAIL=0
 
-echo "GET $BASE/health"
-curl -fsS "$BASE/health" && echo ""
+check() {
+  local path=$1
+  echo "GET ${BASE}${path}"
+  if ! curl -fsS "${BASE}${path}"; then
+    echo "FAILED: ${BASE}${path}" >&2
+    FAIL=1
+  else
+    echo ""
+  fi
+}
 
-echo "GET $BASE/ready"
-curl -fsS "$BASE/ready" && echo ""
+check "/health"
+check "/ready"
+check "/api/v1/health"
 
-echo "GET $BASE/api/v1/health"
-curl -fsS "$BASE/api/v1/health" && echo ""
+if [[ "$FAIL" -ne 0 ]]; then
+  echo "Health check FAILED." >&2
+  echo "Is the stack running? On an API VM after deploy: docker compose ps" >&2
+  exit 1
+fi
 
 echo "All checks OK."

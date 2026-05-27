@@ -289,20 +289,23 @@ cmd_migrate() {
     die "docker is required for migrate"
   fi
 
-  echo "Running one-shot alembic upgrade head (shared.env)..."
+  local env_source="${REPO_ROOT}/.env"
+  [[ -f "$env_source" ]] || env_source="$SHARED_ENV"
+
+  echo "Running one-shot alembic upgrade head (${env_source})..."
   local -a compose_args
   mapfile -t compose_args < <(compose_files)
   (
     cd "$REPO_ROOT"
     set -a
     # shellcheck disable=SC1090
-    source "$SHARED_ENV"
+    source "$env_source"
     set +a
     if [[ -z "${DATABASE_MIGRATION_URL:-}" ]]; then
-      die "DATABASE_MIGRATION_URL must be set in $SHARED_ENV (direct Postgres, not PgBouncer)"
+      die "DATABASE_MIGRATION_URL must be set in $env_source (direct Postgres, not PgBouncer)"
     fi
+    # backend service loads env_file: .env from compose; override URL for direct Cloud SQL.
     docker compose "${compose_args[@]}" run --rm --no-deps \
-      --env-file "$SHARED_ENV" \
       -e COLCOOR_RUN_MIGRATIONS=false \
       -e DATABASE_URL="${DATABASE_MIGRATION_URL}" \
       --entrypoint alembic \
