@@ -10,14 +10,11 @@ ensure_bundle_script_permissions() {
   fi
   shopt -s nullglob
   local f
-  for f in "$bundle_dir"/scripts/*.sh; do
-    chmod +x "$f"
+  for f in "$bundle_dir"/scripts/*.sh "$bundle_dir"/scripts/gcp/*.sh; do
+    [[ -f "$f" ]] && chmod +x "$f"
   done
   shopt -u nullglob
   if [[ -f "$bundle_dir/pgbouncer/docker-entrypoint.sh" ]]; then
     chmod +x "$bundle_dir/pgbouncer/docker-entrypoint.sh"
-  fi
-  if [[ -f "$bundle_dir/install-colcoor.sh" ]]; then
-    chmod +x "$bundle_dir/install-colcoor.sh"
   fi
 }

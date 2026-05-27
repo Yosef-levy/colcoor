@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Verify a release bundle (and optional distribution tarball) before shipping.
+# Verify a GCP production release bundle (and optional distribution tarball) before shipping.
 #
 # Usage:
 #   ./scripts/validate-release-bundle.sh [bundle-dir] [archive.tar.gz]
 #
-# Defaults bundle-dir to dist/colcoor-enterprise-BE…-EXT…/ from read-versions.sh.
+# Defaults bundle-dir to dist/colcoor-gcp-production-BE…-EXT…/ from read-versions.sh.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,6 +16,35 @@ BUNDLE_DIR="${1:-$ROOT/dist/${BUNDLE_BASENAME}}"
 ARCHIVE="${2:-$ROOT/dist/${BUNDLE_BASENAME}.tar.gz}"
 
 FAIL=0
+
+REQUIRED_FILES=(
+  README.md
+  docker-compose.yml
+  gcp.env.example
+  VERSION.txt
+  scripts/00-load-images.sh
+  scripts/create-shared-env.sh
+  scripts/deploy-primary.sh
+  scripts/deploy-replica.sh
+  scripts/health-check.sh
+  scripts/deploy-multi-vm.sh
+  scripts/gcp/provision-infra.sh
+  scripts/gcp/backup-cloudsql.sh
+  nginx/nginx.conf
+  pgbouncer/pgbouncer.ini
+)
+
+FORBIDDEN_FILES=(
+  README.customer.txt
+  install-colcoor.sh
+  scripts/01-setup-env.sh
+  scripts/02-stack-up.sh
+  scripts/06-backup-postgres.sh
+  scripts/07-restore-postgres.sh
+  scripts/generate-self-host-secrets.sh
+  docs/self-host.md
+  docs/release-quickstart.md
+)
 
 assert_scripts_executable() {
   local dir="$1"
@@ -29,7 +58,8 @@ assert_scripts_executable() {
 
   shopt -s nullglob
   local f
-  for f in "$dir"/scripts/*.sh; do
+  for f in "$dir"/scripts/*.sh "$dir"/scripts/gcp/*.sh; do
+    [[ -f "$f" ]] || continue
     if [[ ! -x "$f" ]]; then
       echo "ERROR [$label] not executable: $f" >&2
       bad=1
@@ -42,11 +72,6 @@ assert_scripts_executable() {
     bad=1
   fi
 
-  if [[ -f "$dir/install-colcoor.sh" && ! -x "$dir/install-colcoor.sh" ]]; then
-    echo "ERROR [$label] not executable: $dir/install-colcoor.sh" >&2
-    bad=1
-  fi
-
   return "$bad"
 }
 
@@ -56,6 +81,31 @@ if [[ ! -d "$BUNDLE_DIR" ]]; then
 fi
 
 echo "Validating bundle directory: $BUNDLE_DIR"
+
+for rel in "${REQUIRED_FILES[@]}"; do
+  if [[ ! -f "$BUNDLE_DIR/$rel" ]]; then
+    echo "ERROR [bundle] missing required file: $rel" >&2
+    FAIL=1
+  fi
+done
+
+for rel in "${FORBIDDEN_FILES[@]}"; do
+  if [[ -f "$BUNDLE_DIR/$rel" ]]; then
+    echo "ERROR [bundle] legacy file must not be shipped: $rel" >&2
+    FAIL=1
+  fi
+done
+
+if [[ -f "$BUNDLE_DIR/VERSION.txt" ]] && ! grep -q '^profile=gcp-production' "$BUNDLE_DIR/VERSION.txt"; then
+  echo "ERROR [bundle] VERSION.txt must set profile=gcp-production" >&2
+  FAIL=1
+fi
+
+if [[ -f "$BUNDLE_DIR/docker-compose.yml" ]] && grep -qE '^\s*postgres:|^\s*redis:' "$BUNDLE_DIR/docker-compose.yml"; then
+  echo "ERROR [bundle] docker-compose.yml must not bundle postgres or redis" >&2
+  FAIL=1
+fi
+
 assert_scripts_executable "$BUNDLE_DIR" "bundle" || FAIL=1
 
 if [[ -f "$BUNDLE_DIR/SHA256SUMS" ]]; then
@@ -71,7 +121,7 @@ fi
 if [[ -f "$ARCHIVE" ]]; then
   echo "Validating distribution archive: $ARCHIVE"
   if [[ -f "${ARCHIVE}.sha256" ]]; then
-  if ! (cd "$(dirname "$ARCHIVE")" && sha256sum -c "$(basename "${ARCHIVE}.sha256")" >/dev/null); then
+    if ! (cd "$(dirname "$ARCHIVE")" && sha256sum -c "$(basename "${ARCHIVE}.sha256")" >/dev/null); then
       echo "ERROR: archive checksum failed: ${ARCHIVE}.sha256" >&2
       FAIL=1
     fi
@@ -85,6 +135,12 @@ if [[ -f "$ARCHIVE" ]]; then
     FAIL=1
   else
     assert_scripts_executable "$EXTRACTED" "extracted-tarball" || FAIL=1
+    for rel in "${FORBIDDEN_FILES[@]}"; do
+      if [[ -f "$EXTRACTED/$rel" ]]; then
+        echo "ERROR [extracted-tarball] legacy file must not be shipped: $rel" >&2
+        FAIL=1
+      fi
+    done
   fi
   trap - EXIT
   rm -rf "$TMP"

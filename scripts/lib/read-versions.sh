@@ -12,6 +12,6 @@ read_colcoor_versions() {
     echo "Could not read backend or extension version." >&2
     return 1
   fi
-  BUNDLE_BASENAME="colcoor-enterprise-BE${BACKEND_VERSION}-EXT${EXT_VERSION}"
+  BUNDLE_BASENAME="colcoor-gcp-production-BE${BACKEND_VERSION}-EXT${EXT_VERSION}"
   export BACKEND_VERSION EXT_VERSION BUNDLE_BASENAME
 }

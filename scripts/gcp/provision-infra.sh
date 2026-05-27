@@ -105,7 +105,7 @@ fi
 # App / license defaults for hosted production.
 gcp_env_set_if_missing "$SHARED_ABS" "COLCOOR_ENV" "production"
 gcp_env_set_if_missing "$SHARED_ABS" "NODE_ENV" "production"
-gcp_env_set_if_missing "$SHARED_ABS" "COLCOOR_DEPLOYMENT_PROFILE" "hosted"
+gcp_env_set_if_missing "$SHARED_ABS" "COLCOOR_DEPLOYMENT_PROFILE" "gcp-production"
 gcp_env_set_if_missing "$SHARED_ABS" "RATE_LIMIT_TRUST_PROXY" "true"
 gcp_env_set_if_missing "$SHARED_ABS" "COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED" "true"
 
