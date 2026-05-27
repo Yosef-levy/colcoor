@@ -212,6 +212,9 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="messageCtxMenu"');
     expect(html).toContain('data-msg-action="continue"');
     expect(html).toContain("Continue from here");
+    expect(html.indexOf('data-msg-action="copy"')).toBeGreaterThan(
+      html.indexOf('data-msg-action="resend"'),
+    );
     expect(html).toContain("selectTreeNodeInWebview(eid);");
     expect(html).toContain('if (act === "resend")');
     expect(html).toContain("messageContextMenuOptions");

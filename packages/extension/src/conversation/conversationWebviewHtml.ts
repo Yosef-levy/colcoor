@@ -1861,9 +1861,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     <button type="button" class="composer-ctx-row" data-msg-action="continue" role="menuitem">
       <span class="composer-ctx-label">Continue from here</span>
     </button>
-    <button type="button" class="composer-ctx-row" data-msg-action="copy" role="menuitem">
-      <span class="composer-ctx-label">Copy</span>
-    </button>
     <button type="button" class="composer-ctx-row" data-msg-action="edit" role="menuitem">
       <span class="composer-ctx-label">Edit</span>
     </button>
@@ -1875,6 +1872,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     </button>
     <button type="button" class="composer-ctx-row" data-msg-action="resend" role="menuitem">
       <span class="composer-ctx-label">Resend assistant</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="copy" role="menuitem">
+      <span class="composer-ctx-label">Copy</span>
     </button>
     <button type="button" class="composer-ctx-row" data-msg-action="addNote" role="menuitem">
       <span class="composer-ctx-label">Add note…</span>
