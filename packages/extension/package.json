@@ -357,11 +357,6 @@
           "default": "https://api.colcoor.com",
           "description": "API origin only (no path, no trailing slash). Defaults to https://api.colcoor.com unless COLCOOR_API_URL is set. Local docker-compose.prod: http://127.0.0.1 (nginx :80). Local uvicorn: http://127.0.0.1:8000."
         },
-        "colcoor.googleOAuthClientId": {
-          "type": "string",
-          "default": "",
-          "description": "Google OAuth desktop client ID used for Colcoor sign-in when your Cursor account uses Google. The extension uses an authorization-code PKCE flow with a temporary 127.0.0.1 callback and sends only the resulting Google access token to the Colcoor API."
-        },
         "colcoor.agentMode": {
           "type": "string",
           "enum": [

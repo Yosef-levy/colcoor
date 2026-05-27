@@ -322,11 +322,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           description: "Work, school, or personal Microsoft account",
           provider: "microsoft",
         },
-        {
-          label: "Google",
-          description: "If your Cursor account uses Google",
-          provider: "google",
-        },
       ];
       const pick = await vscode.window.showQuickPick(items, {
         title: "Colcoor — sign in",
