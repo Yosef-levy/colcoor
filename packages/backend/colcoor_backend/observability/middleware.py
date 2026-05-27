@@ -109,6 +109,7 @@ def _log_access(
     error: bool,
 ) -> None:
     extra = {
+        "event_type": "http_request",
         "request_id": request_id,
         "route": route,
         "method": method,

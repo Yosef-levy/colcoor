@@ -3,39 +3,16 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from starlette.requests import Request
 
 from colcoor_backend.observability import context as obs_ctx
+from colcoor_backend.observability.log_schema import warn_unknown_event_type_once
+from colcoor_backend.observability.redaction import redact_string, redact_value
 
-_BEARER_RE = re.compile(r"(Bearer\s+)[^\s]+", re.IGNORECASE)
-_AUTH_HEADER_RE = re.compile(
-    r"(authorization['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+",
-    re.IGNORECASE,
-)
-_TOKEN_KV_RE = re.compile(
-    r"(\btoken['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+",
-    re.IGNORECASE,
-)
-_PASSWORD_KV_RE = re.compile(
-    r"(password['\"]?\s*[:=]\s*['\"]?)[^\s'\"]+",
-    re.IGNORECASE,
-)
-_LICENSE_KEY_RE = re.compile(r"(COLCOOR_LICENSE_KEY\s*=\s*)[^\s]+", re.IGNORECASE)
-
-
-def redact_secrets(text: str) -> str:
-    for pattern in (
-        _BEARER_RE,
-        _AUTH_HEADER_RE,
-        _TOKEN_KV_RE,
-        _PASSWORD_KV_RE,
-        _LICENSE_KEY_RE,
-    ):
-        text = pattern.sub(r"\1***", text)
-    return text
+# Backward-compatible alias used by tests and call sites.
+redact_secrets = redact_string
 
 
 def _request_context(request: Request | None) -> dict[str, Any]:
@@ -70,8 +47,14 @@ def log_event(
     exc_info: bool | BaseException | None = None,
     **fields: Any,
 ) -> None:
-    extra: dict[str, Any] = {"event_type": event_type, **_request_context(request), **fields}
-    logger.log(level, redact_secrets(message), extra=extra, exc_info=exc_info)
+    warn_unknown_event_type_once(event_type)
+    raw_extra: dict[str, Any] = {
+        "event_type": event_type,
+        **_request_context(request),
+        **fields,
+    }
+    extra = {k: redact_value(v, key=k) for k, v in raw_extra.items()}
+    logger.log(level, redact_string(message), extra=extra, exc_info=exc_info)
 
 
 def log_unhandled_exception(

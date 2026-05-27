@@ -18,19 +18,34 @@ import os
 import time
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from colcoor_backend.db.models import SideChatMessage, User
+from colcoor_backend.errors.logging_utils import log_event
+from colcoor_backend.observability.metrics import SSE_CONNECTIONS_ACTIVE, SSE_STREAM_DISCONNECTS_TOTAL
+from colcoor_backend.observability.sse_log_context import (
+    SSE_DISCONNECT_CLIENT_CANCELLED,
+    SSE_DISCONNECT_COMPLETED,
+    SSE_DISCONNECT_ERROR,
+    SSE_DISCONNECT_TIMEOUT,
+    SseStreamLogContext,
+)
 from colcoor_backend.services.side_chat import (
     list_side_chat_messages,
     load_users_by_ids,
     side_chat_message_to_out,
 )
-from colcoor_backend.observability.metrics import SSE_CONNECTIONS_ACTIVE, SSE_STREAM_DISCONNECTS_TOTAL
 from colcoor_backend.services.side_chat_wake.hub import SideChatWakeHub
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _SseRunState:
+    last_seq: int
+    disconnect_reason: str = SSE_DISCONNECT_COMPLETED
 
 
 def format_side_chat_sse_event(row: SideChatMessage, author: User | None) -> str:
@@ -82,6 +97,37 @@ async def _idle_wait(wake: asyncio.Event | None, poll_idle: float) -> None:
         await asyncio.sleep(poll_idle)
 
 
+def _log_sse_stream_close(
+    stream_ctx: SseStreamLogContext,
+    run: _SseRunState,
+    t0: float,
+    *,
+    error: BaseException | None = None,
+) -> None:
+    duration_ms = round((time.monotonic() - t0) * 1000, 2)
+    level = logging.ERROR if run.disconnect_reason == SSE_DISCONNECT_ERROR else logging.INFO
+    log_event(
+        logger,
+        level,
+        "sse_stream_close",
+        "side-chat SSE stream closed",
+        request=None,
+        request_id=stream_ctx.request_id,
+        route=stream_ctx.route,
+        method=stream_ctx.method,
+        user_id=stream_ctx.user_id,
+        conversation_id=stream_ctx.conversation_id,
+        sse_attempt=stream_ctx.sse_attempt,
+        sse_session=stream_ctx.sse_session,
+        reconnect=stream_ctx.reconnect,
+        after_seq=stream_ctx.after_seq,
+        stream_duration_ms=duration_ms,
+        last_seq=run.last_seq,
+        sse_disconnect_reason=run.disconnect_reason,
+        exc_info=error if run.disconnect_reason == SSE_DISCONNECT_ERROR else None,
+    )
+
+
 async def iter_side_chat_sse(
     factory: async_sessionmaker[AsyncSession],
     *,
@@ -89,6 +135,7 @@ async def iter_side_chat_sse(
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
     after_seq: int,
+    stream_ctx: SseStreamLogContext,
 ) -> AsyncIterator[bytes]:
     """
     Emit new ``side_chat_messages`` rows as SSE frames.
@@ -104,9 +151,10 @@ async def iter_side_chat_sse(
     poll_only = os.environ.get("COLCOOR_SIDE_CHAT_SSE_DISABLE_NOTIFY", "").strip() == "1"
     use_redis = wake_hub is not None and not poll_only
 
-    last = after_seq
+    run = _SseRunState(last_seq=after_seq)
     t0 = time.monotonic()
     SSE_CONNECTIONS_ACTIVE.inc()
+    stream_error: BaseException | None = None
 
     try:
         if use_redis:
@@ -116,14 +164,14 @@ async def iter_side_chat_sse(
                     factory,
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    last=last,
+                    run=run,
                     poll_idle=poll_idle,
                     max_sec=max_sec,
                     t0=t0,
                     wake=wake,
                 ):
                     if isinstance(chunk, int):
-                        last = chunk
+                        run.last_seq = chunk
                     else:
                         yield chunk
         else:
@@ -131,19 +179,27 @@ async def iter_side_chat_sse(
                 factory,
                 conversation_id=conversation_id,
                 user_id=user_id,
-                last=last,
+                run=run,
                 poll_idle=poll_idle,
                 max_sec=max_sec,
                 t0=t0,
                 wake=None,
             ):
                 if isinstance(chunk, int):
-                    last = chunk
+                    run.last_seq = chunk
                 else:
                     yield chunk
+    except asyncio.CancelledError:
+        run.disconnect_reason = SSE_DISCONNECT_CLIENT_CANCELLED
+        raise
+    except Exception as exc:
+        run.disconnect_reason = SSE_DISCONNECT_ERROR
+        stream_error = exc
+        raise
     finally:
         SSE_CONNECTIONS_ACTIVE.dec()
-        SSE_STREAM_DISCONNECTS_TOTAL.labels(reason="closed").inc()
+        SSE_STREAM_DISCONNECTS_TOTAL.labels(reason=run.disconnect_reason).inc()
+        _log_sse_stream_close(stream_ctx, run, t0, error=stream_error)
 
 
 async def _run_sse_loop(
@@ -151,13 +207,13 @@ async def _run_sse_loop(
     *,
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
-    last: int,
+    run: _SseRunState,
     poll_idle: float,
     max_sec: float,
     t0: float,
     wake: asyncio.Event | None,
 ) -> AsyncIterator[bytes | int]:
-    cursor = last
+    cursor = run.last_seq
     while True:
         frames, cursor = await _poll_and_yield(
             factory,
@@ -174,4 +230,5 @@ async def _run_sse_loop(
         await _idle_wait(wake, poll_idle)
 
         if max_sec > 0 and (time.monotonic() - t0) >= max_sec:
+            run.disconnect_reason = SSE_DISCONNECT_TIMEOUT
             break

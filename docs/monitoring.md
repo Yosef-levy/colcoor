@@ -89,33 +89,134 @@ Sample config: [`monitoring/prometheus.yml`](../monitoring/prometheus.yml).
 
 ## Structured logs
 
-Production (`COLCOOR_ENV=production`) emits **one JSON object per line**:
+Production (`COLCOOR_ENV=production`) emits **one flat JSON object per line** (Loki/ELK-friendly; no nested payloads).
+
+### Core fields (every JSON line)
+
+| Field | Description |
+|-------|-------------|
+| `timestamp` | ISO-8601 UTC |
+| `level` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `service` | Always `colcoor-api` |
+| `env` | `COLCOOR_ENV` (e.g. `production`, `development`) |
+| `logger` | Python logger name (e.g. `colcoor.access`) |
+| `message` | Human-readable summary (redacted) |
+
+### Correlation & HTTP (when applicable)
+
+| Field | Description |
+|-------|-------------|
+| `event_type` | Stable taxonomy — see below |
+| `request_id` | `X-Request-ID` |
+| `instance_id` | When **`COLCOOR_INSTANCE_ID`** is set |
+| `method`, `route`, `status`, `latency_ms` | HTTP access (`event_type=http_request`) |
+| `user_id` | Authenticated user UUID |
+| `error_code` | API error code (domain events) |
+| `conversation_id` | When logged by domain code (e.g. SSE open/close) |
+| `sse_attempt`, `sse_session`, `reconnect` | Side-chat SSE open and close |
+| `after_seq` | SSE cursor at connect (`after_seq` query param) |
+| `stream_duration_ms` | Wall time for full SSE connection (`sse_stream_close` only) |
+| `last_seq` | Last seq cursor when stream ended |
+| `sse_disconnect_reason` | `client_cancelled`, `timeout`, `error`, `completed` |
+| `error` | Redacted stack trace when `exc_info` is set (errors only, not client disconnect) |
+
+Example HTTP access line:
 
 ```json
 {
   "timestamp": "2026-05-18T12:00:00.000000+00:00",
   "level": "INFO",
+  "service": "colcoor-api",
+  "env": "production",
   "logger": "colcoor.access",
   "message": "request completed",
+  "event_type": "http_request",
   "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "route": "/api/v1/conversations/{conversation_id}/side-chat/stream",
+  "instance_id": "colcoor-api-1",
   "method": "GET",
+  "route": "/api/v1/conversations/{conversation_id}/side-chat/stream",
   "status": 200,
   "latency_ms": 42.5,
-  "user_id": "…",
-  "instance_id": "colcoor-api-1"
+  "user_id": "…"
 }
 ```
 
-`instance_id` appears when **`COLCOOR_INSTANCE_ID`** is set (e.g. by `deploy-multi-vm.sh` on each VM).
+`latency_ms` on SSE routes reflects **response start** (stream opened), not full connection duration. Use **`stream_duration_ms`** on `sse_stream_close` for real stream lifetime.
 
-Errors include an `error` field with stack traces.
+### Side-chat SSE lifecycle
+
+Each SSE connection emits **two** structured domain lines (no per-message logs):
+
+| `event_type` | When |
+|--------------|------|
+| `sse_stream_open` | Route returns `StreamingResponse` (before generator runs) |
+| `sse_stream_close` | Generator `finally` (client disconnect, timeout, or error) |
+
+Correlate open and close with `request_id`, `conversation_id`, and `sse_session`.
+
+| `sse_disconnect_reason` | Meaning |
+|-------------------------|---------|
+| `client_cancelled` | Client closed connection (`CancelledError`); INFO only |
+| `timeout` | `COLCOOR_SIDE_CHAT_SSE_MAX_SECONDS` exceeded (tests) |
+| `error` | Exception in stream loop; includes redacted `error` field |
+| `completed` | Loop exited without cancel/timeout/error (reserved) |
+
+Prometheus: `colcoor_sse_stream_disconnects_total{reason=...}` uses the same reason labels.
+
+```logql
+{service="colcoor-api"} | json | event_type="sse_stream_close"
+{service="colcoor-api"} | json | event_type="sse_stream_close" | sse_disconnect_reason="client_cancelled"
+{service="colcoor-api"} | json | request_id="..." | event_type=~"sse_stream_.*"
+```
+
+### Event taxonomy (`event_type`)
+
+| `event_type` | Source |
+|--------------|--------|
+| `http_request` | `colcoor.access` middleware (every HTTP request) |
+| `license_user_limit_reached` | License handler |
+| `http_exception` | HTTP error handler |
+| `validation_error` | Validation handler |
+| `infrastructure_error` | Classified infra errors |
+| `unhandled_exception` | Unhandled 500 handler |
+| `sse_stream_open` | Side-chat SSE route |
+| `sse_stream_close` | Side-chat SSE generator end |
+
+Unstructured startup/readiness logs may omit `event_type`. Unknown types passed to `log_event()` are allowed but log **one warning per process** per unknown name.
+
+### Loki query examples
+
+```logql
+{service="colcoor-api", env="production"} | json | event_type="http_request"
+{service="colcoor-api"} | json | event_type="sse_stream_open"
+{service="colcoor-api"} | json | event_type="sse_stream_close"
+{service="colcoor-api"} | json | request_id="550e8400-e29b-41d4-a716-446655440000"
+{service="colcoor-api"} | json | level="ERROR"
+```
+
+### Cardinality (logs vs metrics)
+
+- **Logs:** `user_id`, `conversation_id`, and `request_id` are fine for filtering and incident triage.
+- **Prometheus:** Keep using route **templates** and low-cardinality labels — do **not** add `user_id` or `conversation_id` as metric labels.
 
 **HTTP access logs:** The API emits one structured line per request on **`colcoor.access`** (via `RequestContextMiddleware`). Gunicorn **`--access-logfile` is not enabled** in `colcoor-start.sh` (avoids duplicate CLF lines). Uvicorn access logging is disabled; use `colcoor.access` for request tracing. **`COLCOOR_LOG_FORMAT`** is resolved through app settings (`json` in production when unset).
 
 **Log level:** Keep **`COLCOOR_LOG_LEVEL=INFO`** (default) if you need HTTP access lines. Values above `INFO` (e.g. `WARNING`) suppress successful `colcoor.access` entries.
 
 **nginx:** The reverse proxy may still write its own `access.log` at the edge; that is separate from backend stdout JSON.
+
+### Log redaction (safety net)
+
+All stdout log lines pass through **formatter-level redaction** (`colcoor_backend.observability.redaction`):
+
+- **Messages** and **exception tracebacks** (`error` field) are pattern-scrubbed (Bearer tokens, JWTs, license keys, URL credentials, env-style secrets).
+- **Structured `extra` fields** and **`log_event()` kwargs** are key-scrubbed (sensitive keys → `***`; blocked payload keys → `[OMITTED]`).
+- Applies to **JSON (production)** and **text (development)** formatters.
+- Redaction is **best-effort and fail-closed** (`[REDACTION_FAILED]` on internal errors). Prefer **over-redaction** to under-redaction.
+
+Redaction does **not** make it safe to log request/response bodies, tokens, or `colcoor_agent_trace` content — **do not log those by policy**. The formatter is a last line of defense when `logger.exception` or mistakes bypass `log_event()`.
+
+**Still do not log:** JWTs, Cursor tokens, raw `Authorization` headers, full idempotency keys, conversation/side-chat message bodies, image bytes, or full agent/tool traces.
 
 ---
 

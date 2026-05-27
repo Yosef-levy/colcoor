@@ -17,53 +17,85 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from colcoor_backend.observability import context as obs_ctx
+from colcoor_backend.observability.log_schema import (
+    JSON_FIELD_ORDER,
+    RECORD_EXTRA_KEYS,
+    SERVICE_NAME,
+)
+from colcoor_backend.observability.redaction import (
+    MAX_STRING_LEN,
+    redact_string,
+    redact_traceback,
+    redact_value,
+)
 
 if TYPE_CHECKING:
     from colcoor_backend.core.config import Settings
+
+_log_env: str = "development"
+
+
+def set_log_env(env: str) -> None:
+    """Set deployment env label on JSON logs (called from configure_logging)."""
+    global _log_env
+    _log_env = (env or "development").strip() or "development"
+
+
+def get_log_env() -> str:
+    return _log_env
 
 
 class JsonLogFormatter(logging.Formatter):
     """One JSON object per line for production log aggregation."""
 
     def format(self, record: logging.LogRecord) -> str:
-        payload: dict[str, Any] = {
+        values: dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "level": record.levelname,
+            "service": SERVICE_NAME,
+            "env": get_log_env(),
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": redact_string(record.getMessage()),
         }
+
         instance_id = os.environ.get("COLCOOR_INSTANCE_ID", "").strip()
         if instance_id:
-            payload["instance_id"] = instance_id
-        request_id = obs_ctx.request_id_ctx.get()
-        if request_id:
-            payload["request_id"] = request_id
-        route = obs_ctx.route_ctx.get()
-        if route:
-            payload["route"] = route
-        user_id = obs_ctx.user_id_ctx.get()
-        if user_id:
-            payload["user_id"] = user_id
+            values["instance_id"] = instance_id
 
-        for key in (
-            "request_id",
-            "route",
-            "method",
-            "status",
-            "latency_ms",
-            "user_id",
-            "event_type",
-            "error_code",
-        ):
+        if rid := obs_ctx.request_id_ctx.get():
+            values.setdefault("request_id", rid)
+        if route := obs_ctx.route_ctx.get():
+            values.setdefault("route", route)
+        if uid := obs_ctx.user_id_ctx.get():
+            values.setdefault("user_id", uid)
+
+        for key in RECORD_EXTRA_KEYS:
             if hasattr(record, key):
                 value = getattr(record, key)
                 if value is not None:
-                    payload[key] = value
+                    values[key] = redact_value(value, key=key)
 
         if record.exc_info:
-            payload["error"] = "".join(traceback.format_exception(*record.exc_info)).strip()
+            tb = "".join(traceback.format_exception(*record.exc_info)).strip()
+            values["error"] = redact_traceback(tb)
 
-        return json.dumps(payload, default=str)
+        payload: dict[str, Any] = {}
+        for key in JSON_FIELD_ORDER:
+            if key in values:
+                payload[key] = values[key]
+
+        return json.dumps(payload, default=_json_default)
+
+
+def _json_default(obj: object) -> str:
+    return redact_string(str(obj)[:MAX_STRING_LEN])
+
+
+class RedactingTextFormatter(logging.Formatter):
+    """Dev/text logs: redact the final formatted line."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact_string(super().format(record))
 
 
 def configure_logging(settings: Settings | None = None) -> None:
@@ -71,6 +103,7 @@ def configure_logging(settings: Settings | None = None) -> None:
     from colcoor_backend.core.config import get_settings
 
     settings = settings or get_settings()
+    set_log_env(settings.env)
     level_name = os.environ.get("COLCOOR_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
     log_format = settings.resolved_log_format()
@@ -86,6 +119,7 @@ def configure_logging(settings: Settings | None = None) -> None:
         formatter_name = "colcoor"
         formatters = {
             "colcoor": {
+                "()": "colcoor_backend.logging_config.RedactingTextFormatter",
                 "format": "%(asctime)s %(levelname)s [%(name)s] %(message)s",
                 "datefmt": "%Y-%m-%dT%H:%M:%S",
             },

@@ -24,6 +24,7 @@ from colcoor_backend.services.side_chat import (
 )
 from colcoor_backend.errors.logging_utils import log_event
 from colcoor_backend.observability.metrics import SSE_RECONNECTS_TOTAL, SSE_STREAM_OPENS_TOTAL
+from colcoor_backend.observability.sse_log_context import build_sse_stream_log_context
 from colcoor_backend.services.side_chat_sse import iter_side_chat_sse
 from colcoor_backend.services.side_chat_wake.notify import notify_side_chat_changed
 
@@ -74,6 +75,15 @@ async def side_chat_event_stream(
     SSE_STREAM_OPENS_TOTAL.labels(reconnect=str(is_reconnect).lower()).inc()
     if is_reconnect:
         SSE_RECONNECTS_TOTAL.inc()
+    stream_ctx = build_sse_stream_log_context(
+        request,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        after_seq=after_seq,
+        sse_attempt=sse_attempt,
+        sse_session=sse_session or None,
+        reconnect=is_reconnect,
+    )
     log_event(
         logger,
         logging.INFO,
@@ -81,6 +91,7 @@ async def side_chat_event_stream(
         "side-chat SSE stream opened",
         request=request,
         conversation_id=str(conversation_id),
+        after_seq=after_seq,
         sse_attempt=sse_attempt,
         sse_session=sse_session or None,
         reconnect=is_reconnect,
@@ -92,6 +103,7 @@ async def side_chat_event_stream(
             conversation_id=conversation_id,
             user_id=user_id,
             after_seq=after_seq,
+            stream_ctx=stream_ctx,
         ),
         media_type="text/event-stream",
         headers={
