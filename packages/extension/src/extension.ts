@@ -335,7 +335,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!pick) {
         return;
       }
-      const accessToken = await getAccessTokenInteractive(pick.provider);
+      let accessToken: string | undefined;
+      try {
+        accessToken = await getAccessTokenInteractive(pick.provider);
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        await vscode.window.showErrorMessage(`Colcoor: sign-in failed. ${detail}`);
+        return;
+      }
       if (!accessToken) {
         await vscode.window.showErrorMessage(
           "Colcoor: no access token from Cursor — check that you are signed in to the chosen provider.",

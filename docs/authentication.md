@@ -19,7 +19,7 @@ There is **no** alternate development-only login HTTP route; the same **`POST /a
 
 ## 2. Client flow
 
-1. Acquire a provider access token via **`vscode.authentication.getSession`** (scopes and provider ids are defined in the extension implementation; they are **not** part of this identity spec).
+1. Acquire a provider access token. GitHub and Microsoft use **`vscode.authentication.getSession`**. Google uses Colcoor's own OAuth authorization-code flow with PKCE, a temporary `127.0.0.1` callback, and the configured **`colcoor.googleOAuthClientId`** desktop client ID.
 2. **`POST /api/v1/auth/cursor`** with body **`{ "cursor_access_token": "<token>", "provider_hint": "auto" | "github" | "microsoft" | "google" }`**.
 3. Store **`access_token`** from **`AuthResponse`** in **SecretStorage** (or equivalent). Omit from workspace files.
 4. Send **`Authorization: Bearer <access_token>`** on every **`/api/v1/...`** request until expiry; then repeat from step 1.
