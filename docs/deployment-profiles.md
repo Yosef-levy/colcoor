@@ -5,59 +5,53 @@ Colcoor ships **one backend codebase** and **one container image**. Commercial t
 - `COLCOOR_DEPLOYMENT_PROFILE` — where and how you run the stack
 - `COLCOOR_LICENSE_TYPE` / `COLCOOR_LICENSE_MAX_USERS` / `COLCOOR_LICENSE_KEY` — entitlements
 - Environment variables (Postgres, Redis, object storage, `WEB_CONCURRENCY`, feature flags)
-- External services (managed DB, GCS/S3, Lemon Squeezy later)
+- External services (Cloud SQL, Memorystore, GCS, Lemon Squeezy later)
 
-There are **no** separate `free-backend` / `enterprise-backend` repositories or images.
+There are **no** separate backend repositories or images per tier.
 
-## Profiles
+## Customer deployment (GCP production)
 
-### Free self-host (`free`)
+The **only supported customer handoff** is the GCP multi-VM production bundle:
 
-- **Target:** Single VM, homelab, or developer machine
-- **Orchestration:** `docker-compose.self-host.yml`
-- **Defaults:** Local image storage, Postgres + Redis in Compose, nginx on port 80 (`SELF_HOST_HTTP_PORT=8080` for debug)
-- **Seats:** 3 users (`COLCOOR_LICENSE_TYPE=free`)
-- **Support:** Community / best-effort
+```bash
+npm run bundle:gcp-production
+```
 
-### Small business self-host (`team`) — later Compose overlay
+Output: **`dist/colcoor-gcp-production-BE<backend>-EXT<extension>/`**. Operators follow **`README.md`** inside the bundle (GCE VMs → Cloud SQL / Redis / GCS → primary + replica deploy → health check).
 
-- **Target:** Same backend image on a slightly larger VM
-- **Orchestration:** Planned `docker-compose.team.yml` (stronger resources, same services)
-- **Seats:** 10–50 users (paid license via Lemon Squeezy later)
-- **Storage:** Local disk or optional GCS
+See also:
 
-### Business self-host / hosted-style (`business` / `hosted`)
+- [gcp-provisioning.md](gcp-provisioning.md) — repo-side detail on GCP scripts
+- [multi-vm-deploy.md](multi-vm-deploy.md) — `shared.env`, roles, migrations
 
-- **Target:** Production traffic, hundreds of users
-- **Orchestration:** `docker-compose.prod.yml` or managed cloud (RDS, ElastiCache, GCS)
-- **Storage:** GCS (or S3-compatible) recommended
-- **Seats:** Paid license key (Lemon Squeezy later)
+## Local development (not a customer profile)
 
-### Enterprise (`enterprise`)
+For **repo development only**, use root **`docker-compose.yml`** (Postgres + Redis + backend) or **`docker-compose.self-host.yml`** (full stack with nginx on port 80). These stacks bundle Postgres/Redis on the same machine and are **not** shipped in customer bundles.
 
-- **Target:** Customer-owned Kubernetes / OpenShift / private cloud
-- **Orchestration:** Helm charts (future); same backend image
-- **Seats & features:** Custom contract; SSO/SAML/SCIM and HA are future work
+See [self-host.md](self-host.md) for the optional self-host Compose workflow used during development.
+
+## Profile values (`COLCOOR_DEPLOYMENT_PROFILE`)
+
+| Value | Meaning |
+|-------|---------|
+| `free` | Local dev / self-host Compose defaults |
+| `gcp-production` | GCP multi-VM production (`shared.env` from provisioning scripts) |
+| `team`, `business`, `hosted`, `enterprise` | Reserved / future; invalid combinations fail at startup |
 
 ## Configuration reference
 
 | Variable | Purpose |
 |----------|---------|
-| `COLCOOR_DEPLOYMENT_PROFILE` | Topology hint (`free`, `team`, `business`, `hosted`, `enterprise`) |
+| `COLCOOR_DEPLOYMENT_PROFILE` | Topology hint |
 | `COLCOOR_LICENSE_TYPE` | Entitlement tier (`free`, `team`, `business`, `enterprise`) |
 | `COLCOOR_LICENSE_MAX_USERS` | Seat cap override (unset → tier default; `0` = unlimited) |
 | `COLCOOR_LICENSE_KEY` | Optional key for paid tiers (Lemon Squeezy later; never logged) |
 
 Invalid values fail at **startup** with a clear error.
 
-## Lemon Squeezy (future)
-
-Paid self-host will set `COLCOOR_LICENSE_KEY` after purchase. Integration hooks live in `colcoor_backend/licensing/lemonsqueezy.py`. Free self-host does **not** require outbound internet.
-
 ## Related docs
 
-- [Self-host installation](self-host.md)
-- [Production Compose](../docker-compose.prod.yml)
-- [Multi-VM deployment](multi-vm-deploy.md) (shared Postgres / Redis / GCS, `deploy-multi-vm.sh`)
-- [GCP provisioning](gcp-provisioning.md) (Cloud SQL, Redis, GCS, load balancer scripts)
-- [Enterprise bundle](enterprise.md) (offline VSIX + preloaded images — separate packaging, same API)
+- [production.md](production.md) — Docker, nginx, env, health, release builds
+- [gcp-provisioning.md](gcp-provisioning.md)
+- [multi-vm-deploy.md](multi-vm-deploy.md)
+- [self-host.md](self-host.md) — **development only**

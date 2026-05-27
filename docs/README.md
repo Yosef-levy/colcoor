@@ -26,13 +26,13 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 | [authentication.md](authentication.md) | **`cursor_sub`**; **`POST /api/v1/auth/cursor`** |
 | [monetization.md](monetization.md) | Tokens on every request; links **billing-usage** |
 | [architecture.md](architecture.md) | Components and boundaries |
-| [production.md](production.md) | Docker, nginx, Postgres, env, health, release builds (`bundle:enterprise`, `bundle:release`) |
+| [production.md](production.md) | Docker, nginx, env, health, release builds (`bundle:gcp-production`) |
 | [multi-vm-deploy.md](multi-vm-deploy.md) | Multiple API VMs, `shared.env`, `deploy-multi-vm.sh` |
 | [gcp-provisioning.md](gcp-provisioning.md) | GCP: Cloud SQL, Redis, GCS, LB scripts |
-| [release-quickstart.md](release-quickstart.md) | Install self-host bundle + VSIX (first external user) |
+| [release-quickstart.md](release-quickstart.md) | Build and verify GCP production bundle (maintainers) |
 | [release-smoke-test.md](release-smoke-test.md) | Post-build / post-install verification checklist |
 | [release-versions.md](release-versions.md) | Backend ↔ extension version pairing |
-| [enterprise-handoff-checklist.md](enterprise-handoff-checklist.md) | Copy-paste checklist for customer IT / security rollout |
+| [enterprise-handoff-checklist.md](enterprise-handoff-checklist.md) | GCP production handoff checklist for customer IT |
 | [git-integration.md](git-integration.md) | Optional Git metadata |
 | [ui-features.md](ui-features.md) | User-visible UI checklist (thread, tree, drawers / in-conversation search, side-chat settings, 401 handling) |
 | [tree-ui-contract.md](tree-ui-contract.md) | **Normative** conversation tree: node state, selection vs actions, future layouts |

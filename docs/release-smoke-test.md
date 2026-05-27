@@ -1,74 +1,43 @@
-# Release smoke-test checklist
+# Release smoke test
 
-Run after building or receiving a release bundle.
+Post-build verification for maintainers and optional staging installs.
 
-## Automated (build machine)
+## After `npm run bundle:gcp-production`
 
-From repo root:
-
-```bash
-npm run typecheck -w colcoor-extension
-npm run test:extension
-npm run test:backend
-npm run bundle:release
-```
-
-`bundle:release` runs **`validate:release`** (script permissions + tarball extract).
-
-## Unpack (customer VM)
+Validation runs automatically. Re-run manually:
 
 ```bash
-sha256sum -c colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz.sha256
-tar -xzf colcoor-enterprise-BE0.1.0-EXT0.0.1.tar.gz
-cd colcoor-enterprise-BE0.1.0-EXT0.0.1
-test -x install-colcoor.sh || bash scripts/ensure-executable.sh
+npm run validate:release
 ```
 
-## Install (happy path)
+Checks:
 
-| Step | Command | Expected |
-|------|---------|----------|
-| One-shot install | `./install-colcoor.sh` | Images loaded, stack up, health OK, URL printed |
-| Firewall | Inbound TCP **80** open on VM | `curl http://<VM-IP>/health` from another host returns `{"status":"ok"}` |
+- Required GCP bundle files present (`README.md`, wrapper scripts, `scripts/gcp/*`)
+- **No** legacy self-host/enterprise scripts (`01-setup-env.sh`, `install-colcoor.sh`, bundled Postgres backup wrappers)
+- `docker-compose.yml` has no bundled `postgres` or `redis` services
+- `SHA256SUMS` and `.tar.gz` extract preserve script `+x`
 
-## Backend (after install)
+## Staging (GCP project)
 
-| Step | Command / action | Expected |
-|------|------------------|----------|
-| Local health | `curl -fsS http://localhost/health` | `{"status":"ok"}` |
-| Local ready | `curl -fsS http://localhost/ready` | `"status":"ready"` |
-| VM health | `curl -fsS http://<VM-IP>/health` | `{"status":"ok"}` |
-| License (auth) | Sign in via extension, then `curl -H "Authorization: Bearer $JWT" http://localhost/api/v1/system/license` | JSON with `license_type`, `max_users`, `current_users` |
-| Free limit | 4th new user sign-in | HTTP 403, `license_user_limit_reached` |
+1. Extract bundle on a test GCE VM; `./scripts/00-load-images.sh`.
+2. Configure `gcp.env`; `./scripts/create-shared-env.sh --dry-run` (optional).
+3. `./scripts/create-shared-env.sh` against a **non-production** GCP project.
+4. `./scripts/deploy-primary.sh --skip-provision` if infra already exists.
+5. `./scripts/health-check.sh` and `curl` through load balancer if configured.
+6. Install VSIX; sign in; create a conversation branch.
 
-Debug port **8080** (optional): set `SELF_HOST_HTTP_PORT=8080` in `.env`, recreate stack, use `http://localhost:8080/health`.
-
-Backend container listens on **8000** internally only (not published to the host).
-
-## Extension
-
-| Step | Action | Expected |
-|------|--------|----------|
-| VSIX install | Install from bundle VSIX | Extension activates |
-| Backend URL | `colcoor.backendBaseUrl` | `http://<VM-IP>` (port 80, no suffix) |
-| Sign-in | Colcoor: Sign in | Conversations load |
-| Conversation | Add + message | Tree shows messages |
-| Invite | Invite collaborator | Success toast with role |
-| Side chat | 2+ members | SSE works; reconnect banner on blip |
-| Onboarding | First open | Getting started / try-this-next (dismissible) |
-
-## Manual compose (developers, repo root)
+## Local dev stack (not the customer bundle)
 
 ```bash
 cp .env.example .env
 ./scripts/generate-self-host-secrets.sh >> .env
 docker compose -f docker-compose.self-host.yml up -d --build
-curl -sS http://localhost/health
-curl -sS http://localhost/ready
+curl -fsS http://127.0.0.1:8080/ready
 ```
 
-## Not in this checklist
+This uses **bundled Postgres/Redis** for development only — not shipped to customers.
 
-- HTTPS / Let's Encrypt / custom domain
-- Production GCS image uploads (enterprise compose)
-- Lemon Squeezy license activation
+## Not covered here
+
+- Production GCS image uploads (configured in `shared.env` during GCP provisioning)
+- Lemon Squeezy license activation (future)

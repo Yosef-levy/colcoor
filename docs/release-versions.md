@@ -1,41 +1,36 @@
-# Release versions and compatibility
+# Release version pairing
 
-Colcoor ships as a **paired** backend (Docker) and extension (VSIX). Use matching versions from the same bundle directory.
-
-## Current release
-
-| Component | Version source | Example |
-|-----------|----------------|---------|
-| Backend API | `packages/backend/pyproject.toml` → `[project].version` | `0.1.0` |
-| Extension | `packages/extension/package.json` → `version` | `0.0.1` |
+Backend and extension versions are **independent semver** but must be **paired in one bundle folder** so customers install matching artifacts.
 
 ## Bundle directory name
 
-Release folders under `dist/` are named:
-
-```text
-colcoor-enterprise-BE<backend-version>-EXT<extension-version>/
+```
+colcoor-gcp-production-BE<backend-version>-EXT<extension-version>/
 ```
 
-Example: `colcoor-enterprise-BE0.1.0-EXT0.0.1/`
+Example: `colcoor-gcp-production-BE0.1.0-EXT0.0.1/`
 
-Contents are the same naming scheme for **enterprise** (GCS-oriented compose) and **self-host** (free tier compose) builds; only `docker-compose.yml` and docs differ.
+Version sources:
 
-## Compatibility rule
+- Backend: `packages/backend/pyproject.toml` → `[project].version`
+- Extension: `packages/extension/package.json` → `"version"`
 
-- Install the **VSIX** and **backend image** from the **same** `colcoor-enterprise-BE…-EXT…` folder.
-- Do not mix a newer extension with an older API (or vice versa) unless release notes say otherwise.
+## Contents
 
-## Docker image tags
+| Artifact | Name |
+|----------|------|
+| Backend image tarball | `colcoor-backend-<backend-version>.tar.gz` |
+| PgBouncer image tarball | `colcoor-pgbouncer-1.23.1.tar.gz` |
+| Extension | `colcoor-extension-<extension-version>.vsix` |
+| Operator docs | `README.md` (only customer-facing doc) |
 
-After `docker load` from `colcoor-backend-*.tar.gz`:
+Install the **VSIX** and load the **backend image** from the **same** bundle folder.
 
-- `colcoor-backend:<backend-version>` (e.g. `0.1.0`)
-- `colcoor-backend:prod` (alias used by compose)
-- `colcoor-pgbouncer:1.23.1`
+## Build commands
 
-Image ID is recorded in `MANIFEST.txt` when the bundle is built.
+```bash
+npm run bundle:gcp-production
+npm run validate:release
+```
 
-## When to bump versions
-
-Bump **backend** and/or **extension** in their source files, rebuild the bundle, and publish new release notes. Keep both versions in the bundle name so support can identify mismatches quickly.
+Ship **`colcoor-gcp-production-BE…-EXT….tar.gz`** (+ `.sha256`), not a zip of the folder.

@@ -1,4 +1,6 @@
-# Self-host installation (MVP)
+# Self-host installation (development only)
+
+> **Not a customer deployment path.** Production customers use the **GCP multi-VM bundle** (`npm run bundle:gcp-production`; see `README.md` inside the bundle). This doc is for **local development** with bundled Postgres/Redis via `docker-compose.self-host.yml`.
 
 Run Colcoor on a laptop or small VM in about five minutes. Uses the **same backend image** as production; the free tier is limited to **3 users** via license config (no phone-home).
 

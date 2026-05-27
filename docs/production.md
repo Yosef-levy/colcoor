@@ -216,7 +216,7 @@ To run **multiple API VMs** behind a load balancer with shared Postgres, Redis, 
 
 ## Backups and upgrades
 
-- **Backups:** daily logical dumps via [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh); GCS image bytes separately. Full runbook: [backup-and-restore.md](backup-and-restore.md).
+- **Backups (GCP production):** Cloud SQL export via [`scripts/gcp/backup-cloudsql.sh`](../scripts/gcp/backup-cloudsql.sh) in the customer bundle; GCS image bytes separately. Runbook: [backup-and-restore.md](backup-and-restore.md).
 - **Upgrades:** pull new images or rebuild `backend`, run `docker compose -f docker-compose.prod.yml up -d --build`, watch logs and `/ready`. With multiple API VMs, run **`./scripts/deploy-multi-vm.sh migrate`** once per release before rolling replicas.
 
 ---
@@ -301,7 +301,7 @@ Outputs:
 
 | Artifact | Location / name |
 |----------|------------------|
-| VSIX | `dist/colcoor-enterprise-BE<backend-version>-EXT<extension-version>/colcoor-extension-<extension-version>.vsix` (from `npm run package:extension` at repo root) |
+| VSIX | `dist/colcoor-gcp-production-BE<backend-version>-EXT<extension-version>/colcoor-extension-<extension-version>.vsix` (from `npm run package:extension` at repo root) |
 | Docker | `colcoor-backend:<backend-version>` and `colcoor-backend:prod` |
 
 To **push** the same tags to a registry after `docker login`:
@@ -312,74 +312,57 @@ DOCKER_REGISTRY=ghcr.io/yourorg npm run ship:artifacts -- --push
 
 Customers can point `docker-compose.prod.yml` at your registry by changing the `backend.image` line (or overriding with Compose `image:` + pull policy in your own overlay).
 
-### Enterprise bundle (image tarball + VSIX + operator scripts)
+### GCP production bundle (customer handoff)
 
-For **air-gapped or registry-free** handoffs, build a bundle folder and ship the **`.tar.gz`** archive (see below — avoid zip for script permissions):
+For **multi-VM GCE** deployments with **Cloud SQL**, **Memorystore Redis**, and **GCS**, build the sole customer bundle and ship the **`.tar.gz`** archive (avoid zip for script permissions):
 
 ```bash
-npm run bundle:enterprise
+npm run bundle:gcp-production
 ```
 
-The bundle and ship scripts source **`scripts/docker-enable-buildkit-if-ok.sh`**: if **`docker buildx`** works, **`DOCKER_BUILDKIT=1`** is set; otherwise **`DOCKER_BUILDKIT=0`** so the **classic builder** runs (avoids “BuildKit is enabled but the buildx component is missing” on minimal installs). The backend Dockerfile sets **`DEBIAN_FRONTEND=noninteractive`** during `apt-get` to avoid debconf “TERM is not set” noise.
+The bundle and ship scripts source **`scripts/docker-enable-buildkit-if-ok.sh`**: if **`docker buildx`** works, **`DOCKER_BUILDKIT=1`** is set; otherwise **`DOCKER_BUILDKIT=0`** so the **classic builder** runs.
 
-If **`tsc` is missing** (fresh clone, no `node_modules`), the bundle step runs **`npm ci`** at the repo root automatically before packaging the VSIX (requires **Node 20+** and npm registry access).
+If **`tsc` is missing** (fresh clone, no `node_modules`), the bundle step runs **`npm ci`** at the repo root automatically before packaging the VSIX.
 
 If the build host has **Docker but no Node / no network for npm**, build **backend + compose only** and add the VSIX from your dev machine later:
 
 ```bash
-npm run bundle:enterprise:skip-vsix
+npm run bundle:gcp-production:skip-vsix
 # equivalent:
-npm run bundle:enterprise -- --skip-vsix
+npm run bundle:gcp-production -- --skip-vsix
 ```
 
-That omits the VSIX and drops **`EXTENSION_VSIX_NOT_INCLUDED.txt`** in the bundle explaining what to copy. Alternatively, point at an existing VSIX: **`npm run bundle:enterprise -- --vsix-path=/abs/path/colcoor-extension-0.0.1.vsix`**.
+That omits the VSIX and drops **`EXTENSION_VSIX_NOT_INCLUDED.txt`**. Alternatively: **`npm run bundle:gcp-production -- --vsix-path=/abs/path/colcoor-extension-0.0.1.vsix`**.
 
-This writes **`dist/colcoor-enterprise-BE<py-version>-EXT<ext-version>/`** containing:
+This writes **`dist/colcoor-gcp-production-BE<py-version>-EXT<ext-version>/`** containing:
 
 - `colcoor-backend-<version>.tar.gz` — `docker save` of **`colcoor-backend:<version>`** and **`colcoor-backend:prod`**
-- `colcoor-pgbouncer-1.23.1.tar.gz` — pre-built **`colcoor-pgbouncer:1.23.1`** (Alpine PgBouncer + `psql` for healthchecks)
-- `pgbouncer/` — config mounted by Compose
+- `colcoor-pgbouncer-1.23.1.tar.gz`
 - `colcoor-extension-<version>.vsix`
-- `docker-compose.yml` (pre-loaded image only, **no build context**)
-- `nginx/nginx.conf`
-- `scripts/` — load image, generate `.env` / secrets, stack up/down/restart, health check, Postgres backup, **JWT_SECRET rotation**
-- `README.customer.txt` — operator order of operations
+- `docker-compose.yml` — nginx + backend + PgBouncer (**no** bundled Postgres/Redis)
+- `gcp.env.example`, `scripts/` (GCP provision, deploy, health, backup)
+- **`README.md`** — sole customer operator doc (VM creation → health check)
 
-Customer VM (typical): `00-load-image` → `01-setup-env` → `02-stack-up` → `05-health-check` (paths relative to the bundle directory; see that README).
-
-### Self-host release bundle (first external install)
-
-For **free-tier self-host** (local images, 3-user license, nginx on port 80), build the same `dist/colcoor-enterprise-BE<backend>-EXT<extension>/` layout with self-host compose, `install-colcoor.sh`, and operator docs:
-
-```bash
-npm run bundle:release
-# equivalent:
-npm run bundle:self-host-release
-```
-
-Runs extension typecheck + tests, backend tests, Docker image build/save, VSIX package, checksums, a **`.tar.gz` distribution archive** (preserves script `+x`), and **`npm run validate:release`**. Flags (via the underlying script):
-
-```bash
-bash scripts/build-self-host-bundle.sh --skip-tests
-bash scripts/build-self-host-bundle.sh --skip-docker --skip-vsix
-```
+Customer rollout (summary): `00-load-images` → `create-shared-env` → `deploy-primary` → `deploy-replica` → `health-check`. Full steps in bundle **`README.md`**.
 
 Regenerate checksums only after copying files into an existing bundle:
 
 ```bash
-npm run checksums:release -- dist/colcoor-enterprise-BE0.1.0-EXT0.0.1
+npm run checksums:release -- dist/colcoor-gcp-production-BE0.1.0-EXT0.0.1
 ```
 
 | Command | Output |
 |---------|--------|
-| `bundle:release` | `dist/colcoor-enterprise-BE…-EXT…/` plus **`dist/colcoor-enterprise-BE…-EXT….tar.gz`** (ship this on Linux) and **`.tar.gz.sha256`** |
-| `validate:release` | Fails if bundle scripts are not executable or if extracting the `.tar.gz` drops `+x` |
-| `bundle:enterprise` | Same folder + `.tar.gz`; **GCS-oriented** compose (see enterprise section above) |
-| `compose:self-host` | Dev stack from repo source (`docker-compose.self-host.yml`), not the offline bundle |
+| `bundle:gcp-production` | `dist/colcoor-gcp-production-BE…-EXT…/` plus **`.tar.gz`** and **`.tar.gz.sha256`** |
+| `validate:release` | Fails if required GCP files missing, legacy scripts present, or tarball drops `+x` |
 
-**Zip vs tar.gz:** For self-host handoffs, use the **`.tar.gz`** produced by the build. A **zip** of the bundle folder often strips executable bits on `scripts/*.sh` (`Permission denied` on Ubuntu). If users must use zip, document `bash scripts/ensure-executable.sh` after extract.
+**Zip vs tar.gz:** Ship the **`.tar.gz`**. Zip often strips executable bits on `scripts/*.sh`.
 
-Install and smoke-test: [release-quickstart.md](release-quickstart.md), [release-smoke-test.md](release-smoke-test.md), [release-versions.md](release-versions.md).
+Install and smoke-test: [release-quickstart.md](release-quickstart.md), [release-smoke-test.md](release-smoke-test.md), [enterprise-handoff-checklist.md](enterprise-handoff-checklist.md).
+
+### Local development Compose (not shipped to customers)
+
+Use **`docker-compose.yml`** or **`docker-compose.self-host.yml`** from the repo for development with bundled Postgres/Redis. See [self-host.md](self-host.md).
 
 ---
 

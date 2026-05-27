@@ -1,8 +1,24 @@
-# Backup and restore (production VM)
+# Backup and restore
 
-Simple, operator-run **logical backups** (`pg_dump` + gzip) for the **Docker Compose** stack on a VM. No Kubernetes, no PITR/WAL archiving, and no enterprise backup platform at this stage.
+## GCP production (Cloud SQL)
 
-For **managed Postgres** later (RDS, Cloud SQL, etc.), use the provider’s automated backups and treat this document as the logical equivalent of `pg_dump` / restore drills.
+Customer deployments use **Cloud SQL Postgres**, not a Postgres container on the VM.
+
+| Action | Command |
+|--------|---------|
+| On-demand logical export to GCS | `./scripts/gcp/backup-cloudsql.sh --config ./gcp.env` (in the customer bundle) |
+| Automated backups | Enable in GCP Console or `gcloud sql instances patch INSTANCE --backup-start-time=03:00` |
+| Restore drill | Import to a **non-production** instance: `gcloud sql import sql …` |
+
+See bundle **`README.md`** § Backups. GCS image bytes remain a **separate** backup (bucket versioning or `gcloud storage` sync).
+
+---
+
+## Local development (bundled Postgres)
+
+Simple, operator-run **logical backups** (`pg_dump` + gzip) for the **development Docker Compose** stack. Not used in GCP production bundles.
+
+For managed Postgres, prefer provider backups; the scripts below are the logical equivalent of `pg_dump` / restore drills on a dev machine.
 
 ---
 
@@ -37,10 +53,10 @@ For **managed Postgres** later (RDS, Cloud SQL, etc.), use the provider’s auto
 
 | Script | Purpose |
 |--------|---------|
-| [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh) | Daily gzip dump + retention |
-| [`scripts/restore-postgres.sh`](../scripts/restore-postgres.sh) | Restore into clean DB (guarded) |
-| [`scripts/verify-backup-postgres.sh`](../scripts/verify-backup-postgres.sh) | `gzip -t` + sanity checks |
-| Enterprise wrappers | [`06-backup-postgres.sh`](../packaging/enterprise/scripts/06-backup-postgres.sh), [`07-restore-postgres.sh`](../packaging/enterprise/scripts/07-restore-postgres.sh) |
+| [`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh) | Dev Compose: daily gzip dump + retention |
+| [`scripts/restore-postgres.sh`](../scripts/restore-postgres.sh) | Dev Compose: restore into clean DB (guarded) |
+| [`scripts/verify-backup-postgres.sh`](../scripts/verify-backup-postgres.sh) | Dev Compose: `gzip -t` + sanity checks |
+| [`scripts/gcp/backup-cloudsql.sh`](../scripts/gcp/backup-cloudsql.sh) | **GCP production:** Cloud SQL export to GCS |
 
 ### Restore safety (scripts)
 
