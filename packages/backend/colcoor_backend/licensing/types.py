@@ -6,7 +6,7 @@ from typing import Final
 
 # Deployment topology — not separate backends or images.
 DEPLOYMENT_PROFILES: Final[frozenset[str]] = frozenset(
-    {"free", "team", "business", "hosted", "enterprise"}
+    {"free", "team", "business", "hosted", "enterprise", "gcp-production"}
 )
 
 # Commercial / entitlement tier (maps to Lemon Squeezy products later).

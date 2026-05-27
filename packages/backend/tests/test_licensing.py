@@ -50,6 +50,14 @@ def test_invalid_deployment_profile_fails_startup(monkeypatch: pytest.MonkeyPatc
     get_settings.cache_clear()
 
 
+def test_gcp_production_deployment_profile_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COLCOOR_DEPLOYMENT_PROFILE", "gcp-production")
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    assert get_settings().deployment_profile_normalized() == "gcp-production"
+    get_settings.cache_clear()
+
+
 def test_license_key_redacted_in_logs() -> None:
     raw = "COLCOOR_LICENSE_KEY=ls_secret_key_abc123xyz"
     redacted = redact_secrets(raw)

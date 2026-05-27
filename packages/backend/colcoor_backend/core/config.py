@@ -266,7 +266,7 @@ class Settings(BaseSettings):
             "COLCOOR_DEPLOYMENT_PROFILE",
             "DEPLOYMENT_PROFILE",
         ),
-        description="free | team | business | hosted | enterprise — deployment topology, not a separate backend.",
+        description="free | team | business | hosted | enterprise | gcp-production — deployment topology, not a separate backend.",
     )
     license_type: str = Field(
         default="free",
