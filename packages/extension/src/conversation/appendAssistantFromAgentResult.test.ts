@@ -35,7 +35,7 @@ describe("appendAssistantFromAgentResult", () => {
       private_branch: false,
       content_json: {
         colcoor_agent_trace: {
-          version: 2,
+          version: 3,
           entries: [{ t: "x" }],
         },
       },
@@ -65,5 +65,30 @@ describe("appendAssistantFromAgentResult", () => {
     const appendEvent = vi.fn().mockResolvedValue({ id: "a" });
     await appendAssistantFromAgentResult(mockApi(appendEvent), "c", "u", { text: "hi", stub: "none" });
     expect(appendEvent.mock.calls[0][1].content_json).toBeUndefined();
+  });
+
+  it("persists structured assistant display parts with the CLI trace", async () => {
+    const appendEvent = vi.fn().mockResolvedValue({ id: "asst-3" });
+    await appendAssistantFromAgentResult(mockApi(appendEvent), "conv", "userEv", {
+      text: "preface\n\nanswer",
+      stub: "none",
+      cursorCliTimeline: [{ colcoor_row: "read", text: "Read README.md" }],
+      cursorCliDisplayParts: [
+        { kind: "assistant", text: "preface" },
+        { kind: "activity", entries: [{ colcoor_row: "read", text: "Read README.md" }] },
+        { kind: "assistant", text: "answer" },
+      ],
+    });
+    expect(appendEvent.mock.calls[0][1].content_json).toEqual({
+      colcoor_agent_trace: {
+        version: 3,
+        entries: [{ colcoor_row: "read", text: "Read README.md" }],
+        display_parts: [
+          { kind: "assistant", text: "preface" },
+          { kind: "activity", entries: [{ colcoor_row: "read", text: "Read README.md" }] },
+          { kind: "assistant", text: "answer" },
+        ],
+      },
+    });
   });
 });

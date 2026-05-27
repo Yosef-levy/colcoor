@@ -6,12 +6,14 @@ import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 
 function assistantContentJson(runResult: AgentRunResult): Record<string, unknown> | undefined {
   const entries = runResult.cursorCliTimeline;
+  const displayParts = runResult.cursorCliDisplayParts;
   const traceJson =
     entries?.length ?
       {
         colcoor_agent_trace: {
-          version: 2,
+          version: 3,
           entries,
+          ...(displayParts?.length ? { display_parts: displayParts } : {}),
         },
       }
     : undefined;

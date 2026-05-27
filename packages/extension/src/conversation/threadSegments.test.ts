@@ -210,4 +210,40 @@ describe("buildThreadSegments", () => {
     expect(segs[0]!.checkpointLabel).toBe("v1");
     expect(segs[1]!.checkpointLabel).toBe("rare");
   });
+
+  it("renders persisted assistant display parts in stream order", () => {
+    const events: GraphEventNode[] = [
+      ev({
+        id: "u1",
+        parent_event_id: null,
+        kind: "user_input",
+        created_at: "2020-01-01T00:00:00Z",
+        content_text: "Question",
+      }),
+      ev({
+        id: "a1",
+        parent_event_id: "u1",
+        kind: "assistant_output",
+        created_at: "2020-01-01T00:01:00Z",
+        content_text: "I will inspect first.\n\nHere is the answer.",
+        content_json: {
+          colcoor_agent_trace: {
+            version: 3,
+            entries: [{ colcoor_row: "read", text: "Read README.md" }],
+            display_parts: [
+              { kind: "assistant", text: "I will inspect first." },
+              { kind: "activity", entries: [{ colcoor_row: "read", text: "Read README.md" }] },
+              { kind: "assistant", text: "Here is the answer." },
+            ],
+          },
+        },
+      }),
+    ];
+    const segs = buildThreadSegments(events, "a1");
+    expect(segs[1]!.displayParts).toEqual([
+      { kind: "assistant", html: "<p>I will inspect first.</p>\n" },
+      { kind: "activity", entries: [{ colcoor_row: "read", text: "Read README.md" }] },
+      { kind: "assistant", html: "<p>Here is the answer.</p>\n" },
+    ]);
+  });
 });

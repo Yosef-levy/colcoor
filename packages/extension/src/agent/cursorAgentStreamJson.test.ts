@@ -436,6 +436,90 @@ describe("createStreamJsonStdoutFeed", () => {
     expect(t).toHaveLength(2);
     expect(t[0]).toEqual({ colcoor_row: "read", text: "Read README.md (lines 1:5)" });
     expect(t[1]).toEqual({ colcoor_row: "shell_start", text: "Run tests\ncommand: pytest -q" });
+    expect(feed.getDisplayParts()).toEqual([{ kind: "activity", entries: t }]);
+  });
+
+  it("keeps assistant segments and activity batches in stream order", () => {
+    const feed = createStreamJsonStdoutFeed();
+    const seenParts: unknown[][] = [];
+    const onParts = (parts: unknown[]) => seenParts.push(parts);
+    feed.push(
+      '{"type":"assistant","timestamp_ms":1,"message":{"role":"assistant","content":[{"type":"text","text":"I will read first."}]}}\n',
+      undefined,
+      onParts,
+    );
+    feed.push(
+      '{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}\n',
+      undefined,
+      onParts,
+    );
+    feed.push(
+      '{"type":"assistant","timestamp_ms":2,"model_call_id":"m1","message":{"role":"assistant","content":[{"type":"text","text":"I will read first."}]}}\n',
+      undefined,
+      onParts,
+    );
+    feed.push(
+      '{"type":"assistant","timestamp_ms":3,"message":{"role":"assistant","content":[{"type":"text","text":"Now I can answer."}]}}\n',
+      undefined,
+      onParts,
+    );
+    feed.push(
+      '{"type":"result","subtype":"success","is_error":false,"result":"I will read first.Now I can answer."}\n',
+      undefined,
+      onParts,
+    );
+    feed.flushTail(undefined, onParts);
+    expect(feed.getDisplayParts()).toEqual([
+      { kind: "assistant", text: "I will read first." },
+      { kind: "activity", entries: [{ colcoor_row: "read", text: "Read README.md" }] },
+      { kind: "assistant", text: "Now I can answer." },
+    ]);
+    expect(feed.getResolvedText()).toBe("I will read first.\n\nNow I can answer.");
+    expect(seenParts.at(-1)).toEqual(feed.getDisplayParts());
+  });
+
+  it("splits assistant display parts after a long pause at a sentence boundary", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","timestamp_ms":1000,"message":{"role":"assistant","content":[{"type":"text","text":"I will inspect first."}]}}\n',
+    );
+    feed.push(
+      '{"type":"assistant","timestamp_ms":2600,"message":{"role":"assistant","content":[{"type":"text","text":"I found the docs."}]}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getDisplayParts()).toEqual([
+      { kind: "assistant", text: "I will inspect first." },
+      { kind: "assistant", text: "I found the docs." },
+    ]);
+    expect(feed.getResolvedText()).toBe("I will inspect first.\n\nI found the docs.");
+  });
+
+  it("does not split paused assistant text without sentence punctuation or uppercase/non-Latin start", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","timestamp_ms":1000,"message":{"role":"assistant","content":[{"type":"text","text":"Open file.py"}]}}\n',
+    );
+    feed.push(
+      '{"type":"assistant","timestamp_ms":2600,"message":{"role":"assistant","content":[{"type":"text","text":" and inspect it."}]}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getDisplayParts()).toEqual([{ kind: "assistant", text: "Open file.py and inspect it." }]);
+    expect(feed.getResolvedText()).toBe("Open file.py and inspect it.");
+  });
+
+  it("splits paused assistant text when the next sentence starts with a non-Latin letter", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","timestamp_ms":1000,"message":{"role":"assistant","content":[{"type":"text","text":"בדקתי את המסמכים."}]}}\n',
+    );
+    feed.push(
+      '{"type":"assistant","timestamp_ms":2600,"message":{"role":"assistant","content":[{"type":"text","text":"מצאתי את המבנה."}]}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getDisplayParts()).toEqual([
+      { kind: "assistant", text: "בדקתי את המסמכים." },
+      { kind: "assistant", text: "מצאתי את המבנה." },
+    ]);
   });
 
   it("ignores further assistant snapshots after a terminal result", () => {

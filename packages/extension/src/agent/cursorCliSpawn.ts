@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-import { createStreamJsonStdoutFeed } from "./cursorAgentStreamJson";
+import { createStreamJsonStdoutFeed, type CursorAgentDisplayPart } from "./cursorAgentStreamJson";
 import { processEnvForCursorCli } from "./agentPathEnv";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
@@ -42,6 +42,8 @@ export type CursorCliSpawnResult = {
   cancelled?: boolean;
   /** Present for stream-json modes: sanitized NDJSON objects in order (for `content_json`). */
   ndjsonTimeline?: unknown[];
+  /** Assistant/activity sequence from stream-json, used to preserve UI segment boundaries. */
+  displayParts?: CursorAgentDisplayPart[];
   /** From NDJSON `system` / `init` when streaming (actual model when `--model` omitted). */
   cliSessionModel?: string;
 };
@@ -77,6 +79,8 @@ export function spawnCursorAgentPrint(params: {
   signal?: AbortSignal;
   /** Called after each stdout chunk with full stdout captured so far (UTF-8). */
   onStdoutAccumulated?: (stdoutSoFar: string) => void;
+  /** Called when the structured assistant/activity display sequence changes. */
+  onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
   /** Defaults to stream-json + partial deltas. Use `text` if your `agent` build rejects streaming flags. */
   outputMode?: AgentCliOutputMode;
   /** When set, passed as `--model` (omit for Cursor default / automatic). */
@@ -161,7 +165,7 @@ export function spawnCursorAgentPrint(params: {
       }
       rawStdout += s;
       if (jsonFeed) {
-        jsonFeed.push(s, params.onStdoutAccumulated);
+        jsonFeed.push(s, params.onStdoutAccumulated, params.onDisplayParts);
       } else {
         params.onStdoutAccumulated?.(rawStdout);
       }
@@ -189,12 +193,14 @@ export function spawnCursorAgentPrint(params: {
       }
       let stdoutForResult: string;
       let ndjsonTimeline: unknown[] | undefined;
+      let displayParts: CursorAgentDisplayPart[] | undefined;
       let cliSessionModel: string | undefined;
       if (jsonFeed) {
-        jsonFeed.flushTail(params.onStdoutAccumulated);
+        jsonFeed.flushTail(params.onStdoutAccumulated, params.onDisplayParts);
         const resolved = jsonFeed.getResolvedText();
         stdoutForResult = resolved || rawStdout;
         ndjsonTimeline = jsonFeed.getTimeline();
+        displayParts = jsonFeed.getDisplayParts();
         cliSessionModel = jsonFeed.getSessionModel();
       } else {
         stdoutForResult = rawStdout;
@@ -206,6 +212,7 @@ export function spawnCursorAgentPrint(params: {
           exitCode: exitCode ?? null,
           cancelled: true,
           ndjsonTimeline,
+          displayParts,
           cliSessionModel,
         });
         return;
@@ -227,6 +234,7 @@ export function spawnCursorAgentPrint(params: {
         stderr,
         exitCode: exitCode ?? null,
         ndjsonTimeline,
+        displayParts,
         cliSessionModel,
       });
     });

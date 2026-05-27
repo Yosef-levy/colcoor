@@ -1,4 +1,5 @@
 import type { AgentRunner } from "../agent/agentRunner";
+import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
@@ -23,6 +24,8 @@ import type { PrefetchedConversationGraph, UserTurnResult } from "./runUserTurn"
 export type RunResendAssistantOptions = {
   signal?: AbortSignal;
   onAssistantTextDelta?: (textSoFar: string) => void;
+  /** Structured assistant/activity display sequence while the Cursor CLI stream grows. */
+  onAssistantDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
   /** When set (e.g. from the conversation panel), skips the initial tree + notes round-trip. */
   prefetchedGraph?: PrefetchedConversationGraph;
   /** Cursor CLI `--model`; omit for automatic model selection. */
@@ -104,6 +107,7 @@ export async function runResendAssistant(
       workspaceContextAppendix: appendix.length > 0 ? appendix : undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
+      onDisplayParts: options?.onAssistantDisplayParts,
       cliModel: options?.cliModel,
     });
     return appendAssistantFromAgentResult(api, conversationId, resolvedUserEventId, runResult);

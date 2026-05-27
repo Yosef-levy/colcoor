@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { markdownToSafeHtml } from "./threadMarkdown";
 
 /**
@@ -13,16 +14,30 @@ export function createAssistantStreamPusher(
   isWebviewReady: () => boolean,
 ): {
   pushDelta: (rawText: string) => void;
+  pushDisplayParts: (parts: CursorAgentDisplayPart[]) => void;
   dispose: () => void;
 } {
   let lastRaw = "";
+  let lastParts: CursorAgentDisplayPart[] = [];
+
+  function renderDisplayParts(parts: CursorAgentDisplayPart[]): unknown[] {
+    return parts.map((part) =>
+      part.kind === "assistant"
+        ? { kind: "assistant", html: markdownToSafeHtml(part.text) }
+        : { kind: "activity", entries: [...part.entries] },
+    );
+  }
 
   function flushNow(): void {
     const p = getPanel();
     if (!p || !isWebviewReady()) {
       return;
     }
-    void p.webview.postMessage({ type: "assistantStream", html: markdownToSafeHtml(lastRaw) });
+    void p.webview.postMessage({
+      type: "assistantStream",
+      html: markdownToSafeHtml(lastRaw),
+      displayParts: lastParts.length ? renderDisplayParts(lastParts) : undefined,
+    });
   }
 
   return {
@@ -30,8 +45,17 @@ export function createAssistantStreamPusher(
       lastRaw = raw;
       flushNow();
     },
+    pushDisplayParts(parts: CursorAgentDisplayPart[]) {
+      lastParts = parts.map((part) =>
+        part.kind === "assistant"
+          ? { kind: "assistant", text: part.text }
+          : { kind: "activity", entries: [...part.entries] },
+      );
+      flushNow();
+    },
     dispose() {
       lastRaw = "";
+      lastParts = [];
     },
   };
 }

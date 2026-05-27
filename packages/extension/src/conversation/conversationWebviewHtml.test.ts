@@ -83,7 +83,10 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("if (state.pendingUserHtml)");
     expect(html).toContain('class="msg user pending-send"');
     expect(html).toContain("state.pendingUserHtml");
-    expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*if \(state\.streamingHtml\)/);
+    expect(html).toContain("streamingDisplayParts: []");
+    expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*state\.streamingHtml/);
+    expect(html).toContain("renderAssistantDisplayParts(state.streamingDisplayParts, true)");
+    expect(html).toContain("renderAssistantDisplayParts(s.displayParts, false)");
   });
 
   it("shows an assistant placeholder while busy before stream chunks arrive", () => {

@@ -32,6 +32,10 @@ export type ThreadNoteBlock = {
   html: string;
 };
 
+export type ThreadAssistantDisplayPart =
+  | { kind: "assistant"; html: string }
+  | { kind: "activity"; entries: unknown[] };
+
 export type ThreadSegment = {
   role: "user" | "assistant";
   /** Host graph event id (for diagnostics; notes are keyed to this row). */
@@ -49,6 +53,8 @@ export type ThreadSegment = {
   notes?: ThreadNoteBlock[];
   /** Entries from `content_json.colcoor_agent_trace` for assistant rows (webview renders collapsible). */
   traceEntries?: unknown[];
+  /** Structured assistant/activity display sequence from Cursor stream-json. */
+  displayParts?: ThreadAssistantDisplayPart[];
 };
 
 export function extractAgentTraceEntries(
@@ -66,6 +72,35 @@ export function extractAgentTraceEntries(
     return undefined;
   }
   return entries;
+}
+
+function extractAgentDisplayParts(
+  contentJson: Record<string, unknown> | null | undefined,
+): ThreadAssistantDisplayPart[] | undefined {
+  if (!contentJson) {
+    return undefined;
+  }
+  const wrap = contentJson.colcoor_agent_trace;
+  if (!wrap || typeof wrap !== "object") {
+    return undefined;
+  }
+  const raw = (wrap as { display_parts?: unknown }).display_parts;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return undefined;
+  }
+  const out: ThreadAssistantDisplayPart[] = [];
+  for (const part of raw) {
+    if (!part || typeof part !== "object") {
+      continue;
+    }
+    const p = part as { kind?: unknown; text?: unknown; entries?: unknown };
+    if (p.kind === "assistant" && typeof p.text === "string" && p.text.trim()) {
+      out.push({ kind: "assistant", html: bodyHtmlFromMarkdown(p.text) });
+    } else if (p.kind === "activity" && Array.isArray(p.entries) && p.entries.length) {
+      out.push({ kind: "activity", entries: enrichTraceEntriesForWebview(p.entries) });
+    }
+  }
+  return out.length ? out : undefined;
 }
 
 /** Add `diff_html` / counts for `edit_diff` rows (webview renders without re-parsing). */
@@ -139,6 +174,7 @@ export function buildThreadSegments(
       });
     } else if (ev.kind === "assistant_output") {
       const rawTrace = extractAgentTraceEntries(ev.content_json ?? undefined);
+      const displayParts = extractAgentDisplayParts(ev.content_json ?? undefined);
       const assistantDn =
         typeof ev.assistant_display_model === "string" && ev.assistant_display_model.trim()
           ? ev.assistant_display_model.trim()
@@ -152,6 +188,7 @@ export function buildThreadSegments(
         ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),
         notes: noteBlocks,
         traceEntries: rawTrace ? enrichTraceEntriesForWebview(rawTrace) : undefined,
+        ...(displayParts ? { displayParts } : {}),
       });
     }
   }

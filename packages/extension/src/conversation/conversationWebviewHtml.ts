@@ -986,6 +986,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .trace-entry { margin: 8px 0 0; padding-top: 6px; border-top: 1px solid var(--vscode-panel-border); }
     .trace-entry:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
     .trace-meta { font-size: 0.85em; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    .agent-activity {
+      margin: 8px 0 10px;
+      padding: 7px 9px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      background: var(--vscode-editor-inactiveSelectionBackground, var(--vscode-sideBar-background));
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.9em;
+    }
+    .agent-activity > summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--vscode-descriptionForeground);
+      list-style: none;
+    }
+    .agent-activity > summary::-webkit-details-marker { display: none; }
+    .agent-activity-live { margin: 8px 0 10px; color: var(--vscode-descriptionForeground); font-size: 0.9em; }
+    .agent-activity-line { margin: 3px 0 0; }
     .trace-pre {
       margin: 0;
       max-height: 240px;
@@ -2131,6 +2149,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       sideChatMessages: [],
       // Sanitized HTML for in-flight assistant text; cleared when the host sends a full state snapshot.
       streamingHtml: null,
+      streamingDisplayParts: [],
       pendingUserHtml: null,
       /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
       treeCollapsedIds: {},
@@ -2858,6 +2877,91 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       );
     }
 
+    function traceActivityLabel(ev) {
+      if (!ev || typeof ev !== "object") return "Agent activity";
+      if (ev.colcoor_row === "read" && typeof ev.text === "string") return ev.text;
+      if (ev.colcoor_row === "edit_diff") {
+        var path = ev.path != null && String(ev.path).trim() ? " " + String(ev.path).trim() : "";
+        return "Edited" + path;
+      }
+      if (ev.colcoor_row === "shell_start" && typeof ev.text === "string") {
+        var first = ev.text.split("\\n")[0].trim();
+        return first && first.indexOf("command:") !== 0 ? first : "Running command";
+      }
+      if (ev.colcoor_row === "shell_done") return "Command completed";
+      if (ev.colcoor_row === "colcoor_truncated") return "More activity omitted";
+      return traceSummaryLineLegacy(ev);
+    }
+
+    function plural(n, one, many) {
+      return String(n) + " " + (n === 1 ? one : many);
+    }
+
+    function traceActivitySummary(entries) {
+      var arr = Array.isArray(entries) ? entries : [];
+      if (!arr.length) return "";
+      var reads = 0;
+      var shells = 0;
+      var edits = 0;
+      for (var i = 0; i < arr.length; i++) {
+        var ev = arr[i];
+        if (!ev || typeof ev !== "object") continue;
+        if (ev.colcoor_row === "read") reads++;
+        else if (ev.colcoor_row === "shell_start") shells++;
+        else if (ev.colcoor_row === "edit_diff") edits++;
+      }
+      var parts = [];
+      if (reads) parts.push("explored " + plural(reads, "file", "files"));
+      if (shells) parts.push("ran " + plural(shells, "command", "commands"));
+      if (edits) parts.push("made " + plural(edits, "edit", "edits"));
+      if (!parts.length) return plural(arr.length, "agent step", "agent steps");
+      var text = parts.join(", ");
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    }
+
+    function formatTraceActivityHtml(entries, live) {
+      var arr = Array.isArray(entries) ? entries : [];
+      if (!arr.length) return "";
+      var summary = traceActivitySummary(arr);
+      if (live) {
+        var last = traceActivityLabel(arr[arr.length - 1]);
+        return (
+          '<div class="agent-activity-live" role="status"><div>' +
+          esc(summary) +
+          '</div><div class="agent-activity-line">' +
+          esc(last) +
+          "</div></div>"
+        );
+      }
+      var traceOpen = state.agentTraceOpen !== false;
+      var html =
+        "<details" +
+        (traceOpen ? " open" : "") +
+        ' class="agent-trace agent-activity"><summary>' +
+        esc(summary) +
+        "</summary>";
+      for (var i = 0; i < arr.length; i++) {
+        html += formatTraceEntryHtml(arr[i], i);
+      }
+      html += "</details>";
+      return html;
+    }
+
+    function renderAssistantDisplayParts(parts, live) {
+      var arr = Array.isArray(parts) ? parts : [];
+      var html = "";
+      for (var i = 0; i < arr.length; i++) {
+        var part = arr[i];
+        if (!part || typeof part !== "object") continue;
+        if (part.kind === "assistant" && typeof part.html === "string" && part.html.trim()) {
+          html += '<div class="body md" dir="auto">' + part.html + "</div>";
+        } else if (part.kind === "activity" && Array.isArray(part.entries)) {
+          html += formatTraceActivityHtml(part.entries, live);
+        }
+      }
+      return html;
+    }
+
     function syncConversationMenuPanel() {
       var convMenuPanel = document.getElementById("menuPanelConversation");
       if (!convMenuPanel) return;
@@ -3456,10 +3560,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           "</div>" +
           (s.checkpointLabel
             ? '<div class="thread-msg-title">' + esc("Title: " + String(s.checkpointLabel)) + "</div>"
-            : "") +
-          '<div class="body md" dir="auto">' +
-          s.html +
-          "</div>";
+            : "");
+        var displayPartsHtml = s.role === "assistant" ? renderAssistantDisplayParts(s.displayParts, false) : "";
+        if (displayPartsHtml) {
+          html += displayPartsHtml;
+        } else {
+          html += '<div class="body md" dir="auto">' + s.html + "</div>";
+        }
         if (s.notes && s.notes.length) {
           html += '<div class="msg-notes">';
           for (var ni = 0; ni < s.notes.length; ni++) {
@@ -3481,7 +3588,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
           html += "</div>";
         }
-        if (s.role === "assistant" && s.traceEntries && s.traceEntries.length) {
+        if (s.role === "assistant" && !displayPartsHtml && s.traceEntries && s.traceEntries.length) {
           var traceOpen = state.agentTraceOpen !== false;
           html +=
             "<details" +
@@ -3504,13 +3611,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           state.pendingUserHtml +
           "</div></div>";
       }
-      if (state.streamingHtml) {
+      if (state.streamingHtml || (state.streamingDisplayParts && state.streamingDisplayParts.length)) {
         html +=
           '<div class="msg assistant streaming"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">' +
           pendingAssistantRoleLabel() +
-          '</div><div class="body md" dir="auto">' +
-          state.streamingHtml +
-          "</div></div>";
+          "</div>";
+        var streamingPartsHtml = renderAssistantDisplayParts(state.streamingDisplayParts, true);
+        if (streamingPartsHtml) {
+          html += streamingPartsHtml;
+        } else {
+          html += '<div class="body md" dir="auto">' + state.streamingHtml + "</div>";
+        }
+        html += "</div>";
       } else if (state.busy) {
         html +=
           '<div class="msg assistant assistant-waiting">' +
@@ -5236,6 +5348,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         state = {
           ...m,
           streamingHtml: null,
+          streamingDisplayParts: [],
           treeCollapsedIds: collapsedFromHost,
           conversationNotes: Array.isArray(m.conversationNotes) ? m.conversationNotes : [],
           drawersStarred: Array.isArray(m.drawersStarred) ? m.drawersStarred : [],
@@ -5288,10 +5401,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       }
       if (m && m.type === "assistantStream" && typeof m.html === "string") {
-        state = { ...state, streamingHtml: m.html || null };
+        var streamingDisplayParts = Array.isArray(m.displayParts) ? m.displayParts : [];
+        state = { ...state, streamingHtml: m.html || null, streamingDisplayParts: streamingDisplayParts };
         wireThreadScrollPinDuringStream();
         try {
-          if (!patchStreamingAssistantBody(m.html)) {
+          if (streamingDisplayParts.length || !patchStreamingAssistantBody(m.html)) {
             renderThread({ mode: threadStreamScrollPinned ? "preserve" : "stick" });
           }
         } catch (e) {
