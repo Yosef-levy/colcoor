@@ -111,7 +111,7 @@ Edit **`gcp.env`** with **planned names and settings** for managed resources. No
 
 ## Step 5 — Create shared infrastructure and `shared.env`
 
-Run **once** before starting the API on any VM:
+Run **once** before starting the API on any VM. Prefer your **operator laptop** (or Cloud Shell) with a **user account** that can create Cloud SQL, Redis, and Storage — not the API VM’s default compute service account.
 
 ```bash
 ./scripts/create-shared-env.sh
@@ -126,6 +126,29 @@ Optional HTTP load balancer (after VMs run nginx):
 ```bash
 ./scripts/create-shared-env.sh --with-lb
 ```
+
+**Permission error** (`ACCESS_TOKEN_SCOPE_INSUFFICIENT`, `does not have permission`, or active account is `*-compute@developer.gserviceaccount.com`):
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT
+gcloud auth list
+```
+
+Use the **`COLCOOR_GCP_PROJECT`** value from `gcp.env` instead of `YOUR_PROJECT`. Confirm your **user email** is active (not the VM service account), then re-run `./scripts/create-shared-env.sh`. Copy the resulting **`shared.env`** to each API VM before Step 6.
+
+If APIs are already enabled on the project, you can skip that step: `./scripts/create-shared-env.sh --skip-apis`
+
+**Cloud SQL tier error** (`Invalid Tier (db-custom-…) for (ENTERPRISE_PLUS) Edition`): GCP defaults to **Enterprise Plus**, which does not accept `db-custom-*` tiers. Either keep `COLCOOR_CLOUDSQL_TIER=db-custom-2-7680` (the script passes `--edition=ENTERPRISE`), or switch to Enterprise Plus tiers such as `db-perf-optimized-N-2` in `gcp.env`.
+
+**Cloud SQL `INTERNAL_ERROR` on create:** Often private IP / VPC peering. Wait 2–3 minutes after the first run, then retry with `--skip-apis`. Check for a failed instance in Cloud Console → SQL and **delete** it before retrying. Verify peering:
+
+```bash
+gcloud compute addresses describe google-managed-services-default --global --project=YOUR_PROJECT
+gcloud services vpc-peerings list --network=default --project=YOUR_PROJECT
+```
+
+Use your `COLCOOR_GCP_NETWORK` instead of `default` if different. The script passes `--allocated-ip-range-name=google-managed-services-<network>` to match the peering range. If it still fails, create once manually in Console (private IP, same VPC) or open a GCP support ticket — `INTERNAL_ERROR` is often transient on Google's side.
 
 ---
 

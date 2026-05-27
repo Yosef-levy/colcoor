@@ -59,6 +59,13 @@ done
 gcp_load_config "$CONFIG"
 gcp_require_gcloud
 
+if [[ -f "$SHARED_ENV" ]]; then
+  # shellcheck disable=SC1090
+  set -a
+  source "$SHARED_ENV"
+  set +a
+fi
+
 INSTANCE="${COLCOOR_CLOUDSQL_INSTANCE:-colcoor-prod}"
 TIER="${COLCOOR_CLOUDSQL_TIER:-db-custom-2-7680}"
 DB_VERSION="${COLCOOR_CLOUDSQL_VERSION:-POSTGRES_16}"
@@ -66,11 +73,17 @@ POSTGRES_DB="${COLCOOR_POSTGRES_DB:-colcoor}"
 POSTGRES_USER="${COLCOOR_POSTGRES_USER:-colcoor}"
 NETWORK="projects/${COLCOOR_GCP_PROJECT}/global/networks/${COLCOOR_GCP_NETWORK}"
 
-if [[ -f "$SHARED_ENV" ]]; then
-  # shellcheck disable=SC1090
-  set -a
-  source "$SHARED_ENV"
-  set +a
+# Postgres defaults to ENTERPRISE_PLUS; db-custom-* tiers require ENTERPRISE edition.
+EDITION="${COLCOOR_CLOUDSQL_EDITION:-}"
+if [[ -z "$EDITION" ]]; then
+  case "$TIER" in
+    db-perf-optimized-*)
+      EDITION="ENTERPRISE_PLUS"
+      ;;
+    *)
+      EDITION="ENTERPRISE"
+      ;;
+  esac
 fi
 
 POSTGRES_PASSWORD="${COLCOOR_POSTGRES_PASSWORD:-${POSTGRES_PASSWORD:-}}"
@@ -96,18 +109,24 @@ if [[ "$DRY_RUN" != "1" ]]; then
       --ranges="$PEERING_RANGE" \
       --network="$COLCOOR_GCP_NETWORK" \
       --project="$COLCOOR_GCP_PROJECT"
+    if [[ "$DRY_RUN" != "1" ]]; then
+      echo "Waiting 30s for VPC peering to propagate..."
+      sleep 30
+    fi
   fi
 fi
 
 if ! gcp_instance_exists cloudsql "$INSTANCE"; then
-  echo "Creating Cloud SQL instance ${INSTANCE} (${TIER}, ${COLCOOR_GCP_REGION})..."
+  echo "Creating Cloud SQL instance ${INSTANCE} (${EDITION}, ${TIER}, ${COLCOOR_GCP_REGION})..."
   gcp_run gcloud sql instances create "$INSTANCE" \
     --project="$COLCOOR_GCP_PROJECT" \
     --database-version="$DB_VERSION" \
+    --edition="$EDITION" \
     --tier="$TIER" \
     --region="$COLCOOR_GCP_REGION" \
     --network="$NETWORK" \
     --no-assign-ip \
+    --allocated-ip-range-name="$PEERING_RANGE" \
     --storage-auto-increase \
     --availability-type=zonal \
     --backup-start-time=03:00 \

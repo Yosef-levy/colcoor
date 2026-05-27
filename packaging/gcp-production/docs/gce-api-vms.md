@@ -43,7 +43,7 @@ Starting points for **typical** Colcoor usage (I/O-bound API, GCS images, SSE si
 | **Machine type** | `e2-standard-2` (2 vCPU, 8 GiB RAM) |
 | **`WEB_CONCURRENCY`** (per VM) | 2 |
 | **`COLCOOR_API_REPLICAS`** | 2 |
-| **Cloud SQL tier** (`COLCOOR_CLOUDSQL_TIER`) | `db-custom-2-7680` (2 vCPU, 7.5 GiB) |
+| **Cloud SQL tier** (`COLCOOR_CLOUDSQL_TIER`) | `db-custom-2-7680` (2 vCPU, 7.5 GiB, **Enterprise** edition) |
 | **Memorystore Redis** | 1 GiB Basic tier |
 | **Boot disk** | 30 GiB SSD |
 
@@ -80,6 +80,8 @@ Treat the tables above as a floor. Plan:
 - Redis Standard tier with replication if side-chat fan-out across many replicas matters.
 - Re-run pool sizing after changing VM count:  
   `./scripts/gcp/size-db-pools.sh --shared-env ./shared.env --api-replicas N --web-concurrency N`
+
+**Cloud SQL editions:** GCP defaults new Postgres to **Enterprise Plus**, which uses tiers like `db-perf-optimized-N-2`. The bundle’s `db-custom-*` tiers use **Enterprise** edition; `create-shared-env.sh` sets `--edition=ENTERPRISE` automatically for those tiers.
 
 ---
 
