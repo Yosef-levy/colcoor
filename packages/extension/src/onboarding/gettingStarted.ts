@@ -5,7 +5,6 @@ import {
   KEY_ONBOARDING_DISMISSED,
   KEY_SOLO_COLLABORATOR_HINT_DISMISSED_BY_CONVERSATION,
   KEY_TRY_THIS_NEXT,
-  isSoloCollaboratorHintDismissedSync,
   isTryThisNextVisibleSync,
 } from "./gettingStartedFlags";
 
