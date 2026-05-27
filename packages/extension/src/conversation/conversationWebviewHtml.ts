@@ -3277,6 +3277,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!root) return;
       const ctx = buildVisibleTreeContext();
       if (!ctx.evs.length) {
+        if (state.conversationLoading === true) {
+          root.innerHTML = "";
+          return;
+        }
         root.innerHTML = emptyStateHtml(EMPTY_COPY.tree);
         wireEmptyStateActions(root);
         return;
@@ -3537,6 +3541,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var wasAtBottom = captured.wasAtBottom;
       const segs = visibleThreadSegmentsForUi();
       if (!segs.length && !state.pendingUserHtml && !state.streamingHtml && !state.busy) {
+        if (state.conversationLoading === true) {
+          el.innerHTML = "";
+          applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom);
+          return;
+        }
         el.innerHTML = emptyStateHtml(EMPTY_COPY.thread);
         wireEmptyStateActions(el);
         applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom);

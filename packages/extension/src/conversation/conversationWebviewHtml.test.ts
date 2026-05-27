@@ -15,6 +15,9 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("conversation-loading-spinner");
     expect(html).toContain("Loading conversation…");
     expect(html).toContain("conversationLoading: m.conversationLoading === true");
+    expect(html).toContain("if (state.conversationLoading === true)");
+    expect(html).toContain('root.innerHTML = "";');
+    expect(html).toContain('el.innerHTML = "";');
   });
 
   it("names the tree reload control consistently with the refresh command ([ui-features.md] §6)", () => {
