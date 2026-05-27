@@ -106,6 +106,9 @@ fi
 cp -a "$ROOT/packaging/gcp-production/docker-compose.yml" "$OUT/"
 cp -a "$ROOT/packaging/gcp-production/gcp.env.example" "$OUT/"
 cp -a "$ROOT/packaging/gcp-production/README.md" "$OUT/README.md"
+if [[ -d "$ROOT/packaging/gcp-production/docs" ]]; then
+  cp -a "$ROOT/packaging/gcp-production/docs" "$OUT/"
+fi
 cp -a "$ROOT/nginx/nginx.conf" "$OUT/nginx/nginx.conf"
 cp -a "$ROOT/pgbouncer/"* "$OUT/pgbouncer/"
 cp -a "$ROOT/packaging/gcp-production/scripts/"*.sh "$OUT/scripts/"

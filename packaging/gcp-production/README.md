@@ -16,6 +16,7 @@ Each API VM runs **nginx + backend + PgBouncer** (Docker Compose). There is **no
 | `docker-compose.yml` | API stack on each VM |
 | `gcp.env.example` | GCP project / resource names |
 | `scripts/` | Operator scripts (load images, provision GCP, deploy) |
+| `docs/gce-api-vms.md` | VM count, sizing, and required properties by expected users |
 | `shared.env` | Created by you — **same file on every API VM** (never commit) |
 
 ---
@@ -35,13 +36,19 @@ Each API VM runs **nginx + backend + PgBouncer** (Docker Compose). There is **no
 
 ## Step 1 — Create GCE VMs (first time)
 
-Create at least **two** VMs in the same region and VPC, for example:
+**Planning:** how many VMs, machine types, and required properties for your expected user load — see **[docs/gce-api-vms.md](docs/gce-api-vms.md)**.
+
+Create at least **two** VMs in the same region and VPC. Example (small tier, 2 VMs):
 
 ```bash
 gcloud compute instances create colcoor-api-1 colcoor-api-2 \
   --project=YOUR_PROJECT \
   --zone=us-central1-a \
   --machine-type=e2-standard-2 \
+  --boot-disk-size=30GB \
+  --boot-disk-type=pd-balanced \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
   --tags=colcoor-api,http-server \
   --scopes=https://www.googleapis.com/auth/cloud-platform
 ```
@@ -81,9 +88,24 @@ On the **primary** VM (or your operator laptop with this bundle):
 
 ```bash
 cp gcp.env.example gcp.env
-# Edit: COLCOOR_GCP_PROJECT, COLCOOR_GCS_BUCKET, COLCOOR_API_VM_INSTANCES, region/zone, …
 chmod 600 gcp.env
 ```
+
+Edit **`gcp.env`** with **planned names and settings** for managed resources. Nothing below needs to exist in GCP yet except the API VMs from Step 1 — **Step 5 creates** Cloud SQL, Memorystore, and GCS (and optionally the load balancer) from these values:
+
+| Variable | What to set |
+|----------|-------------|
+| `COLCOOR_GCP_PROJECT` | Your GCP project ID (must exist) |
+| `COLCOOR_GCP_REGION` / `COLCOOR_GCP_ZONE` / `COLCOOR_GCP_NETWORK` | Same region, zone, and VPC as your API VMs |
+| `COLCOOR_API_VM_INSTANCES` | Comma-separated VM names from Step 1 (must exist) |
+| `COLCOOR_CLOUDSQL_INSTANCE` | Planned Cloud SQL instance name (e.g. `colcoor-prod`) |
+| `COLCOOR_CLOUDSQL_TIER` | Instance size — see [docs/gce-api-vms.md](docs/gce-api-vms.md) |
+| `COLCOOR_REDIS_INSTANCE` | Planned Memorystore Redis name (e.g. `colcoor-redis`) |
+| `COLCOOR_GCS_BUCKET` | Planned GCS bucket name (globally unique, e.g. `your-project-colcoor-images`) |
+| `COLCOOR_LB_NAME` | Planned HTTP load balancer name (used with `--with-lb` or Step 8) |
+| `COLCOOR_POSTGRES_DB`, `COLCOOR_POSTGRES_USER` | Database and user to create inside Cloud SQL |
+
+`create-shared-env.sh` creates any of the above that are missing, grants GCS IAM, sizes connection pools, and writes **`shared.env`**. To reuse resources you created outside this bundle, set the same names in `gcp.env`; existing resources are left unchanged.
 
 ---
 
