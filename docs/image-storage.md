@@ -56,9 +56,12 @@ Attach a dedicated service account to the GCE VM (or use the default compute SA)
 
 | Role | Purpose |
 |------|---------|
-| **`roles/storage.objectAdmin`** | `storage.objects.create`, `get`, `delete` on objects in the bucket (upload, signed-url reads, delete) |
+| **`roles/storage.objectAdmin`** | `storage.objects.create`, `get`, `delete` on objects in the bucket (upload, delete) |
+| **`roles/iam.serviceAccountTokenCreator`** on the **same** SA (self) | **Signed URL** generation for `GET …/images/{id}` on GCE via IAM `signBlob` |
 
-`roles/storage.objectAdmin` is sufficient for `google-cloud-storage` `blob.generate_signed_url()` when using that service account’s credentials (GCE metadata or JSON key).
+On GCE, `blob.generate_signed_url()` uses the VM metadata token + **`signBlob`**, not a JSON private key. `create-shared-env.sh` grants both roles for each API VM listed in `gcp.env`.
+
+`roles/storage.objectAdmin` alone is **not** enough to **view** images in production.
 
 **Tighter custom role** (optional): `storage.objects.create`, `storage.objects.get`, `storage.objects.delete` on resource `projects/_/buckets/BUCKET_NAME/objects/conversations/*`.
 

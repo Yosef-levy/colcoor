@@ -6,9 +6,26 @@ import asyncio
 import logging
 from datetime import timedelta
 
+from google.auth.credentials import Signing
+from google.auth.transport.requests import Request as AuthRequest
 from google.cloud import storage
 
 logger = logging.getLogger(__name__)
+
+
+def _signed_url_generation_kwargs(credentials) -> dict[str, str]:
+    """Extra kwargs for ``generate_signed_url`` on GCE (IAM signBlob, no private key)."""
+    if isinstance(credentials, Signing):
+        return {}
+    if not credentials.valid:
+        credentials.refresh(AuthRequest())
+    email = getattr(credentials, "service_account_email", None)
+    token = getattr(credentials, "token", None)
+    if email and token:
+        return {"service_account_email": email, "access_token": token}
+    raise RuntimeError(
+        "cannot generate GCS signed URL: credentials have no signing key or service account email"
+    )
 
 
 class GcsImageBlobStorage:
@@ -49,18 +66,26 @@ class GcsImageBlobStorage:
         await asyncio.to_thread(_delete)
 
     async def ping(self) -> None:
-        """Verify bucket metadata is reachable (readiness)."""
+        """Verify GCS access (readiness).
+
+        Uses object list, not ``bucket.exists()``, because ``roles/storage.objectAdmin``
+        includes object APIs but not ``storage.buckets.get``.
+        """
 
         def _check() -> None:
-            if not self._bucket.exists():
-                raise RuntimeError(f"GCS bucket not found: {self._bucket_name}")
+            next(
+                iter(self._client.list_blobs(self._bucket_name, max_results=1)),
+                None,
+            )
 
         await asyncio.to_thread(_check)
 
     def signed_download_url(self, object_key: str) -> str:
         blob = self._blob(object_key)
+        creds = self._client._credentials
         return blob.generate_signed_url(
             version="v4",
             expiration=timedelta(seconds=self._signed_url_ttl_seconds),
             method="GET",
+            **_signed_url_generation_kwargs(creds),
         )

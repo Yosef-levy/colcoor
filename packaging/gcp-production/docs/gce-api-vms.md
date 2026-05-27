@@ -96,7 +96,8 @@ All API VMs must share these characteristics:
 | **Docker** | Docker Engine **24+** and **Docker Compose v2** plugin. |
 | **Port 80** | nginx publishes **HTTP :80** for app traffic and Google load balancer health checks (`/health`, `/ready`). |
 | **Network tag** | Must include **`COLCOOR_API_VM_TAG`** (default `colcoor-api`) for firewall and LB rules. |
-| **Service account** | VM service account; Step 5 grants **`roles/storage.objectAdmin`** on the bucket named in `COLCOOR_GCS_BUCKET`. |
+| **OAuth access scopes** | **`cloud-platform` on every API VM** (`--scopes=…/cloud-platform` or Console **Cloud Platform → Enabled**). Required for GCS upload **and** signed URL viewing (`IAM signBlob`). **Storage → Read Write alone is not sufficient** — uploads may work while GET image fails with `ACCESS_TOKEN_SCOPE_INSUFFICIENT`. |
+| **Service account** | VM service account; Step 5 (`provision-gcs.sh`) grants **`roles/storage.objectAdmin`** on the bucket and **`roles/iam.serviceAccountTokenCreator`** (self) for signed URLs — **project-level IAM**, run once per distinct SA (see below). |
 | **Private connectivity** | VM can reach Cloud SQL **private IP** and Memorystore **host:port** (no public Postgres/Redis). |
 | **Disk** | Enough space for Docker images (~1–2 GiB loaded) and logs; **30 GiB+** boot disk recommended. |
 | **Outbound** | HTTPS to GCS, Google APIs, and (for users) Cursor auth endpoints from **user desktops**, not necessarily from the VM. |
@@ -141,6 +142,95 @@ Then install Docker on each VM: [Docker Engine install (Ubuntu)](https://docs.do
 
 ---
 
+## Fix OAuth scopes on existing VMs
+
+If VMs were created without **`cloud-platform`**, image upload or **viewing** (signed URLs) fails even when bucket IAM and TokenCreator are correct.
+
+### Google Cloud Console
+
+1. **Compute Engine → VM instances** → select the VM → **Stop**.
+2. **Edit** → **Identity and API access** → **Access scopes**.
+3. Either:
+   - **Allow full access to all Cloud APIs**, **or**
+   - **Set access for each API** → **Cloud Platform → Enabled** (optionally **Storage → Read Write** as well — but **Cloud Platform must be Enabled**).
+4. **Save** → **Start** the VM.
+
+Repeat for **each** API VM (primary and replicas). After restart, confirm Colcoor is up (`docker compose ps`, `curl http://127.0.0.1/ready`).
+
+**Common mistake:** **Storage → Read Write** without **Cloud Platform → Enabled** — upload works, GET image returns HTTP 500 with `SignBlob` / `ACCESS_TOKEN_SCOPE_INSUFFICIENT`.
+
+### gcloud (VM must be stopped)
+
+```bash
+gcloud compute instances stop VM_NAME --zone=ZONE --project=PROJECT
+gcloud compute instances set-service-account VM_NAME \
+  --zone=ZONE \
+  --project=PROJECT \
+  --scopes=https://www.googleapis.com/auth/cloud-platform
+gcloud compute instances start VM_NAME --zone=ZONE --project=PROJECT
+```
+
+### Verify scopes from inside a VM
+
+```bash
+curl -s -H "Metadata-Flavor: Google" \
+  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/scopes"
+```
+
+Expect **`https://www.googleapis.com/auth/cloud-platform`**. If you only see `devstorage.read_write`, enable **Cloud Platform** on the VM (Console or gcloud below).
+
+### GCS signed URLs (viewing images)
+
+`GET …/images/{id}` returns a **302** to a short-lived signed GCS URL. Requires **both**:
+
+1. **VM OAuth scope:** **`cloud-platform`** (Console: **Cloud Platform → Enabled**) so the metadata token can call **`IAMCredentials.SignBlob`**.
+2. **Project IAM (once per distinct service account):** **Service Account Token Creator** on the SA → same SA (self); enable **IAM Service Account Credentials API**.
+
+| What | How often |
+|------|-----------|
+| Enable **IAM Service Account Credentials API** | **Once per project** |
+| **Service Account Token Creator** on SA → same SA (self) | **Once per distinct** API VM service account (if both VMs share the default compute SA, **one** binding covers both) |
+| **`roles/storage.objectAdmin`** on the image bucket | **Once per distinct** SA (Step 5 / `provision-gcs.sh`) |
+
+**Automatic:** `./scripts/create-shared-env.sh` runs `provision-gcs.sh`, which enables the API (via `provision-infra.sh`) and applies both bucket and TokenCreator bindings for every VM in **`COLCOOR_API_VM_INSTANCES`**.
+
+#### Google Cloud Console (recommended)
+
+1. Select project **`COLCOOR_GCP_PROJECT`**.
+2. **APIs & Services → Library** → search **IAM Service Account Credentials API** → **Enable** (once per project).
+3. Find the VM service account email (SSH to any API VM is fine for this read-only step only):
+   ```bash
+   curl -s -H "Metadata-Flavor: Google" \
+     http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email
+   ```
+4. **IAM & Admin → Service Accounts** → open that account → **Permissions** → **Grant access**.
+5. **New principals:** paste the **same** service account email → **Role:** **Service Account Token Creator** → **Save**.
+6. If another API VM uses a **different** service account, repeat steps 3–5 for that email.
+
+#### gcloud (Cloud Shell or laptop — not on the VM)
+
+```bash
+PROJECT=YOUR_PROJECT_ID
+SA="YOUR_VM_SERVICE_ACCOUNT@PROJECT.iam.gserviceaccount.com"
+
+gcloud services enable iamcredentials.googleapis.com --project="$PROJECT"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --project="$PROJECT" \
+  --member="serviceAccount:${SA}" \
+  --role="roles/iam.serviceAccountTokenCreator"
+```
+
+Or re-run provisioning (primary VM or laptop with `gcp.env`):
+
+```bash
+./scripts/gcp/provision-gcs.sh --config ./gcp.env --shared-env ./shared.env
+```
+
+If you added VMs later, update **`COLCOOR_API_VM_INSTANCES`** in `gcp.env` and re-run `provision-gcs.sh` so new service accounts get bucket + TokenCreator bindings.
+
+---
+
 ## Match `gcp.env` to your VMs
 
 After choosing count and sizes, set **planned names** in **`gcp.env`** (before `create-shared-env.sh` — Step 5 creates these if missing):
@@ -173,6 +263,8 @@ If you add a third VM later:
 - [ ] **`COLCOOR_API_VM_INSTANCES`** lists every VM name  
 - [ ] **`COLCOOR_API_REPLICAS`** equals that count  
 - [ ] **`WEB_CONCURRENCY`** matches machine size (2 for `e2-standard-2`, 4 for `e2-standard-4`)  
+- [ ] **OAuth scopes:** **`cloud-platform`** on **every** API VM (Console **Cloud Platform → Enabled**, or gcloud `--scopes=cloud-platform`)  
+- [ ] **Project:** IAM Service Account Credentials API enabled; **Service Account Token Creator** granted on each distinct API VM SA (self) — or Step 5 / `provision-gcs.sh` run  
 - [ ] **Port 80** reachable from the load balancer and health-check ranges (firewall rules created with LB provisioning)  
 - [ ] **`gcp.env`** lists planned names for Cloud SQL, Redis, and GCS (created in Step 5 if missing)
 

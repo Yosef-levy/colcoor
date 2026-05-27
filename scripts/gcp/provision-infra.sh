@@ -98,6 +98,7 @@ if [[ "$SKIP_APIS" != "1" && "$DRY_RUN" != "1" ]]; then
     redis.googleapis.com \
     compute.googleapis.com \
     storage.googleapis.com \
+    iamcredentials.googleapis.com \
     servicenetworking.googleapis.com \
     --project="$COLCOOR_GCP_PROJECT"
 fi

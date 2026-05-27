@@ -28,7 +28,8 @@ Each API VM runs **nginx + backend + PgBouncer** (Docker Compose). There is **no
 3. **Two or more GCE VMs** (same VPC / region) with:
    - Docker Engine + Docker Compose v2
    - HTTP **port 80** open (for nginx and load balancer health checks)
-   - A service account with access to **GCS** (for image uploads)
+   - VM **OAuth scope** **`cloud-platform`** on **every** API VM (required for GCS upload **and** signed URL image viewing — see Step 1)
+   - VM service account with **`roles/storage.objectAdmin`** on the image bucket (granted in Step 5)
 4. **Operator machine** (can be your laptop) with `gcloud` for steps that create Cloud SQL, Redis, and GCS — or run those scripts on the primary VM.
 5. **Cursor** on user machines to install the `.vsix`.
 
@@ -52,6 +53,36 @@ gcloud compute instances create colcoor-api-1 colcoor-api-2 \
   --tags=colcoor-api,http-server \
   --scopes=https://www.googleapis.com/auth/cloud-platform
 ```
+
+**VM OAuth scopes (required on every API VM):** Colcoor uses the **attached service account** via the metadata server for GCS **upload**, **readiness**, and **signed URL** generation (`IAM signBlob`). Use **`cloud-platform`** — **Storage read/write alone is not enough** to view images.
+
+| Setting | gcloud (create / set-service-account) | Google Cloud Console |
+|---------|--------------------------------------|----------------------|
+| **Recommended** | `--scopes=https://www.googleapis.com/auth/cloud-platform` | **Allow full access to all Cloud APIs** |
+| **Per-API (Console)** | — | **Set access for each API** → **Cloud Platform → Enabled** (you may also set **Storage → Read Write**, but **Cloud Platform must be Enabled**) |
+
+**Do not** use **Storage → Read Write** without **Cloud Platform → Enabled**: uploads may work, but **viewing images fails** with `ACCESS_TOKEN_SCOPE_INSUFFICIENT` on `IAMCredentials.SignBlob` in backend logs.
+
+If scopes are too narrow, `/ready` may still report `"storage":"ok"`, but **upload** can fail with `Provided scope(s) are not authorized`, or **GET image** with `insufficient authentication scopes` on `signBlob`.
+
+**Fix scopes on VMs already created (Google Cloud Console):**
+
+1. **Compute Engine → VM instances** → **Stop** the VM.
+2. Open the VM → **Edit**.
+3. **Identity and API access** → **Access scopes**:
+   - **Allow full access to all Cloud APIs**, **or**
+   - **Set access for each API** → **Cloud Platform → Enabled** (add **Storage → Read Write** if you use per-API mode).
+4. **Save** → **Start** the VM → wait for `docker compose` / Colcoor to come back.
+
+Repeat for **every** API VM (primary **and** replicas). You can also use `gcloud compute instances set-service-account … --scopes=cloud-platform` while stopped (see [docs/gce-api-vms.md](docs/gce-api-vms.md)).
+
+**GCS signed URLs (once per GCP project):** Viewing conversation images (`GET …/images/{id}`) uses **IAM `signBlob`** on the VM service account. This is **project-level IAM**, not something you configure inside each VM. **`create-shared-env.sh` (Step 5) grants it automatically** when run from a machine with `gcloud` admin access. If you set up VMs before that script, or view images fail with `private key to sign credentials` in logs, do the following **once in the project** (Google Cloud Console or Cloud Shell — not SSH on the VM):
+
+1. **APIs & Services → Library** → enable **IAM Service Account Credentials API**.
+2. **IAM & Admin → Service Accounts** → open the API VM service account (on a VM: `curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email` to read the email).
+3. **Permissions → Grant access** → principal = **that same service account email** → role = **Service Account Token Creator** → Save.
+
+If primary and replica VMs use **different** service accounts, repeat step 3 for each distinct account. If both VMs share the default compute service account (`…-compute@developer.gserviceaccount.com`), **one** binding covers both. Details: [docs/gce-api-vms.md](docs/gce-api-vms.md) § GCS signed URLs.
 
 Install Docker on each VM (see [Docker docs](https://docs.docker.com/engine/install/)).
 
@@ -216,6 +247,13 @@ Expect JSON with `"status":"ready"` and `"database":"ok"`, `"redis":"ok"`, `"sto
 
 ## Upgrades (new backend version)
 
+**Before upgrading:** back up **`shared.env`** (and **`gcp.env`** if present). They hold secrets and connection URLs not stored elsewhere — losing them means reconstructing Cloud SQL / Redis / GCS settings and rotating **`JWT_SECRET`** (which invalidates existing user sessions). Copy to a secure location (password manager, Secret Manager, encrypted offline copy); mode **600**.
+
+```bash
+cp -a shared.env "shared.env.bak.$(date -u +%Y%m%d)"
+chmod 600 shared.env.bak.*
+```
+
 On one machine with `shared.env` and the new bundle:
 
 ```bash
@@ -228,6 +266,8 @@ Rolling restart: **primary** first, then **replicas** (`deploy-primary.sh` / `de
 ---
 
 ## Backups
+
+**`shared.env`:** back up before upgrades or VM rebuilds (see **Upgrades** above). Same file must exist on every API VM; treat loss as a production incident.
 
 PostgreSQL runs on **Cloud SQL**, not on the VM disk.
 
@@ -246,6 +286,9 @@ See `./scripts/gcp/backup-cloudsql.sh --help` for export to GCS. GCS image bytes
 | `/ready` 503 database | `PGBOUNCER_POSTGRES_HOST`, Cloud SQL private IP, VPC |
 | `/ready` 503 redis | `REDIS_URL`, Memorystore network |
 | `/ready` 503 storage | `GCS_BUCKET`, VM service account `objectAdmin` |
+| Image upload HTTP 500, log `Provided scope(s) are not authorized` | VM scope missing GCS write — **Cloud Platform → Enabled** (Step 1) on **that** VM |
+| View image HTTP 500, log `ACCESS_TOKEN_SCOPE_INSUFFICIENT` / `SignBlob` | Same VM needs **Cloud Platform → Enabled** (Storage-only scope is not enough); fix **every** replica |
+| View image HTTP 500, log `private key to sign credentials` | **Project-level:** enable **IAM Service Account Credentials API**; grant SA **Service Account Token Creator** on itself; redeploy backend with GCS signBlob fix |
 | Auth works on one VM only | `JWT_SECRET` must match in `shared.env` on all VMs |
 | `Permission denied` on scripts | `chmod +x scripts/*.sh scripts/gcp/*.sh` or re-extract `.tar.gz` |
 

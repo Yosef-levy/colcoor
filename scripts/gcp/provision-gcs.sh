@@ -88,6 +88,37 @@ gcp_run gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
   --role="roles/storage.objectAdmin" \
   --quiet
 
+# Signed URL generation on GCE uses IAM signBlob (no JSON key). Each API VM SA must sign as itself.
+grant_sign_blob() {
+  local sa=$1
+  [[ -n "$sa" ]] || return 0
+  echo "Granting roles/iam.serviceAccountTokenCreator to ${sa} (self, for GCS signed URLs)..."
+  gcp_run gcloud iam service-accounts add-iam-policy-binding "$sa" \
+    --project="$COLCOOR_GCP_PROJECT" \
+    --member="serviceAccount:${sa}" \
+    --role="roles/iam.serviceAccountTokenCreator" \
+    --quiet
+}
+
+grant_sign_blob "$SA"
+
+if [[ -n "${COLCOOR_API_VM_INSTANCES:-}" ]]; then
+  IFS=',' read -r -a VMS <<<"${COLCOOR_API_VM_INSTANCES}"
+  for vm in "${VMS[@]}"; do
+    vm="$(echo "$vm" | xargs)"
+    [[ -n "$vm" ]] || continue
+    vm_sa="$(gcp_vm_service_account "$vm")"
+    grant_sign_blob "$vm_sa"
+    if [[ -n "$vm_sa" && "$vm_sa" != "$SA" ]]; then
+      echo "Granting roles/storage.objectAdmin to ${vm_sa} on gs://${BUCKET}..."
+      gcp_run gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+        --member="serviceAccount:${vm_sa}" \
+        --role="roles/storage.objectAdmin" \
+        --quiet
+    fi
+  done
+fi
+
 if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
