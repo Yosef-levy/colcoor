@@ -38,15 +38,17 @@ docker build \
   packages/backend
 
 EXT_VERSION="$(node -p "require('./packages/extension/package.json').version")"
-BUNDLE_NAME="colcoor-enterprise-BE${BACKEND_VERSION}-EXT${EXT_VERSION}"
+# shellcheck source=lib/read-versions.sh
+source "$ROOT/scripts/lib/read-versions.sh"
+read_colcoor_versions
 
 echo ""
 echo "Built:"
-echo "  VSIX:  dist/${BUNDLE_NAME}/colcoor-extension-${EXT_VERSION}.vsix"
+echo "  VSIX:  dist/${BUNDLE_BASENAME}/colcoor-extension-${EXT_VERSION}.vsix"
 echo "  Image: colcoor-backend:${BACKEND_VERSION}  (and :prod)"
 echo ""
-echo "For a company handoff folder (image tarball + VSIX + compose + scripts):"
-echo "  npm run bundle:enterprise"
+echo "For a GCP production customer bundle (image tarball + VSIX + compose + scripts):"
+echo "  npm run bundle:gcp-production"
 
 if [[ "${PUSH}" -eq 1 ]]; then
   if [[ -z "${DOCKER_REGISTRY:-}" ]]; then

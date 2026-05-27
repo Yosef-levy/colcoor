@@ -69,14 +69,14 @@ npm run ship:artifacts
 
 See **[`docs/production.md`](docs/production.md)** § Release artifacts for outputs and optional registry push.
 
-**Enterprise bundle** (image `.tar.gz` + VSIX + compose + operator scripts for the customer VM):
+**GCP production bundle** (image `.tar.gz` + VSIX + compose + operator scripts for multi-VM GCE):
 
 ```bash
-npm run bundle:enterprise
+npm run bundle:gcp-production
 ```
 
-Output directory: **`dist/colcoor-enterprise-BE…-EXT…/`** (see `README.customer.txt` inside the bundle).
+Output directory: **`dist/colcoor-gcp-production-BE…-EXT…/`** (customer entry point: **`README.md`** inside the bundle).
 
 **Extension backend URL:** after setting **`colcoor.backendBaseUrl`** (or **`COLCOOR_API_URL`**), run **Developer: Reload Window** from the Command Palette so Colcoor uses the new API origin.
 
-On a **Docker-only** server without extension dev deps, use **`npm run bundle:enterprise:skip-vsix`** and copy the `.vsix` from a machine where `npm install` and **`npm run package:extension`** work (artifact under **`dist/colcoor-enterprise-BE…-EXT…/`**).
+On a **Docker-only** server without extension dev deps, use **`npm run bundle:gcp-production:skip-vsix`** and copy the `.vsix` from a machine where `npm install` and **`npm run package:extension`** work.

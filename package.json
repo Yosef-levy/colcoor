@@ -8,14 +8,12 @@
     "test": "npm run test:extension && npm run test:backend",
     "test:extension": "npm run test -w colcoor-extension",
     "test:backend": "sh -c 'cd packages/backend && if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest -q; else python3 -m pytest -q; fi'",
-    "package:extension": "bash scripts/package-extension-to-enterprise-dist.sh",
+    "package:extension": "bash scripts/package-extension-to-dist.sh",
     "ship:artifacts": "bash scripts/ship-artifacts.sh",
-    "bundle:enterprise": "bash scripts/build-enterprise-bundle.sh",
-    "bundle:enterprise:skip-vsix": "bash scripts/build-enterprise-bundle.sh --skip-vsix",
-    "bundle:self-host-release": "bash scripts/build-self-host-bundle.sh",
-    "bundle:release": "bash scripts/build-self-host-bundle.sh",
+    "bundle": "bash scripts/build-gcp-production-bundle.sh",
+    "bundle:gcp-production": "bash scripts/build-gcp-production-bundle.sh",
+    "bundle:gcp-production:skip-vsix": "bash scripts/build-gcp-production-bundle.sh --skip-vsix",
     "checksums:release": "bash scripts/generate-release-checksums.sh",
-    "validate:release": "bash scripts/validate-release-bundle.sh",
-    "compose:self-host": "docker compose -f docker-compose.self-host.yml up -d --build"
+    "validate:release": "bash scripts/validate-release-bundle.sh"
   }
 }
