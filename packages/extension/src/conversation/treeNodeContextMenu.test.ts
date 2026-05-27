@@ -6,6 +6,13 @@ import { describe, expect, it } from "vitest";
 import { TREE_NODE_CONTEXT_MENU_ENTRIES } from "./treeNodeContextMenu";
 
 describe("TREE_NODE_CONTEXT_MENU_ENTRIES", () => {
+  it("puts continue from here first", () => {
+    expect(TREE_NODE_CONTEXT_MENU_ENTRIES[0]).toMatchObject({
+      commandId: "colcoor.continueFromHere",
+      quickPickLabel: "Continue from here",
+    });
+  });
+
   it("orders reference note after reference message in side chat", () => {
     const ids = TREE_NODE_CONTEXT_MENU_ENTRIES.map((e) => e.commandId);
     const iMsg = ids.indexOf("colcoor.referenceSelectedMessageInSideChat");

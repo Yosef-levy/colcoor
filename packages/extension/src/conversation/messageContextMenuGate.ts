@@ -13,6 +13,7 @@ export type MessageContextMenuGateEvent = {
 };
 
 export type MessageContextMenuOptions = {
+  continueFromHere: boolean;
   copy: boolean;
   edit: boolean;
   star: boolean;
@@ -49,6 +50,7 @@ export function messageContextMenuOptions(
   const addNote = viewerRole !== "viewer";
   const starred = ev.starred === true;
   return {
+    continueFromHere: true,
     copy,
     edit,
     star: true,

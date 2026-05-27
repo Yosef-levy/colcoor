@@ -207,6 +207,10 @@ describe("getConversationWebviewHtml", () => {
   it("tree and thread use in-webview message context menu", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="messageCtxMenu"');
+    expect(html).toContain('data-msg-action="continue"');
+    expect(html).toContain("Continue from here");
+    expect(html).toContain("selectTreeNodeInWebview(eid);");
+    expect(html).toContain('if (act === "resend")');
     expect(html).toContain("messageContextMenuOptions");
     expect(html).toContain('type: "messageContextAction"');
     expect(html).toContain("wireThreadContextMenu");

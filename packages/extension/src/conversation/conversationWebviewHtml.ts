@@ -1847,6 +1847,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     </button>
   </div>
   <div id="messageCtxMenu" class="composer-ctx-menu" role="menu" hidden aria-label="Message actions">
+    <button type="button" class="composer-ctx-row" data-msg-action="continue" role="menuitem">
+      <span class="composer-ctx-label">Continue from here</span>
+    </button>
     <button type="button" class="composer-ctx-row" data-msg-action="copy" role="menuitem">
       <span class="composer-ctx-label">Copy</span>
     </button>
@@ -4714,6 +4717,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var viewer = state.sideChatViewerRole;
       var addNote = viewer !== "viewer";
       return {
+        continueFromHere: true,
         copy: text.length > 0 || hasMedia,
         edit: edit,
         star: true,
@@ -4766,21 +4770,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         menu.querySelectorAll("[data-msg-action]").forEach(function (btn) {
           var act = btn.getAttribute("data-msg-action");
           var show =
-            act === "copy"
-              ? opts.copy
-              : act === "edit"
-                ? opts.edit
-                : act === "star"
-                  ? opts.star
-                  : act === "title"
-                    ? opts.title
-                    : act === "resend"
-                      ? opts.resend
-                      : act === "addNote"
-                        ? opts.addNote
-                        : false;
+            act === "continue"
+              ? opts.continueFromHere
+              : act === "copy"
+                ? opts.copy
+                : act === "edit"
+                  ? opts.edit
+                  : act === "star"
+                    ? opts.star
+                    : act === "title"
+                      ? opts.title
+                      : act === "resend"
+                        ? opts.resend
+                        : act === "addNote"
+                          ? opts.addNote
+                          : false;
           btn.hidden = !show;
-          btn.disabled = state.busy === true && act !== "copy" && act !== "star";
+          btn.disabled = state.busy === true && act !== "continue" && act !== "copy" && act !== "star";
         });
         var starLbl = menu.querySelector("[data-msg-star-label]");
         if (starLbl) starLbl.textContent = opts.starLabel || "Star";
@@ -4788,7 +4794,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       function openMessageContextMenu(clientX, clientY, eventId) {
         var opts = messageContextMenuOptions(eventId);
         if (!opts) return;
-        if (!opts.copy && !opts.edit && !opts.star && !opts.title && !opts.resend && !opts.addNote) {
+        if (
+          !opts.continueFromHere &&
+          !opts.copy &&
+          !opts.edit &&
+          !opts.star &&
+          !opts.title &&
+          !opts.resend &&
+          !opts.addNote
+        ) {
           return;
         }
         closeAllMenus();
@@ -4806,6 +4820,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var eid = messageCtxTargetEventId;
         closeMessageCtxMenu();
         if (!act || !eid) return;
+        if (act === "continue") {
+          selectTreeNodeInWebview(eid);
+          return;
+        }
+        if (act === "resend") {
+          selectTreeNodeInWebview(eid);
+        }
         vscode.postMessage({ type: "messageContextAction", eventId: eid, action: act });
       });
       document.addEventListener(

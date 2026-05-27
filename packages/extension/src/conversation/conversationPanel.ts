@@ -2092,6 +2092,16 @@ export function createConversationPanelController(
     if (!conversationId || !eventId) {
       return;
     }
+    if (targetEventId !== undefined && selectedEventId !== eventId) {
+      const prevSel = selectedEventId;
+      selectedEventId = eventId;
+      if (lastTreeEvents.some((e) => e.id === eventId)) {
+        postState(lastTreeEvents, false, lastPostedError);
+      }
+      void syncActiveToBackend(eventId, {
+        needsContextRebuild: prevSel !== undefined && prevSel !== eventId,
+      });
+    }
     pendingMainSendQueue = [];
     busyAnchorParentEventId = undefined;
     const ws = getWorkspaceRoot();
@@ -3053,7 +3063,7 @@ export function createConversationPanelController(
       lastTreeEvents = lastTreeEvents.map((e) =>
         e.id === eventId ? { ...e, starred: nextStarred } : e,
       );
-      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
     } catch (e) {
       void showColcoorApiFailure(e);
     }

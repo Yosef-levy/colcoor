@@ -11,6 +11,7 @@ describe("messageContextMenuOptions", () => {
   it("returns menu flags for a user message", () => {
     const o = messageContextMenuOptions("c", "u1", evs, "editor");
     expect(o).toMatchObject({
+      continueFromHere: true,
       copy: true,
       edit: true,
       star: true,
