@@ -13,6 +13,7 @@ import {
   normalizeOptionalGraphEventId,
   normalizePersistedUserInputText,
 } from "./normalizeUserInputText";
+import { buildContextSavingsTurn, type ContextSavingsTurn } from "./contextSavings";
 import {
   findBranchTip,
   graphPathToTranscriptTurns,
@@ -74,6 +75,8 @@ export type UserTurnResult = {
   assistantText?: string;
   /** Present when the assistant body is a local placeholder, not Cursor CLI output. */
   assistantStub?: AssistantStubKind;
+  /** Estimated context tokens saved by using the graph path instead of a linearized conversation. */
+  contextSavings?: ContextSavingsTurn;
   /** User stopped generation before a normal completion; see data-flow-and-api.md §3. */
   cancelled?: boolean;
 };
@@ -135,6 +138,15 @@ export async function runColcoorUserTurn(
     finalUserMessage: trimmed || null,
     finalUserMediaContentJson: mediaJson,
   });
+  const contextSavings = buildContextSavingsTurn({
+    kind: "send",
+    conversationTitle,
+    visibleEventsBeforeRun: events,
+    visibleNotes: notes,
+    actualTranscriptText: transcriptText,
+    finalUserMessage: trimmed || null,
+    finalUserMediaContentJson: mediaJson,
+  });
 
   const cp = normalizeOptionalCheckpointLabel(options?.checkpointLabel);
   const userRes = await api.appendEvent(conversationId, {
@@ -167,7 +179,7 @@ export async function runColcoorUserTurn(
       onDisplayParts: options?.onAssistantDisplayParts,
       cliModel: options?.cliModel,
     });
-    return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult);
+    return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult, contextSavings);
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       return { userEventId: userRes.id, cancelled: true };

@@ -204,9 +204,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       position: relative;
       z-index: 1;
     }
-    .thread-hint {
+    .thread-header {
       flex-shrink: 0;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
       margin-bottom: 4px;
+    }
+    .context-savings {
+      color: var(--vscode-descriptionForeground);
+      white-space: nowrap;
     }
     .thread-visit-nav {
       flex-shrink: 0;
@@ -1709,7 +1717,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     <div class="col-center">
       <div id="collaboratorHint" class="ux-hint-banner ux-hint-compact" hidden role="status"></div>
       <div class="thread">
-        <div class="hint thread-hint">Thread (root → selected)</div>
+        <div class="hint thread-header">
+          <span>Thread (root → selected)</span>
+          <span id="contextSavings" class="context-savings" style="display:none"></span>
+        </div>
         <div class="thread-visit-nav" role="group" aria-label="Visited tree selection">
           <button
             type="button"
@@ -2128,6 +2139,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       conversationId: "",
       title: null,
       conversationPinned: false,
+      contextSavings: null,
       events: [],
       selectedEventId: "",
       threadSegments: [],
@@ -2984,6 +2996,52 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var canFwd = state.selectionVisitCanGoForward === true;
       back.disabled = state.busy || !canBack;
       fwd.disabled = state.busy || !canFwd;
+    }
+
+    function formatCompactNumber(n) {
+      var v = typeof n === "number" && Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+      if (v >= 1000000) return (v / 1000000).toFixed(v >= 10000000 ? 0 : 1).replace(/\\.0$/, "") + "M";
+      if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 0 : 1).replace(/\\.0$/, "") + "k";
+      return String(v);
+    }
+
+    function renderContextSavings() {
+      var el = document.getElementById("contextSavings");
+      if (!el) return;
+      var s = state.contextSavings;
+      var saved =
+        s && typeof s.tokensSaved === "number" && Number.isFinite(s.tokensSaved)
+          ? Math.max(0, Math.floor(s.tokensSaved))
+          : 0;
+      if (!s || saved <= 0) {
+        el.style.display = "none";
+        el.textContent = "";
+        el.removeAttribute("title");
+        return;
+      }
+      var pct =
+        typeof s.percentSaved === "number" && Number.isFinite(s.percentSaved)
+          ? Math.max(0, Math.min(100, s.percentSaved))
+          : 0;
+      var linear =
+        typeof s.totalLinearContextTokens === "number" && Number.isFinite(s.totalLinearContextTokens)
+          ? Math.max(0, Math.floor(s.totalLinearContextTokens))
+          : 0;
+      var generations =
+        typeof s.countedGenerations === "number" && Number.isFinite(s.countedGenerations)
+          ? Math.max(0, Math.floor(s.countedGenerations))
+          : 0;
+      el.style.display = "";
+      el.textContent = "~" + formatCompactNumber(saved) + " tokens saved (" + pct.toFixed(1).replace(/\\.0$/, "") + "%)";
+      el.title =
+        "Estimated context saved by using the selected conversation path instead of a linearized chat. " +
+        formatCompactNumber(saved) +
+        " of " +
+        formatCompactNumber(linear) +
+        " linear-context tokens across " +
+        String(generations) +
+        " assistant generation" +
+        (generations === 1 ? "." : "s.");
     }
 
     function renderDetailBar() {
@@ -4667,6 +4725,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         lastThreadScrollSnapshot = threadScrollSnapshotFromState(state);
         renderInlineSideChat();
         renderUxHints();
+        renderContextSavings();
         renderDetailBar();
         updateThreadVisitNav();
         applyTreeWidth();
@@ -5383,6 +5442,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           drawersStarred: Array.isArray(m.drawersStarred) ? m.drawersStarred : [],
           drawersTodos: Array.isArray(m.drawersTodos) ? m.drawersTodos : [],
           legalPolicyLinks: Array.isArray(m.legalPolicyLinks) ? m.legalPolicyLinks : [],
+          contextSavings:
+            m.contextSavings && typeof m.contextSavings === "object" ? m.contextSavings : null,
           sideChatUnreadCount:
             typeof m.sideChatUnreadCount === "number" && Number.isFinite(m.sideChatUnreadCount)
               ? Math.max(0, Math.floor(m.sideChatUnreadCount))

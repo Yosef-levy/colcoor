@@ -72,6 +72,11 @@ import { evaluateEditUserMessageGate } from "./editUserMessageGate";
 import { buildComposerPrefillFromUserEvent, type ComposerPrefillPayload } from "./buildComposerPrefillFromUserEvent";
 import { mergeUserMediaImageRefs } from "./mergeUserMediaImageRefs";
 import {
+  mergeConversationContextSavingsMetadata,
+  readConversationContextSavingsAggregate,
+  type ContextSavingsTurn,
+} from "./contextSavings";
+import {
   findBranchTipOrUndeletedAncestor,
   lowestUndeletedAncestorId,
   mergeEventLineageById,
@@ -150,6 +155,12 @@ type WebviewStateMessage = {
   conversationId: string;
   title: string | null;
   conversationPinned: boolean;
+  contextSavings: {
+    tokensSaved: number;
+    percentSaved: number;
+    totalLinearContextTokens: number;
+    countedGenerations: number;
+  } | null;
   events: GraphEventNode[];
   selectedEventId: string;
   threadSegments: ThreadSegment[];
@@ -431,6 +442,7 @@ export function createConversationPanelController(
   let webviewAudioUnlocked = false;
   let conversationId: string | undefined;
   let conversationTitle: string | null | undefined;
+  let conversationMetadataJson: Record<string, unknown> | null | undefined;
   let conversationPinned = false;
   /** Side-chat unread for the open conversation (from list row or parallel list fetch). */
   let sideChatUnreadCount = 0;
@@ -629,7 +641,36 @@ export function createConversationPanelController(
     if (row) {
       conversationPinned = row.pinned;
       conversationTitle = row.title;
+      conversationMetadataJson = row.metadata_json ?? null;
       applySideChatUnreadFromListRow(row);
+    }
+  }
+
+  function contextSavingsForWebview(): WebviewStateMessage["contextSavings"] {
+    const aggregate = readConversationContextSavingsAggregate(conversationMetadataJson);
+    if (!aggregate || aggregate.counted_generations <= 0 || aggregate.total_tokens_saved <= 0) {
+      return null;
+    }
+    return {
+      tokensSaved: aggregate.total_tokens_saved,
+      percentSaved: aggregate.percent_saved,
+      totalLinearContextTokens: aggregate.total_linear_context_tokens,
+      countedGenerations: aggregate.counted_generations,
+    };
+  }
+
+  async function persistConversationContextSavings(turn: ContextSavingsTurn | undefined): Promise<void> {
+    if (!conversationId || !turn) {
+      return;
+    }
+    const nextMetadata = mergeConversationContextSavingsMetadata(conversationMetadataJson, turn);
+    try {
+      const out = await api.patchConversation(conversationId, { metadata_json: nextMetadata });
+      applyConversationMetaFromListRow(out);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      getColcoorOutputLog().appendLine(`Context savings metadata update failed: ${msg}`);
+      conversationMetadataJson = nextMetadata;
     }
   }
 
@@ -1393,6 +1434,7 @@ export function createConversationPanelController(
         conversationId,
         title: conversationTitle ?? null,
         conversationPinned,
+        contextSavings: contextSavingsForWebview(),
         events: eventsForWebview,
         selectedEventId: sel ?? "",
         threadSegments: buildThreadSegments(
@@ -1494,6 +1536,7 @@ export function createConversationPanelController(
           conversationId,
           title: conversationTitle ?? null,
           conversationPinned,
+          contextSavings: contextSavingsForWebview(),
           events: [],
           selectedEventId: "",
           threadSegments: [],
@@ -1883,6 +1926,7 @@ export function createConversationPanelController(
           },
         );
         stream.dispose();
+        await persistConversationContextSavings(result.contextSavings);
         postState(lastTreeEvents, true, lastPostedError);
         if (result.cancelled) {
           break;
@@ -2055,6 +2099,7 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
+      await persistConversationContextSavings(result.contextSavings);
       let assistantTipId = result.assistantEventId;
       if (!result.cancelled) {
         assistantTipId = (await drainMainSendQueue(result.assistantEventId)) ?? assistantTipId;
@@ -2130,6 +2175,7 @@ export function createConversationPanelController(
         },
       );
       stream.dispose();
+      await persistConversationContextSavings(result.contextSavings);
       await loadTreeAndPush(
         false,
         null,
@@ -3017,6 +3063,7 @@ export function createConversationPanelController(
       resetVisitedSelectionHistory();
       selectedEventId = undefined;
       conversationPinned = false;
+      conversationMetadataJson = null;
       lastTreeEvents = [];
       lastConversationMembers = [];
       lastNotes = [];
@@ -3409,6 +3456,7 @@ export function createConversationPanelController(
       conversationId = cid;
       conversationTitle = title;
       conversationPinned = false;
+      conversationMetadataJson = null;
       staleTreePromptedForEventId = null;
       staleTreePromptedForGrowthFingerprint = null;
       viewerUserIdMemo = undefined;
@@ -3463,6 +3511,7 @@ export function createConversationPanelController(
       conversationId = cid;
       conversationTitle = title;
       conversationPinned = false;
+      conversationMetadataJson = null;
       staleTreePromptedForEventId = null;
       staleTreePromptedForGrowthFingerprint = null;
       viewerUserIdMemo = undefined;

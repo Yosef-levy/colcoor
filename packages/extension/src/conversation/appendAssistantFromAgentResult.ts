@@ -2,9 +2,13 @@ import type { AgentRunResult, AssistantStubKind } from "../agent/agentRunner";
 import type { ColcoorApiClient } from "../api/client";
 import type { UserTurnResult } from "./runUserTurn";
 import { buildColcoorAgentMeta, mergeAssistantContentJson } from "./agentModelDisplay";
+import { COLCOOR_CONTEXT_SAVINGS_KEY, type ContextSavingsTurn } from "./contextSavings";
 import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 
-function assistantContentJson(runResult: AgentRunResult): Record<string, unknown> | undefined {
+function assistantContentJson(
+  runResult: AgentRunResult,
+  contextSavings?: ContextSavingsTurn,
+): Record<string, unknown> | undefined {
   const entries = runResult.cursorCliTimeline;
   const displayParts = runResult.cursorCliDisplayParts;
   const traceJson =
@@ -19,7 +23,11 @@ function assistantContentJson(runResult: AgentRunResult): Record<string, unknown
     : undefined;
   const modelId = runResult.cliModelId?.trim();
   const metaJson = buildColcoorAgentMeta(modelId, undefined);
-  return mergeAssistantContentJson(traceJson, metaJson);
+  const base = mergeAssistantContentJson(traceJson, metaJson);
+  if (!contextSavings) {
+    return base;
+  }
+  return { ...(base ?? {}), [COLCOOR_CONTEXT_SAVINGS_KEY]: contextSavings };
 }
 
 /**
@@ -31,6 +39,7 @@ export async function appendAssistantFromAgentResult(
   conversationId: string,
   userMessageEventId: string,
   runResult: AgentRunResult,
+  contextSavings?: ContextSavingsTurn,
 ): Promise<UserTurnResult> {
   const assistantStub: AssistantStubKind | undefined =
     runResult.stub === "none" ? undefined : runResult.stub;
@@ -47,13 +56,14 @@ export async function appendAssistantFromAgentResult(
       content: partial,
       author: "cursor_agent",
       private_branch: false,
-      content_json: assistantContentJson(runResult),
+      content_json: assistantContentJson(runResult, contextSavings),
     });
     return {
       userEventId: userMessageEventId,
       assistantEventId: asstRes.id,
       assistantText: partial,
       assistantStub,
+      ...(contextSavings ? { contextSavings } : {}),
       cancelled: true,
     };
   }
@@ -64,7 +74,7 @@ export async function appendAssistantFromAgentResult(
     content: assistantText,
     author: "cursor_agent",
     private_branch: false,
-    content_json: assistantContentJson(runResult),
+    content_json: assistantContentJson(runResult, contextSavings),
   });
 
   return {
@@ -72,5 +82,6 @@ export async function appendAssistantFromAgentResult(
     assistantEventId: asstRes.id,
     assistantText,
     assistantStub,
+    ...(contextSavings ? { contextSavings } : {}),
   };
 }

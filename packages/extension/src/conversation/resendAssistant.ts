@@ -13,6 +13,7 @@ import {
   normalizeOptionalGraphEventId,
   normalizePersistedUserInputText,
 } from "./normalizeUserInputText";
+import { buildContextSavingsTurn } from "./contextSavings";
 import {
   graphPathToTranscriptTurns,
   indexNotesByEventId,
@@ -91,6 +92,13 @@ export async function runResendAssistant(
     pathFromRoot: pathTurns,
     finalUserMessage: undefined,
   });
+  const contextSavings = buildContextSavingsTurn({
+    kind: "resend",
+    conversationTitle,
+    visibleEventsBeforeRun: events,
+    visibleNotes: notes,
+    actualTranscriptText: transcriptText,
+  });
 
   const workspaceContextAppendix = await collectWorkspaceHintsForAgent(workspaceRoot);
   let tempPaths: string[] = [];
@@ -110,7 +118,13 @@ export async function runResendAssistant(
       onDisplayParts: options?.onAssistantDisplayParts,
       cliModel: options?.cliModel,
     });
-    return appendAssistantFromAgentResult(api, conversationId, resolvedUserEventId, runResult);
+    return appendAssistantFromAgentResult(
+      api,
+      conversationId,
+      resolvedUserEventId,
+      runResult,
+      contextSavings,
+    );
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       return { userEventId: resolvedUserEventId, cancelled: true };
