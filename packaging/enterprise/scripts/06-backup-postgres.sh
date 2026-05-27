@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# Logical backup of Postgres to ./backups/ (gzip SQL). Wrapper for bundle compose file.
-set -euo pipefail
-
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export COMPOSE_FILE="$ROOT/docker-compose.yml"
-export COLCOOR_REPO_ROOT="$ROOT"
-exec "$ROOT/scripts/backup-postgres.sh"
