@@ -87,6 +87,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*state\.streamingHtml/);
     expect(html).toContain("renderAssistantDisplayParts(state.streamingDisplayParts, true)");
     expect(html).toContain("renderAssistantDisplayParts(s.displayParts, false)");
+    expect(html).toContain('<details class="agent-trace agent-activity"><summary>');
   });
 
   it("shows an assistant placeholder while busy before stream chunks arrive", () => {

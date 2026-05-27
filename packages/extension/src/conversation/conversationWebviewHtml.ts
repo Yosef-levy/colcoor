@@ -2933,11 +2933,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           "</div></div>"
         );
       }
-      var traceOpen = state.agentTraceOpen !== false;
       var html =
-        "<details" +
-        (traceOpen ? " open" : "") +
-        ' class="agent-trace agent-activity"><summary>' +
+        '<details class="agent-trace agent-activity"><summary>' +
         esc(summary) +
         "</summary>";
       for (var i = 0; i < arr.length; i++) {
