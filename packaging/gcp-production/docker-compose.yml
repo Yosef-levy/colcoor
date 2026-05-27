@@ -1,0 +1,110 @@
+# Colcoor GCP production — one API VM (nginx + backend + PgBouncer → Cloud SQL).
+# Pre-loaded images from the release bundle (no build). Managed Redis + GCS are external.
+#
+# Usage (after shared.env → .env via deploy-primary.sh):
+#   docker compose up -d
+
+services:
+  pgbouncer:
+    image: colcoor-pgbouncer:1.23.1
+    pull_policy: never
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PGBOUNCER_POSTGRES_HOST: ${PGBOUNCER_POSTGRES_HOST}
+      PGBOUNCER_POSTGRES_PORT: ${PGBOUNCER_POSTGRES_PORT:-5432}
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-}
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "PGPASSWORD=\"$$POSTGRES_PASSWORD\" psql -h 127.0.0.1 -p 6432 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -c 'SELECT 1' >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+
+  backend:
+    image: colcoor-backend:prod
+    pull_policy: never
+    restart: unless-stopped
+    stop_grace_period: 35s
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      COLCOOR_ENV: production
+      PORT: "8000"
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      COLCOOR_LOG_LEVEL: ${COLCOOR_LOG_LEVEL:-INFO}
+      COLCOOR_LOG_FORMAT: ${COLCOOR_LOG_FORMAT:-}
+      COLCOOR_METRICS_ENABLED: ${COLCOOR_METRICS_ENABLED:-true}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_TRUST_PROXY: ${RATE_LIMIT_TRUST_PROXY:-true}
+      COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED: ${COLCOOR_EVENT_PURGE_SCHEDULER_ENABLED:-true}
+      COLCOOR_RUN_MIGRATIONS: ${COLCOOR_RUN_MIGRATIONS:-true}
+      COLCOOR_INSTANCE_ID: ${COLCOOR_INSTANCE_ID:-}
+      COLCOOR_NODE_ROLE: ${COLCOOR_NODE_ROLE:-primary}
+      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_MIGRATION_URL: ${DATABASE_MIGRATION_URL:-}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-1800}
+      REDIS_URL: ${REDIS_URL}
+      GCS_BUCKET: ${GCS_BUCKET}
+      COLCOOR_IMAGE_STORAGE: ${COLCOOR_IMAGE_STORAGE:-gcs}
+      GCS_SIGNED_URL_TTL_SECONDS: ${GCS_SIGNED_URL_TTL_SECONDS:-900}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    expose:
+      - "8000"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import os, urllib.request; p=os.environ.get('PORT','8000'); urllib.request.urlopen(f'http://127.0.0.1:{p}/ready', timeout=12)\"",
+        ]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.26-alpine
+    restart: unless-stopped
+    stop_grace_period: 20s
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
