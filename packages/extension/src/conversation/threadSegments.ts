@@ -49,12 +49,6 @@ export type ThreadSegment = {
   notes?: ThreadNoteBlock[];
   /** Entries from `content_json.colcoor_agent_trace` for assistant rows (webview renders collapsible). */
   traceEntries?: unknown[];
-  /** Character offset where trace activity should appear inside the assistant body. */
-  traceActivityAfterChars?: number;
-  /** Assistant body before the trace activity insertion point, rendered from markdown. */
-  traceActivityPrefixHtml?: string;
-  /** Assistant body after the trace activity insertion point, rendered from markdown. */
-  traceActivityRestHtml?: string;
 };
 
 export function extractAgentTraceEntries(
@@ -72,20 +66,6 @@ export function extractAgentTraceEntries(
     return undefined;
   }
   return entries;
-}
-
-function extractAgentTraceActivityAfterChars(
-  contentJson: Record<string, unknown> | null | undefined,
-): number | undefined {
-  if (!contentJson) {
-    return undefined;
-  }
-  const wrap = contentJson.colcoor_agent_trace;
-  if (!wrap || typeof wrap !== "object") {
-    return undefined;
-  }
-  const value = (wrap as { activity_after_chars?: unknown }).activity_after_chars;
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
 }
 
 /** Add `diff_html` / counts for `edit_diff` rows (webview renders without re-parsing). */
@@ -159,11 +139,6 @@ export function buildThreadSegments(
       });
     } else if (ev.kind === "assistant_output") {
       const rawTrace = extractAgentTraceEntries(ev.content_json ?? undefined);
-      const traceActivityAfterChars = extractAgentTraceActivityAfterChars(ev.content_json ?? undefined);
-      const traceSplit =
-        rawTrace && traceActivityAfterChars !== undefined
-          ? Math.min(Math.max(traceActivityAfterChars, 0), text.length)
-          : undefined;
       const assistantDn =
         typeof ev.assistant_display_model === "string" && ev.assistant_display_model.trim()
           ? ev.assistant_display_model.trim()
@@ -177,13 +152,6 @@ export function buildThreadSegments(
         ...(checkpointLabel !== undefined ? { checkpointLabel } : {}),
         notes: noteBlocks,
         traceEntries: rawTrace ? enrichTraceEntriesForWebview(rawTrace) : undefined,
-        ...(traceActivityAfterChars !== undefined ? { traceActivityAfterChars } : {}),
-        ...(traceSplit !== undefined
-          ? {
-              traceActivityPrefixHtml: bodyHtmlFromMarkdown(text.slice(0, traceSplit)),
-              traceActivityRestHtml: bodyHtmlFromMarkdown(text.slice(traceSplit)),
-            }
-          : {}),
       });
     }
   }

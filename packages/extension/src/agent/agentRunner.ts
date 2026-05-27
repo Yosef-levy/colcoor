@@ -26,8 +26,6 @@ export type AgentRunResult = {
   cancelled?: boolean;
   /** Sanitized stream-json timeline for `assistant_output.content_json` (headless CLI only). */
   cursorCliTimeline?: unknown[];
-  /** Assistant text length when the first trace row arrived, used to place activity in the UI. */
-  cursorCliActivityAfterChars?: number;
   /** Model id passed as `--model` or reported by the CLI init line when Automatic. */
   cliModelId?: string;
 };
@@ -44,8 +42,6 @@ export class AgentRunner {
     signal?: AbortSignal;
     /** Full assistant text so far (CLI stdout grows incrementally). Stub mode invokes once with the full body. */
     onTextDelta?: (textSoFar: string) => void;
-    /** Compact Cursor stream-json trace row as soon as a tool event is parsed. */
-    onTimelineEntry?: (entry: unknown) => void;
     /** Cursor CLI `--model`; omit for automatic model selection. */
     cliModel?: string;
   }): Promise<AgentRunResult> {
@@ -78,15 +74,7 @@ export class AgentRunner {
     try {
       const storedKey = await this.secrets.get(SECRET_CURSOR_AGENT_API_KEY);
 
-      const {
-        stdout,
-        stderr,
-        exitCode,
-        cancelled,
-        ndjsonTimeline,
-        firstTimelineTextLength,
-        cliSessionModel,
-      } =
+      const { stdout, stderr, exitCode, cancelled, ndjsonTimeline, cliSessionModel } =
         await spawnCursorAgentPrint({
         executable,
         workspaceRoot: cwd,
@@ -95,7 +83,6 @@ export class AgentRunner {
         storedCursorApiKey: storedKey?.trim() || undefined,
         signal: input.signal,
         onStdoutAccumulated: input.onTextDelta,
-        onTimelineEntry: input.onTimelineEntry,
         outputMode,
         cliModel: input.cliModel?.trim() || undefined,
       });
@@ -106,7 +93,6 @@ export class AgentRunner {
           stub: "none",
           cancelled: true,
           cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
-          cursorCliActivityAfterChars: firstTimelineTextLength,
           cliModelId,
         };
       }
@@ -138,7 +124,6 @@ export class AgentRunner {
         text,
         stub: "none",
         cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
-        cursorCliActivityAfterChars: firstTimelineTextLength,
         cliModelId,
       };
     } catch (e) {

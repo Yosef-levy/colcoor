@@ -210,35 +210,4 @@ describe("buildThreadSegments", () => {
     expect(segs[0]!.checkpointLabel).toBe("v1");
     expect(segs[1]!.checkpointLabel).toBe("rare");
   });
-
-  it("splits assistant HTML around the trace activity insertion point", () => {
-    const prefix = "I will inspect first.\n\n";
-    const events: GraphEventNode[] = [
-      ev({
-        id: "u1",
-        parent_event_id: null,
-        kind: "user_input",
-        created_at: "2020-01-01T00:00:00Z",
-        content_text: "Question",
-      }),
-      ev({
-        id: "a1",
-        parent_event_id: "u1",
-        kind: "assistant_output",
-        created_at: "2020-01-01T00:01:00Z",
-        content_text: `${prefix}Here is the answer.`,
-        content_json: {
-          colcoor_agent_trace: {
-            version: 2,
-            activity_after_chars: prefix.length,
-            entries: [{ colcoor_row: "read", text: "Read README.md" }],
-          },
-        },
-      }),
-    ];
-    const segs = buildThreadSegments(events, "a1");
-    expect(segs[1]!.traceActivityAfterChars).toBe(prefix.length);
-    expect(segs[1]!.traceActivityPrefixHtml).toContain("I will inspect first.");
-    expect(segs[1]!.traceActivityRestHtml).toContain("Here is the answer.");
-  });
 });

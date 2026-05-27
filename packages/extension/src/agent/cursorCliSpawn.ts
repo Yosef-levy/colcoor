@@ -42,8 +42,6 @@ export type CursorCliSpawnResult = {
   cancelled?: boolean;
   /** Present for stream-json modes: sanitized NDJSON objects in order (for `content_json`). */
   ndjsonTimeline?: unknown[];
-  /** Assistant text length when the first timeline row arrived. */
-  firstTimelineTextLength?: number;
   /** From NDJSON `system` / `init` when streaming (actual model when `--model` omitted). */
   cliSessionModel?: string;
 };
@@ -79,8 +77,6 @@ export function spawnCursorAgentPrint(params: {
   signal?: AbortSignal;
   /** Called after each stdout chunk with full stdout captured so far (UTF-8). */
   onStdoutAccumulated?: (stdoutSoFar: string) => void;
-  /** Called for each compact Cursor stream-json timeline row as it arrives. */
-  onTimelineEntry?: (entry: unknown) => void;
   /** Defaults to stream-json + partial deltas. Use `text` if your `agent` build rejects streaming flags. */
   outputMode?: AgentCliOutputMode;
   /** When set, passed as `--model` (omit for Cursor default / automatic). */
@@ -165,7 +161,7 @@ export function spawnCursorAgentPrint(params: {
       }
       rawStdout += s;
       if (jsonFeed) {
-        jsonFeed.push(s, params.onStdoutAccumulated, params.onTimelineEntry);
+        jsonFeed.push(s, params.onStdoutAccumulated);
       } else {
         params.onStdoutAccumulated?.(rawStdout);
       }
@@ -193,14 +189,12 @@ export function spawnCursorAgentPrint(params: {
       }
       let stdoutForResult: string;
       let ndjsonTimeline: unknown[] | undefined;
-      let firstTimelineTextLength: number | undefined;
       let cliSessionModel: string | undefined;
       if (jsonFeed) {
-        jsonFeed.flushTail(params.onStdoutAccumulated, params.onTimelineEntry);
+        jsonFeed.flushTail(params.onStdoutAccumulated);
         const resolved = jsonFeed.getResolvedText();
         stdoutForResult = resolved || rawStdout;
         ndjsonTimeline = jsonFeed.getTimeline();
-        firstTimelineTextLength = jsonFeed.getFirstTimelineTextLength();
         cliSessionModel = jsonFeed.getSessionModel();
       } else {
         stdoutForResult = rawStdout;
@@ -212,7 +206,6 @@ export function spawnCursorAgentPrint(params: {
           exitCode: exitCode ?? null,
           cancelled: true,
           ndjsonTimeline,
-          firstTimelineTextLength,
           cliSessionModel,
         });
         return;
@@ -234,7 +227,6 @@ export function spawnCursorAgentPrint(params: {
         stderr,
         exitCode: exitCode ?? null,
         ndjsonTimeline,
-        firstTimelineTextLength,
         cliSessionModel,
       });
     });

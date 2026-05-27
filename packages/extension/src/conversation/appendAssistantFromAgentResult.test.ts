@@ -66,21 +66,4 @@ describe("appendAssistantFromAgentResult", () => {
     await appendAssistantFromAgentResult(mockApi(appendEvent), "c", "u", { text: "hi", stub: "none" });
     expect(appendEvent.mock.calls[0][1].content_json).toBeUndefined();
   });
-
-  it("persists the activity insertion offset with the CLI timeline", async () => {
-    const appendEvent = vi.fn().mockResolvedValue({ id: "asst-3" });
-    await appendAssistantFromAgentResult(mockApi(appendEvent), "conv", "userEv", {
-      text: "preface\n\nanswer",
-      stub: "none",
-      cursorCliTimeline: [{ colcoor_row: "read", text: "Read README.md" }],
-      cursorCliActivityAfterChars: "preface\n\n".length,
-    });
-    expect(appendEvent.mock.calls[0][1].content_json).toEqual({
-      colcoor_agent_trace: {
-        version: 2,
-        entries: [{ colcoor_row: "read", text: "Read README.md" }],
-        activity_after_chars: "preface\n\n".length,
-      },
-    });
-  });
 });

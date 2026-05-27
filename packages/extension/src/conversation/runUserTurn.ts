@@ -50,8 +50,6 @@ export type RunUserTurnOptions = {
   signal?: AbortSignal;
   /** Incremental assistant body while the Cursor CLI prints stdout (same string grows over time). */
   onAssistantTextDelta?: (textSoFar: string) => void;
-  /** Compact Cursor stream-json trace row as soon as a tool event is parsed. */
-  onAssistantTimelineEntry?: (entry: unknown) => void;
   /** Invoked after `user_input` is stored and before the agent runs (e.g. refresh UI so the new row appears while streaming). */
   onUserMessagePersisted?: (args: { userEventId: string }) => void | Promise<void>;
   /** Optional display-only label on the new `user_input` (`events.checkpoint_label`; [ui-features.md] §8). */
@@ -163,7 +161,6 @@ export async function runColcoorUserTurn(
       workspaceContextAppendix: appendix.length > 0 ? appendix : undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
-      onTimelineEntry: options?.onAssistantTimelineEntry,
       cliModel: options?.cliModel,
     });
     return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult);
