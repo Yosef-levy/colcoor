@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Create a release tarball that preserves Unix file modes (unlike zip on many tools).
 #
-# Usage: ./scripts/archive-release-bundle.sh /path/to/colcoor-enterprise-BE…-EXT…/
+# Usage: ./scripts/archive-release-bundle.sh /path/to/colcoor-gcp-production-BE…-EXT…/
 #
 # Writes: dist/<bundle-basename>.tar.gz and dist/<bundle-basename>.tar.gz.sha256
 set -euo pipefail

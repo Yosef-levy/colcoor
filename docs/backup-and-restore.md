@@ -132,7 +132,7 @@ Use a **clean staging VM** (or local machine) to prove you can recover. Do **not
    docker compose -f docker-compose.prod.yml up -d --build
    ```
 
-   Or use the enterprise bundle with a **fresh** Postgres volume.
+   Or use local dev Compose with a **fresh** Postgres volume.
 
 2. **Restore the dump**
 

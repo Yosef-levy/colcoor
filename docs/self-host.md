@@ -37,11 +37,13 @@ COLCOOR_IMAGE_STORAGE=local
 docker compose -f docker-compose.self-host.yml up -d --build
 ```
 
-Or: `npm run compose:self-host`
+Or from repo root:
+
+```bash
+docker compose -f docker-compose.self-host.yml up -d --build
+```
 
 Services: `postgres`, `pgbouncer`, `redis`, `backend` (internal :8000), `nginx` (public **port 80** by default).
-
-**Release bundle:** run `./install-colcoor.sh` from the unpacked folder instead of the manual steps above.
 
 ### 3. Verify health
 
