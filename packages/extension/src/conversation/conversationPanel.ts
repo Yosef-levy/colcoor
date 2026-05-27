@@ -1868,6 +1868,7 @@ export function createConversationPanelController(
             privateBranch: item.kind === "new_branch" ? item.privateBranch : false,
             signal: sig,
             onAssistantTextDelta: (t) => stream.pushDelta(t),
+            onAssistantTimelineEntry: (entry) => stream.pushTimelineEntry(entry),
             cliModel: cliModelForConversationRuns(),
             ...(userMediaContentJson ? { userMediaContentJson } : {}),
             onUserMessagePersisted: async ({ userEventId }) => {
@@ -2035,6 +2036,7 @@ export function createConversationPanelController(
           privateBranch,
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
+          onAssistantTimelineEntry: (entry) => stream.pushTimelineEntry(entry),
           cliModel: cliModelForConversationRuns(),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
@@ -2109,6 +2111,7 @@ export function createConversationPanelController(
         {
           signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
+          onAssistantTimelineEntry: (entry) => stream.pushTimelineEntry(entry),
           cliModel: cliModelForConversationRuns(),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }

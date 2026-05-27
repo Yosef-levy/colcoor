@@ -83,7 +83,10 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("if (state.pendingUserHtml)");
     expect(html).toContain('class="msg user pending-send"');
     expect(html).toContain("state.pendingUserHtml");
-    expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*if \(state\.streamingHtml\)/);
+    expect(html).toContain("streamingTraceEntries: []");
+    expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*state\.streamingHtml/);
+    expect(html).toContain("formatTraceActivityHtml(state.streamingTraceEntries, true)");
+    expect(html).toContain("traceActivityPrefixHtml");
   });
 
   it("shows an assistant placeholder while busy before stream chunks arrive", () => {

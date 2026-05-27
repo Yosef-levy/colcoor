@@ -424,18 +424,41 @@ describe("createStreamJsonStdoutFeed", () => {
 
   it("records compact read and shell rows (no system line)", () => {
     const feed = createStreamJsonStdoutFeed();
+    const liveRows: unknown[] = [];
     feed.push('{"type":"system","subtype":"init","model":"TestModel"}\n');
     feed.push(
       '{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"readToolCall":{"args":{"path":"README.md","startLine":1,"endLine":5}}}}\n',
+      undefined,
+      (entry) => liveRows.push(entry),
     );
     feed.push(
       '{"type":"tool_call","subtype":"started","call_id":"c2","tool_call":{"shellToolCall":{"args":{"command":"pytest -q","description":"Run tests"}}}}\n',
+      undefined,
+      (entry) => liveRows.push(entry),
     );
     feed.flushTail();
     const t = feed.getTimeline();
     expect(t).toHaveLength(2);
     expect(t[0]).toEqual({ colcoor_row: "read", text: "Read README.md (lines 1:5)" });
     expect(t[1]).toEqual({ colcoor_row: "shell_start", text: "Run tests\ncommand: pytest -q" });
+    expect(liveRows).toEqual(t);
+    expect(feed.getFirstTimelineTextLength()).toBe(0);
+  });
+
+  it("records assistant text length when the first compact trace row arrives", () => {
+    const feed = createStreamJsonStdoutFeed();
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will inspect first.\\n\\n"}]}}\n',
+    );
+    feed.push(
+      '{"type":"tool_call","subtype":"started","tool_call":{"readToolCall":{"args":{"path":"README.md"}}}}\n',
+    );
+    feed.push(
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will inspect first.\\n\\nHere is the answer."}]}}\n',
+    );
+    feed.flushTail();
+    expect(feed.getFirstTimelineTextLength()).toBe("I will inspect first.\n\n".length);
+    expect(feed.getResolvedText()).toBe("I will inspect first.\n\nHere is the answer.");
   });
 
   it("ignores further assistant snapshots after a terminal result", () => {

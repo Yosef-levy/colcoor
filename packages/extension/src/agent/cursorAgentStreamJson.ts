@@ -134,13 +134,19 @@ export function parseCursorAgentNdjsonLine(line: string): StreamJsonLineEffect |
  * `result` event when present, and records a sanitized timeline of parsed objects for persistence.
  */
 export function createStreamJsonStdoutFeed(): {
-  push(chunk: string, onResolvedSoFar?: (textSoFar: string) => void): void;
+  push(
+    chunk: string,
+    onResolvedSoFar?: (textSoFar: string) => void,
+    onTimelineEntry?: (entry: unknown) => void,
+  ): void;
   /** Parse any trailing bytes after the stream closes (last line may lack a newline). */
-  flushTail(onResolvedSoFar?: (textSoFar: string) => void): void;
+  flushTail(onResolvedSoFar?: (textSoFar: string) => void, onTimelineEntry?: (entry: unknown) => void): void;
   /** Plain assistant text for persistence (prefers terminal `result` over summed assistant deltas). */
   getResolvedText(): string;
   /** Sanitized NDJSON-derived objects in stream order (for `events.content_json`). */
   getTimeline(): unknown[];
+  /** Assistant text length when the first timeline row arrived, for placing activity between prose chunks. */
+  getFirstTimelineTextLength(): number | undefined;
   /** Model id from the stream `system` / `init` line when present. */
   getSessionModel(): string | undefined;
 } {
@@ -148,6 +154,7 @@ export function createStreamJsonStdoutFeed(): {
   let fromAssistant = "";
   let terminal: string | null = null;
   let sessionModel: string | undefined;
+  let firstTimelineTextLength: number | undefined;
   const timeline: unknown[] = [];
 
   function resolvedSoFar(): string {
@@ -175,7 +182,11 @@ export function createStreamJsonStdoutFeed(): {
     on?.(resolvedSoFar());
   }
 
-  function processCompleteLine(line: string, onResolvedSoFar?: (textSoFar: string) => void): void {
+  function processCompleteLine(
+    line: string,
+    onResolvedSoFar?: (textSoFar: string) => void,
+    onTimelineEntry?: (entry: unknown) => void,
+  ): void {
     const o = tryParseNdjsonObject(line);
     if (o) {
       if (
@@ -188,7 +199,14 @@ export function createStreamJsonStdoutFeed(): {
       }
       const slim = slimNdjsonForTimeline(o);
       if (slim) {
+        if (firstTimelineTextLength === undefined) {
+          firstTimelineTextLength = fromAssistant.length;
+        }
+        const before = timeline.length;
         appendTimelineEntry(timeline, slim);
+        if (timeline.length > before) {
+          onTimelineEntry?.(timeline[timeline.length - 1]);
+        }
       }
     }
     const effect = o ? effectFromNdjsonObject(o) : null;
@@ -198,28 +216,35 @@ export function createStreamJsonStdoutFeed(): {
   }
 
   return {
-    push(chunk: string, onResolvedSoFar?: (textSoFar: string) => void) {
+    push(
+      chunk: string,
+      onResolvedSoFar?: (textSoFar: string) => void,
+      onTimelineEntry?: (entry: unknown) => void,
+    ) {
       lineBuf += chunk;
       const normalized = normalizeStdoutNewlinesForNdjson(lineBuf);
       const parts = normalized.split("\n");
       lineBuf = parts.pop() ?? "";
       for (const line of parts) {
-        processCompleteLine(line, onResolvedSoFar);
+        processCompleteLine(line, onResolvedSoFar, onTimelineEntry);
       }
     },
-    flushTail(onResolvedSoFar?: (textSoFar: string) => void) {
+    flushTail(onResolvedSoFar?: (textSoFar: string) => void, onTimelineEntry?: (entry: unknown) => void) {
       const tail = lineBuf.trim();
       lineBuf = "";
       if (!tail) {
         return;
       }
-      processCompleteLine(tail, onResolvedSoFar);
+      processCompleteLine(tail, onResolvedSoFar, onTimelineEntry);
     },
     getResolvedText() {
       return resolvedSoFar().trim();
     },
     getTimeline() {
       return [...timeline];
+    },
+    getFirstTimelineTextLength() {
+      return firstTimelineTextLength;
     },
     getSessionModel() {
       return sessionModel;

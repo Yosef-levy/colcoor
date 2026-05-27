@@ -6,12 +6,19 @@ import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 
 function assistantContentJson(runResult: AgentRunResult): Record<string, unknown> | undefined {
   const entries = runResult.cursorCliTimeline;
+  const activityAfterChars =
+    typeof runResult.cursorCliActivityAfterChars === "number" &&
+    Number.isFinite(runResult.cursorCliActivityAfterChars) &&
+    runResult.cursorCliActivityAfterChars >= 0
+      ? Math.floor(runResult.cursorCliActivityAfterChars)
+      : undefined;
   const traceJson =
     entries?.length ?
       {
         colcoor_agent_trace: {
           version: 2,
           entries,
+          ...(activityAfterChars !== undefined ? { activity_after_chars: activityAfterChars } : {}),
         },
       }
     : undefined;

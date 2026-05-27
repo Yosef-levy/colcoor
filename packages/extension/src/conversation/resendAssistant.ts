@@ -23,6 +23,8 @@ import type { PrefetchedConversationGraph, UserTurnResult } from "./runUserTurn"
 export type RunResendAssistantOptions = {
   signal?: AbortSignal;
   onAssistantTextDelta?: (textSoFar: string) => void;
+  /** Compact Cursor stream-json trace row as soon as a tool event is parsed. */
+  onAssistantTimelineEntry?: (entry: unknown) => void;
   /** When set (e.g. from the conversation panel), skips the initial tree + notes round-trip. */
   prefetchedGraph?: PrefetchedConversationGraph;
   /** Cursor CLI `--model`; omit for automatic model selection. */
@@ -104,6 +106,7 @@ export async function runResendAssistant(
       workspaceContextAppendix: appendix.length > 0 ? appendix : undefined,
       signal: options?.signal,
       onTextDelta: options?.onAssistantTextDelta,
+      onTimelineEntry: options?.onAssistantTimelineEntry,
       cliModel: options?.cliModel,
     });
     return appendAssistantFromAgentResult(api, conversationId, resolvedUserEventId, runResult);

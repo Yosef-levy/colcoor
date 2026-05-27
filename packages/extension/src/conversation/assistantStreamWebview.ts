@@ -13,16 +13,28 @@ export function createAssistantStreamPusher(
   isWebviewReady: () => boolean,
 ): {
   pushDelta: (rawText: string) => void;
+  pushTimelineEntry: (entry: unknown) => void;
   dispose: () => void;
 } {
   let lastRaw = "";
+  const timelineEntries: unknown[] = [];
+  let activityAfterChars: number | undefined;
 
   function flushNow(): void {
     const p = getPanel();
     if (!p || !isWebviewReady()) {
       return;
     }
-    void p.webview.postMessage({ type: "assistantStream", html: markdownToSafeHtml(lastRaw) });
+    const split =
+      activityAfterChars !== undefined && activityAfterChars >= 0 && activityAfterChars <= lastRaw.length
+        ? activityAfterChars
+        : undefined;
+    void p.webview.postMessage({
+      type: "assistantStream",
+      html: markdownToSafeHtml(split === undefined ? lastRaw : lastRaw.slice(split)),
+      ...(split !== undefined ? { preActivityHtml: markdownToSafeHtml(lastRaw.slice(0, split)) } : {}),
+      traceEntries: timelineEntries,
+    });
   }
 
   return {
@@ -30,8 +42,17 @@ export function createAssistantStreamPusher(
       lastRaw = raw;
       flushNow();
     },
+    pushTimelineEntry(entry: unknown) {
+      if (activityAfterChars === undefined) {
+        activityAfterChars = lastRaw.length;
+      }
+      timelineEntries.push(entry);
+      flushNow();
+    },
     dispose() {
       lastRaw = "";
+      timelineEntries.length = 0;
+      activityAfterChars = undefined;
     },
   };
 }
