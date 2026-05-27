@@ -98,6 +98,7 @@ def _conversation_out(
     return ConversationOut(
         id=conv.id,
         title=conv.title,
+        metadata_json=conv.metadata_json,
         pinned=member.pinned,
         updated_at=conv.updated_at,
         side_chat_has_unread=side_chat_has_unread,
@@ -130,7 +131,12 @@ async def create_conversation(
     user_id: CurrentUserId,
     body: ConversationCreate,
 ) -> ConversationOut:
-    conv, member = await create_conversation_with_owner(session, user_id=user_id, title=body.title)
+    conv, member = await create_conversation_with_owner(
+        session,
+        user_id=user_id,
+        title=body.title,
+        metadata_json=body.metadata_json,
+    )
     await session.commit()
     unread_counts = await side_chat_unread_count_by_conversation_ids(session, user_id, [conv.id])
     return _conversation_out(
@@ -152,7 +158,7 @@ async def patch_conversation(
     if not patch:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="at least one of title, pinned required",
+            detail="at least one of title, metadata_json, pinned required",
         )
     try:
         row = await patch_conversation_for_user(

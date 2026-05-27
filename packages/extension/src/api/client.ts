@@ -23,6 +23,8 @@ export type CursorExchangeBody = {
 export type ConversationSummary = {
   id: string;
   title: string | null;
+  /** Shared conversation metadata, e.g. aggregate context stats. */
+  metadata_json?: Record<string, unknown> | null;
   pinned: boolean;
   /** ISO 8601; used for sidebar ordering and “last updated”. */
   updated_at?: string;
@@ -340,7 +342,10 @@ export class ColcoorApiClient {
   }
 
   /** Create a conversation; you are the owner (POST /conversations). */
-  async createConversation(body: { title?: string | null }): Promise<ConversationSummary> {
+  async createConversation(body: {
+    title?: string | null;
+    metadata_json?: Record<string, unknown> | null;
+  }): Promise<ConversationSummary> {
     const res = await this.fetchApi("/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -354,7 +359,11 @@ export class ColcoorApiClient {
   /** Update title (owner/editor) and/or caller pin state (PATCH /conversations/{id}). */
   async patchConversation(
     conversationId: string,
-    body: { title?: string | null; pinned?: boolean },
+    body: {
+      title?: string | null;
+      metadata_json?: Record<string, unknown> | null;
+      pinned?: boolean;
+    },
   ): Promise<ConversationSummary> {
     const res = await this.fetchApi(`/conversations/${conversationId}`, {
       method: "PATCH",

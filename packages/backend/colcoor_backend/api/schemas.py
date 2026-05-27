@@ -82,6 +82,7 @@ class LicenseStatusResponse(BaseModel):
 
 class ConversationCreate(BaseModel):
     title: str | None = None
+    metadata_json: dict[str, Any] | None = None
 
 
 class ConversationPatch(BaseModel):
@@ -90,6 +91,10 @@ class ConversationPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(default=None, description="Conversation title; omit key to leave unchanged")
+    metadata_json: dict[str, Any] | None = Field(
+        default=None,
+        description="Shared conversation metadata; omit key to leave unchanged",
+    )
     pinned: bool | None = Field(
         default=None,
         description="Caller’s per-user pin for this conversation; omit key to leave unchanged",
@@ -101,6 +106,7 @@ class ConversationOut(BaseModel):
 
     id: UUID
     title: str | None
+    metadata_json: dict[str, Any] | None = None
     pinned: bool
     updated_at: datetime
     side_chat_has_unread: bool = Field(

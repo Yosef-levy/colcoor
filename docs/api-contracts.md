@@ -88,6 +88,7 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 |-------|------|----------|
 | `id` | uuid | yes |
 | `title` | string \| null | yes |
+| `metadata_json` | object \| null | yes |
 | `pinned` | boolean | yes | **Per authenticated user** — value read from that user’s `conversation_members.pinned` |
 | `updated_at` | string (ISO-8601 timestamptz) | yes |
 | `side_chat_has_unread` | boolean | yes | `true` when the caller’s side-chat read cursor is behind the latest **non-deleted** side-chat message in that conversation |
@@ -110,6 +111,7 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 | Field | Type | Required |
 |-------|------|----------|
 | `title` | string \| null | no |
+| `metadata_json` | object \| null | no |
 
 ### 3.3 `PATCH /api/v1/conversations/{conversation_id}`
 
@@ -120,7 +122,7 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 | **Auth** | Bearer JWT |
 | **200** | `ConversationOut` |
 | **401** | missing/invalid token |
-| **403** | role insufficient for `title` change |
+| **403** | role insufficient for `title` or `metadata_json` change |
 | **404** | conversation not found or not a member |
 | **422** | validation error (e.g. empty body) |
 
@@ -129,6 +131,7 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 | Field | Type | Required | Semantics |
 |-------|------|----------|-----------|
 | `title` | string \| null | no | Omitted = leave unchanged; `null` = clear title |
+| `metadata_json` | object \| null | no | Omitted = leave unchanged; `null` = clear metadata; object = replace shared conversation metadata |
 | `pinned` | boolean | no | Omitted = leave unchanged; updates **only** the caller’s `conversation_members.pinned` |
 
 ### 3.4 `DELETE /api/v1/conversations/{conversation_id}`

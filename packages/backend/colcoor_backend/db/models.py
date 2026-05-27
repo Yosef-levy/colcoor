@@ -59,6 +59,7 @@ class Conversation(Base):
         Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )

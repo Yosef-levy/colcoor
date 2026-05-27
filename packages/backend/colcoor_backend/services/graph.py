@@ -91,9 +91,10 @@ async def create_conversation_with_owner(
     *,
     user_id: uuid.UUID,
     title: str | None,
+    metadata_json: dict | None = None,
 ) -> tuple[Conversation, ConversationMember]:
     now = datetime.now(tz=UTC)
-    conv = Conversation(title=title)
+    conv = Conversation(title=title, metadata_json=metadata_json)
     session.add(conv)
     await session.flush()
     member = ConversationMember(
@@ -602,7 +603,7 @@ async def patch_conversation_for_user(
     user_id: uuid.UUID,
     patch: dict[str, object],
 ) -> tuple[Conversation, ConversationMember] | None:
-    """Apply keys from ``patch`` (``title``, ``pinned``). ``title`` requires owner/editor."""
+    """Apply keys from ``patch``. Shared conversation fields require owner/editor."""
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         return None
@@ -619,6 +620,13 @@ async def patch_conversation_for_user(
             raise PermissionError("cannot rename conversation")
         t = patch["title"]
         conv.title = None if t is None else str(t)
+    if "metadata_json" in patch:
+        if member.role not in ("owner", "editor"):
+            raise PermissionError("cannot update conversation metadata")
+        metadata_json = patch["metadata_json"]
+        if metadata_json is not None and not isinstance(metadata_json, dict):
+            raise ValueError("metadata_json must be an object or null")
+        conv.metadata_json = metadata_json
     conv.updated_at = now
     await session.flush()
     await session.refresh(conv)

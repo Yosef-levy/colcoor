@@ -27,6 +27,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 |--------|------|---------|
 | id | uuid PK | Conversation |
 | title | text null | Display title (shared) |
+| metadata_json | jsonb null | Shared conversation metadata |
 | created_at | timestamptz not null | Created |
 | updated_at | timestamptz not null | Last structural/content touch |
 | deleted_at | timestamptz null | Owner soft-delete; hidden from conversation list until undo / restore / purge |
@@ -233,6 +234,7 @@ CREATE INDEX idx_users_last_login_at ON users (last_login_at);
 CREATE TABLE conversations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     title text,
+    metadata_json jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     deleted_at timestamptz,
