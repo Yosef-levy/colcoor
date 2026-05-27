@@ -3,11 +3,17 @@ import * as vscode from "vscode";
 import {
   KEY_HAS_SIGNED_IN,
   KEY_ONBOARDING_DISMISSED,
+  KEY_SOLO_COLLABORATOR_HINT_DISMISSED_BY_CONVERSATION,
   KEY_TRY_THIS_NEXT,
+  isSoloCollaboratorHintDismissedSync,
   isTryThisNextVisibleSync,
 } from "./gettingStartedFlags";
 
-export { isGettingStartedVisibleSync, isTryThisNextVisibleSync } from "./gettingStartedFlags";
+export {
+  isGettingStartedVisibleSync,
+  isSoloCollaboratorHintDismissedSync,
+  isTryThisNextVisibleSync,
+} from "./gettingStartedFlags";
 
 export async function markHasSignedIn(globalState: vscode.Memento): Promise<boolean> {
   const wasFirst = !globalState.get<boolean>(KEY_HAS_SIGNED_IN);
@@ -49,6 +55,17 @@ export async function shouldShowTryThisNextInPanel(
 
 export async function dismissTryThisNext(globalState: vscode.Memento): Promise<void> {
   await globalState.update(KEY_TRY_THIS_NEXT, undefined);
+}
+
+export async function dismissSoloCollaboratorHint(
+  globalState: vscode.Memento,
+  conversationId: string,
+): Promise<void> {
+  const current = globalState.get<Record<string, boolean>>(KEY_SOLO_COLLABORATOR_HINT_DISMISSED_BY_CONVERSATION) ?? {};
+  await globalState.update(KEY_SOLO_COLLABORATOR_HINT_DISMISSED_BY_CONVERSATION, {
+    ...current,
+    [conversationId]: true,
+  });
 }
 
 export async function maybeOfferFirstSignInHint(isFirstSignIn: boolean): Promise<void> {

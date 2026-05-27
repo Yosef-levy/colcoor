@@ -29,8 +29,10 @@ import { getConversationWebviewHtml } from "./conversationWebviewHtml";
 import {
   armTryThisNextForConversation as persistTryThisNextConversation,
   dismissOnboarding,
+  dismissSoloCollaboratorHint,
   dismissTryThisNext,
   isGettingStartedVisibleSync,
+  isSoloCollaboratorHintDismissedSync,
   isTryThisNextVisibleSync,
 } from "../onboarding/gettingStarted";
 import { buildConversationDrawersModel, type TodoDrawerRow, type StarredDrawerRow } from "./drawersModel";
@@ -230,6 +232,8 @@ type WebviewStateMessage = {
   gettingStartedVisible?: boolean;
   /** Dismissible suggestions after creating a conversation. */
   tryThisNextVisible?: boolean;
+  /** Per-conversation dismissal for the solo collaborator invite hint. */
+  soloCollaboratorHintDismissed?: boolean;
   /** Collaborators for roster / solo-invite hint. */
   conversationMembers?: {
     user_id: string;
@@ -291,6 +295,7 @@ type FromWebview =
   | { type: "addMember" }
   | { type: "dismissGettingStarted" }
   | { type: "dismissTryThisNext" }
+  | { type: "dismissSoloCollaboratorHint" }
   | { type: "tryThisNext"; step: "invite" | "branch" | "sideChat" }
   | { type: "changeMemberRole" }
   | { type: "removeMember" }
@@ -1446,6 +1451,7 @@ export function createConversationPanelController(
         pendingAssistantModelLabel: pendingAssistantModelLabelForWebview(),
         gettingStartedVisible: isGettingStartedVisibleSync(context.globalState),
         tryThisNextVisible: isTryThisNextVisibleSync(context.globalState, conversationId),
+        soloCollaboratorHintDismissed: isSoloCollaboratorHintDismissedSync(context.globalState, conversationId),
         conversationMembers: lastConversationMembers.map((m) => ({
           user_id: m.user_id,
           role: m.role,
@@ -2562,6 +2568,14 @@ export function createConversationPanelController(
       }
       if (msg.type === "dismissTryThisNext") {
         await dismissTryThisNext(context.globalState);
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        return;
+      }
+      if (msg.type === "dismissSoloCollaboratorHint") {
+        if (!conversationId) {
+          return;
+        }
+        await dismissSoloCollaboratorHint(context.globalState, conversationId);
         postState(lastTreeEvents, lastPostedBusy, lastPostedError);
         return;
       }

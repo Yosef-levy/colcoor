@@ -495,7 +495,10 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="tryThisNextBanner"');
     expect(html).toContain('id="collaboratorHint"');
     expect(html).toContain("gettingStartedVisible");
+    expect(html).toContain("soloCollaboratorHintDismissed");
     expect(html).toContain("Invite collaborator");
+    expect(html).toContain('data-empty-dismiss="');
+    expect(html).toContain('vscode.postMessage({ type: "dismissSoloCollaboratorHint" });');
   });
 
   it("includes Members and Add member under Conversation menu (data-conv-action)", () => {

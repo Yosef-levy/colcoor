@@ -2151,18 +2151,28 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       pendingAssistantModelLabel: null,
       gettingStartedVisible: false,
       tryThisNextVisible: false,
+      soloCollaboratorHintDismissed: false,
       conversationMembers: [],
     };
     const EMPTY_COPY = ${emptyCopyJson};
     const GETTING_STARTED_LINES = ${gettingStartedLinesJson};
     const TRY_THIS_NEXT_STEPS = ${tryThisNextStepsJson};
 
-    function emptyStateHtml(copy) {
+    function emptyStateHtml(copy, dismissAction) {
       if (!copy) return '<p class="empty">Nothing here yet.</p>';
-      var html =
-        '<div class="empty-state-card"><p class="empty-state-title">' +
-        esc(copy.title) +
-        '</p><p class="empty-state-body">' +
+      var html = '<div class="empty-state-card">';
+      if (dismissAction) {
+        html +=
+          '<div class="ux-hint-banner-header"><p class="empty-state-title">' +
+          esc(copy.title) +
+          '</p><button type="button" class="ux-hint-dismiss" data-empty-dismiss="' +
+          esc(dismissAction) +
+          '" aria-label="Dismiss collaborator invite hint">Dismiss</button></div>';
+      } else {
+        html += '<p class="empty-state-title">' + esc(copy.title) + "</p>";
+      }
+      html +=
+        '<p class="empty-state-body">' +
         esc(copy.body) +
         "</p>";
       if (copy.actionLabel && copy.action) {
@@ -2181,6 +2191,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!container || container.getAttribute("data-empty-wired") === "1") return;
       container.setAttribute("data-empty-wired", "1");
       container.addEventListener("click", function (ev) {
+        var dismissBtn = ev.target && ev.target.closest ? ev.target.closest("[data-empty-dismiss]") : null;
+        if (dismissBtn) {
+          var dismissAction = dismissBtn.getAttribute("data-empty-dismiss");
+          if (dismissAction === "dismissSoloCollaboratorHint") {
+            vscode.postMessage({ type: "dismissSoloCollaboratorHint" });
+          }
+          return;
+        }
         var btn = ev.target && ev.target.closest ? ev.target.closest("[data-empty-action]") : null;
         if (!btn) return;
         var action = btn.getAttribute("data-empty-action");
@@ -2237,9 +2255,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var members = Array.isArray(state.conversationMembers) ? state.conversationMembers : [];
         if (!state.conversationId || state.conversationLoading) {
           collab.hidden = true;
+        } else if (state.soloCollaboratorHintDismissed && members.length <= 1) {
+          collab.hidden = true;
         } else if (members.length <= 1) {
           collab.hidden = false;
-          collab.innerHTML = emptyStateHtml(EMPTY_COPY.soloCollaborator);
+          collab.innerHTML = emptyStateHtml(EMPTY_COPY.soloCollaborator, "dismissSoloCollaboratorHint");
           wireEmptyStateActions(collab);
         } else {
           collab.hidden = false;
@@ -5256,6 +5276,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               : null,
           gettingStartedVisible: m.gettingStartedVisible === true,
           tryThisNextVisible: m.tryThisNextVisible === true,
+          soloCollaboratorHintDismissed: m.soloCollaboratorHintDismissed === true,
           conversationMembers: Array.isArray(m.conversationMembers)
             ? m.conversationMembers
             : [],

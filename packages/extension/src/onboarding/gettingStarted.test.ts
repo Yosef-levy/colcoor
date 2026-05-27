@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isGettingStartedVisibleSync,
+  isSoloCollaboratorHintDismissedSync,
   isTryThisNextVisibleSync,
 } from "./gettingStartedFlags";
 
@@ -30,5 +31,20 @@ describe("gettingStarted", () => {
     void globalState.update("colcoor.onboarding.tryThisNextConversationId", "conv-a");
     expect(isTryThisNextVisibleSync(globalState, "conv-a")).toBe(true);
     expect(isTryThisNextVisibleSync(globalState, "conv-b")).toBe(false);
+  });
+
+  it("dismisses the solo collaborator hint per conversation id", () => {
+    const mem = { store: {} as Record<string, unknown> };
+    const globalState = {
+      get: <T>(key: string) => mem.store[key] as T | undefined,
+      update: async (key: string, value: unknown) => {
+        mem.store[key] = value;
+      },
+    };
+    void globalState.update("colcoor.onboarding.soloCollaboratorHintDismissedByConversation", {
+      "conv-a": true,
+    });
+    expect(isSoloCollaboratorHintDismissedSync(globalState, "conv-a")).toBe(true);
+    expect(isSoloCollaboratorHintDismissedSync(globalState, "conv-b")).toBe(false);
   });
 });
