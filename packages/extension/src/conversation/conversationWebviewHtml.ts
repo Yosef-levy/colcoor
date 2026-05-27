@@ -1548,6 +1548,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <hr class="menu-sep" role="separator" />
             <button type="button" class="menu-item" role="menuitem" data-conv-action="rename">Rename…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="togglePin">Pin</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="restoreMessageBranch" title="Restore a soft-deleted message branch by event id">Restore message branch (soft-deleted)…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="deleteConversation" title="Delete this conversation">Delete conversation…</button>
           </div>
         </div>
@@ -2356,6 +2357,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           else if (ca === "removeMember") vscode.postMessage({ type: "removeMember" });
           else if (ca === "rename") vscode.postMessage({ type: "rename" });
           else if (ca === "togglePin") vscode.postMessage({ type: "togglePin" });
+          else if (ca === "restoreMessageBranch") vscode.postMessage({ type: "restoreMessageBranch" });
           else if (ca === "deleteConversation") vscode.postMessage({ type: "deleteConversation" });
           else return;
           closeAllMenus();

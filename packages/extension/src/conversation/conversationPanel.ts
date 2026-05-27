@@ -331,6 +331,7 @@ type FromWebview =
   | { type: "editMessageTitle" }
   | { type: "listNotesOnSelection" }
   | { type: "deleteMessageBranch" }
+  | { type: "restoreMessageBranch" }
   | { type: "treeCollapse"; collapsedEventIds: string[] }
   | { type: "editNote"; noteId: string }
   | { type: "deleteNote"; noteId: string };
@@ -2615,6 +2616,10 @@ export function createConversationPanelController(
         await vscode.commands.executeCommand("colcoor.removeMemberFromConversation", {
           conv: { id: conversationId, title: conversationTitle ?? null },
         });
+        return;
+      }
+      if (msg.type === "restoreMessageBranch") {
+        await restoreMessageBranchFromPalette();
         return;
       }
       if (msg.type === "openSideChat") {
