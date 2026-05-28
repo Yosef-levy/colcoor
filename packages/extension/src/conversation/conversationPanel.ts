@@ -2681,7 +2681,7 @@ export function createConversationPanelController(
           await openInlineSideChatDrawer();
         } else if (msg.step === "branch") {
           void vscode.window.showInformationMessage(
-            "Colcoor: select a message in the tree, choose Message → Edit message…, change it, and send to create a branch.",
+            "Colcoor: select a message in the tree to continue from, or choose Message → Edit message…, change it, and send to create a branch.",
           );
           if (panel && webviewReady) {
             void panel.webview.postMessage({ type: "focusComposer" });
