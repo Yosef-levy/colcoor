@@ -171,7 +171,10 @@ export function parseCursorAgentNdjsonLine(line: string): StreamJsonLineEffect |
  * Buffers stdout chunks, splits NDJSON lines, accumulates assistant text, applies a terminal
  * `result` event when present, and records a sanitized timeline of parsed objects for persistence.
  */
-export function createStreamJsonStdoutFeed(): {
+export function createStreamJsonStdoutFeed(options?: {
+  /** Invoked for each parsed NDJSON object (before assistant text effects). */
+  onNdjsonObject?: (o: Record<string, unknown>) => void;
+}): {
   push(
     chunk: string,
     onResolvedSoFar?: (textSoFar: string) => void,
@@ -286,6 +289,7 @@ export function createStreamJsonStdoutFeed(): {
   ): void {
     const o = tryParseNdjsonObject(line);
     if (o) {
+      options?.onNdjsonObject?.(o);
       if (
         o.type === "system" &&
         o.subtype === "init" &&

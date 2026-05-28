@@ -13,6 +13,7 @@ import {
   type AgentCliOutputMode,
 } from "./cursorCliSpawn";
 import type { CursorAgentDisplayPart } from "./cursorAgentStreamJson";
+import { resolveShellToolCallRejection } from "./cursorShellCommandApproval";
 import { stripAnsiSgr } from "./stripAnsi";
 
 export type AgentMode = "auto" | "headless" | "stub";
@@ -55,7 +56,8 @@ export class AgentRunner {
     const mode: AgentMode =
       rawMode === "headless" || rawMode === "stub" || rawMode === "auto" ? rawMode : "auto";
     const executable = (config.get<string>("agentExecutable") ?? "agent").trim() || "agent";
-    const timeoutMs = config.get<number>("agentTimeoutMs") ?? 300_000;
+    const timeoutMs = Math.max(10_000, config.get<number>("agentTimeoutMs") ?? 300_000);
+    const promptShellApproval = config.get<boolean>("agentPromptShellApproval") !== false;
     const outputMode: AgentCliOutputMode = normalizeAgentCliOutputMode(
       config.get<string>("agentOutputFormat"),
     );
@@ -91,6 +93,10 @@ export class AgentRunner {
         onDisplayParts: input.onDisplayParts,
         outputMode,
         cliModel: input.cliModel?.trim() || undefined,
+        promptShellApproval,
+        resolveShellRejection: promptShellApproval
+          ? (rejection) => resolveShellToolCallRejection(rejection, timeoutMs)
+          : undefined,
       });
       const cliModelId = input.cliModel?.trim() || cliSessionModel?.trim() || undefined;
       if (cancelled) {

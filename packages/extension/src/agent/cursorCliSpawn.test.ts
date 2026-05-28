@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { processEnvForCursorCli } from "./agentPathEnv";
-import { buildAgentPrintArgs, buildEnvForAgentSpawn, normalizeAgentCliOutputMode } from "./cursorCliSpawn";
+import { buildAgentPrintArgs, buildEnvForAgentSpawn, buildAgentResumeArgs, normalizeAgentCliOutputMode } from "./cursorCliSpawn";
 
 describe("normalizeAgentCliOutputMode", () => {
   it("accepts known values", () => {
@@ -68,6 +68,22 @@ describe("buildAgentPrintArgs", () => {
       "--workspace",
       ws,
       prompt,
+    ]);
+  });
+});
+
+describe("buildAgentResumeArgs", () => {
+  it("includes --resume with session id and continuation prompt", () => {
+    expect(buildAgentResumeArgs("/tmp/ws", "sess-abc", "continue please", "stream-json")).toEqual([
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--trust",
+      "--workspace",
+      "/tmp/ws",
+      "--resume",
+      "sess-abc",
+      "continue please",
     ]);
   });
 });

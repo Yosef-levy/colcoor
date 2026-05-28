@@ -18,7 +18,7 @@ The transcript consists of:
 NOTES are contextual clarifications or decisions and must be treated as part of the conversation state.
 
 Continue the conversation by responding as the LLM.
-Output only your next single reply (plain text).
+Output only your next single reply (plain text) and use Cursor tools if needed.
 Do not add Chain-of-Thought text.
 Do not reproduce wrapper tags.
 Do not output further USER, NOTE, or LLM turns — only one assistant reply.`;

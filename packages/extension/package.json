@@ -389,6 +389,11 @@
           "default": "stream-json-partial",
           "description": "How Cursor `agent -p` prints stdout (see https://cursor.com/docs/cli/reference/output-format). stream-json-partial: NDJSON + --stream-partial-output (fine-grained UI streaming). stream-json: NDJSON without partial deltas. text: final answer only (works on older CLI; minimal streaming)."
         },
+        "colcoor.agentPromptShellApproval": {
+          "type": "boolean",
+          "default": true,
+          "description": "When the Cursor CLI rejects a shell command (allowlist / policy), show a Colcoor prompt with Run, Skip, or Add to allowlist. Add to allowlist updates your ~/.cursor/cli-config.json for future runs; Run executes once and resumes the agent with the output; Skip resumes without running the command."
+        },
         "colcoor.includeWorkspaceHintsInAgentPrompt": {
           "type": "boolean",
           "default": true,
