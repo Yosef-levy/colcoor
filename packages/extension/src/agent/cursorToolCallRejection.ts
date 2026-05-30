@@ -15,6 +15,15 @@ export type ToolCallRejection = {
   detail: string;
   /** Cursor CLI permission tokens for "Add to allowlist". */
   allowTokens: string[];
+  /** Web fetch/search target URL or query when known. */
+  webTarget?: string;
+  /**
+   * Headless CLI blocks web fetch/search with reason "User Rejected"; allowlist tokens do not
+   * re-enable the native tool — use shell curl fallback instead.
+   */
+  headlessWebBlock?: boolean;
+  /** When set, Run / Fetch via shell executes this locally (typically curl). */
+  shellFallbackCommand?: string;
   /** Shell-only: run locally on "Run". */
   shell?: {
     command: string;
@@ -79,6 +88,66 @@ function webTargetFromArgs(
     str(rejected.query) ??
     str(rejected.searchTerm)
   );
+}
+
+function extractUrlFromText(text: string): string | undefined {
+  const match = text.match(/https?:\/\/[^\s"'<>]+/i);
+  return match?.[0];
+}
+
+/** Headless CLI rejects native web tools with this reason; allowlist cannot fix it. */
+export function isHeadlessWebToolBlock(
+  rejected: Record<string, unknown>,
+  kind: ToolCallKind,
+): boolean {
+  if (kind !== "webFetch" && kind !== "webSearch") {
+    return false;
+  }
+  const reason = str(rejected.reason)?.toLowerCase();
+  return reason === "user rejected";
+}
+
+export function curlCommandForWebTarget(url: string): string {
+  return `curl -sL ${JSON.stringify(url.trim())}`;
+}
+
+function webAllowTokens(isSearch: boolean, domain?: string): string[] {
+  const tokens = new Set<string>();
+  if (domain) {
+    tokens.add(`WebFetch(${domain})`);
+  } else {
+    tokens.add("WebFetch(*)");
+  }
+  if (isSearch) {
+    tokens.add("WebSearch(*)");
+  }
+  return [...tokens];
+}
+
+function attachWebRejectionFields(
+  rejection: Omit<ToolCallRejection, "sessionId" | "callId">,
+  rejected: Record<string, unknown>,
+  toolKey: string,
+  target?: string,
+): Omit<ToolCallRejection, "sessionId" | "callId"> {
+  if (rejection.kind !== "webFetch" && rejection.kind !== "webSearch") {
+    return rejection;
+  }
+  const webTarget = target ?? extractUrlFromText(rejection.detail);
+  const headlessWebBlock = isHeadlessWebToolBlock(rejected, rejection.kind);
+  const shellFallbackCommand = webTarget ? curlCommandForWebTarget(webTarget) : undefined;
+  const isSearch = rejection.kind === "webSearch" || toolKey === "webSearchToolCall";
+  const domain = webTarget ? domainFromWebFetchUrl(webTarget) : undefined;
+  return {
+    ...rejection,
+    webTarget,
+    headlessWebBlock,
+    shellFallbackCommand,
+    allowTokens:
+      headlessWebBlock && shellFallbackCommand
+        ? [...shellBasesForAllowlist(shellFallbackCommand), ...webAllowTokens(isSearch, domain)]
+        : rejection.allowTokens,
+  };
 }
 
 function toolKindFromKey(key: string): ToolCallKind {
@@ -209,7 +278,7 @@ function buildRejectionFromBranch(
     const isSearch = kind === "webSearch" || toolKey === "webSearchToolCall";
     const target = webTargetFromArgs(args, rejected);
     const domain = target ? domainFromWebFetchUrl(target) : undefined;
-    return {
+    const base = {
       kind: isSearch ? "webSearch" : "webFetch",
       title: isSearch ? "Web search needs approval" : "Web fetch needs approval",
       detail:
@@ -217,11 +286,12 @@ function buildRejectionFromBranch(
         rejectedReasonDetail(
           rejected,
           isSearch
-            ? "Web search blocked by Cursor CLI allowlist"
-            : "Web fetch blocked by Cursor CLI allowlist",
+            ? "Web search blocked in Cursor headless CLI"
+            : "Web fetch blocked in Cursor headless CLI",
         ),
-      allowTokens: domain ? [`WebFetch(${domain})`] : ["WebFetch(*)"],
-    };
+      allowTokens: webAllowTokens(isSearch, domain),
+    } satisfies Omit<ToolCallRejection, "sessionId" | "callId">;
+    return attachWebRejectionFields(base, rejected, toolKey, target);
   }
 
   if (kind === "mcp") {
@@ -369,18 +439,24 @@ export function enrichToolCallRejection(
   }
   if (
     (rejection.kind === "webFetch" || rejection.kind === "webSearch") &&
-    rejection.allowTokens.length <= 1 &&
-    rejection.allowTokens[0] === "WebFetch(*)" &&
     pending.webFetchUrl
   ) {
     const domain = domainFromWebFetchUrl(pending.webFetchUrl);
-    if (domain) {
-      return {
+    const isSearch = rejection.kind === "webSearch";
+    const enriched = attachWebRejectionFields(
+      {
         ...rejection,
         detail: pending.webFetchUrl,
-        allowTokens: [`WebFetch(${domain})`],
-      };
-    }
+        allowTokens: webAllowTokens(isSearch, domain),
+      },
+      { reason: rejection.headlessWebBlock ? "User Rejected" : "" },
+      isSearch ? "webSearchToolCall" : "webFetchToolCall",
+      pending.webFetchUrl,
+    );
+    return {
+      ...enriched,
+      title: rejection.title || pending.title || rejection.title,
+    };
   }
   if (
     rejection.allowTokens.length === 0 &&
@@ -401,7 +477,30 @@ export function enrichToolCallRejection(
 }
 
 export function toolCallSupportsRunOnce(rejection: ToolCallRejection): boolean {
-  return rejection.kind === "shell" && Boolean(rejection.shell?.command);
+  return (
+    (rejection.kind === "shell" && Boolean(rejection.shell?.command)) ||
+    Boolean(rejection.shellFallbackCommand)
+  );
+}
+
+export function toolCallSupportsShellInstead(rejection: ToolCallRejection): boolean {
+  return Boolean(rejection.headlessWebBlock && !rejection.shellFallbackCommand);
+}
+
+export function runOnceLabelForRejection(rejection: ToolCallRejection): string {
+  if (rejection.shellFallbackCommand) {
+    return rejection.kind === "webSearch" ? "Fetch via shell" : "Fetch via shell";
+  }
+  return "Run";
+}
+
+export function continuationPromptAfterWebShellFallback(rejection: ToolCallRejection): string {
+  const label = rejection.kind === "webSearch" ? "web search" : "web fetch";
+  return (
+    `Colcoor: Cursor headless CLI blocked native ${label} (allowlist tokens do not re-enable it).\n` +
+    `${rejection.detail}\n\n` +
+    "Use shell curl (or similar) to retrieve the content, then continue the task."
+  );
 }
 
 export function continuationPromptAfterSkip(rejection: ToolCallRejection): string {
@@ -439,12 +538,15 @@ export function continuationPromptAfterRun(
   rejection: ToolCallRejection,
   exec: { exitCode: number | null; stdout: string; stderr: string },
 ): string {
-  const cmd = rejection.shell?.command ?? rejection.detail;
+  const cmd = rejection.shellFallbackCommand ?? rejection.shell?.command ?? rejection.detail;
+  const intro = rejection.shellFallbackCommand
+    ? "Colcoor: the user approved fetching this URL via shell:"
+    : "Colcoor: the user approved running this shell command:";
   const code = exec.exitCode == null ? "unknown" : String(exec.exitCode);
   const stdout = exec.stdout.trim() || "(empty)";
   const stderr = exec.stderr.trim() || "(empty)";
   return (
-    `Colcoor: the user approved running this shell command:\n` +
+    `${intro}\n` +
     `\`${cmd}\`\n\n` +
     `Exit code: ${code}\nStdout:\n\`\`\`\n${stdout}\n\`\`\`\nStderr:\n\`\`\`\n${stderr}\n\`\`\`\n\n` +
     "Continue the task using this output."

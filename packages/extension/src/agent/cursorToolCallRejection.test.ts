@@ -11,6 +11,7 @@ import {
   shellCommandBaseForAllowlist,
   shellCommandBasesForAllowlist,
   toolCallSupportsRunOnce,
+  toolCallSupportsShellInstead,
 } from "./cursorToolCallRejection";
 
 describe("parseToolCallRejection", () => {
@@ -147,8 +148,11 @@ describe("parseToolCallRejection", () => {
       kind: "webFetch",
       title: "Web fetch needs approval",
       detail: "User Rejected",
+      headlessWebBlock: true,
       allowTokens: ["WebFetch(*)"],
     });
+    expect(rejection?.shellFallbackCommand).toBeUndefined();
+    expect(toolCallSupportsShellInstead(rejection!)).toBe(true);
   });
 
   it("detects rejected webSearchToolCall from GPT 5.5 (completed-only, no query)", () => {
@@ -168,8 +172,31 @@ describe("parseToolCallRejection", () => {
       sessionId: "sess-gpt",
       callId: "call_abc fc_def",
       title: "Web search needs approval",
-      allowTokens: ["WebFetch(*)"],
+      headlessWebBlock: true,
+      allowTokens: ["WebFetch(*)", "WebSearch(*)"],
     });
+    expect(toolCallSupportsRunOnce(rejection!)).toBe(false);
+    expect(toolCallSupportsShellInstead(rejection!)).toBe(true);
+  });
+
+  it("offers curl shell fallback when headless web block includes a URL", () => {
+    const rejection = parseToolCallRejection({
+      type: "tool_call",
+      subtype: "completed",
+      tool_call: {
+        webFetchToolCall: {
+          args: { url: "https://cursor.com/docs/cli/reference/permissions" },
+          result: { rejected: { reason: "User Rejected" } },
+        },
+      },
+    });
+    expect(rejection).toMatchObject({
+      headlessWebBlock: true,
+      webTarget: "https://cursor.com/docs/cli/reference/permissions",
+      shellFallbackCommand: 'curl -sL "https://cursor.com/docs/cli/reference/permissions"',
+      allowTokens: ["Shell(curl)", "WebFetch(cursor.com)"],
+    });
+    expect(toolCallSupportsRunOnce(rejection!)).toBe(true);
   });
 
   it("normalizes GPT call_id newlines for pending lookup", () => {
