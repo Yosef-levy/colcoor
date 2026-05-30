@@ -3,13 +3,16 @@ import { spawn } from "node:child_process";
 import { processEnvForCursorCli } from "./agentPathEnv";
 import { createStreamJsonStdoutFeed, type CursorAgentDisplayPart } from "./cursorAgentStreamJson";
 import {
-  parseShellToolCallRejection,
-  type ShellToolCallRejection,
-} from "./cursorShellToolCall";
-import type { ShellRejectionResolution } from "./cursorShellCommandApproval";
+  enrichToolCallRejection,
+  parseToolCallRejection,
+  parseToolCallStarted,
+  type ToolCallPending,
+  type ToolCallRejection,
+} from "./cursorToolCallRejection";
+import type { ToolRejectionResolution } from "./cursorToolCallApproval";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
-const MAX_SHELL_RESUME_ATTEMPTS = 5;
+const MAX_TOOL_RESUME_ATTEMPTS = 5;
 
 /** Cursor `agent -p` stdout shape; see https://cursor.com/docs/cli/reference/output-format */
 export type AgentCliOutputMode = "stream-json-partial" | "stream-json" | "text";
@@ -73,7 +76,7 @@ export function buildAgentResumeArgs(
 
 type SpawnOnceResult = CursorCliSpawnResult & {
   sessionId?: string;
-  shellRejection?: ShellToolCallRejection;
+  toolRejection?: ToolCallRejection;
 };
 
 export type CursorCliSpawnResult = {
@@ -132,7 +135,7 @@ function spawnCursorAgentPrintOnce(params: {
   outputMode: AgentCliOutputMode;
   cliModel?: string;
   resumeSessionId?: string;
-  detectShellRejections: boolean;
+  detectToolRejections: boolean;
 }): Promise<SpawnOnceResult> {
   const cwd = params.workspaceRoot.trim() || process.cwd();
   const env = buildEnvForAgentSpawn(params.storedCursorApiKey);
@@ -153,7 +156,8 @@ function spawnCursorAgentPrintOnce(params: {
 
   return new Promise((resolve, reject) => {
     let sessionId = params.resumeSessionId?.trim() || undefined;
-    let shellRejection: ShellToolCallRejection | undefined;
+    let toolRejection: ToolCallRejection | undefined;
+    const pendingToolByCallId = new Map<string, ToolCallPending>();
     const child = spawn(params.executable, args, {
       cwd,
       env,
@@ -163,23 +167,33 @@ function spawnCursorAgentPrintOnce(params: {
 
     const jsonFeed = useJsonFeed
       ? createStreamJsonStdoutFeed({
-          onNdjsonObject: params.detectShellRejections
+          onNdjsonObject: params.detectToolRejections
             ? (o) => {
                 if (typeof o.session_id === "string" && o.session_id.trim()) {
                   sessionId = o.session_id.trim();
                 }
-                if (shellRejection) {
+                const started = parseToolCallStarted(o);
+                if (started) {
+                  pendingToolByCallId.set(started.callId, started);
+                }
+                if (toolRejection) {
                   return;
                 }
-                const rejection = parseShellToolCallRejection(o);
+                const rejection = parseToolCallRejection(o);
                 if (!rejection) {
                   return;
                 }
-                shellRejection = {
-                  ...rejection,
-                  sessionId: rejection.sessionId ?? sessionId,
+                const callId = typeof o.call_id === "string" ? o.call_id.trim() : "";
+                toolRejection = enrichToolCallRejection(
+                  rejection,
+                  callId ? pendingToolByCallId.get(callId) : undefined,
+                );
+                toolRejection = {
+                  ...toolRejection,
+                  sessionId: toolRejection.sessionId ?? sessionId,
+                  callId: toolRejection.callId ?? (callId || undefined),
                 };
-                killReason = "shell_rejected";
+                killReason = "tool_rejected";
                 child.kill("SIGTERM");
               }
             : undefined,
@@ -190,7 +204,7 @@ function spawnCursorAgentPrintOnce(params: {
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
-    let killReason: null | "timeout" | "user_abort" | "oversized" | "shell_rejected" = null;
+    let killReason: null | "timeout" | "user_abort" | "oversized" | "tool_rejected" = null;
 
     const onAbort = (): void => {
       if (settled) {
@@ -295,7 +309,7 @@ function spawnCursorAgentPrintOnce(params: {
           displayParts,
           cliSessionModel,
           sessionId,
-          shellRejection,
+          toolRejection,
         });
         return;
       }
@@ -307,7 +321,7 @@ function spawnCursorAgentPrintOnce(params: {
         );
         return;
       }
-      if (closeSignal && killReason !== "shell_rejected") {
+      if (closeSignal && killReason !== "tool_rejected") {
         fail(new Error(`Cursor agent terminated by signal ${closeSignal}.`));
         return;
       }
@@ -319,7 +333,7 @@ function spawnCursorAgentPrintOnce(params: {
         displayParts,
         cliSessionModel,
         sessionId,
-        shellRejection,
+        toolRejection,
       });
     });
   });
@@ -327,8 +341,8 @@ function spawnCursorAgentPrintOnce(params: {
 
 /**
  * Runs `agent -p` (Cursor headless CLI) with the given prompt; cwd and `--workspace` are set.
- * When stream-json reports a rejected shell command, optionally prompts the user (Run / Skip /
- * Add to allowlist), updates ~/.cursor/cli-config.json on allowlist, and resumes the CLI session.
+ * When stream-json reports a rejected tool call, optionally prompts the user (Run for shell /
+ * Skip / Add to allowlist), updates ~/.cursor/cli-config.json on allowlist, and resumes the CLI session.
  * @see https://cursor.com/docs/cli/headless
  */
 export async function spawnCursorAgentPrint(params: {
@@ -348,16 +362,23 @@ export async function spawnCursorAgentPrint(params: {
   outputMode?: AgentCliOutputMode;
   /** When set, passed as `--model` (omit for Cursor default / automatic). */
   cliModel?: string;
-  /** When true (default), detect shell rejections and invoke `resolveShellRejection`. */
+  /** When true (default), detect tool rejections and invoke `resolveToolRejection`. */
+  promptToolApproval?: boolean;
+  /** Resolve a rejected tool call (Run / Skip / Add to allowlist). */
+  resolveToolRejection?: (rejection: ToolCallRejection) => Promise<ToolRejectionResolution>;
+  /** @deprecated Use `promptToolApproval`. */
   promptShellApproval?: boolean;
-  /** Resolve a rejected shell command (Run / Skip / Add to allowlist). */
-  resolveShellRejection?: (rejection: ShellToolCallRejection) => Promise<ShellRejectionResolution>;
+  /** @deprecated Use `resolveToolRejection`. */
+  resolveShellRejection?: (rejection: ToolCallRejection) => Promise<ToolRejectionResolution>;
 }): Promise<CursorCliSpawnResult> {
   const outputMode = params.outputMode ?? "stream-json-partial";
-  const detectShellRejections =
-    params.promptShellApproval !== false &&
+  const promptToolApproval =
+    params.promptToolApproval ?? params.promptShellApproval ?? true;
+  const resolveToolRejection = params.resolveToolRejection ?? params.resolveShellRejection;
+  const detectToolRejections =
+    promptToolApproval !== false &&
     outputMode !== "text" &&
-    Boolean(params.resolveShellRejection);
+    Boolean(resolveToolRejection);
   let merged: CursorCliSpawnResult = {
     stdout: "",
     stderr: "",
@@ -380,30 +401,30 @@ export async function spawnCursorAgentPrint(params: {
       outputMode,
       cliModel: params.cliModel,
       resumeSessionId,
-      detectShellRejections,
+      detectToolRejections,
     });
     merged = mergeSpawnResults(merged, once);
 
     if (
-      !detectShellRejections ||
-      !once.shellRejection ||
+      !detectToolRejections ||
+      !once.toolRejection ||
       once.cancelled ||
       params.signal?.aborted
     ) {
       return merged;
     }
 
-    const resolution = await params.resolveShellRejection!(once.shellRejection);
+    const resolution = await resolveToolRejection!(once.toolRejection);
 
-    const nextSessionId = once.shellRejection.sessionId ?? once.sessionId;
+    const nextSessionId = once.toolRejection.sessionId ?? once.sessionId;
     if (!nextSessionId?.trim()) {
       return merged;
     }
 
     resumeAttempts += 1;
-    if (resumeAttempts > MAX_SHELL_RESUME_ATTEMPTS) {
+    if (resumeAttempts > MAX_TOOL_RESUME_ATTEMPTS) {
       throw new Error(
-        "Colcoor: too many shell approval resumes in one agent run. Adjust Cursor CLI allowlist or retry.",
+        "Colcoor: too many tool approval resumes in one agent run. Adjust Cursor CLI allowlist or retry.",
       );
     }
 

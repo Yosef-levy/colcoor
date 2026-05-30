@@ -1,4 +1,13 @@
-/** Parsed shell tool_call rejection from Cursor CLI stream-json. */
+/** @deprecated Import from `./cursorToolCallRejection` instead. */
+export {
+  continuationPromptAfterAllowlist,
+  continuationPromptAfterRun,
+  continuationPromptAfterSkip,
+  shellAllowToken,
+  shellCommandBaseForAllowlist,
+  shellCommandBasesForAllowlist,
+} from "./cursorToolCallRejection";
+
 export type ShellToolCallRejection = {
   command: string;
   workingDirectory?: string;
@@ -7,104 +16,84 @@ export type ShellToolCallRejection = {
   simpleCommands?: string[];
 };
 
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() ? v.trim() : undefined;
-}
+export type ShellToolCallPending = {
+  command?: string;
+  simpleCommands?: string[];
+};
 
-/** First token Cursor uses for CLI allowlist matching (e.g. `npm` from `npm run build`). */
-export function shellCommandBaseForAllowlist(
-  command: string,
-  simpleCommands?: string[],
-): string | undefined {
-  const fromSimple = simpleCommands?.map((s) => s.trim()).find(Boolean);
-  if (fromSimple) {
-    return fromSimple;
-  }
-  const trimmed = command.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  const first = trimmed.split(/\s+/)[0]?.replace(/^['"]|['"]$/g, "");
-  return first || undefined;
-}
+import {
+  enrichToolCallRejection,
+  parseToolCallRejection,
+  parseToolCallStarted,
+  shellCommandBasesForAllowlist,
+  type ToolCallPending,
+  type ToolCallRejection,
+} from "./cursorToolCallRejection";
 
-export function shellAllowToken(commandBase: string): string {
-  return `Shell(${commandBase})`;
-}
-
-/** Detect a completed shell tool_call that Cursor rejected (allowlist / policy). */
-export function parseShellToolCallRejection(o: Record<string, unknown>): ShellToolCallRejection | null {
-  if (o.type !== "tool_call" || o.subtype !== "completed") {
+function toShellRejection(rejection: ToolCallRejection): ShellToolCallRejection | null {
+  if (rejection.kind !== "shell" || !rejection.shell?.command) {
     return null;
   }
-  const toolCall = o.tool_call;
-  if (!toolCall || typeof toolCall !== "object") {
-    return null;
-  }
-  const shell = (toolCall as { shellToolCall?: unknown }).shellToolCall;
-  if (!shell || typeof shell !== "object") {
-    return null;
-  }
-  const shellObj = shell as {
-    args?: Record<string, unknown>;
-    result?: Record<string, unknown>;
-    description?: unknown;
-  };
-  const result = shellObj.result;
-  if (!result || typeof result !== "object" || !("rejected" in result)) {
-    return null;
-  }
-  const rejected =
-    result.rejected && typeof result.rejected === "object"
-      ? (result.rejected as Record<string, unknown>)
-      : {};
-  const args = shellObj.args ?? {};
-  const command = str(args.command) ?? str(rejected.command);
-  if (!command) {
-    return null;
-  }
-  const simpleCommands = Array.isArray(args.simpleCommands)
-    ? args.simpleCommands.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
-    : undefined;
-  const workingDirectory = str(args.workingDirectory) ?? str(rejected.workingDirectory);
   return {
-    command,
-    workingDirectory: workingDirectory || undefined,
-    description: str(args.description) ?? str(shellObj.description),
-    sessionId: str(o.session_id),
-    simpleCommands,
+    command: rejection.shell.command,
+    workingDirectory: rejection.shell.workingDirectory,
+    description: rejection.shell.description,
+    sessionId: rejection.sessionId,
+    simpleCommands: rejection.shell.simpleCommands,
   };
 }
 
-export function continuationPromptAfterSkip(rejection: ShellToolCallRejection): string {
-  const desc = rejection.description ? ` (${rejection.description})` : "";
-  return (
-    `Colcoor: the user declined to run this shell command${desc}:\n` +
-    `\`${rejection.command}\`\n\n` +
-    "Do not retry that command unless the user asks. Continue the task without it."
-  );
+/** @deprecated Use {@link parseToolCallRejection}. */
+export function parseShellToolCallRejection(o: Record<string, unknown>): ShellToolCallRejection | null {
+  const rejection = parseToolCallRejection(o);
+  return rejection ? toShellRejection(rejection) : null;
 }
 
-export function continuationPromptAfterAllowlist(rejection: ShellToolCallRejection): string {
-  const desc = rejection.description ? ` (${rejection.description})` : "";
-  return (
-    `Colcoor: the user added \`${rejection.command}\`${desc} to the Cursor CLI shell allowlist. ` +
-    "Retry that shell command now and continue the task."
-  );
+/** @deprecated Use {@link parseToolCallStarted}. */
+export function parseShellToolCallStarted(
+  o: Record<string, unknown>,
+): (ShellToolCallPending & { callId: string }) | null {
+  const started = parseToolCallStarted(o);
+  if (!started || started.kind !== "shell") {
+    return null;
+  }
+  return {
+    callId: started.callId,
+    command: started.shell?.command,
+    simpleCommands: started.shell?.simpleCommands,
+  };
 }
 
-export function continuationPromptAfterRun(
+/** @deprecated Use {@link enrichToolCallRejection}. */
+export function enrichShellToolCallRejection(
   rejection: ShellToolCallRejection,
-  exec: { exitCode: number | null; stdout: string; stderr: string },
-): string {
-  const desc = rejection.description ? ` (${rejection.description})` : "";
-  const code = exec.exitCode == null ? "unknown" : String(exec.exitCode);
-  const stdout = exec.stdout.trim() || "(empty)";
-  const stderr = exec.stderr.trim() || "(empty)";
-  return (
-    `Colcoor: the user approved running this shell command${desc}:\n` +
-    `\`${rejection.command}\`\n\n` +
-    `Exit code: ${code}\nStdout:\n\`\`\`\n${stdout}\n\`\`\`\nStderr:\n\`\`\`\n${stderr}\n\`\`\`\n\n` +
-    "Continue the task using this output."
+  pending?: ShellToolCallPending | null,
+): ShellToolCallRejection {
+  const enriched = enrichToolCallRejection(
+    {
+      kind: "shell",
+      title: rejection.description ?? "Shell command needs approval",
+      detail: rejection.command,
+      allowTokens: shellCommandBasesForAllowlist(rejection.command, rejection.simpleCommands).map(
+        (b) => `Shell(${b})`,
+      ),
+      sessionId: rejection.sessionId,
+      shell: {
+        command: rejection.command,
+        workingDirectory: rejection.workingDirectory,
+        description: rejection.description,
+        simpleCommands: rejection.simpleCommands,
+      },
+    },
+    pending
+      ? {
+          kind: "shell",
+          shell: {
+            command: pending.command ?? "",
+            simpleCommands: pending.simpleCommands,
+          },
+        }
+      : undefined,
   );
+  return toShellRejection(enriched)!;
 }

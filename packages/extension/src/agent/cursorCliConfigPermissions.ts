@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { shellAllowToken } from "./cursorShellToolCall";
+import { shellAllowToken } from "./cursorToolCallRejection";
 
 type CliConfigPermissions = {
   allow?: string[];
@@ -34,21 +34,20 @@ export async function readCliConfigFile(): Promise<CliConfigFile> {
   return { permissions: { allow: [], deny: [] } };
 }
 
-/** Append `Shell(commandBase)` to ~/.cursor/cli-config.json allow list if missing. Returns whether it was added. */
-export async function appendCliShellAllow(commandBase: string): Promise<boolean> {
-  const base = commandBase.trim();
-  if (!base) {
+/** Append a permission token to ~/.cursor/cli-config.json allow list if missing. Returns whether it was added. */
+export async function appendCliPermissionToken(token: string): Promise<boolean> {
+  const trimmed = token.trim();
+  if (!trimmed) {
     return false;
   }
-  const token = shellAllowToken(base);
   const filePath = cursorCliConfigPath();
   const config = await readCliConfigFile();
   const permissions = config.permissions ?? { allow: [], deny: [] };
   const allow = Array.isArray(permissions.allow) ? [...permissions.allow] : [];
-  if (allow.includes(token)) {
+  if (allow.includes(trimmed)) {
     return false;
   }
-  allow.push(token);
+  allow.push(trimmed);
   const next: CliConfigFile = {
     ...config,
     permissions: {
@@ -60,4 +59,35 @@ export async function appendCliShellAllow(commandBase: string): Promise<boolean>
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
   return true;
+}
+
+/** Append each token to the CLI allow list; returns tokens newly added. */
+export async function appendCliPermissionTokens(tokens: string[]): Promise<string[]> {
+  const added: string[] = [];
+  for (const token of tokens) {
+    if (await appendCliPermissionToken(token)) {
+      added.push(token);
+    }
+  }
+  return added;
+}
+
+/** Append `Shell(commandBase)` to ~/.cursor/cli-config.json allow list if missing. Returns whether it was added. */
+export async function appendCliShellAllow(commandBase: string): Promise<boolean> {
+  const base = commandBase.trim();
+  if (!base) {
+    return false;
+  }
+  return appendCliPermissionToken(shellAllowToken(base));
+}
+
+/** Append each base to the CLI allow list; returns bases newly added. */
+export async function appendCliShellAllows(commandBases: string[]): Promise<string[]> {
+  const added: string[] = [];
+  for (const base of commandBases) {
+    if (await appendCliShellAllow(base)) {
+      added.push(base);
+    }
+  }
+  return added;
 }

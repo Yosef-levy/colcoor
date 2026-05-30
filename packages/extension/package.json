@@ -392,7 +392,7 @@
         "colcoor.agentPromptShellApproval": {
           "type": "boolean",
           "default": true,
-          "description": "When the Cursor CLI rejects a shell command (allowlist / policy), show a Colcoor prompt with Run, Skip, or Add to allowlist. Add to allowlist updates your ~/.cursor/cli-config.json for future runs; Run executes once and resumes the agent with the output; Skip resumes without running the command."
+          "description": "When the Cursor CLI rejects a tool call (shell, read, write, web fetch, MCP, etc.), show a Colcoor prompt with Skip or Add to allowlist. Shell commands also offer Run once locally. Add to allowlist updates your ~/.cursor/cli-config.json for future runs; Run executes a rejected shell command once and resumes the agent with the output; Skip resumes without running the tool."
         },
         "colcoor.includeWorkspaceHintsInAgentPrompt": {
           "type": "boolean",
