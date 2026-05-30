@@ -8,6 +8,7 @@ import {
   continuationPromptAfterRun,
   continuationPromptAfterSkip,
   continuationPromptAfterWebShellFallback,
+  enrichRejectionWithUserRequest,
   runOnceLabelForRejection,
   toolCallSupportsRunOnce,
   toolCallSupportsShellInstead,
@@ -47,7 +48,15 @@ export async function promptToolCallApproval(
   choices.push(SKIP_LABEL);
 
   const detail = rejection.headlessWebBlock
-    ? `${rejection.detail}\n\nNative web tools are blocked in Cursor headless CLI; allowlist tokens do not re-enable them. Use shell curl instead.`
+    ? [
+        rejection.userRequest ? `User asked: ${rejection.userRequest}` : rejection.detail,
+        rejection.shellFallbackCommand
+          ? `Suggested: ${rejection.shellFallbackCommand}`
+          : undefined,
+        "Native web tools are blocked in Cursor headless CLI; allowlist tokens do not re-enable them.",
+      ]
+        .filter(Boolean)
+        .join("\n\n")
     : rejection.detail;
 
   const choice = await vscode.window.showInformationMessage(
@@ -126,34 +135,36 @@ export async function executeShellCommandOnce(params: {
 export async function resolveToolCallRejection(
   rejection: ToolCallRejection,
   timeoutMs: number,
+  userMessage?: string,
 ): Promise<ToolRejectionResolution> {
-  const decision = await promptToolCallApproval(rejection);
+  const enriched = enrichRejectionWithUserRequest(rejection, userMessage);
+  const decision = await promptToolCallApproval(enriched);
   if (decision === "skip") {
-    return { kind: "resume", continuationPrompt: continuationPromptAfterSkip(rejection) };
+    return { kind: "resume", continuationPrompt: continuationPromptAfterSkip(enriched) };
   }
   if (decision === "useShell") {
-    return { kind: "resume", continuationPrompt: continuationPromptAfterWebShellFallback(rejection) };
+    return { kind: "resume", continuationPrompt: continuationPromptAfterWebShellFallback(enriched) };
   }
   if (decision === "allowlist") {
-    if (rejection.allowTokens.length === 0) {
+    if (enriched.allowTokens.length === 0) {
       throw new Error(
         "Colcoor: cannot add this tool to the Cursor CLI allowlist automatically. Edit ~/.cursor/cli-config.json manually.",
       );
     }
-    await appendCliPermissionTokens(rejection.allowTokens);
-    return { kind: "resume", continuationPrompt: continuationPromptAfterAllowlist(rejection) };
+    await appendCliPermissionTokens(enriched.allowTokens);
+    return { kind: "resume", continuationPrompt: continuationPromptAfterAllowlist(enriched) };
   }
-  const command = rejection.shellFallbackCommand ?? rejection.shell?.command;
+  const command = enriched.shellFallbackCommand ?? enriched.shell?.command;
   if (!command) {
-    return { kind: "resume", continuationPrompt: continuationPromptAfterSkip(rejection) };
+    return { kind: "resume", continuationPrompt: continuationPromptAfterSkip(enriched) };
   }
-  if (rejection.shellFallbackCommand) {
+  if (enriched.shellFallbackCommand) {
     await appendCliPermissionTokens(["Shell(curl)"]);
   }
   const exec = await executeShellCommandOnce({
     command,
-    workingDirectory: rejection.shell?.workingDirectory,
+    workingDirectory: enriched.shell?.workingDirectory,
     timeoutMs,
   });
-  return { kind: "resume", continuationPrompt: continuationPromptAfterRun(rejection, exec) };
+  return { kind: "resume", continuationPrompt: continuationPromptAfterRun(enriched, exec) };
 }

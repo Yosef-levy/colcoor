@@ -95,7 +95,7 @@ export class AgentRunner {
         cliModel: input.cliModel?.trim() || undefined,
         promptToolApproval,
         resolveToolRejection: promptToolApproval
-          ? (rejection) => resolveToolCallRejection(rejection, timeoutMs)
+          ? (rejection) => resolveToolCallRejection(rejection, timeoutMs, input.userMessage)
           : undefined,
       });
       const cliModelId = input.cliModel?.trim() || cliSessionModel?.trim() || undefined;

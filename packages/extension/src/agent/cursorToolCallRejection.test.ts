@@ -5,11 +5,14 @@ import {
   continuationPromptAfterSkip,
   domainFromWebFetchUrl,
   enrichToolCallRejection,
+  enrichRejectionWithUserRequest,
+  extractWeatherLocation,
   parseToolCallRejection,
   parseToolCallStarted,
   shellAllowToken,
   shellCommandBaseForAllowlist,
   shellCommandBasesForAllowlist,
+  suggestShellCommandForLiveWebQuery,
   toolCallSupportsRunOnce,
   toolCallSupportsShellInstead,
 } from "./cursorToolCallRejection";
@@ -368,6 +371,35 @@ describe("shellCommandBaseForAllowlist", () => {
 describe("shellAllowToken", () => {
   it("formats Cursor CLI permission token", () => {
     expect(shellAllowToken("npm")).toBe("Shell(npm)");
+  });
+});
+
+describe("suggestShellCommandForLiveWebQuery", () => {
+  it("builds wttr.in curl for weather questions", () => {
+    expect(extractWeatherLocation("what is the weather in Haifa, Israel?")).toBe("Haifa, Israel");
+    expect(suggestShellCommandForLiveWebQuery("what is the weather in Haifa, Israel?")).toBe(
+      'curl -sL "wttr.in/Haifa,+Israel?format=3"',
+    );
+  });
+
+  it("enriches headless web search rejection with user weather request", () => {
+    const rejection = parseToolCallRejection({
+      type: "tool_call",
+      subtype: "completed",
+      tool_call: {
+        webSearchToolCall: {
+          result: { rejected: { reason: "User Rejected" } },
+        },
+      },
+    })!;
+    const enriched = enrichRejectionWithUserRequest(
+      rejection,
+      "what is the weather in Haifa, Israel?",
+    );
+    expect(enriched.userRequest).toBe("what is the weather in Haifa, Israel?");
+    expect(enriched.shellFallbackCommand).toBe('curl -sL "wttr.in/Haifa,+Israel?format=3"');
+    expect(toolCallSupportsRunOnce(enriched)).toBe(true);
+    expect(toolCallSupportsShellInstead(enriched)).toBe(false);
   });
 });
 

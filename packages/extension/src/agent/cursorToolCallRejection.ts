@@ -24,6 +24,8 @@ export type ToolCallRejection = {
   headlessWebBlock?: boolean;
   /** When set, Run / Fetch via shell executes this locally (typically curl). */
   shellFallbackCommand?: string;
+  /** Latest user message for this turn (resume prompts). */
+  userRequest?: string;
   /** Shell-only: run locally on "Run". */
   shell?: {
     command: string;
@@ -109,6 +111,62 @@ export function isHeadlessWebToolBlock(
 
 export function curlCommandForWebTarget(url: string): string {
   return `curl -sL ${JSON.stringify(url.trim())}`;
+}
+
+/** Extract location from a weather question (e.g. "Haifa, Israel"). */
+export function extractWeatherLocation(userMessage: string): string | undefined {
+  const q = userMessage.trim();
+  const inMatch = q.match(/\bweather\b[^?\n]*?\b(?:in|for|at)\s+(.+?)[?.!]?\s*$/i);
+  if (inMatch?.[1]?.trim()) {
+    return inMatch[1].trim();
+  }
+  if (/\bweather\b/i.test(q)) {
+    return undefined;
+  }
+  return undefined;
+}
+
+/** Build a shell curl command for common live-web questions when native web tools are blocked. */
+export function suggestShellCommandForLiveWebQuery(userMessage: string): string | undefined {
+  const q = userMessage.trim();
+  if (!q) {
+    return undefined;
+  }
+  if (/\bweather\b/i.test(q)) {
+    const location = extractWeatherLocation(q);
+    if (location) {
+      const loc = location.replace(/\s+/g, "+");
+      return curlCommandForWebTarget(`wttr.in/${loc}?format=3`);
+    }
+  }
+  return undefined;
+}
+
+/** Attach user intent and a concrete curl fallback for headless web blocks. */
+export function enrichRejectionWithUserRequest(
+  rejection: ToolCallRejection,
+  userMessage?: string,
+): ToolCallRejection {
+  const userRequest = userMessage?.trim() || undefined;
+  if (!userRequest) {
+    return rejection;
+  }
+  if (!rejection.headlessWebBlock) {
+    return { ...rejection, userRequest };
+  }
+  if (rejection.shellFallbackCommand) {
+    return { ...rejection, userRequest };
+  }
+  if (rejection.kind !== "webFetch" && rejection.kind !== "webSearch") {
+    return { ...rejection, userRequest };
+  }
+  const shellFallbackCommand = suggestShellCommandForLiveWebQuery(userRequest);
+  if (!shellFallbackCommand) {
+    return { ...rejection, userRequest };
+  }
+  const shellTokens = shellBasesForAllowlist(shellFallbackCommand);
+  const allowTokens = [...new Set([...shellTokens, ...rejection.allowTokens])];
+  return { ...rejection, userRequest, shellFallbackCommand, allowTokens };
 }
 
 function webAllowTokens(isSearch: boolean, domain?: string): string[] {
@@ -496,10 +554,18 @@ export function runOnceLabelForRejection(rejection: ToolCallRejection): string {
 
 export function continuationPromptAfterWebShellFallback(rejection: ToolCallRejection): string {
   const label = rejection.kind === "webSearch" ? "web search" : "web fetch";
+  const userLine = rejection.userRequest
+    ? `Latest user message:\n${rejection.userRequest}\n\n`
+    : "";
+  const curlHint = rejection.shellFallbackCommand
+    ? `Run this shell command now if you have not already:\n\`${rejection.shellFallbackCommand}\`\n\n`
+    : "Use shell curl (or similar) to fetch the live web content needed for the latest user message.\n\n";
   return (
-    `Colcoor: Cursor headless CLI blocked native ${label} (allowlist tokens do not re-enable it).\n` +
+    `Colcoor: Cursor headless CLI blocked native ${label}.\n` +
     `${rejection.detail}\n\n` +
-    "Use shell curl (or similar) to retrieve the content, then continue the task."
+    userLine +
+    curlHint +
+    "Use the shell output to answer the latest user message. The conversation transcript and workspace remain your context — use them when they help."
   );
 }
 
