@@ -4,6 +4,7 @@ import { processEnvForCursorCli } from "./agentPathEnv";
 import { createStreamJsonStdoutFeed, type CursorAgentDisplayPart } from "./cursorAgentStreamJson";
 import {
   enrichToolCallRejection,
+  normalizeToolCallId,
   parseToolCallRejection,
   parseToolCallStarted,
   type ToolCallPending,
@@ -183,7 +184,7 @@ function spawnCursorAgentPrintOnce(params: {
                 if (!rejection) {
                   return;
                 }
-                const callId = typeof o.call_id === "string" ? o.call_id.trim() : "";
+                const callId = normalizeToolCallId(o.call_id) ?? "";
                 toolRejection = enrichToolCallRejection(
                   rejection,
                   callId ? pendingToolByCallId.get(callId) : undefined,

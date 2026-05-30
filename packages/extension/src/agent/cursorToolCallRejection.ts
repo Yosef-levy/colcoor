@@ -3,7 +3,7 @@
  * @see https://cursor.com/docs/cli/reference/permissions
  */
 
-export type ToolCallKind = "shell" | "read" | "write" | "webFetch" | "mcp" | "unknown";
+export type ToolCallKind = "shell" | "read" | "write" | "webFetch" | "webSearch" | "mcp" | "unknown";
 
 export type ToolCallRejection = {
   kind: ToolCallKind;
@@ -44,12 +44,41 @@ const TOOL_KEY_TO_KIND: Record<string, ToolCallKind> = {
   writeToolCall: "write",
   webFetchToolCall: "webFetch",
   fetchToolCall: "webFetch",
-  webSearchToolCall: "webFetch",
+  webSearchToolCall: "webSearch",
   mcpToolCall: "mcp",
 };
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+/** GPT models embed newlines in call_id; normalize for pending lookup. */
+export function normalizeToolCallId(raw: unknown): string | undefined {
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const collapsed = raw.trim().replace(/\s+/g, " ");
+  return collapsed || undefined;
+}
+
+function rejectedReasonDetail(rejected: Record<string, unknown>, fallback: string): string {
+  return str(rejected.reason) ?? fallback;
+}
+
+function webTargetFromArgs(
+  args: Record<string, unknown>,
+  rejected: Record<string, unknown>,
+): string | undefined {
+  return (
+    str(args.url) ??
+    str(args.uri) ??
+    str(rejected.url) ??
+    str(rejected.uri) ??
+    str(args.query) ??
+    str(args.searchTerm) ??
+    str(rejected.query) ??
+    str(rejected.searchTerm)
+  );
 }
 
 function toolKindFromKey(key: string): ToolCallKind {
@@ -115,9 +144,10 @@ export function domainFromWebFetchUrl(url: string): string | undefined {
 
 function buildRejectionFromBranch(
   kind: ToolCallKind,
+  toolKey: string,
   branch: Record<string, unknown>,
   rejected: Record<string, unknown>,
-): Omit<ToolCallRejection, "sessionId" | "callId"> | null {
+): Omit<ToolCallRejection, "sessionId" | "callId"> {
   const args = (branch.args && typeof branch.args === "object" ? branch.args : {}) as Record<
     string,
     unknown
@@ -126,7 +156,12 @@ function buildRejectionFromBranch(
   if (kind === "shell") {
     const command = str(args.command) ?? str(rejected.command);
     if (!command) {
-      return null;
+      return {
+        kind: "unknown",
+        title: "Shell command needs approval",
+        detail: rejectedReasonDetail(rejected, "Shell command blocked by Cursor CLI allowlist"),
+        allowTokens: [],
+      };
     }
     const simpleCommands = Array.isArray(args.simpleCommands)
       ? args.simpleCommands.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
@@ -152,47 +187,40 @@ function buildRejectionFromBranch(
 
   if (kind === "read") {
     const path = str(args.path) ?? str(rejected.path);
-    if (!path) {
-      return null;
-    }
     return {
       kind,
       title: "Read file needs approval",
-      detail: path,
-      allowTokens: [`Read(${path})`],
+      detail: path ?? rejectedReasonDetail(rejected, "File read blocked by Cursor CLI allowlist"),
+      allowTokens: path ? [`Read(${path})`] : ["Read(**)"],
     };
   }
 
   if (kind === "write") {
     const path = str(args.path) ?? str(rejected.path);
-    if (!path) {
-      return null;
-    }
     return {
       kind,
       title: "Write file needs approval",
-      detail: path,
-      allowTokens: [`Write(${path})`],
+      detail: path ?? rejectedReasonDetail(rejected, "File write blocked by Cursor CLI allowlist"),
+      allowTokens: path ? [`Write(${path})`] : ["Write(**)"],
     };
   }
 
-  if (kind === "webFetch") {
-    const url =
-      str(args.url) ??
-      str(args.uri) ??
-      str(rejected.url) ??
-      str(rejected.uri) ??
-      str(args.query);
-    if (!url) {
-      return null;
-    }
-    const domain = domainFromWebFetchUrl(url);
-    const tokens = domain ? [`WebFetch(${domain})`] : [];
+  if (kind === "webFetch" || kind === "webSearch") {
+    const isSearch = kind === "webSearch" || toolKey === "webSearchToolCall";
+    const target = webTargetFromArgs(args, rejected);
+    const domain = target ? domainFromWebFetchUrl(target) : undefined;
     return {
-      kind,
-      title: "Web fetch needs approval",
-      detail: url,
-      allowTokens: tokens,
+      kind: isSearch ? "webSearch" : "webFetch",
+      title: isSearch ? "Web search needs approval" : "Web fetch needs approval",
+      detail:
+        target ??
+        rejectedReasonDetail(
+          rejected,
+          isSearch
+            ? "Web search blocked by Cursor CLI allowlist"
+            : "Web fetch blocked by Cursor CLI allowlist",
+        ),
+      allowTokens: domain ? [`WebFetch(${domain})`] : ["WebFetch(*)"],
     };
   }
 
@@ -200,11 +228,11 @@ function buildRejectionFromBranch(
     const server = str(args.server) ?? str(rejected.server) ?? str(args.mcpServer);
     const tool =
       str(args.tool) ?? str(rejected.tool) ?? str(args.toolName) ?? str(args.name);
-    if (!server && !tool) {
-      return null;
-    }
     const token = `Mcp(${server ?? "*"}:${tool ?? "*"})`;
-    const detail = server && tool ? `${server}:${tool}` : server ?? tool ?? token;
+    const detail =
+      server && tool
+        ? `${server}:${tool}`
+        : server ?? tool ?? rejectedReasonDetail(rejected, "MCP tool blocked by Cursor CLI allowlist");
     return {
       kind,
       title: "MCP tool needs approval",
@@ -213,7 +241,7 @@ function buildRejectionFromBranch(
     };
   }
 
-  const fallback = JSON.stringify({ ...args, ...rejected }, null, 2);
+  const fallback = JSON.stringify({ toolKey, ...args, ...rejected }, null, 2);
   return {
     kind: "unknown",
     title: "Tool call needs approval",
@@ -224,6 +252,7 @@ function buildRejectionFromBranch(
 
 function buildPendingFromBranch(
   kind: ToolCallKind,
+  toolKey: string,
   branch: Record<string, unknown>,
 ): ToolCallPending {
   const args = (branch.args && typeof branch.args === "object" ? branch.args : {}) as Record<
@@ -231,21 +260,19 @@ function buildPendingFromBranch(
     unknown
   >;
   const pending: ToolCallPending = { kind };
-  const built = buildRejectionFromBranch(kind, branch, {});
-  if (built) {
-    pending.title = built.title;
-    pending.detail = built.detail;
-    pending.allowTokens = built.allowTokens;
-    pending.shell = built.shell;
-  }
+  const built = buildRejectionFromBranch(kind, toolKey, branch, {});
+  pending.title = built.title;
+  pending.detail = built.detail;
+  pending.allowTokens = built.allowTokens;
+  pending.shell = built.shell;
   if (kind === "read") {
     pending.readPath = str(args.path);
   }
   if (kind === "write") {
     pending.writePath = str(args.path);
   }
-  if (kind === "webFetch") {
-    pending.webFetchUrl = str(args.url) ?? str(args.uri);
+  if (kind === "webFetch" || kind === "webSearch") {
+    pending.webFetchUrl = webTargetFromArgs(args, {});
   }
   if (kind === "mcp") {
     pending.mcpServer = str(args.server) ?? str(args.mcpServer);
@@ -283,14 +310,11 @@ export function parseToolCallRejection(o: Record<string, unknown>): ToolCallReje
     return null;
   }
   const rejected = rejectedRecord(result as Record<string, unknown>);
-  const built = buildRejectionFromBranch(branchInfo.kind, branchInfo.branch, rejected);
-  if (!built) {
-    return null;
-  }
+  const built = buildRejectionFromBranch(branchInfo.kind, branchInfo.key, branchInfo.branch, rejected);
   return {
     ...built,
     sessionId: str(o.session_id),
-    callId: str(o.call_id),
+    callId: normalizeToolCallId(o.call_id),
   };
 }
 
@@ -301,7 +325,7 @@ export function parseToolCallStarted(
   if (o.type !== "tool_call" || o.subtype !== "started") {
     return null;
   }
-  const callId = str(o.call_id);
+  const callId = normalizeToolCallId(o.call_id);
   if (!callId) {
     return null;
   }
@@ -313,7 +337,7 @@ export function parseToolCallStarted(
   if (!branchInfo) {
     return null;
   }
-  return { callId, ...buildPendingFromBranch(branchInfo.kind, branchInfo.branch) };
+  return { callId, ...buildPendingFromBranch(branchInfo.kind, branchInfo.key, branchInfo.branch) };
 }
 
 /** Completed rejections often omit args; merge started metadata when available. */
@@ -321,7 +345,7 @@ export function enrichToolCallRejection(
   rejection: ToolCallRejection,
   pending?: ToolCallPending | null,
 ): ToolCallRejection {
-  if (!pending || pending.kind !== rejection.kind) {
+  if (!pending || (pending.kind !== rejection.kind && !(pending.kind === "webFetch" && rejection.kind === "webSearch"))) {
     return rejection;
   }
   if (rejection.kind === "shell" && rejection.shell) {
@@ -342,6 +366,21 @@ export function enrichToolCallRejection(
       allowTokens: shellBasesForAllowlist(shell.command, shell.simpleCommands),
       shell,
     };
+  }
+  if (
+    (rejection.kind === "webFetch" || rejection.kind === "webSearch") &&
+    rejection.allowTokens.length <= 1 &&
+    rejection.allowTokens[0] === "WebFetch(*)" &&
+    pending.webFetchUrl
+  ) {
+    const domain = domainFromWebFetchUrl(pending.webFetchUrl);
+    if (domain) {
+      return {
+        ...rejection,
+        detail: pending.webFetchUrl,
+        allowTokens: [`WebFetch(${domain})`],
+      };
+    }
   }
   if (
     rejection.allowTokens.length === 0 &&
@@ -375,7 +414,9 @@ export function continuationPromptAfterSkip(rejection: ToolCallRejection): strin
           ? "file write"
           : rejection.kind === "webFetch"
             ? "web fetch"
-            : rejection.kind === "mcp"
+            : rejection.kind === "webSearch"
+              ? "web search"
+              : rejection.kind === "mcp"
               ? "MCP tool call"
               : "tool call";
   return (

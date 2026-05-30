@@ -133,6 +133,72 @@ describe("parseToolCallRejection", () => {
     });
   });
 
+  it("detects rejected webFetchToolCall with minimal GPT-style payload", () => {
+    const rejection = parseToolCallRejection({
+      type: "tool_call",
+      subtype: "completed",
+      tool_call: {
+        webFetchToolCall: {
+          result: { rejected: { reason: "User Rejected" } },
+        },
+      },
+    });
+    expect(rejection).toMatchObject({
+      kind: "webFetch",
+      title: "Web fetch needs approval",
+      detail: "User Rejected",
+      allowTokens: ["WebFetch(*)"],
+    });
+  });
+
+  it("detects rejected webSearchToolCall from GPT 5.5 (completed-only, no query)", () => {
+    const rejection = parseToolCallRejection({
+      type: "tool_call",
+      subtype: "completed",
+      session_id: "sess-gpt",
+      call_id: "call_abc\nfc_def",
+      tool_call: {
+        webSearchToolCall: {
+          result: { rejected: { reason: "User Rejected" } },
+        },
+      },
+    });
+    expect(rejection).toMatchObject({
+      kind: "webSearch",
+      sessionId: "sess-gpt",
+      callId: "call_abc fc_def",
+      title: "Web search needs approval",
+      allowTokens: ["WebFetch(*)"],
+    });
+  });
+
+  it("normalizes GPT call_id newlines for pending lookup", () => {
+    const callId = "call_abc\nfc_def";
+    const started = parseToolCallStarted({
+      type: "tool_call",
+      subtype: "started",
+      call_id: callId,
+      tool_call: {
+        shellToolCall: {
+          args: { command: "python3 --version", simpleCommands: ["python3"] },
+        },
+      },
+    });
+    const rejection = parseToolCallRejection({
+      type: "tool_call",
+      subtype: "completed",
+      call_id: callId,
+      tool_call: {
+        shellToolCall: {
+          result: { rejected: { command: "python3 --version" } },
+        },
+      },
+    });
+    expect(
+      enrichToolCallRejection(rejection!, started).allowTokens,
+    ).toEqual(["Shell(python3)"]);
+  });
+
   it("detects rejected mcpToolCall", () => {
     const rejection = parseToolCallRejection({
       type: "tool_call",
