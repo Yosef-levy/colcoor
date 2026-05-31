@@ -97,7 +97,7 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("assistant-waiting");
     expect(html).toContain("Preparing reply");
-    expect(html).toContain("} else if (state.busy) {");
+    expect(html).toContain("} else if (selectedRunActive) {");
   });
 
   it("threads user rows with a left accent and assistant rows with a right accent", () => {
@@ -390,16 +390,26 @@ describe("getConversationWebviewHtml", () => {
 
   it("shows clearer busy/send/stop messaging while a reply is in progress", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('sendBtn.textContent = state.busy && !wf ? "Sending…" : "Send"');
+    expect(html).toContain('sendBtn.textContent = selectedRunActive && !wf ? "Sending…" : "Send"');
     expect(html).toContain('sendBtn.title = "Your message is being sent…"');
-    expect(html).toContain('stopBtn.title = state.busy ? "Cancel the in-progress assistant reply." : ""');
-    expect(html).toContain("Assistant is replying… You can queue a follow-up or start a branch (see Private draft below).");
-    expect(html).toContain("Sending… Press Stop to cancel.");
+    expect(html).toContain('stopBtn.title = selectedRunActive ? "Cancel the answer to the selected message." : ""');
+    expect(html).toContain("Assistant is replying to the selected message… You can queue a follow-up or start a branch.");
+    expect(html).toContain("Sending… Press Stop to cancel this answer.");
+  });
+
+  it("scopes busy composer controls and streams to the selected active run", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("selectedRun: null");
+    expect(html).toContain("selectedRunStreamingHtml");
+    expect(html).toContain("var selectedRunActive = !!state.selectedRun");
+    expect(html).toContain("currentRunId && incomingRunId && currentRunId !== incomingRunId");
+    expect(html).toContain("sendBtn.disabled = true");
+    expect(html).toContain("selectedRunActive &&");
   });
 
   it("Stop posts cancel to the extension host (same signal as Colcoor: Stop assistant generation)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
-    expect(html).toContain('vscode.postMessage({ type: "cancel" })');
+    expect(html).toContain('vscode.postMessage(runId ? { type: "cancel", runId: runId } : { type: "cancel" });');
   });
 
   it("includes per-conversation Cursor CLI model selector near Send", () => {
@@ -473,7 +483,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="btnReferenceSideChat"');
     expect(html).toMatch(/id="menuPanelMessage"[\s\S]*?id="btnReferenceSideChat"/);
     expect(html).not.toMatch(/id="menuPanelView"[\s\S]*?id="btnReferenceSideChat"/);
-    expect(html).toContain('refSideChatBtn.disabled = state.busy;');
+    expect(html).toContain("refSideChatBtn.disabled = false;");
     expect(html).toContain('vscode.postMessage({ type: "referenceInSideChat" });');
   });
 
@@ -487,7 +497,7 @@ describe("getConversationWebviewHtml", () => {
   it("includes Reference note in side chat detail action wiring", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnReferenceNoteSideChat"');
-    expect(html).toContain('refNoteSideChatBtn.disabled = state.busy;');
+    expect(html).toContain("refNoteSideChatBtn.disabled = false;");
     expect(html).toContain('vscode.postMessage({ type: "referenceNoteInSideChat" });');
   });
 
@@ -501,9 +511,9 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('id="btnStarredTodoDrawer"');
     expect(html).toMatch(/id="menuPanelView"[\s\S]*?id="btnStarredTodoDrawer"/);
     expect(html).toContain("Starred &amp; TODO");
-    expect(html).toContain("if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;");
-    expect(html).toContain("if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;");
-    expect(html).toContain("if (starredTodoDrawerBtn) starredTodoDrawerBtn.disabled = state.busy;");
+    expect(html).toContain("if (starredDrawerBtn) starredDrawerBtn.disabled = false;");
+    expect(html).toContain("if (todoDrawerBtn) todoDrawerBtn.disabled = false;");
+    expect(html).toContain("if (starredTodoDrawerBtn) starredTodoDrawerBtn.disabled = false;");
     expect(html).toContain('id="listsDrawer"');
     expect(html).toContain("wireListsDrawer");
     expect(html).toContain('openColcoorListsDrawer("starred")');
@@ -545,7 +555,7 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnOpenSideChat"');
     expect(html).toContain('data-conv-action="deleteConversation"');
-    expect(html).toContain("openSideChatBtn.disabled = state.busy;");
+    expect(html).toContain("openSideChatBtn.disabled = false;");
     expect(html).toContain('vscode.postMessage({ type: "openSideChat" });');
     expect(html).toContain('vscode.postMessage({ type: "deleteConversation" });');
     expect(html).not.toContain('id="btnCopyConversationId"');

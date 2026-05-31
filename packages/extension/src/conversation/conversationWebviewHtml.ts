@@ -2169,6 +2169,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       streamingHtml: null,
       streamingDisplayParts: [],
       pendingUserHtml: null,
+      selectedRun: null,
+      selectedRunStreamingHtml: null,
+      selectedRunStreamingDisplayParts: [],
+      activeRunCount: 0,
       /** Event ids whose child branches are collapsed in the indented tree (client-only; [tree-ui-contract.md]). */
       treeCollapsedIds: {},
       conversationNotes: [],
@@ -2996,8 +3000,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!back || !fwd) return;
       var canBack = state.selectionVisitCanGoBack === true;
       var canFwd = state.selectionVisitCanGoForward === true;
-      back.disabled = state.busy || !canBack;
-      fwd.disabled = state.busy || !canFwd;
+      back.disabled = !canBack;
+      fwd.disabled = !canFwd;
     }
 
     function formatCompactNumber(n) {
@@ -3074,12 +3078,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         !listNotesOnSelectionBtn
       )
         return;
-      if (openSearchBtn) openSearchBtn.disabled = state.busy;
-      if (starredDrawerBtn) starredDrawerBtn.disabled = state.busy;
-      if (todoDrawerBtn) todoDrawerBtn.disabled = state.busy;
-      if (starredTodoDrawerBtn) starredTodoDrawerBtn.disabled = state.busy;
+      var selectedRunActive = !!state.selectedRun;
+      if (openSearchBtn) openSearchBtn.disabled = false;
+      if (starredDrawerBtn) starredDrawerBtn.disabled = false;
+      if (todoDrawerBtn) todoDrawerBtn.disabled = false;
+      if (starredTodoDrawerBtn) starredTodoDrawerBtn.disabled = false;
       if (openSideChatBtn) {
-        openSideChatBtn.disabled = state.busy;
+        openSideChatBtn.disabled = false;
         openSideChatBtn.textContent =
           typeof state.sideChatOpenButtonLabel === "string" && state.sideChatOpenButtonLabel.trim()
             ? state.sideChatOpenButtonLabel
@@ -3122,9 +3127,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           editTitleBtn.title = "Select a message in the tree first.";
         }
         const jumpBtnEmpty = document.getElementById("btnJumpTip");
-        if (jumpBtnEmpty) jumpBtnEmpty.disabled = state.busy;
+        if (jumpBtnEmpty) jumpBtnEmpty.disabled = false;
       } else {
-      copyBtn.disabled = state.busy;
+      copyBtn.disabled = false;
       const canEditUser =
         last &&
         last.kind === "user_input" &&
@@ -3137,35 +3142,27 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             var w = j.colcoor_user_media;
             return !!(w && w.images && w.images.length);
           })());
-      editUserBtn.disabled = state.busy || !canEditUser;
+      editUserBtn.disabled = !canEditUser;
       editUserBtn.title = canEditUser
         ? "Select parent and copy this message into the composer (send creates a sibling branch)."
         : "Select a user message with text or images (not the conversation root).";
-      toggleStarBtn.disabled = state.busy;
+      toggleStarBtn.disabled = false;
       toggleStarBtn.textContent = last.starred === true ? "Unstar" : "Star";
       toggleStarBtn.title =
         last.starred === true
           ? "Remove your star from this message."
           : "Star this message (visible in Starred drawer).";
-      addNoteBtn.disabled = state.busy;
-      addNoteBtn.title = state.busy
-        ? "Wait for the current operation to finish."
-        : "Attach a note to the selected message (owner/editor).";
-      listNotesOnSelectionBtn.disabled = state.busy;
-      listNotesOnSelectionBtn.title = state.busy
-        ? "Wait for the current operation to finish."
-        : "List notes on the selected message in the Colcoor notes output.";
-      refSideChatBtn.disabled = state.busy;
-      refSideChatBtn.title = state.busy
-        ? "Wait for the current operation to finish."
-        : "Open side chat with a reference to the selected message.";
-      refNoteSideChatBtn.disabled = state.busy;
-      refNoteSideChatBtn.title = state.busy
-        ? "Wait for the current operation to finish."
-        : "Open side chat and pick a note from the selected message.";
+      addNoteBtn.disabled = false;
+      addNoteBtn.title = "Attach a note to the selected message (owner/editor).";
+      listNotesOnSelectionBtn.disabled = false;
+      listNotesOnSelectionBtn.title = "List notes on the selected message in the Colcoor notes output.";
+      refSideChatBtn.disabled = false;
+      refSideChatBtn.title = "Open side chat with a reference to the selected message.";
+      refNoteSideChatBtn.disabled = false;
+      refNoteSideChatBtn.title = "Open side chat and pick a note from the selected message.";
       const canCopyThread = threadHasCopyablePlainText();
       if (copyThreadBtn) {
-        copyThreadBtn.disabled = state.busy || !canCopyThread;
+        copyThreadBtn.disabled = !canCopyThread;
         copyThreadBtn.title = canCopyThread
           ? "Copy the visible thread (root → selected) as plain text"
           : "Nothing to copy on this path yet.";
@@ -3174,22 +3171,24 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         last &&
         last.kind === "user_input" &&
         String(last.content_text || "").trim().length > 0;
-      resendBtn.disabled = state.busy || !canResend;
-      resendBtn.title = canResend
+      resendBtn.disabled = selectedRunActive || !canResend;
+      resendBtn.title = selectedRunActive
+        ? "Stop the active answer for this message before resending."
+        : canResend
         ? "New assistant reply for this user message (same user row; transcript per docs)."
         : "Pick a user message with text (not the empty root placeholder).";
       const jumpBtn = document.getElementById("btnJumpTip");
-      if (jumpBtn) jumpBtn.disabled = state.busy;
+      if (jumpBtn) jumpBtn.disabled = false;
       if (deleteBranchBtn) {
         const isRoot = last.parent_event_id == null;
         const viewer = state.sideChatViewerRole === "viewer";
-        deleteBranchBtn.disabled = state.busy || isRoot || viewer;
+        deleteBranchBtn.disabled = selectedRunActive || isRoot || viewer;
         if (viewer) {
           deleteBranchBtn.title = "Viewers cannot delete a message branch.";
         } else if (isRoot) {
           deleteBranchBtn.title = "The conversation root cannot be deleted.";
-        } else if (state.busy) {
-          deleteBranchBtn.title = "Wait for the current operation to finish.";
+        } else if (selectedRunActive) {
+          deleteBranchBtn.title = "Stop the active answer for this branch before deleting it.";
         } else {
           deleteBranchBtn.title = "Delete the selected message and all replies under it (owner/editor).";
         }
@@ -3197,12 +3196,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (editTitleBtn) {
         const canTitle =
           last.kind === "user_input" || last.kind === "assistant_output";
-        editTitleBtn.disabled = state.busy || !canTitle;
+        editTitleBtn.disabled = !canTitle;
         editTitleBtn.title = !canTitle
           ? "Titles apply only to user or assistant messages."
-          : state.busy
-            ? "Wait for the current operation to finish."
-            : "Set or clear the display-only title for the selected message.";
+          : "Set or clear the display-only title for the selected message.";
       }
       }
       syncConversationMenuPanel();
@@ -3600,7 +3597,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var prevScrollTop = captured.prevScrollTop;
       var wasAtBottom = captured.wasAtBottom;
       const segs = visibleThreadSegmentsForUi();
-      if (!segs.length && !state.pendingUserHtml && !state.streamingHtml && !state.busy) {
+      var selectedRunActive = !!state.selectedRun;
+      if (!segs.length && !state.pendingUserHtml && !state.streamingHtml && !selectedRunActive) {
         if (state.conversationLoading === true) {
           el.innerHTML = "";
           applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom);
@@ -3694,7 +3692,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           html += '<div class="body md" dir="auto">' + state.streamingHtml + "</div>";
         }
         html += "</div>";
-      } else if (state.busy) {
+      } else if (selectedRunActive) {
         html +=
           '<div class="msg assistant assistant-waiting">' +
           '<div class="role">' +
@@ -4381,7 +4379,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       } else {
         sel.value = "auto";
       }
-      sel.disabled = !!state.busy;
+      sel.disabled = false;
       var hint =
         state.agentModelsListHint != null && String(state.agentModelsListHint).trim()
           ? String(state.agentModelsListHint).trim()
@@ -4404,7 +4402,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var hasText = ta && String(ta.value || "").trim().length > 0;
       var has = hasText || pendingSendImages.length > 0 || pendingSendImageRefs.length > 0;
       var wf = state.waitingForAssistant === true;
-      if (state.busy && wf) {
+      var selectedRunActive = !!state.selectedRun;
+      if (selectedRunActive && wf) {
         sendBtn.disabled = true;
         if (qBtn) {
           qBtn.disabled = !has;
@@ -4420,7 +4419,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         return;
       }
-      if (state.busy) {
+      if (selectedRunActive) {
         sendBtn.disabled = true;
         if (qBtn) qBtn.disabled = true;
         if (bBtn) bBtn.disabled = true;
@@ -4641,18 +4640,19 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         updateLegalPolicyStrip();
         var wf = state.waitingForAssistant === true;
+        var selectedRunActive = !!state.selectedRun;
         var waitRow = document.getElementById("composerWhileWaitingRow");
         if (waitRow) {
-          waitRow.style.display = state.busy && wf ? "flex" : "none";
+          waitRow.style.display = selectedRunActive && wf ? "flex" : "none";
         }
         if (sendBtn) {
-          sendBtn.textContent = state.busy && !wf ? "Sending…" : "Send";
-          if (state.busy && wf) {
+          sendBtn.textContent = selectedRunActive && !wf ? "Sending…" : "Send";
+          if (selectedRunActive && wf) {
             sendBtn.style.display = "none";
             updateComposerSendEnabled();
           } else {
             sendBtn.style.display = "";
-            if (state.busy) {
+            if (selectedRunActive) {
               sendBtn.disabled = true;
               sendBtn.title = "Your message is being sent…";
             } else {
@@ -4662,20 +4662,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         updateInlineSideChatSendEnabled();
         if (stopBtn) {
-          stopBtn.disabled = !state.busy;
-          stopBtn.title = state.busy ? "Cancel the in-progress assistant reply." : "";
+          stopBtn.disabled = !selectedRunActive;
+          stopBtn.title = selectedRunActive ? "Cancel the answer to the selected message." : "";
         }
-        if (refBtn) refBtn.disabled = state.busy;
-        if (ta) ta.disabled = state.busy && !wf;
-        if (priv) priv.disabled = state.busy && !wf;
+        if (refBtn) refBtn.disabled = false;
+        if (ta) ta.disabled = false;
+        if (priv) priv.disabled = false;
         updateAgentModelSelect();
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
+          var activeCount =
+            typeof state.activeRunCount === "number" && Number.isFinite(state.activeRunCount)
+              ? Math.max(0, Math.floor(state.activeRunCount))
+              : 0;
           busyEl.textContent =
-            state.busy && wf
-              ? "Assistant is replying… You can queue a follow-up or start a branch (see Private draft below)."
-              : state.busy
-                ? "Sending… Press Stop to cancel."
+            selectedRunActive && wf
+              ? "Assistant is replying to the selected message… You can queue a follow-up or start a branch."
+              : selectedRunActive
+                ? "Sending… Press Stop to cancel this answer."
+                : state.busy
+                  ? String(activeCount || 1) + " answer" + ((activeCount || 1) === 1 ? " is" : "s are") + " running on other branch" + ((activeCount || 1) === 1 ? "." : "es.")
                 : "Working…";
         }
         var badge = document.getElementById("queuedSendBadge");
@@ -4856,7 +4862,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
                           ? opts.addNote
                           : false;
           btn.hidden = !show;
-          btn.disabled = state.busy === true && act !== "continue" && act !== "copy" && act !== "star";
+          var selectedRunActive = !!state.selectedRun;
+          btn.disabled =
+            selectedRunActive &&
+            (act === "resend" || act === "title" || act === "addNote");
         });
         var starLbl = menu.querySelector("[data-msg-star-label]");
         if (starLbl) starLbl.textContent = opts.starLabel || "Star";
@@ -5437,8 +5446,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         });
         state = {
           ...m,
-          streamingHtml: null,
-          streamingDisplayParts: [],
+          streamingHtml:
+            typeof m.selectedRunStreamingHtml === "string" && m.selectedRunStreamingHtml.trim()
+              ? m.selectedRunStreamingHtml
+              : null,
+          streamingDisplayParts: Array.isArray(m.selectedRunStreamingDisplayParts)
+            ? m.selectedRunStreamingDisplayParts
+            : [],
+          selectedRun: m.selectedRun && typeof m.selectedRun === "object" ? m.selectedRun : null,
+          activeRunCount:
+            typeof m.activeRunCount === "number" && Number.isFinite(m.activeRunCount)
+              ? Math.max(0, Math.floor(m.activeRunCount))
+              : 0,
           treeCollapsedIds: collapsedFromHost,
           conversationNotes: Array.isArray(m.conversationNotes) ? m.conversationNotes : [],
           drawersStarred: Array.isArray(m.drawersStarred) ? m.drawersStarred : [],
@@ -5493,6 +5512,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       }
       if (m && m.type === "assistantStream" && typeof m.html === "string") {
+        var currentRunId = state.selectedRun && state.selectedRun.runId ? String(state.selectedRun.runId) : "";
+        var incomingRunId = typeof m.runId === "string" ? m.runId : "";
+        if (currentRunId && incomingRunId && currentRunId !== incomingRunId) {
+          return;
+        }
         var streamingDisplayParts = Array.isArray(m.displayParts) ? m.displayParts : [];
         state = { ...state, streamingHtml: m.html || null, streamingDisplayParts: streamingDisplayParts };
         wireThreadScrollPinDuringStream();
@@ -5590,7 +5614,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     })();
 
     document.getElementById("stop").addEventListener("click", () => {
-      vscode.postMessage({ type: "cancel" });
+      var runId = state.selectedRun && state.selectedRun.runId ? String(state.selectedRun.runId) : "";
+      vscode.postMessage(runId ? { type: "cancel", runId: runId } : { type: "cancel" });
     });
 
     document.getElementById("refresh").addEventListener("click", () => {
@@ -5612,7 +5637,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       document.addEventListener(
         "keydown",
         function (ev) {
-          if (state.busy) return;
           if (!ev.altKey || ev.ctrlKey || ev.metaKey) return;
           if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
           var t = ev.target;
@@ -6114,7 +6138,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     document.getElementById("input").addEventListener("keydown", (e) => {
       if (!shouldSendOnEnter(e)) return;
-      if (state.busy && state.waitingForAssistant) {
+      if (state.selectedRun && state.waitingForAssistant) {
         var qb = document.getElementById("btnQueueAfterReply");
         if (qb && qb.disabled) return;
         e.preventDefault();

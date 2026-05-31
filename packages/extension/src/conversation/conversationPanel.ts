@@ -134,19 +134,38 @@ const colcoorNotesChannel = vscode.window.createOutputChannel("Colcoor notes");
 
 /** Staged main-thread sends while the assistant is still generating the reply to the active user line. */
 type QueuedMainSendItem =
-  | {
-      kind: "after_assistant";
-      text: string;
-      images?: { dataUrl: string }[];
-      imageRefs?: ColcoorUserMediaImageRef[];
-    }
-  | {
-      kind: "new_branch";
-      text: string;
-      images?: { dataUrl: string }[];
-      imageRefs?: ColcoorUserMediaImageRef[];
-      privateBranch: boolean;
-    };
+  {
+    kind: "after_assistant";
+    text: string;
+    images?: { dataUrl: string }[];
+    imageRefs?: ColcoorUserMediaImageRef[];
+    privateBranch: boolean;
+    cliModel?: string;
+  };
+
+type ActiveMainRun = {
+  runId: string;
+  anchorParentEventId: string;
+  userEventId?: string;
+  assistantEventId?: string;
+  pendingUserMarkdown?: string;
+  queue: QueuedMainSendItem[];
+  abort: AbortController;
+  streamHtml: string | null;
+  streamDisplayParts: unknown[];
+  modelLabel: string | null;
+  privateBranch: boolean;
+  createdAt: number;
+};
+
+type SelectedMainRunState = {
+  runId: string;
+  anchorParentEventId: string;
+  userEventId: string | null;
+  queueCount: number;
+  waitingForAssistant: boolean;
+  modelLabel: string | null;
+};
 
 /** Optional server snapshots for `revealAtEvent` to skip redundant GETs after a palette/drawer fetch. */
 export type RevealAtEventPrefetchOptions = {
@@ -195,6 +214,12 @@ type WebviewStateMessage = {
   sideChatUnreadCount: number;
   /** In-flight send: sanitized markdown for the user line before the server persists it ([ui-features.md] §7). */
   pendingUserHtml: string | null;
+  /** Active run for the currently selected tree message, if any. */
+  selectedRun: SelectedMainRunState | null;
+  /** Current stream HTML for selectedRun, restored on branch switches. */
+  selectedRunStreamingHtml: string | null;
+  selectedRunStreamingDisplayParts: unknown[];
+  activeRunCount: number;
   /** Inline side-chat drawer in the same conversation tab. */
   sideChatVisible: boolean;
   /** SSE connection banner in the side-chat column (`reconnecting` | `restored` | hidden). */
@@ -214,9 +239,9 @@ type WebviewStateMessage = {
   /** Client-only visited selection stack (max ~20); thread ← / → controls. */
   selectionVisitCanGoBack: boolean;
   selectionVisitCanGoForward: boolean;
-  /** True after the in-flight user line is persisted and until the assistant run finishes ([ui-features.md] §7). */
+  /** True after the selected run user line is persisted and until that assistant run finishes ([ui-features.md] §7). */
   waitingForAssistant: boolean;
-  /** Messages staged while {@link waitingForAssistant}; flushed after the current assistant reply. */
+  /** Messages staged for the selected run while {@link waitingForAssistant}. */
   queuedMainSendCount: number;
   /** Members of this conversation (side-chat @ autocomplete and mention tooltips). */
   sideChatMentionMembers: {
@@ -288,7 +313,7 @@ type FromWebview =
     }
   | { type: "selectTip" }
   | { type: "refresh" }
-  | { type: "cancel" }
+  | { type: "cancel"; runId?: string }
   | { type: "resend" }
   | { type: "setAgentModel"; model: string }
   | { type: "openAgentModelPicker" }
@@ -452,14 +477,15 @@ export function createConversationPanelController(
   let sideChatUnreadCount = 0;
   let sideChatHasUnread = false;
   let selectedEventId: string | undefined;
-  let sendAbort: AbortController | undefined;
+  const activeMainRunsByRunId = new Map<string, ActiveMainRun>();
+  const activeMainRunIdByUserEventId = new Map<string, string>();
 
-  /** When `true`, a main-thread send or resend is using `sendAbort` (palette keybindings can use this). */
+  /** When `true`, at least one main-thread run is active (palette keybindings can use this). */
   function syncConversationReplyInProgressContext(): void {
     void vscode.commands.executeCommand(
       "setContext",
       COLCOOR_CONVERSATION_REPLY_IN_PROGRESS_CONTEXT,
-      sendAbort != null,
+      activeMainRunsByRunId.size > 0,
     );
   }
 
@@ -484,11 +510,6 @@ export function createConversationPanelController(
   const lastSelectedEventIdByConversation = new Map<string, string>();
   /** Cached GET /me id — avoids repeated calls when checking collaborative tree growth. */
   let viewerUserIdMemo: string | undefined;
-  /** Set while a main-thread send is in flight until the user message exists on the tree ([ui-features.md] §7). */
-  let pendingSendUserMarkdown: string | undefined;
-  let pendingMainSendQueue: QueuedMainSendItem[] = [];
-  /** `selectedEventId` when the primary in-flight send started; used for queued “new branch” items. */
-  let busyAnchorParentEventId: string | undefined;
   /** Data URLs for `user_input` rows with `colcoor_user_media`, built on each tree refresh for thread HTML. */
   let lastUserImageDataUrlsByEventId: ReadonlyMap<string, readonly string[]> = new Map();
   /** Consumed once in {@link postState} to fill the main composer. */
@@ -1104,7 +1125,7 @@ export function createConversationPanelController(
     } catch (e) {
       reportPanelApiError(e);
     }
-    postState(lastTreeEvents, sendAbort != null, null);
+    postState(lastTreeEvents, hasActiveMainRuns(), null);
   }
 
   async function postOneInlineSideChatJob(job: {
@@ -1117,7 +1138,7 @@ export function createConversationPanelController(
       inlineSideChatUrlsByMessageId.delete(job.tempId);
       rebuildInlineSideChatRendered();
       if (panel && webviewReady) {
-        postState(lastTreeEvents, sendAbort != null, null);
+        postState(lastTreeEvents, hasActiveMainRuns(), null);
       }
       return;
     }
@@ -1139,14 +1160,14 @@ export function createConversationPanelController(
         inlineSideChatUrlsByMessageId.delete(created.id);
       }
       rebuildInlineSideChatRendered();
-      postState(lastTreeEvents, sendAbort != null, null);
+      postState(lastTreeEvents, hasActiveMainRuns(), null);
       await markInlineSideChatReadFromCache(true);
       await refreshConversationMeta();
     } catch (e) {
       inlineSideChatRows = inlineSideChatRows.filter((m) => m.id !== job.tempId);
       inlineSideChatUrlsByMessageId.delete(job.tempId);
       rebuildInlineSideChatRendered();
-      postState(lastTreeEvents, sendAbort != null, null);
+      postState(lastTreeEvents, hasActiveMainRuns(), null);
       await showColcoorApiFailure(e);
     }
   }
@@ -1189,9 +1210,8 @@ export function createConversationPanelController(
       clearTimeout(inlineSideChatListRefreshTimer);
       inlineSideChatListRefreshTimer = undefined;
     }
-    sendAbort?.abort();
-    sendAbort = undefined;
-    syncConversationReplyInProgressContext();
+    abortAllActiveMainRuns();
+    clearActiveMainRuns();
     panel?.dispose();
     panel = undefined;
     webviewReady = false;
@@ -1267,10 +1287,7 @@ export function createConversationPanelController(
     return agentModelCliFlag(readSelectedAgentModelForConversation(map, conversationId));
   }
 
-  function pendingAssistantModelLabelForWebview(): string | null {
-    if (!sendAbort) {
-      return null;
-    }
+  function assistantModelLabelForCurrentSelection(): string | null {
     const map = readAgentModelByConversationMap(context.workspaceState);
     const selected = conversationId
       ? readSelectedAgentModelForConversation(map, conversationId)
@@ -1279,6 +1296,79 @@ export function createConversationPanelController(
     const cliModel = agentModelCliFlag(selected);
     const label = resolveAgentModelShortLabel(cliModel ?? selected, catalog);
     return label ?? null;
+  }
+
+  function newMainRunId(): string {
+    return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function hasActiveMainRuns(): boolean {
+    return activeMainRunsByRunId.size > 0;
+  }
+
+  function findRunForEventId(eventId: string | undefined): ActiveMainRun | undefined {
+    const id = eventId?.trim();
+    if (!id) {
+      return undefined;
+    }
+    const direct = activeMainRunsByRunId.get(id);
+    if (direct) {
+      return direct;
+    }
+    const byUser = activeMainRunIdByUserEventId.get(id);
+    if (byUser) {
+      return activeMainRunsByRunId.get(byUser);
+    }
+    for (const run of activeMainRunsByRunId.values()) {
+      if (run.userEventId === id || run.assistantEventId === id) {
+        return run;
+      }
+      if (!run.userEventId && run.anchorParentEventId === id) {
+        return run;
+      }
+    }
+    return undefined;
+  }
+
+  function selectedMainRunState(run: ActiveMainRun | undefined): SelectedMainRunState | null {
+    if (!run) {
+      return null;
+    }
+    return {
+      runId: run.runId,
+      anchorParentEventId: run.anchorParentEventId,
+      userEventId: run.userEventId ?? null,
+      queueCount: run.queue.length,
+      waitingForAssistant: run.pendingUserMarkdown === undefined,
+      modelLabel: run.modelLabel,
+    };
+  }
+
+  function removeActiveMainRun(run: ActiveMainRun): void {
+    activeMainRunsByRunId.delete(run.runId);
+    if (run.userEventId) {
+      activeMainRunIdByUserEventId.delete(run.userEventId);
+    }
+    syncConversationReplyInProgressContext();
+  }
+
+  function abortRunForSelection(runId?: string): void {
+    const run = runId?.trim()
+      ? activeMainRunsByRunId.get(runId.trim())
+      : findRunForEventId(selectedEventId);
+    run?.abort.abort();
+  }
+
+  function abortAllActiveMainRuns(): void {
+    for (const run of activeMainRunsByRunId.values()) {
+      run.abort.abort();
+    }
+  }
+
+  function clearActiveMainRuns(): void {
+    activeMainRunsByRunId.clear();
+    activeMainRunIdByUserEventId.clear();
+    syncConversationReplyInProgressContext();
   }
 
   function agentModelFieldsForWebview(): {
@@ -1402,15 +1492,16 @@ export function createConversationPanelController(
       return;
     }
     syncSideChatReferenceLabelMapsFromTree(events, lastNotes);
+    const effectiveBusy = busy || hasActiveMainRuns();
     try {
-      lastPostedBusy = busy;
+      lastPostedBusy = effectiveBusy;
       lastPostedError = lastError;
       const ids = new Set(events.map((e) => e.id));
       const lineageById = mergeEventLineageById(lastTreeEvents, events);
       let sel = selectedEventId;
       if (!sel || !ids.has(sel)) {
         // During send/stream the tree snapshot may lag behind selection (new user/assistant ids).
-        if (!(busy && sel)) {
+        if (!(effectiveBusy && sel)) {
           const resolved =
             sel != null && String(sel).trim()
               ? lowestUndeletedAncestorId(String(sel), ids, lineageById)
@@ -1451,8 +1542,12 @@ export function createConversationPanelController(
         side_chat_has_unread: sideChatHasUnread,
         side_chat_unread_count: sideChatUnreadCount,
       });
-      const pendingUserHtml = pendingUserHtmlForPanelState(busy, pendingSendUserMarkdown);
-      const waitingForAssistant = Boolean(sendAbort && pendingSendUserMarkdown === undefined);
+      const selectedRun = findRunForEventId(sel);
+      const selectedRunState = selectedMainRunState(selectedRun);
+      const pendingUserHtml = selectedRun?.pendingUserMarkdown
+        ? pendingUserHtmlForPanelState(true, selectedRun.pendingUserMarkdown)
+        : null;
+      const waitingForAssistant = Boolean(selectedRun && selectedRun.pendingUserMarkdown === undefined);
       const drawersModel = buildConversationDrawersModel(events, lastNotes);
       const eventsForWebview = enrichGraphEventsWithComposerDisplay(
         events,
@@ -1475,8 +1570,8 @@ export function createConversationPanelController(
         ),
         threadPlainText: appendPendingPlainThreadFragment(
           buildPlainThread(eventsForWebview, sel ?? "", lastNotes),
-          busy,
-          pendingSendUserMarkdown,
+          Boolean(selectedRun?.pendingUserMarkdown),
+          selectedRun?.pendingUserMarkdown,
         ),
         treeWidthPx,
         sideChatColumnWidthPx,
@@ -1484,7 +1579,7 @@ export function createConversationPanelController(
         treeCollapsedEventIds: prunedCollapsedEventIds(events),
         agentTraceOpen,
         needsContextRebuild: lastNeedsContextRebuild,
-        busy,
+        busy: effectiveBusy,
         conversationLoading: conversationTreeLoading,
         lastError,
         legalPolicyLinks: listLegalPolicyLinksFromColcoorWorkspaceSection(
@@ -1494,6 +1589,10 @@ export function createConversationPanelController(
         sideChatOpenButtonTitle: sideChatBtn.title,
         sideChatUnreadCount,
         pendingUserHtml,
+        selectedRun: selectedRunState,
+        selectedRunStreamingHtml: selectedRun?.streamHtml ?? null,
+        selectedRunStreamingDisplayParts: selectedRun?.streamDisplayParts ?? [],
+        activeRunCount: activeMainRunsByRunId.size,
         sideChatVisible: inlineSideChatVisible,
         sideChatSseStatus: inlineSideChatVisible ? inlineSideChatSseStatus : null,
         sideChatMessages: inlineSideChatRendered,
@@ -1509,7 +1608,7 @@ export function createConversationPanelController(
         selectionVisitCanGoForward: nav.canGoForward,
         sideChatViewerRole: viewerConversationRole,
         waitingForAssistant,
-        queuedMainSendCount: pendingMainSendQueue.length,
+        queuedMainSendCount: selectedRun?.queue.length ?? 0,
         sideChatMentionMembers: lastConversationMembers.map((m) => ({
           user_id: m.user_id,
           display_name: m.display_name ?? null,
@@ -1521,7 +1620,7 @@ export function createConversationPanelController(
         pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
         ...(pendingComposerPrefill ? { composerPrefill: pendingComposerPrefill } : {}),
         ...agentModelFieldsForWebview(),
-        pendingAssistantModelLabel: pendingAssistantModelLabelForWebview(),
+        pendingAssistantModelLabel: selectedRun?.modelLabel ?? null,
         gettingStartedVisible: isGettingStartedVisibleSync(context.globalState),
         tryThisNextVisible: isTryThisNextVisibleSync(context.globalState, conversationId),
         soloCollaboratorHintDismissed: isSoloCollaboratorHintDismissedSync(context.globalState, conversationId),
@@ -1570,14 +1669,14 @@ export function createConversationPanelController(
           events: [],
           selectedEventId: "",
           threadSegments: [],
-          threadPlainText: appendPendingPlainThreadFragment("", busy, pendingSendUserMarkdown),
+          threadPlainText: "",
           treeWidthPx,
           sideChatColumnWidthPx,
           composerTextareaHeightPx,
           treeCollapsedEventIds: [],
           agentTraceOpen,
           needsContextRebuild: false,
-          busy,
+          busy: effectiveBusy,
           conversationLoading: false,
           lastError:
             lastError ??
@@ -1589,6 +1688,10 @@ export function createConversationPanelController(
           sideChatOpenButtonTitle: sideChatBtnFb.title,
           sideChatUnreadCount,
           pendingUserHtml: null,
+          selectedRun: null,
+          selectedRunStreamingHtml: null,
+          selectedRunStreamingDisplayParts: [],
+          activeRunCount: activeMainRunsByRunId.size,
           sideChatVisible: inlineSideChatVisible,
           sideChatSseStatus: inlineSideChatVisible ? inlineSideChatSseStatus : null,
           sideChatMessages: inlineSideChatRendered,
@@ -1603,8 +1706,8 @@ export function createConversationPanelController(
           selectionVisitCanGoBack: false,
           selectionVisitCanGoForward: false,
           sideChatViewerRole: viewerConversationRole,
-          waitingForAssistant: Boolean(sendAbort && pendingSendUserMarkdown === undefined),
-          queuedMainSendCount: pendingMainSendQueue.length,
+          waitingForAssistant: false,
+          queuedMainSendCount: 0,
           sideChatMentionMembers: lastConversationMembers.map((m) => ({
             user_id: m.user_id,
             display_name: m.display_name ?? null,
@@ -1615,7 +1718,7 @@ export function createConversationPanelController(
           sideChatSoundVolume: readSideChatCueSettings(vscode.workspace.getConfiguration("colcoor")).soundVolume,
           pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
           ...agentModelFieldsForWebview(),
-          pendingAssistantModelLabel: pendingAssistantModelLabelForWebview(),
+          pendingAssistantModelLabel: null,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -1870,10 +1973,6 @@ export function createConversationPanelController(
     });
   }
 
-  function isWaitingForAssistant(): boolean {
-    return sendAbort != null && pendingSendUserMarkdown === undefined;
-  }
-
   async function uploadPastedImagesForMainSend(
     pastedImages: { dataUrl: string }[] | undefined,
   ): Promise<ColcoorUserMediaImageRef[]> {
@@ -1900,20 +1999,29 @@ export function createConversationPanelController(
     return mergeUserMediaImageRefs(existingRefs ?? [], uploaded);
   }
 
-  async function drainMainSendQueue(initialAssistantId: string | undefined): Promise<string | undefined> {
+  function createStreamForRun(run: ActiveMainRun): ReturnType<typeof createAssistantStreamPusher> {
+    return createAssistantStreamPusher(() => panel, () => webviewReady, {
+      runId: run.runId,
+      onFlush: (frame) => {
+        run.streamHtml = frame.html || null;
+        run.streamDisplayParts = Array.isArray(frame.displayParts) ? frame.displayParts : [];
+      },
+    });
+  }
+
+  async function drainMainSendQueue(run: ActiveMainRun, initialAssistantId: string | undefined): Promise<string | undefined> {
     let mainAssistant = initialAssistantId;
-    const anchor = busyAnchorParentEventId;
-    if (!conversationId || !anchor) {
+    if (!conversationId) {
       return mainAssistant;
     }
     const ws = getWorkspaceRoot();
-    const sig = sendAbort?.signal;
+    const sig = run.abort.signal;
     if (!sig) {
       return mainAssistant;
     }
-    while (pendingMainSendQueue.length > 0) {
-      const item = pendingMainSendQueue.shift()!;
-      const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
+    while (run.queue.length > 0) {
+      const item = run.queue.shift()!;
+      const stream = createStreamForRun(run);
       try {
         const refs = await resolveMainSendMediaRefs(item.images, item.imageRefs);
         const trimmed = normalizePersistedUserInputText(item.text);
@@ -1922,14 +2030,18 @@ export function createConversationPanelController(
           continue;
         }
         const userMediaContentJson = refs.length > 0 ? buildUserMediaContentJson(refs) : undefined;
-        const replyParent = item.kind === "after_assistant" ? mainAssistant ?? undefined : anchor;
-        if (item.kind === "after_assistant" && replyParent === undefined) {
+        const replyParent = mainAssistant ?? undefined;
+        if (replyParent === undefined) {
           stream.dispose();
           void vscode.window.showWarningMessage(
             "Colcoor: skipped a queued message — no assistant reply to attach under.",
           );
           continue;
         }
+        run.pendingUserMarkdown = trimmed || (refs.length > 0 ? "_Image_…" : "");
+        run.streamHtml = null;
+        run.streamDisplayParts = [];
+        postState(lastTreeEvents, true, lastPostedError);
         const result = await runColcoorUserTurn(
           api,
           agent,
@@ -1939,19 +2051,27 @@ export function createConversationPanelController(
           ws,
           {
             replyParentEventId: replyParent,
-            privateBranch: item.kind === "new_branch" ? item.privateBranch : false,
+            privateBranch: item.privateBranch,
             signal: sig,
             onAssistantTextDelta: (t) => stream.pushDelta(t),
             onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
-            cliModel: cliModelForConversationRuns(),
+            cliModel: item.cliModel,
             linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
             ...(userMediaContentJson ? { userMediaContentJson } : {}),
             onUserMessagePersisted: async ({ userEventId }) => {
-              selectedEventId = userEventId;
+              const previousRunUserEventId = run.userEventId;
+              run.pendingUserMarkdown = undefined;
+              run.userEventId = userEventId;
+              activeMainRunIdByUserEventId.set(userEventId, run.runId);
+              const shouldSelectQueuedUser =
+                selectedEventId === previousRunUserEventId || selectedEventId === run.assistantEventId;
+              if (shouldSelectQueuedUser) {
+                selectedEventId = userEventId;
+              }
               await loadTreeAndPush(true, null, {
                 skipConversationsList: true,
                 skipInlineSideChatRefresh: true,
-                selectEventId: userEventId,
+                ...(shouldSelectQueuedUser ? { selectEventId: userEventId } : {}),
               });
             },
           },
@@ -1962,8 +2082,9 @@ export function createConversationPanelController(
         if (result.cancelled) {
           break;
         }
-        if (item.kind === "after_assistant" && result.assistantEventId) {
+        if (result.assistantEventId) {
           mainAssistant = result.assistantEventId;
+          run.assistantEventId = result.assistantEventId;
         }
       } catch (e) {
         stream.dispose();
@@ -2049,51 +2170,102 @@ export function createConversationPanelController(
       return;
     }
 
-    if (sendAbort != null) {
+    const selectedRun = findRunForEventId(selectedEventId);
+    if (selectedRun && selectedRun.userEventId) {
       if (!busySendMode) {
         void vscode.window.showInformationMessage(
-          "Colcoor: a reply is still generating. Use “Queue after reply” or “New branch”, or press Stop.",
+          "Colcoor: this message is already waiting for an answer. Use “Queue after reply” or “New branch”, or press Stop.",
         );
         return;
       }
-      if (!isWaitingForAssistant()) {
+      if (selectedRun.pendingUserMarkdown !== undefined) {
         void vscode.window.showWarningMessage(
           "Colcoor: wait until your message appears in the thread, then you can queue or branch.",
         );
         return;
       }
       if (busySendMode === "queue") {
-        pendingMainSendQueue.push({
+        selectedRun.queue.push({
           kind: "after_assistant",
           text: trimmed,
           images: pastedImages,
           imageRefs,
-        });
-      } else {
-        pendingMainSendQueue.push({
-          kind: "new_branch",
-          text: trimmed,
-          images: pastedImages,
-          imageRefs,
           privateBranch,
+          cliModel: cliModelForConversationRuns(),
         });
+        postState(lastTreeEvents, true, lastPostedError);
+        return;
+      } else {
+        const parent = selectedRun.anchorParentEventId || selectedEventId;
+        void startMainRun({
+          text: trimmed,
+          privateBranch,
+          pastedImages,
+          imageRefs,
+          replyParentEventId: parent,
+          selectPersistedUser: true,
+        });
+        return;
       }
-      postState(lastTreeEvents, true, lastPostedError);
-      return;
     }
 
-    pendingMainSendQueue = [];
-    busyAnchorParentEventId = selectedEventId;
+    void startMainRun({
+      text: trimmed,
+      privateBranch,
+      pastedImages,
+      imageRefs,
+      replyParentEventId: selectedEventId,
+      selectPersistedUser: true,
+    });
+  }
 
-    pendingSendUserMarkdown = trimmed || (hasPasted || hasRefs ? "_Image_…" : "");
+  async function startMainRun(args: {
+    text: string;
+    privateBranch: boolean;
+    pastedImages?: { dataUrl: string }[];
+    imageRefs?: ColcoorUserMediaImageRef[];
+    replyParentEventId: string;
+    selectPersistedUser: boolean;
+    existingUserEventId?: string;
+  }): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    const trimmed = normalizePersistedUserInputText(args.text);
+    const hasPasted =
+      Array.isArray(args.pastedImages) && args.pastedImages.some((x) => typeof x?.dataUrl === "string" && x.dataUrl.trim());
+    const hasRefs =
+      Array.isArray(args.imageRefs) &&
+      args.imageRefs.some((r) => typeof r?.id === "string" && r.id.trim() && typeof r?.mime_type === "string");
+    if (!trimmed && !hasPasted && !hasRefs) {
+      return;
+    }
     const ws = getWorkspaceRoot();
-    sendAbort = new AbortController();
+    const abort = new AbortController();
+    const run: ActiveMainRun = {
+      runId: newMainRunId(),
+      anchorParentEventId: args.replyParentEventId,
+      userEventId: args.existingUserEventId,
+      pendingUserMarkdown: args.existingUserEventId
+        ? undefined
+        : trimmed || (hasPasted || hasRefs ? "_Image_…" : ""),
+      queue: [],
+      abort,
+      streamHtml: null,
+      streamDisplayParts: [],
+      modelLabel: assistantModelLabelForCurrentSelection(),
+      privateBranch: args.privateBranch,
+      createdAt: Date.now(),
+    };
+    activeMainRunsByRunId.set(run.runId, run);
+    if (run.userEventId) {
+      activeMainRunIdByUserEventId.set(run.userEventId, run.runId);
+    }
     syncConversationReplyInProgressContext();
-    const signal = sendAbort.signal;
     postState(lastTreeEvents, true, lastPostedError);
-    const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
+    const stream = createStreamForRun(run);
     try {
-      const refs = await resolveMainSendMediaRefs(pastedImages, imageRefs);
+      const refs = await resolveMainSendMediaRefs(args.pastedImages, args.imageRefs);
       if (!trimmed && refs.length === 0) {
         stream.dispose();
         postState(lastTreeEvents, false, lastPostedError);
@@ -2108,9 +2280,9 @@ export function createConversationPanelController(
         trimmed,
         ws,
         {
-          replyParentEventId: selectedEventId,
-          privateBranch,
-          signal,
+          replyParentEventId: args.replyParentEventId,
+          privateBranch: args.privateBranch,
+          signal: abort.signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
@@ -2120,12 +2292,18 @@ export function createConversationPanelController(
             : {}),
           ...(userMediaContentJson ? { userMediaContentJson } : {}),
           onUserMessagePersisted: async ({ userEventId }) => {
-            pendingSendUserMarkdown = undefined;
-            selectedEventId = userEventId;
+            run.pendingUserMarkdown = undefined;
+            run.userEventId = userEventId;
+            activeMainRunIdByUserEventId.set(userEventId, run.runId);
+            const shouldSelectPersistedUser =
+              args.selectPersistedUser && selectedEventId === args.replyParentEventId;
+            if (shouldSelectPersistedUser) {
+              selectedEventId = userEventId;
+            }
             await loadTreeAndPush(true, null, {
               skipConversationsList: true,
               skipInlineSideChatRefresh: true,
-              selectEventId: userEventId,
+              ...(shouldSelectPersistedUser ? { selectEventId: userEventId } : {}),
             });
           },
         },
@@ -2134,15 +2312,15 @@ export function createConversationPanelController(
       await persistConversationContextSavings(result.contextSavings, result.assistantText);
       let assistantTipId = result.assistantEventId;
       if (!result.cancelled) {
-        assistantTipId = (await drainMainSendQueue(result.assistantEventId)) ?? assistantTipId;
+        if (assistantTipId) {
+          run.assistantEventId = assistantTipId;
+        }
+        assistantTipId = (await drainMainSendQueue(run, result.assistantEventId)) ?? assistantTipId;
       }
-      await loadTreeAndPush(
-        false,
-        null,
-        assistantTipId?.trim()
-          ? { selectEventId: assistantTipId.trim() }
-          : { finalizeToDefaultBranchTip: true },
-      );
+      const stillViewingRun =
+        selectedEventId != null &&
+        (selectedEventId === run.userEventId || selectedEventId === run.assistantEventId);
+      await loadTreeAndPush(false, null, stillViewingRun && assistantTipId?.trim() ? { selectEventId: assistantTipId.trim() } : {});
       if (result.cancelled) {
         void vscode.window.showInformationMessage(
           result.assistantText?.trim()
@@ -2156,11 +2334,8 @@ export function createConversationPanelController(
       stream.dispose();
       await loadTreeAndPush(false, msg);
     } finally {
-      pendingSendUserMarkdown = undefined;
-      sendAbort = undefined;
-      pendingMainSendQueue = [];
-      busyAnchorParentEventId = undefined;
-      syncConversationReplyInProgressContext();
+      removeActiveMainRun(run);
+      postState(lastTreeEvents, hasActiveMainRuns(), lastPostedError);
     }
   }
 
@@ -2173,21 +2348,42 @@ export function createConversationPanelController(
       const prevSel = selectedEventId;
       selectedEventId = eventId;
       if (lastTreeEvents.some((e) => e.id === eventId)) {
-        postState(lastTreeEvents, false, lastPostedError);
+        postState(lastTreeEvents, hasActiveMainRuns(), lastPostedError);
       }
       void syncActiveToBackend(eventId, {
         needsContextRebuild: prevSel !== undefined && prevSel !== eventId,
       });
     }
-    pendingMainSendQueue = [];
-    busyAnchorParentEventId = undefined;
+    if (findRunForEventId(eventId)) {
+      void vscode.window.showInformationMessage(
+        "Colcoor: this message already has an answer in progress. Stop it before resending.",
+      );
+      return;
+    }
+    const ev = lastTreeEvents.find((e) => e.id === eventId);
+    const anchorParentEventId =
+      ev?.parent_event_id != null && String(ev.parent_event_id).trim()
+        ? String(ev.parent_event_id).trim()
+        : eventId;
     const ws = getWorkspaceRoot();
-    sendAbort?.abort();
-    sendAbort = new AbortController();
+    const abort = new AbortController();
+    const run: ActiveMainRun = {
+      runId: newMainRunId(),
+      anchorParentEventId,
+      userEventId: eventId,
+      queue: [],
+      abort,
+      streamHtml: null,
+      streamDisplayParts: [],
+      modelLabel: assistantModelLabelForCurrentSelection(),
+      privateBranch: false,
+      createdAt: Date.now(),
+    };
+    activeMainRunsByRunId.set(run.runId, run);
+    activeMainRunIdByUserEventId.set(eventId, run.runId);
     syncConversationReplyInProgressContext();
-    const signal = sendAbort.signal;
     postState(lastTreeEvents, true, lastPostedError);
-    const stream = createAssistantStreamPusher(() => panel, () => webviewReady);
+    const stream = createStreamForRun(run);
     try {
       const result = await runResendAssistant(
         api,
@@ -2197,7 +2393,7 @@ export function createConversationPanelController(
         eventId,
         ws,
         {
-          signal,
+          signal: abort.signal,
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
@@ -2209,12 +2405,17 @@ export function createConversationPanelController(
       );
       stream.dispose();
       await persistConversationContextSavings(result.contextSavings, result.assistantText);
+      if (result.assistantEventId) {
+        run.assistantEventId = result.assistantEventId;
+      }
+      const stillViewingRun =
+        selectedEventId === eventId || selectedEventId === run.assistantEventId;
       await loadTreeAndPush(
         false,
         null,
-        result.assistantEventId?.trim()
+        stillViewingRun && result.assistantEventId?.trim()
           ? { selectEventId: result.assistantEventId.trim() }
-          : { finalizeToDefaultBranchTip: true },
+          : {},
       );
       if (result.cancelled) {
         void vscode.window.showInformationMessage(
@@ -2229,8 +2430,8 @@ export function createConversationPanelController(
       stream.dispose();
       await loadTreeAndPush(false, msg);
     } finally {
-      sendAbort = undefined;
-      syncConversationReplyInProgressContext();
+      removeActiveMainRun(run);
+      postState(lastTreeEvents, hasActiveMainRuns(), lastPostedError);
     }
   }
 
@@ -2471,7 +2672,7 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "cancel") {
-        sendAbort?.abort();
+        abortRunForSelection(msg.runId);
         return;
       }
       if (msg.type === "copy" && typeof msg.text === "string") {
@@ -2717,7 +2918,7 @@ export function createConversationPanelController(
       }
       if (msg.type === "clearSideChatGraphReference") {
         clearPendingSideChatGraphReference();
-        postState(lastTreeEvents, sendAbort != null, null);
+        postState(lastTreeEvents, hasActiveMainRuns(), null);
         return;
       }
       if (msg.type === "selectSideChatReference") {
@@ -2787,7 +2988,7 @@ export function createConversationPanelController(
         if (conversationId) {
           dismissedInlineSideChatByConversationId.add(conversationId);
         }
-        postState(lastTreeEvents, sendAbort != null, null);
+        postState(lastTreeEvents, hasActiveMainRuns(), null);
         return;
       }
       if (msg.type === "refreshSideChat") {
@@ -2800,7 +3001,7 @@ export function createConversationPanelController(
         } catch (e) {
           reportPanelApiError(e);
         }
-        postState(lastTreeEvents, sendAbort != null, null);
+        postState(lastTreeEvents, hasActiveMainRuns(), null);
         return;
       }
       if (msg.type === "sendSideChat") {
@@ -2866,7 +3067,7 @@ export function createConversationPanelController(
           inlineSideChatUrlsByMessageId.delete(tempId);
         }
         rebuildInlineSideChatRendered();
-        postState(lastTreeEvents, sendAbort != null, null);
+        postState(lastTreeEvents, hasActiveMainRuns(), null);
 
         inlineSideChatPostChain = inlineSideChatPostChain
           .catch(() => {
@@ -2908,7 +3109,7 @@ export function createConversationPanelController(
           const updated = await api.patchSideChatMessage(conversationId, mid, { body });
           inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, updated);
           rebuildInlineSideChatRendered();
-          postState(lastTreeEvents, sendAbort != null, null);
+          postState(lastTreeEvents, hasActiveMainRuns(), null);
         } catch (e) {
           await showColcoorApiFailure(e);
         }
@@ -2951,7 +3152,7 @@ export function createConversationPanelController(
           inlineSideChatRows = mergeSideChatMessage(inlineSideChatRows, tombstone);
           inlineSideChatUrlsByMessageId.delete(tombstone.id);
           rebuildInlineSideChatRendered();
-          postState(lastTreeEvents, sendAbort != null, null);
+          postState(lastTreeEvents, hasActiveMainRuns(), null);
           await refreshConversationMeta();
         } catch (e) {
           await showColcoorApiFailure(e);
@@ -3088,9 +3289,8 @@ export function createConversationPanelController(
         clearTimeout(inlineSideChatListRefreshTimer);
         inlineSideChatListRefreshTimer = undefined;
       }
-      sendAbort?.abort();
-      sendAbort = undefined;
-      syncConversationReplyInProgressContext();
+      abortAllActiveMainRuns();
+      clearActiveMainRuns();
       panel = undefined;
       webviewReady = false;
       conversationId = undefined;
@@ -3480,12 +3680,8 @@ export function createConversationPanelController(
         stopInlineSideChatSse();
         inlineSideChatNotifiedMessageIds.clear();
         inlineSideChatLastNotificationAtMs = null;
-        sendAbort?.abort();
-        sendAbort = undefined;
-        pendingMainSendQueue = [];
-        busyAnchorParentEventId = undefined;
-        pendingSendUserMarkdown = undefined;
-        syncConversationReplyInProgressContext();
+        abortAllActiveMainRuns();
+        clearActiveMainRuns();
         clearPendingSideChatGraphReference();
       }
       conversationId = cid;
@@ -3535,12 +3731,8 @@ export function createConversationPanelController(
         stopInlineSideChatSse();
         inlineSideChatNotifiedMessageIds.clear();
         inlineSideChatLastNotificationAtMs = null;
-        sendAbort?.abort();
-        sendAbort = undefined;
-        pendingMainSendQueue = [];
-        busyAnchorParentEventId = undefined;
-        pendingSendUserMarkdown = undefined;
-        syncConversationReplyInProgressContext();
+        abortAllActiveMainRuns();
+        clearActiveMainRuns();
         clearPendingSideChatGraphReference();
       }
       conversationId = cid;
@@ -3608,7 +3800,7 @@ export function createConversationPanelController(
       };
     },
     cancelInFlightGeneration: () => {
-      sendAbort?.abort();
+      abortRunForSelection();
     },
     async continueFromHere(): Promise<void> {
       const gate = evaluateContinueFromHere(

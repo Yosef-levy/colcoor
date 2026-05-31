@@ -12,6 +12,10 @@ import { markdownToSafeHtml } from "./threadMarkdown";
 export function createAssistantStreamPusher(
   getPanel: () => vscode.WebviewPanel | undefined,
   isWebviewReady: () => boolean,
+  options?: {
+    runId?: string;
+    onFlush?: (frame: { html: string; displayParts?: unknown[] }) => void;
+  },
 ): {
   pushDelta: (rawText: string) => void;
   pushDisplayParts: (parts: CursorAgentDisplayPart[]) => void;
@@ -29,14 +33,18 @@ export function createAssistantStreamPusher(
   }
 
   function flushNow(): void {
+    const displayParts = lastParts.length ? renderDisplayParts(lastParts) : undefined;
+    const html = markdownToSafeHtml(lastRaw);
+    options?.onFlush?.({ html, displayParts });
     const p = getPanel();
     if (!p || !isWebviewReady()) {
       return;
     }
     void p.webview.postMessage({
       type: "assistantStream",
-      html: markdownToSafeHtml(lastRaw),
-      displayParts: lastParts.length ? renderDisplayParts(lastParts) : undefined,
+      ...(options?.runId ? { runId: options.runId } : {}),
+      html,
+      displayParts,
     });
   }
 
