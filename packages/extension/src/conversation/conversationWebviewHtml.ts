@@ -2478,8 +2478,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       } catch (e) {}
     })();
 
-    var TREE_ZOOM_MIN = 0.65;
-    var TREE_ZOOM_MAX = 1.75;
+    var TREE_ZOOM_MIN = 0.2;
+    var TREE_ZOOM_MAX = 1.5;
     var TREE_ZOOM_STEP = 0.1;
     var TREE_ZOOM_LS_KEY = "colcoor.treeZoomScale";
 
