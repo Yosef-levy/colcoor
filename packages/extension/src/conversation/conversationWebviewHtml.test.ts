@@ -87,7 +87,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('class="msg user pending-send"');
     expect(html).toContain("state.pendingUserHtml");
     expect(html).toContain("streamingDisplayParts: []");
-    expect(html).toMatch(/if \(state\.pendingUserHtml\)[\s\S]*state\.streamingHtml/);
+    expect(html).toMatch(/if \(selectedRunActive && state\.pendingUserHtml\)[\s\S]*selectedRunActive &&[\s\S]*state\.streamingHtml/);
     expect(html).toContain("renderAssistantDisplayParts(state.streamingDisplayParts, true)");
     expect(html).toContain("renderAssistantDisplayParts(s.displayParts, false)");
     expect(html).toContain('<details class="agent-trace agent-activity"><summary>');
@@ -402,7 +402,9 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("selectedRun: null");
     expect(html).toContain("selectedRunStreamingHtml");
     expect(html).toContain("var selectedRunActive = !!state.selectedRun");
-    expect(html).toContain("currentRunId && incomingRunId && currentRunId !== incomingRunId");
+    expect(html).toContain("function clearSelectedRunThreadTailState()");
+    expect(html).toContain("currentRunId !== incomingRunId");
+    expect(html).not.toContain("currentRunId && incomingRunId && currentRunId !== incomingRunId");
     expect(html).toContain("sendBtn.disabled = true");
     expect(html).toContain("selectedRunActive &&");
   });

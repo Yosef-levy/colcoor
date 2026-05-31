@@ -2799,7 +2799,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       var segs = visibleThreadSegmentsForUi();
       if (segs.length) return true;
-      if (state.pendingUserHtml || state.streamingHtml) return true;
+      if (state.selectedRun && (state.pendingUserHtml || state.streamingHtml)) return true;
       return String(threadPlainTextForCopy()).trim().length > 0;
     }
 
@@ -3477,8 +3477,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
    */
     function computeThreadScrollMode(preserveThreadScroll, prevSnap, st) {
       if (preserveThreadScroll) return "preserve";
-      if (st.pendingUserHtml) return "force";
-      if (st.streamingHtml) return "stick";
+      if (st.selectedRun && st.pendingUserHtml) return "force";
+      if (st.selectedRun && st.streamingHtml) return "stick";
       if (st.busy && !st.pendingUserHtml) return "stick";
       var nextSnap = threadScrollSnapshotFromState(st);
       if (prevSnap) {
@@ -3574,7 +3574,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       wrap.addEventListener(
         "scroll",
         function () {
-          if (!state.streamingHtml && !state.busy) return;
+          if ((!state.selectedRun || !state.streamingHtml) && !state.busy) return;
           threadStreamScrollPinned = !isThreadScrolledToBottom(wrap);
         },
         { passive: true },
@@ -3672,7 +3672,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         html += "</div>";
       }
-      if (state.pendingUserHtml) {
+      if (selectedRunActive && state.pendingUserHtml) {
         html +=
           '<div class="msg user pending-send"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">User</div>' +
           '<p class="pending-hint">Sending… (not on the tree until saved)</p>' +
@@ -3680,7 +3680,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           state.pendingUserHtml +
           "</div></div>";
       }
-      if (state.streamingHtml || (state.streamingDisplayParts && state.streamingDisplayParts.length)) {
+      if (
+        selectedRunActive &&
+        (state.streamingHtml || (state.streamingDisplayParts && state.streamingDisplayParts.length))
+      ) {
         html +=
           '<div class="msg assistant streaming"><button type="button" class="thread-copy-icon-btn msg-copy-icon" aria-label="Copy message" title="Copy message">⧉</button><div class="role">' +
           pendingAssistantRoleLabel() +
@@ -4719,7 +4722,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           prevConversationIdForSideChatScroll = cidScroll;
           prevSideChatPanelOpen = false;
         }
-        if (!state.streamingHtml && !state.busy) {
+        if ((!state.selectedRun || !state.streamingHtml) && !state.busy) {
           threadStreamScrollPinned = false;
         }
         wireThreadScrollPinDuringStream();
@@ -4804,11 +4807,25 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       };
     }
 
+    function clearSelectedRunThreadTailState() {
+      state = {
+        ...state,
+        streamingHtml: null,
+        streamingDisplayParts: [],
+        pendingUserHtml: null,
+        selectedRun: null,
+        waitingForAssistant: false,
+        queuedMainSendCount: 0,
+      };
+    }
+
     function selectTreeNodeInWebview(eventId) {
       var root = document.getElementById("tree");
       if (!root) return;
       var eid = String(eventId);
+      if (eid === state.selectedEventId) return;
       state.selectedEventId = eid;
+      clearSelectedRunThreadTailState();
       try {
         var prev = root.querySelector(".node.selected");
         if (prev) prev.classList.remove("selected");
@@ -4820,6 +4837,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           }
         }
       } catch (e0) {}
+      renderThread({ mode: "preserve" });
       vscode.postMessage({ type: "select", id: eid });
     }
 
@@ -4956,15 +4974,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var node = ev.target.closest && ev.target.closest(".node");
         if (node) {
           var nid = node.getAttribute("data-id");
-          if (nid) {
-            state.selectedEventId = nid;
-            try {
-              var prev = root.querySelector(".node.selected");
-              if (prev) prev.classList.remove("selected");
-              node.classList.add("selected");
-            } catch (e2) {}
-            vscode.postMessage({ type: "select", id: nid });
-          }
+          if (nid) selectTreeNodeInWebview(nid);
         }
       });
       root.addEventListener("contextmenu", function (ev) {
@@ -5513,8 +5523,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       if (m && m.type === "assistantStream" && typeof m.html === "string") {
         var currentRunId = state.selectedRun && state.selectedRun.runId ? String(state.selectedRun.runId) : "";
-        var incomingRunId = typeof m.runId === "string" ? m.runId : "";
-        if (currentRunId && incomingRunId && currentRunId !== incomingRunId) {
+        var incomingRunId = typeof m.runId === "string" ? m.runId.trim() : "";
+        if (!currentRunId || !incomingRunId || currentRunId !== incomingRunId) {
           return;
         }
         var streamingDisplayParts = Array.isArray(m.displayParts) ? m.displayParts : [];
