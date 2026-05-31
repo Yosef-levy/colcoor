@@ -279,6 +279,14 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('walk("__root__", 0)');
   });
 
+  it("keeps tree message cards from stretching across wide tree panes", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("min-width: 100%;");
+    expect(html).toContain("width: max-content;");
+    expect(html).toContain("flex: 0 1 clamp(180px, 32vw, 360px);");
+    expect(html).toContain("max-width: min(360px, calc(100vw - 72px));");
+  });
+
   it("shows staged main-thread reference row and clear postMessage in inline side chat", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="inlineSideChatGraphRefRow"');

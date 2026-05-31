@@ -687,7 +687,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       list-style: none;
       margin: 0;
       padding: 0;
-      min-width: max-content;
+      min-width: 100%;
     }
     .tree-branch {
       list-style: none;
@@ -749,7 +749,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       display: flex;
       align-items: stretch;
       gap: 2px;
-      min-width: max-content;
+      width: max-content;
+      max-width: 100%;
+      min-width: 0;
     }
     .tree-expand {
       flex: 0 0 22px;
@@ -778,7 +780,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       width: 22px;
     }
     .node {
-      flex: 1;
+      flex: 0 1 clamp(180px, 32vw, 360px);
+      width: clamp(180px, 32vw, 360px);
+      max-width: min(360px, calc(100vw - 72px));
       min-width: 0;
       cursor: pointer;
       border-radius: 8px;
