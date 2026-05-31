@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import * as vscode from "vscode";
 
 import { appendCliPermissionTokens } from "./cursorCliConfigPermissions";
+import { enqueueToolCallApproval } from "./cursorToolCallApprovalQueue";
 import {
   continuationPromptAfterAllowlist,
   continuationPromptAfterRun,
@@ -17,6 +18,11 @@ import {
 
 export type ToolApprovalDecision = "run" | "skip" | "allowlist" | "useShell";
 
+export type ToolCallApprovalPromptContext = {
+  /** Short label for the Colcoor branch that triggered this approval (shown in the modal). */
+  branchLabel?: string;
+};
+
 export type ToolRejectionResolution = {
   kind: "resume";
   continuationPrompt: string;
@@ -29,51 +35,57 @@ const USE_SHELL_LABEL = "Use shell instead";
 /** Ask the user how to handle a Cursor CLI tool rejection. */
 export async function promptToolCallApproval(
   rejection: ToolCallRejection,
+  context?: ToolCallApprovalPromptContext,
 ): Promise<ToolApprovalDecision> {
-  const title = rejection.title.trim() || "Tool call needs approval";
-  const canRun = toolCallSupportsRunOnce(rejection);
-  const canUseShell = toolCallSupportsShellInstead(rejection);
-  const showAllowlist = !rejection.headlessWebBlock && rejection.allowTokens.length > 0;
+  return enqueueToolCallApproval(async () => {
+    const title = rejection.title.trim() || "Tool call needs approval";
+    const canRun = toolCallSupportsRunOnce(rejection);
+    const canUseShell = toolCallSupportsShellInstead(rejection);
+    const showAllowlist = !rejection.headlessWebBlock && rejection.allowTokens.length > 0;
 
-  const choices: string[] = [];
-  if (canRun) {
-    choices.push(runOnceLabelForRejection(rejection));
-  }
-  if (canUseShell) {
-    choices.push(USE_SHELL_LABEL);
-  }
-  if (showAllowlist) {
-    choices.push(ALLOWLIST_LABEL);
-  }
-  choices.push(SKIP_LABEL);
+    const choices: string[] = [];
+    if (canRun) {
+      choices.push(runOnceLabelForRejection(rejection));
+    }
+    if (canUseShell) {
+      choices.push(USE_SHELL_LABEL);
+    }
+    if (showAllowlist) {
+      choices.push(ALLOWLIST_LABEL);
+    }
+    choices.push(SKIP_LABEL);
 
-  const detail = rejection.headlessWebBlock
-    ? [
-        rejection.userRequest ? `User asked: ${rejection.userRequest}` : rejection.detail,
-        rejection.shellFallbackCommand
-          ? `Suggested: ${rejection.shellFallbackCommand}`
-          : undefined,
-        "Native web tools are blocked in Cursor headless CLI; allowlist tokens do not re-enable them.",
-      ]
-        .filter(Boolean)
-        .join("\n\n")
-    : rejection.detail;
+    const branchLabel = context?.branchLabel?.trim();
+    const branchPrefix = branchLabel ? `Reply branch: ${branchLabel}\n\n` : "";
 
-  const choice = await vscode.window.showInformationMessage(
-    `Colcoor: ${title}\n\n${detail}`,
-    { modal: true },
-    ...choices,
-  );
-  if (canRun && choice === runOnceLabelForRejection(rejection)) {
-    return "run";
-  }
-  if (canUseShell && choice === USE_SHELL_LABEL) {
-    return "useShell";
-  }
-  if (showAllowlist && choice === ALLOWLIST_LABEL) {
-    return "allowlist";
-  }
-  return "skip";
+    const detail = rejection.headlessWebBlock
+      ? [
+          rejection.userRequest ? `User asked: ${rejection.userRequest}` : rejection.detail,
+          rejection.shellFallbackCommand
+            ? `Suggested: ${rejection.shellFallbackCommand}`
+            : undefined,
+          "Native web tools are blocked in Cursor headless CLI; allowlist tokens do not re-enable them.",
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+      : rejection.detail;
+
+    const choice = await vscode.window.showInformationMessage(
+      `Colcoor: ${title}\n\n${branchPrefix}${detail}`,
+      { modal: true },
+      ...choices,
+    );
+    if (canRun && choice === runOnceLabelForRejection(rejection)) {
+      return "run";
+    }
+    if (canUseShell && choice === USE_SHELL_LABEL) {
+      return "useShell";
+    }
+    if (showAllowlist && choice === ALLOWLIST_LABEL) {
+      return "allowlist";
+    }
+    return "skip";
+  });
 }
 
 export async function executeShellCommandOnce(params: {
@@ -136,9 +148,10 @@ export async function resolveToolCallRejection(
   rejection: ToolCallRejection,
   timeoutMs: number,
   userMessage?: string,
+  context?: ToolCallApprovalPromptContext,
 ): Promise<ToolRejectionResolution> {
   const enriched = enrichRejectionWithUserRequest(rejection, userMessage);
-  const decision = await promptToolCallApproval(enriched);
+  const decision = await promptToolCallApproval(enriched, context);
   if (decision === "skip") {
     return { kind: "resume", continuationPrompt: continuationPromptAfterSkip(enriched) };
   }

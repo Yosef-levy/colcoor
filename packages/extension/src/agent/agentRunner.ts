@@ -50,6 +50,8 @@ export class AgentRunner {
     onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
     /** Cursor CLI `--model`; omit for automatic model selection. */
     cliModel?: string;
+    /** Shown in tool-approval modals so parallel runs are distinguishable. */
+    toolApprovalBranchLabel?: string;
   }): Promise<AgentRunResult> {
     const config = vscode.workspace.getConfiguration("colcoor");
     const rawMode = config.get<string>("agentMode") ?? "auto";
@@ -95,7 +97,10 @@ export class AgentRunner {
         cliModel: input.cliModel?.trim() || undefined,
         promptToolApproval,
         resolveToolRejection: promptToolApproval
-          ? (rejection) => resolveToolCallRejection(rejection, timeoutMs, input.userMessage)
+          ? (rejection) =>
+              resolveToolCallRejection(rejection, timeoutMs, input.userMessage, {
+                branchLabel: input.toolApprovalBranchLabel,
+              })
           : undefined,
       });
       const cliModelId = input.cliModel?.trim() || cliSessionModel?.trim() || undefined;

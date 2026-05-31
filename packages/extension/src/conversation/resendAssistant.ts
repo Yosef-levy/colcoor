@@ -33,6 +33,8 @@ export type RunResendAssistantOptions = {
   cliModel?: string;
   /** Incremental linear-chat token baseline before this resend. */
   linearContextTokensBeforeRun?: number;
+  /** Shown in tool-approval modals so parallel runs are distinguishable. */
+  toolApprovalBranchLabel?: string;
 };
 
 /**
@@ -118,6 +120,7 @@ export async function runResendAssistant(
       onTextDelta: options?.onAssistantTextDelta,
       onDisplayParts: options?.onAssistantDisplayParts,
       cliModel: options?.cliModel,
+      toolApprovalBranchLabel: options?.toolApprovalBranchLabel,
     });
     return appendAssistantFromAgentResult(
       api,

@@ -86,6 +86,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow-x: auto;
       overscroll-behavior: contain;
     }
+    .tree-zoom-label {
+      font-size: 0.72em;
+      color: var(--vscode-descriptionForeground);
+      min-width: 2.6em;
+      text-align: center;
+      user-select: none;
+      line-height: 1.2;
+    }
     .col-center {
       flex: 1;
       display: flex;
@@ -1704,6 +1712,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             aria-label="Collapse to current thread"
           >⇲</button>
           <button
+            id="btnTreeZoomOut"
+            type="button"
+            class="btn-secondary btn-icon"
+            title="Zoom out conversation tree (Ctrl+wheel)"
+            aria-label="Zoom out conversation tree"
+          >−</button>
+          <span id="treeZoomLabel" class="tree-zoom-label" aria-hidden="true">100%</span>
+          <button
+            id="btnTreeZoomIn"
+            type="button"
+            class="btn-secondary btn-icon"
+            title="Zoom in conversation tree (Ctrl+wheel)"
+            aria-label="Zoom in conversation tree"
+          >+</button>
+          <button
             id="refresh"
             type="button"
             class="btn-secondary btn-icon"
@@ -2453,6 +2476,77 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var ta = document.getElementById("input");
         if (ta && h >= 72 && h <= 800) ta.style.height = h + "px";
       } catch (e) {}
+    })();
+
+    var TREE_ZOOM_MIN = 0.65;
+    var TREE_ZOOM_MAX = 1.75;
+    var TREE_ZOOM_STEP = 0.1;
+    var TREE_ZOOM_LS_KEY = "colcoor.treeZoomScale";
+
+    function readTreeZoomScale() {
+      try {
+        var v = parseFloat(localStorage.getItem(TREE_ZOOM_LS_KEY));
+        if (Number.isFinite(v) && v >= TREE_ZOOM_MIN && v <= TREE_ZOOM_MAX) return v;
+      } catch (e0) {}
+      return 1;
+    }
+
+    function formatTreeZoomLabel(scale) {
+      return Math.round(scale * 100) + "%";
+    }
+
+    function applyTreeZoom() {
+      var tree = document.getElementById("tree");
+      if (!tree) return;
+      var scale = readTreeZoomScale();
+      tree.style.zoom = String(scale);
+      var lbl = document.getElementById("treeZoomLabel");
+      if (lbl) lbl.textContent = formatTreeZoomLabel(scale);
+      var out = document.getElementById("btnTreeZoomOut");
+      var inn = document.getElementById("btnTreeZoomIn");
+      if (out) out.disabled = scale <= TREE_ZOOM_MIN + 1e-6;
+      if (inn) inn.disabled = scale >= TREE_ZOOM_MAX - 1e-6;
+    }
+
+    function setTreeZoomScale(scale) {
+      var snapped = Math.round(scale / TREE_ZOOM_STEP) * TREE_ZOOM_STEP;
+      var next = Math.min(TREE_ZOOM_MAX, Math.max(TREE_ZOOM_MIN, snapped));
+      try {
+        localStorage.setItem(TREE_ZOOM_LS_KEY, String(next));
+      } catch (e0) {}
+      applyTreeZoom();
+    }
+
+    function bumpTreeZoom(delta) {
+      setTreeZoomScale(readTreeZoomScale() + delta);
+    }
+
+    (function wireTreeZoom() {
+      var out = document.getElementById("btnTreeZoomOut");
+      var inn = document.getElementById("btnTreeZoomIn");
+      var scroll = document.querySelector(".tree-scroll");
+      if (out) {
+        out.addEventListener("click", function () {
+          bumpTreeZoom(-TREE_ZOOM_STEP);
+        });
+      }
+      if (inn) {
+        inn.addEventListener("click", function () {
+          bumpTreeZoom(TREE_ZOOM_STEP);
+        });
+      }
+      if (scroll) {
+        scroll.addEventListener(
+          "wheel",
+          function (ev) {
+            if (!ev.ctrlKey && !ev.metaKey) return;
+            ev.preventDefault();
+            bumpTreeZoom(ev.deltaY < 0 ? TREE_ZOOM_STEP : -TREE_ZOOM_STEP);
+          },
+          { passive: false },
+        );
+      }
+      applyTreeZoom();
     })();
 
     function esc(s) {
@@ -4727,6 +4821,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         wireThreadScrollPinDuringStream();
         renderTree();
+        applyTreeZoom();
         var threadScrollMode = computeThreadScrollMode(
           preserveThreadScroll,
           lastThreadScrollSnapshot,

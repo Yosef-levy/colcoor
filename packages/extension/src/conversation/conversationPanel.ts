@@ -43,6 +43,7 @@ import {
 } from "./normalizeUserInputText";
 import { buildUserImageDataUrlsByEventId } from "./conversationImageDataUrls";
 import { runColcoorUserTurn } from "./runUserTurn";
+import { shouldAutoSelectPersistedUserMessage } from "./persistedUserSelection";
 import { enrichGraphEventsWithComposerDisplay } from "./enrichGraphEventsWithComposerDisplay";
 import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
@@ -564,6 +565,16 @@ export function createConversationPanelController(
   let visitedSelectionStack: string[] = [];
   let visitedSelectionIndex = -1;
   let suppressVisitedSelectionRecording = false;
+  /** Bumps when the user explicitly changes tree selection (not programmatic refresh). */
+  let selectionRevision = 0;
+
+  function noteExplicitSelectionChange(nextId: string): void {
+    const trimmed = nextId.trim();
+    if (!trimmed || trimmed === selectedEventId) {
+      return;
+    }
+    selectionRevision += 1;
+  }
 
   function resetVisitedSelectionHistory(): void {
     visitedSelectionStack = [];
@@ -1302,6 +1313,14 @@ export function createConversationPanelController(
     return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 
+  function toolApprovalBranchLabel(message: string): string {
+    const t = normalizePersistedUserInputText(message).replace(/\s+/g, " ").trim();
+    if (!t) {
+      return "Parallel reply";
+    }
+    return t.length > 72 ? `${t.slice(0, 69)}…` : t;
+  }
+
   function hasActiveMainRuns(): boolean {
     return activeMainRunsByRunId.size > 0;
   }
@@ -1430,7 +1449,7 @@ export function createConversationPanelController(
       matchOnDescription: true,
     });
     if (!pick) {
-      postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
       return;
     }
     await writeSelectedAgentModelForConversation(
@@ -1438,13 +1457,13 @@ export function createConversationPanelController(
       conversationId,
       pick.modelId,
     );
-    postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
   }
 
   function scheduleRefreshCachedAgentModels(): void {
     scheduleRefreshAgentModelCatalog(context.secrets, () => {
       if (panel && conversationId && webviewReady) {
-        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
       }
     });
   }
@@ -1740,6 +1759,9 @@ export function createConversationPanelController(
       prefetchedTreeEvents?: GraphEventNode[];
       prefetchedNotes?: NoteOut[];
       skipInlineSideChatRefresh?: boolean;
+      /** Keep the current tree selection; do not overwrite from backend active_event_id. */
+      preserveLocalSelection?: boolean;
+      preserveThreadScroll?: boolean;
     },
   ): Promise<void> {
     await withTreeRefreshLock(async () => {
@@ -1748,6 +1770,8 @@ export function createConversationPanelController(
       }
       const skipConversationsList = Boolean(opts?.skipConversationsList);
       const skipInlineSideChatRefresh = Boolean(opts?.skipInlineSideChatRefresh);
+      const preserveLocalSelection = Boolean(opts?.preserveLocalSelection);
+      const preserveThreadScroll = Boolean(opts?.preserveThreadScroll);
       let finalizeToDefaultBranchTip = Boolean(opts?.finalizeToDefaultBranchTip);
       const explicitSelectEventId =
         typeof opts?.selectEventId === "string" ? opts.selectEventId.trim() : "";
@@ -1829,7 +1853,7 @@ export function createConversationPanelController(
             const lr = caller.side_chat_last_read_seq;
             lastSideChatReadSeq =
               typeof lr === "number" && Number.isFinite(lr) ? Math.max(0, Math.floor(lr)) : 0;
-            if (!busy && !explicitSelectEventId) {
+            if (!busy && !explicitSelectEventId && !hasActiveMainRuns() && !preserveLocalSelection) {
               const aidRaw = caller.active_event_id;
               const aid =
                 typeof aidRaw === "string" && aidRaw.trim() ? aidRaw.trim() : "";
@@ -1944,7 +1968,9 @@ export function createConversationPanelController(
           lastConversationMembers = members;
           conversationTreeLoading = false;
           await ensureMeForSideChat();
-          postState(events, busy, lastError);
+          postState(events, busy, lastError, {
+            ...(preserveThreadScroll ? { preserveThreadScroll: true } : {}),
+          });
           if (members.length > 1) {
             ensureInlineSideChatSseForConversation();
           } else {
@@ -2021,6 +2047,8 @@ export function createConversationPanelController(
     }
     while (run.queue.length > 0) {
       const item = run.queue.shift()!;
+      const selectionAtQueuedSendStart = selectedEventId;
+      const selectionRevisionAtQueuedSendStart = selectionRevision;
       const stream = createStreamForRun(run);
       try {
         const refs = await resolveMainSendMediaRefs(item.images, item.imageRefs);
@@ -2057,6 +2085,7 @@ export function createConversationPanelController(
             onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
             cliModel: item.cliModel,
             linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
+            toolApprovalBranchLabel: toolApprovalBranchLabel(trimmed || "Queued message"),
             ...(userMediaContentJson ? { userMediaContentJson } : {}),
             onUserMessagePersisted: async ({ userEventId }) => {
               const previousRunUserEventId = run.userEventId;
@@ -2064,7 +2093,10 @@ export function createConversationPanelController(
               run.userEventId = userEventId;
               activeMainRunIdByUserEventId.set(userEventId, run.runId);
               const shouldSelectQueuedUser =
-                selectedEventId === previousRunUserEventId || selectedEventId === run.assistantEventId;
+                selectionRevision === selectionRevisionAtQueuedSendStart &&
+                selectedEventId === selectionAtQueuedSendStart &&
+                (selectedEventId === previousRunUserEventId ||
+                  selectedEventId === run.assistantEventId);
               if (shouldSelectQueuedUser) {
                 selectedEventId = userEventId;
               }
@@ -2242,6 +2274,8 @@ export function createConversationPanelController(
     }
     const ws = getWorkspaceRoot();
     const abort = new AbortController();
+    const selectionAtSendStart = selectedEventId;
+    const selectionRevisionAtSendStart = selectionRevision;
     const run: ActiveMainRun = {
       runId: newMainRunId(),
       anchorParentEventId: args.replyParentEventId,
@@ -2287,6 +2321,9 @@ export function createConversationPanelController(
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
           linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
+          toolApprovalBranchLabel: toolApprovalBranchLabel(
+            trimmed || (hasPasted || hasRefs ? "Image message" : "New message"),
+          ),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
@@ -2295,8 +2332,14 @@ export function createConversationPanelController(
             run.pendingUserMarkdown = undefined;
             run.userEventId = userEventId;
             activeMainRunIdByUserEventId.set(userEventId, run.runId);
-            const shouldSelectPersistedUser =
-              args.selectPersistedUser && selectedEventId === args.replyParentEventId;
+            const shouldSelectPersistedUser = shouldAutoSelectPersistedUserMessage({
+              selectPersistedUser: args.selectPersistedUser,
+              selectedEventId,
+              replyParentEventId: args.replyParentEventId,
+              selectionAtSendStart,
+              selectionRevision,
+              selectionRevisionAtSendStart,
+            });
             if (shouldSelectPersistedUser) {
               selectedEventId = userEventId;
             }
@@ -2385,6 +2428,8 @@ export function createConversationPanelController(
     postState(lastTreeEvents, true, lastPostedError);
     const stream = createStreamForRun(run);
     try {
+      const resendUserBody =
+        lastTreeEvents.find((e) => e.id === eventId)?.content_text?.trim() || "Resend";
       const result = await runResendAssistant(
         api,
         agent,
@@ -2398,6 +2443,7 @@ export function createConversationPanelController(
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
           linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
+          toolApprovalBranchLabel: toolApprovalBranchLabel(resendUserBody),
           ...(lastTreeEvents.length > 0
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
@@ -2553,7 +2599,7 @@ export function createConversationPanelController(
           conversationId,
           msg.model,
         );
-        postState(lastTreeEvents, lastPostedBusy, lastPostedError);
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
         return;
       }
       if (msg.type === "openAgentModelPicker") {
@@ -2570,6 +2616,7 @@ export function createConversationPanelController(
           return;
         }
         const prevSel = selectedEventId;
+        noteExplicitSelectionChange(nextId);
         selectedEventId = nextId;
         // Keep tree selection snappy: render immediately from cached state, then sync active in background.
         if (lastTreeEvents.some((e) => e.id === nextId)) {
@@ -2593,6 +2640,7 @@ export function createConversationPanelController(
         suppressVisitedSelectionRecording = true;
         try {
           visitedSelectionIndex = nextIdx;
+          noteExplicitSelectionChange(nextSel);
           selectedEventId = nextSel;
           postState(lastTreeEvents, lastPostedBusy, lastPostedError);
           void syncActiveToBackend(nextSel, {
@@ -2616,6 +2664,7 @@ export function createConversationPanelController(
         suppressVisitedSelectionRecording = true;
         try {
           visitedSelectionIndex = nextIdx;
+          noteExplicitSelectionChange(nextSel);
           selectedEventId = nextSel;
           postState(lastTreeEvents, lastPostedBusy, lastPostedError);
           void syncActiveToBackend(nextSel, {
@@ -2661,7 +2710,10 @@ export function createConversationPanelController(
         return;
       }
       if (msg.type === "refresh") {
-        await loadTreeAndPush(false, null);
+        await loadTreeAndPush(false, null, {
+          preserveLocalSelection: true,
+          preserveThreadScroll: true,
+        });
         return;
       }
       if (msg.type === "openLegalPolicyUrl" && typeof msg.url === "string") {
@@ -3443,7 +3495,11 @@ export function createConversationPanelController(
         payload ? "Colcoor: title saved." : "Colcoor: title cleared.",
         2500,
       );
-      await loadTreeAndPush(false, null, { skipConversationsList: true });
+      await loadTreeAndPush(false, null, {
+        skipConversationsList: true,
+        preserveLocalSelection: true,
+        preserveThreadScroll: true,
+      });
     } catch (e) {
       void showColcoorApiFailure(e);
     }
@@ -3907,7 +3963,10 @@ export function createConversationPanelController(
         );
         return;
       }
-      await loadTreeAndPush(false, null);
+      await loadTreeAndPush(false, null, {
+        preserveLocalSelection: true,
+        preserveThreadScroll: true,
+      });
       if (!opts?.quiet) {
         void vscode.window.setStatusBarMessage("Colcoor: conversation tree refreshed.", 2500);
       }

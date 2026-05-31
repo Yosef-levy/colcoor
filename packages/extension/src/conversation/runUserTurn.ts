@@ -73,6 +73,8 @@ export type RunUserTurnOptions = {
   cliModel?: string;
   /** Incremental linear-chat token baseline before this pending user message. */
   linearContextTokensBeforeRun?: number;
+  /** Shown in tool-approval modals so parallel runs are distinguishable. */
+  toolApprovalBranchLabel?: string;
 };
 
 export type UserTurnResult = {
@@ -181,6 +183,7 @@ export async function runColcoorUserTurn(
       onTextDelta: options?.onAssistantTextDelta,
       onDisplayParts: options?.onAssistantDisplayParts,
       cliModel: options?.cliModel,
+      toolApprovalBranchLabel: options?.toolApprovalBranchLabel,
     });
     return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult, contextSavings);
   } catch (e) {

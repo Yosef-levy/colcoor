@@ -312,6 +312,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("collapseToCurrentThread");
   });
 
+  it("supports zoom in and out on the conversation tree", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnTreeZoomOut"');
+    expect(html).toContain('id="btnTreeZoomIn"');
+    expect(html).toContain('id="treeZoomLabel"');
+    expect(html).toContain("function applyTreeZoom()");
+    expect(html).toContain("colcoor.treeZoomScale");
+    expect(html).toContain("tree.style.zoom");
+    expect(html).toContain("ev.ctrlKey && !ev.metaKey");
+  });
+
   it("exposes thread visited-selection back/forward controls under the thread hint", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnSelectionHistoryBack"');

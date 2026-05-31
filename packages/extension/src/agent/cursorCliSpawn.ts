@@ -11,6 +11,11 @@ import {
   type ToolCallRejection,
 } from "./cursorToolCallRejection";
 import type { ToolRejectionResolution } from "./cursorToolCallApproval";
+import {
+  mergeAgentDisplayPartsAcrossResume,
+  mergeAgentStdoutAcrossResume,
+} from "./cursorCliStdoutMerge";
+import { withWorkspaceAgentSpawn } from "./cursorCliWorkspaceLock";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
 const MAX_TOOL_RESUME_ATTEMPTS = 5;
@@ -112,9 +117,12 @@ export function buildEnvForAgentSpawn(storedCursorApiKey: string | undefined): N
 
 function mergeSpawnResults(base: CursorCliSpawnResult, next: CursorCliSpawnResult): CursorCliSpawnResult {
   const ndjsonTimeline = [...(base.ndjsonTimeline ?? []), ...(next.ndjsonTimeline ?? [])];
-  const displayParts = [...(base.displayParts ?? []), ...(next.displayParts ?? [])];
+  const displayParts = mergeAgentDisplayPartsAcrossResume(
+    base.displayParts ?? [],
+    next.displayParts ?? [],
+  );
   return {
-    stdout: next.stdout || base.stdout,
+    stdout: mergeAgentStdoutAcrossResume(base.stdout, next.stdout),
     stderr: [base.stderr, next.stderr].filter(Boolean).join("\n"),
     exitCode: next.exitCode,
     cancelled: next.cancelled ?? base.cancelled,
@@ -390,20 +398,33 @@ export async function spawnCursorAgentPrint(params: {
   let resumeAttempts = 0;
 
   while (true) {
-    const once = await spawnCursorAgentPrintOnce({
-      executable: params.executable,
-      workspaceRoot: params.workspaceRoot,
-      prompt,
-      timeoutMs: params.timeoutMs,
-      storedCursorApiKey: params.storedCursorApiKey,
-      signal: params.signal,
-      onStdoutAccumulated: params.onStdoutAccumulated,
-      onDisplayParts: params.onDisplayParts,
-      outputMode,
-      cliModel: params.cliModel,
-      resumeSessionId,
-      detectToolRejections,
-    });
+    const once = await withWorkspaceAgentSpawn(
+      params.workspaceRoot,
+      { resume: Boolean(resumeSessionId?.trim()) },
+      () =>
+        spawnCursorAgentPrintOnce({
+        executable: params.executable,
+        workspaceRoot: params.workspaceRoot,
+        prompt,
+        timeoutMs: params.timeoutMs,
+        storedCursorApiKey: params.storedCursorApiKey,
+        signal: params.signal,
+        onStdoutAccumulated: (textSoFarThisSpawn) => {
+          params.onStdoutAccumulated?.(
+            mergeAgentStdoutAcrossResume(merged.stdout, textSoFarThisSpawn),
+          );
+        },
+        onDisplayParts: (partsThisSpawn) => {
+          params.onDisplayParts?.(
+            mergeAgentDisplayPartsAcrossResume(merged.displayParts ?? [], partsThisSpawn),
+          );
+        },
+        outputMode,
+        cliModel: params.cliModel,
+        resumeSessionId,
+          detectToolRejections,
+        }),
+    );
     merged = mergeSpawnResults(merged, once);
 
     if (
