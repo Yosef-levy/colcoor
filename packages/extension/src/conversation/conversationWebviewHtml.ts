@@ -750,7 +750,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       align-items: stretch;
       gap: 2px;
       width: max-content;
-      max-width: 100%;
       min-width: 0;
     }
     .tree-expand {
@@ -780,9 +779,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       width: 22px;
     }
     .node {
-      flex: 0 1 clamp(180px, 32vw, 360px);
-      width: clamp(180px, 32vw, 360px);
-      max-width: min(360px, calc(100vw - 72px));
+      flex: 0 0 240px;
+      width: 240px;
       min-width: 0;
       cursor: pointer;
       border-radius: 8px;

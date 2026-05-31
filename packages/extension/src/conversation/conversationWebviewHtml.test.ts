@@ -279,12 +279,13 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('walk("__root__", 0)');
   });
 
-  it("keeps tree message cards from stretching across wide tree panes", () => {
+  it("keeps tree message cards at a fixed readable width", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("min-width: 100%;");
     expect(html).toContain("width: max-content;");
-    expect(html).toContain("flex: 0 1 clamp(180px, 32vw, 360px);");
-    expect(html).toContain("max-width: min(360px, calc(100vw - 72px));");
+    expect(html).not.toContain("max-width: 100%;");
+    expect(html).toContain("flex: 0 0 240px;");
+    expect(html).toContain("width: 240px;");
   });
 
   it("shows staged main-thread reference row and clear postMessage in inline side chat", () => {
