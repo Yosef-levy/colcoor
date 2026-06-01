@@ -26,7 +26,6 @@ import {
   parseToolCallRejection,
   parseToolCallStarted,
   shellCommandBasesForAllowlist,
-  type ToolCallPending,
   type ToolCallRejection,
 } from "./cursorToolCallRejection";
 
