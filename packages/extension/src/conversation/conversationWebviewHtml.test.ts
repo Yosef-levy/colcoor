@@ -373,6 +373,8 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('return "force"');
     expect(html).toContain("applyThreadScrollAfterRender");
     expect(html).toContain("function patchStreamingAssistantBody(html)");
+    expect(html).toContain("function patchStreamingAssistantContent(html, displayParts)");
+    expect(html).toContain("shouldTrackThreadStreamScrollPin");
     expect(html).toContain("threadStreamScrollPinned");
     expect(html).toContain("wireThreadScrollPinDuringStream");
   });

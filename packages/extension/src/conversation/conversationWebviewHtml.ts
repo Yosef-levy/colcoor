@@ -3529,9 +3529,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return threadEl && threadEl.closest ? threadEl.closest(".thread-scroll") : null;
     }
 
+    function shouldTrackThreadStreamScrollPin(st) {
+      if (!st) return false;
+      if (st.busy) return true;
+      if (!st.selectedRun) return false;
+      return !!(st.streamingHtml || (st.streamingDisplayParts && st.streamingDisplayParts.length));
+    }
+
     /** True when the viewport is at (or within thresholdPx of) the bottom before content changes. */
     function isThreadScrolledToBottom(wrap, thresholdPx) {
-      if (!wrap) return true;
+      if (!wrap) return false;
       var th = typeof thresholdPx === "number" && Number.isFinite(thresholdPx) ? thresholdPx : 48;
       try {
         return wrap.scrollHeight - wrap.clientHeight - wrap.scrollTop <= th;
@@ -3572,7 +3579,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     function computeThreadScrollMode(preserveThreadScroll, prevSnap, st) {
       if (preserveThreadScroll) return "preserve";
       if (st.selectedRun && st.pendingUserHtml) return "force";
-      if (st.selectedRun && st.streamingHtml) return "stick";
+      if (
+        st.selectedRun &&
+        (st.streamingHtml || (st.streamingDisplayParts && st.streamingDisplayParts.length))
+      ) {
+        return "stick";
+      }
       if (st.busy && !st.pendingUserHtml) return "stick";
       var nextSnap = threadScrollSnapshotFromState(st);
       if (prevSnap) {
@@ -3611,7 +3623,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
     function applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom) {
       if (mode === "preserve" && wrap && prevScrollTop != null) {
-        restoreThreadScroll(wrap, prevScrollTop);
+        if (shouldTrackThreadStreamScrollPin(state) || threadStreamScrollPinned) {
+          setThreadScrollTopImmediate(wrap, prevScrollTop);
+        } else {
+          restoreThreadScroll(wrap, prevScrollTop);
+        }
         return;
       }
       if (mode === "force") {
@@ -3621,8 +3637,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (mode === "stick") {
         if (threadStreamScrollPinned && wrap && prevScrollTop != null) {
           setThreadScrollTopImmediate(wrap, prevScrollTop);
-        } else if (wasAtBottom) {
-          scrollThreadToBottom();
+        } else if (wasAtBottom && wrap && !threadStreamScrollPinned) {
+          setThreadScrollTopImmediate(wrap, wrap.scrollHeight);
         } else if (wrap && prevScrollTop != null) {
           setThreadScrollTopImmediate(wrap, prevScrollTop);
         }
@@ -3641,6 +3657,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       } catch (e0) {}
     }
 
+    function applyStreamingAssistantScroll(wrap, prevTop, followBottomBeforeChange) {
+      if (!wrap) return;
+      if (threadStreamScrollPinned || !followBottomBeforeChange) {
+        setThreadScrollTopImmediate(wrap, prevTop);
+      } else {
+        setThreadScrollTopImmediate(wrap, wrap.scrollHeight);
+      }
+    }
+
     /** Update only the streaming assistant body to avoid full-thread innerHTML flicker. */
     function patchStreamingAssistantBody(html) {
       var el = document.getElementById("thread");
@@ -3649,16 +3674,46 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!body) return false;
       var wrap = getThreadScrollWrap();
       var prevTop = wrap ? wrap.scrollTop : 0;
-      var wasAtBottom = wrap ? isThreadScrolledToBottom(wrap) : true;
+      var followBottom = wrap ? !threadStreamScrollPinned && isThreadScrolledToBottom(wrap) : false;
       body.innerHTML = html || "";
-      if (threadStreamScrollPinned) {
-        if (wrap) setThreadScrollTopImmediate(wrap, prevTop);
-      } else if (wasAtBottom && wrap) {
-        setThreadScrollTopImmediate(wrap, wrap.scrollHeight);
-      } else if (wrap) {
-        setThreadScrollTopImmediate(wrap, prevTop);
-      }
+      applyStreamingAssistantScroll(wrap, prevTop, followBottom);
       return true;
+    }
+
+    function patchStreamingAssistantDisplayParts(displayParts) {
+      var parts = Array.isArray(displayParts) ? displayParts : [];
+      if (!parts.length) return false;
+      var el = document.getElementById("thread");
+      if (!el) return false;
+      var streaming = el.querySelector(".msg.assistant.streaming");
+      if (!streaming) return false;
+      var partsHtml = renderAssistantDisplayParts(parts, true);
+      if (!partsHtml) return false;
+      var wrap = getThreadScrollWrap();
+      var prevTop = wrap ? wrap.scrollTop : 0;
+      var followBottom = wrap ? !threadStreamScrollPinned && isThreadScrolledToBottom(wrap) : false;
+      var copyBtn = streaming.querySelector(".thread-copy-icon-btn");
+      var role = streaming.querySelector(".role");
+      streaming.textContent = "";
+      if (copyBtn) streaming.appendChild(copyBtn);
+      if (role) {
+        streaming.appendChild(role);
+      } else {
+        var roleEl = document.createElement("div");
+        roleEl.className = "role";
+        roleEl.textContent = pendingAssistantRoleLabel();
+        streaming.appendChild(roleEl);
+      }
+      var temp = document.createElement("div");
+      temp.innerHTML = partsHtml;
+      while (temp.firstChild) streaming.appendChild(temp.firstChild);
+      applyStreamingAssistantScroll(wrap, prevTop, followBottom);
+      return true;
+    }
+
+    function patchStreamingAssistantContent(html, displayParts) {
+      if (patchStreamingAssistantDisplayParts(displayParts)) return true;
+      return patchStreamingAssistantBody(html);
     }
 
     function wireThreadScrollPinDuringStream() {
@@ -3668,7 +3723,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       wrap.addEventListener(
         "scroll",
         function () {
-          if ((!state.selectedRun || !state.streamingHtml) && !state.busy) return;
+          if (!shouldTrackThreadStreamScrollPin(state)) return;
           threadStreamScrollPinned = !isThreadScrolledToBottom(wrap);
         },
         { passive: true },
@@ -4816,7 +4871,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           prevConversationIdForSideChatScroll = cidScroll;
           prevSideChatPanelOpen = false;
         }
-        if ((!state.selectedRun || !state.streamingHtml) && !state.busy) {
+        if (!shouldTrackThreadStreamScrollPin(state)) {
           threadStreamScrollPinned = false;
         }
         wireThreadScrollPinDuringStream();
@@ -4827,6 +4882,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           lastThreadScrollSnapshot,
           state,
         );
+        if (threadStreamScrollPinned && shouldTrackThreadStreamScrollPin(state)) {
+          threadScrollMode = "preserve";
+        }
         renderThread({ mode: threadScrollMode });
         lastThreadScrollSnapshot = threadScrollSnapshotFromState(state);
         renderInlineSideChat();
@@ -5626,8 +5684,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         state = { ...state, streamingHtml: m.html || null, streamingDisplayParts: streamingDisplayParts };
         wireThreadScrollPinDuringStream();
         try {
-          if (streamingDisplayParts.length || !patchStreamingAssistantBody(m.html)) {
-            renderThread({ mode: threadStreamScrollPinned ? "preserve" : "stick" });
+          if (!patchStreamingAssistantContent(m.html, streamingDisplayParts)) {
+            var streamWrap = getThreadScrollWrap();
+            var streamScrollMode =
+              threadStreamScrollPinned ||
+              (streamWrap && !isThreadScrolledToBottom(streamWrap))
+                ? "preserve"
+                : "stick";
+            renderThread({ mode: streamScrollMode });
           }
         } catch (e) {
           const msg = e && e.message ? String(e.message) : String(e);
