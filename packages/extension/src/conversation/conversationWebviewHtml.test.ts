@@ -357,6 +357,16 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("scrollThreadToBottom();");
   });
 
+  it("scrolls to message end on tree select and message head on re-click", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain("function scrollThreadToMessageHead(eventId");
+    expect(html).toContain("function scrollThreadToMessageEnd(eventId");
+    expect(html).toContain("pendingTreeSelectScroll");
+    expect(html).toContain('mode: "messageEnd"');
+    expect(html).toContain("if (eid === state.selectedEventId)");
+    expect(html).toContain("scrollThreadToMessageHead(eid)");
+  });
+
   it("preserves thread scroll when host sets preserveThreadScroll (note add/edit/delete)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("preserveThreadScroll");
@@ -375,6 +385,8 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("function patchStreamingAssistantBody(html)");
     expect(html).toContain("function patchStreamingAssistantContent(html, displayParts)");
     expect(html).toContain("shouldTrackThreadStreamScrollPin");
+    expect(html).toContain("threadScrollSnapshotsEqual");
+    expect(html).toContain("prevConversationIdForThreadScrollPin");
     expect(html).toContain("threadStreamScrollPinned");
     expect(html).toContain("wireThreadScrollPinDuringStream");
   });
