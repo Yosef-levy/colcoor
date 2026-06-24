@@ -566,7 +566,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       padding: 6px;
     }
     .composer .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
-    .composer select.agent-model-select {
+    .composer select.agent-model-select,
+    .composer select.agent-mode-select {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
@@ -577,7 +578,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       max-width: 14rem;
       min-width: 7rem;
     }
-    .composer select.agent-model-select:disabled {
+    .composer select.agent-model-select:disabled,
+    .composer select.agent-mode-select:disabled {
       opacity: 0.65;
     }
     .composer .composer-waiting-row {
@@ -1806,6 +1808,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <select id="agentModel" class="agent-model-select" title="Cursor CLI model for this conversation">
             <option value="auto">Auto</option>
           </select>
+          <label class="hint" for="agentMode" style="margin:0">Mode</label>
+          <select id="agentMode" class="agent-mode-select" title="Cursor CLI mode for this conversation">
+            <option value="ask" selected>Ask</option>
+            <option value="agent">Agent</option>
+            <option value="plan">Plan</option>
+          </select>
           <button id="send" type="button" disabled>Send</button>
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
           <span class="hint" id="busy" style="display:none">Working…</span>
@@ -2213,6 +2221,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       agentModelOptions: [],
       agentModelSelected: "auto",
       agentModelsListHint: null,
+      agentModeSelected: "ask",
       pendingAssistantModelLabel: null,
       gettingStartedVisible: false,
       tryThisNextVisible: false,
@@ -4630,6 +4639,23 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           : "Use model " + selected + " for sends in this conversation";
     }
 
+    function updateAgentModeSelect() {
+      var sel = document.getElementById("agentMode");
+      if (!sel) return;
+      var selected =
+        state.agentModeSelected === "agent" || state.agentModeSelected === "plan"
+          ? String(state.agentModeSelected)
+          : "ask";
+      sel.value = selected;
+      sel.disabled = false;
+      sel.title =
+        selected === "ask"
+          ? "Run Cursor CLI in Ask mode (read-only exploration)"
+          : selected === "plan"
+            ? "Run Cursor CLI in Plan mode"
+            : "Run Cursor CLI in Agent mode";
+    }
+
     function updateComposerSendEnabled() {
       var sendBtn = document.getElementById("send");
       var ta = document.getElementById("input");
@@ -4908,6 +4934,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (ta) ta.disabled = false;
         if (priv) priv.disabled = false;
         updateAgentModelSelect();
+        updateAgentModeSelect();
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
           var activeCount =
@@ -5758,6 +5785,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             typeof m.sideChatSoundVolume === "number" && Number.isFinite(m.sideChatSoundVolume)
               ? clampInlineSideChatVolume(m.sideChatSoundVolume)
               : 0.7,
+          agentModeSelected:
+            m.agentModeSelected === "agent" || m.agentModeSelected === "plan"
+              ? m.agentModeSelected
+              : "ask",
           pendingSideChatGraphReferenceSummary:
             typeof m.pendingSideChatGraphReferenceSummary === "string" &&
             m.pendingSideChatGraphReferenceSummary.trim()
@@ -5860,6 +5891,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           return;
         }
         vscode.postMessage({ type: "setAgentModel", model: modelSel.value || "auto" });
+      });
+    })();
+
+    (function wireAgentModeSelect() {
+      var modeSel = document.getElementById("agentMode");
+      if (!modeSel) return;
+      modeSel.addEventListener("change", function () {
+        vscode.postMessage({ type: "setAgentMode", mode: modeSel.value || "ask" });
       });
     })();
 

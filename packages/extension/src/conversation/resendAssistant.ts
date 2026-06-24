@@ -1,4 +1,5 @@
 import type { AgentRunner } from "../agent/agentRunner";
+import type { CursorCliMode } from "../agent/cursorCliMode";
 import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
@@ -31,6 +32,8 @@ export type RunResendAssistantOptions = {
   prefetchedGraph?: PrefetchedConversationGraph;
   /** Cursor CLI `--model`; omit for automatic model selection. */
   cliModel?: string;
+  /** Cursor CLI `--mode`; Colcoor's UI defaults this to Ask mode. */
+  cliMode?: CursorCliMode;
   /** Incremental linear-chat token baseline before this resend. */
   linearContextTokensBeforeRun?: number;
   /** Shown in tool-approval modals so parallel runs are distinguishable. */
@@ -120,6 +123,7 @@ export async function runResendAssistant(
       onTextDelta: options?.onAssistantTextDelta,
       onDisplayParts: options?.onAssistantDisplayParts,
       cliModel: options?.cliModel,
+      cliMode: options?.cliMode,
       toolApprovalBranchLabel: options?.toolApprovalBranchLabel,
     });
     return appendAssistantFromAgentResult(

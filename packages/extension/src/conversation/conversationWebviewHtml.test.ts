@@ -449,6 +449,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("updateAgentModelSelect");
   });
 
+  it("includes per-conversation Cursor CLI mode selector near the model selector", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="agentMode"');
+    expect(html).toContain('<option value="ask" selected>Ask</option>');
+    expect(html).toContain('<option value="agent">Agent</option>');
+    expect(html).toContain('<option value="plan">Plan</option>');
+    expect(html).toContain('type: "setAgentMode"');
+    expect(html).toContain("updateAgentModeSelect");
+    expect(html).toContain('agentModeSelected: "ask"');
+  });
+
   it("disables Send until the composer has text or pasted images", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('<button id="send" type="button" disabled>Send</button>');

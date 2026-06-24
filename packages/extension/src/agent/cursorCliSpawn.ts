@@ -15,6 +15,7 @@ import {
   mergeAgentDisplayPartsAcrossResume,
   mergeAgentStdoutAcrossResume,
 } from "./cursorCliStdoutMerge";
+import type { CursorCliMode } from "./cursorCliMode";
 import { withWorkspaceAgentSpawn } from "./cursorCliWorkspaceLock";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
@@ -40,16 +41,26 @@ export function buildAgentPrintArgs(
   prompt: string,
   mode: AgentCliOutputMode,
   model?: string,
+  cliMode?: CursorCliMode,
 ): string[] {
   const modelFlag = model?.trim() ? (["--model", model.trim()] as const) : [];
+  const cliModeFlag = cliMode?.trim() ? (["--mode", cliMode.trim()] as const) : [];
   const tail = agentPrintTail(workspaceRoot, prompt);
   switch (mode) {
     case "text":
-      return ["-p", "--output-format", "text", ...modelFlag, ...tail];
+      return ["-p", "--output-format", "text", ...modelFlag, ...cliModeFlag, ...tail];
     case "stream-json":
-      return ["-p", "--output-format", "stream-json", ...modelFlag, ...tail];
+      return ["-p", "--output-format", "stream-json", ...modelFlag, ...cliModeFlag, ...tail];
     default:
-      return ["-p", "--output-format", "stream-json", "--stream-partial-output", ...modelFlag, ...tail];
+      return [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--stream-partial-output",
+        ...modelFlag,
+        ...cliModeFlag,
+        ...tail,
+      ];
   }
 }
 
@@ -59,8 +70,10 @@ export function buildAgentResumeArgs(
   continuationPrompt: string,
   mode: AgentCliOutputMode,
   model?: string,
+  cliMode?: CursorCliMode,
 ): string[] {
   const modelFlag = model?.trim() ? (["--model", model.trim()] as const) : [];
+  const cliModeFlag = cliMode?.trim() ? (["--mode", cliMode.trim()] as const) : [];
   const cwd = workspaceRoot.trim() || process.cwd();
   const tail = [
     "--trust",
@@ -72,11 +85,19 @@ export function buildAgentResumeArgs(
   ] as const;
   switch (mode) {
     case "text":
-      return ["-p", "--output-format", "text", ...modelFlag, ...tail];
+      return ["-p", "--output-format", "text", ...modelFlag, ...cliModeFlag, ...tail];
     case "stream-json":
-      return ["-p", "--output-format", "stream-json", ...modelFlag, ...tail];
+      return ["-p", "--output-format", "stream-json", ...modelFlag, ...cliModeFlag, ...tail];
     default:
-      return ["-p", "--output-format", "stream-json", "--stream-partial-output", ...modelFlag, ...tail];
+      return [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--stream-partial-output",
+        ...modelFlag,
+        ...cliModeFlag,
+        ...tail,
+      ];
   }
 }
 
@@ -143,6 +164,7 @@ function spawnCursorAgentPrintOnce(params: {
   onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
   outputMode: AgentCliOutputMode;
   cliModel?: string;
+  cliMode?: CursorCliMode;
   resumeSessionId?: string;
   detectToolRejections: boolean;
 }): Promise<SpawnOnceResult> {
@@ -155,8 +177,15 @@ function spawnCursorAgentPrintOnce(params: {
         params.prompt,
         params.outputMode,
         params.cliModel,
+        params.cliMode,
       )
-    : buildAgentPrintArgs(params.workspaceRoot, params.prompt, params.outputMode, params.cliModel);
+    : buildAgentPrintArgs(
+        params.workspaceRoot,
+        params.prompt,
+        params.outputMode,
+        params.cliModel,
+        params.cliMode,
+      );
   const useJsonFeed = params.outputMode !== "text";
 
   if (params.signal?.aborted) {
@@ -371,6 +400,8 @@ export async function spawnCursorAgentPrint(params: {
   outputMode?: AgentCliOutputMode;
   /** When set, passed as `--model` (omit for Cursor default / automatic). */
   cliModel?: string;
+  /** Cursor CLI `--mode`; Colcoor defaults this to Ask mode. */
+  cliMode?: CursorCliMode;
   /** When true (default), detect tool rejections and invoke `resolveToolRejection`. */
   promptToolApproval?: boolean;
   /** Resolve a rejected tool call (Run / Skip / Add to allowlist). */
@@ -403,25 +434,26 @@ export async function spawnCursorAgentPrint(params: {
       { resume: Boolean(resumeSessionId?.trim()) },
       () =>
         spawnCursorAgentPrintOnce({
-        executable: params.executable,
-        workspaceRoot: params.workspaceRoot,
-        prompt,
-        timeoutMs: params.timeoutMs,
-        storedCursorApiKey: params.storedCursorApiKey,
-        signal: params.signal,
-        onStdoutAccumulated: (textSoFarThisSpawn) => {
-          params.onStdoutAccumulated?.(
-            mergeAgentStdoutAcrossResume(merged.stdout, textSoFarThisSpawn),
-          );
-        },
-        onDisplayParts: (partsThisSpawn) => {
-          params.onDisplayParts?.(
-            mergeAgentDisplayPartsAcrossResume(merged.displayParts ?? [], partsThisSpawn),
-          );
-        },
-        outputMode,
-        cliModel: params.cliModel,
-        resumeSessionId,
+          executable: params.executable,
+          workspaceRoot: params.workspaceRoot,
+          prompt,
+          timeoutMs: params.timeoutMs,
+          storedCursorApiKey: params.storedCursorApiKey,
+          signal: params.signal,
+          onStdoutAccumulated: (textSoFarThisSpawn) => {
+            params.onStdoutAccumulated?.(
+              mergeAgentStdoutAcrossResume(merged.stdout, textSoFarThisSpawn),
+            );
+          },
+          onDisplayParts: (partsThisSpawn) => {
+            params.onDisplayParts?.(
+              mergeAgentDisplayPartsAcrossResume(merged.displayParts ?? [], partsThisSpawn),
+            );
+          },
+          outputMode,
+          cliModel: params.cliModel,
+          cliMode: params.cliMode,
+          resumeSessionId,
           detectToolRejections,
         }),
     );

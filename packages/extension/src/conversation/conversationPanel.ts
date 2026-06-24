@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { AgentRunner } from "../agent/agentRunner";
+import type { CursorCliMode } from "../agent/cursorCliMode";
 import {
   getAgentModelCatalog,
   scheduleRefreshAgentModelCatalog,
@@ -65,6 +66,11 @@ import {
   readSelectedAgentModelForConversation,
   writeSelectedAgentModelForConversation,
 } from "./conversationAgentModel";
+import {
+  readAgentModeByConversationMap,
+  readSelectedAgentModeForConversation,
+  writeSelectedAgentModeForConversation,
+} from "./conversationAgentMode";
 import { resolveAgentModelShortLabel } from "./agentModelDisplay";
 import { evaluateContinueFromHere } from "./continueFromHereGate";
 import { clipboardTextForTreeMessage } from "./selectedMessageClipboardText";
@@ -142,6 +148,7 @@ type QueuedMainSendItem =
     imageRefs?: ColcoorUserMediaImageRef[];
     privateBranch: boolean;
     cliModel?: string;
+    cliMode: CursorCliMode;
   };
 
 type ActiveMainRun = {
@@ -265,6 +272,8 @@ type WebviewStateMessage = {
   agentModelSelected: string;
   /** Shown as the model dropdown title when the CLI list is empty or failed. */
   agentModelsListHint: string | null;
+  /** Cursor CLI mode for sends in this conversation. */
+  agentModeSelected: CursorCliMode;
   /** Short label for the in-flight assistant reply (tree/thread headers while busy). */
   pendingAssistantModelLabel: string | null;
   /** When true, re-render the thread without scrolling to the bottom (note add/edit/delete). */
@@ -318,6 +327,7 @@ type FromWebview =
   | { type: "resend" }
   | { type: "setAgentModel"; model: string }
   | { type: "openAgentModelPicker" }
+  | { type: "setAgentMode"; mode: string }
   | { type: "copy"; text: string }
   | { type: "copyThread"; text: string }
   | {
@@ -1298,6 +1308,13 @@ export function createConversationPanelController(
     return agentModelCliFlag(readSelectedAgentModelForConversation(map, conversationId));
   }
 
+  function cliModeForConversationRuns(): CursorCliMode {
+    const map = readAgentModeByConversationMap(context.workspaceState);
+    return conversationId
+      ? readSelectedAgentModeForConversation(map, conversationId)
+      : "ask";
+  }
+
   function assistantModelLabelForCurrentSelection(): string | null {
     const map = readAgentModelByConversationMap(context.workspaceState);
     const selected = conversationId
@@ -1394,11 +1411,16 @@ export function createConversationPanelController(
     agentModelOptions: CursorAgentModelEntry[];
     agentModelSelected: string;
     agentModelsListHint: string | null;
+    agentModeSelected: CursorCliMode;
   } {
     const map = readAgentModelByConversationMap(context.workspaceState);
     const selected = conversationId
       ? readSelectedAgentModelForConversation(map, conversationId)
       : AGENT_MODEL_AUTO;
+    const modeMap = readAgentModeByConversationMap(context.workspaceState);
+    const modeSelected = conversationId
+      ? readSelectedAgentModeForConversation(modeMap, conversationId)
+      : "ask";
     const catalog = getAgentModelCatalog();
     const options = [...catalog.curated];
     if (selected !== AGENT_MODEL_AUTO && !options.some((o) => o.id === selected)) {
@@ -1409,6 +1431,7 @@ export function createConversationPanelController(
       agentModelOptions: options,
       agentModelSelected: selected,
       agentModelsListHint: catalog.hint,
+      agentModeSelected: modeSelected,
     };
   }
 
@@ -2084,6 +2107,7 @@ export function createConversationPanelController(
             onAssistantTextDelta: (t) => stream.pushDelta(t),
             onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
             cliModel: item.cliModel,
+            cliMode: item.cliMode,
             linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
             toolApprovalBranchLabel: toolApprovalBranchLabel(trimmed || "Queued message"),
             ...(userMediaContentJson ? { userMediaContentJson } : {}),
@@ -2224,6 +2248,7 @@ export function createConversationPanelController(
           imageRefs,
           privateBranch,
           cliModel: cliModelForConversationRuns(),
+          cliMode: cliModeForConversationRuns(),
         });
         postState(lastTreeEvents, true, lastPostedError);
         return;
@@ -2320,6 +2345,7 @@ export function createConversationPanelController(
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
+          cliMode: cliModeForConversationRuns(),
           linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
           toolApprovalBranchLabel: toolApprovalBranchLabel(
             trimmed || (hasPasted || hasRefs ? "Image message" : "New message"),
@@ -2442,6 +2468,7 @@ export function createConversationPanelController(
           onAssistantTextDelta: (t) => stream.pushDelta(t),
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
+          cliMode: cliModeForConversationRuns(),
           linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
           toolApprovalBranchLabel: toolApprovalBranchLabel(resendUserBody),
           ...(lastTreeEvents.length > 0
@@ -2598,6 +2625,15 @@ export function createConversationPanelController(
           context.workspaceState,
           conversationId,
           msg.model,
+        );
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+        return;
+      }
+      if (msg.type === "setAgentMode" && typeof msg.mode === "string" && conversationId) {
+        await writeSelectedAgentModeForConversation(
+          context.workspaceState,
+          conversationId,
+          msg.mode,
         );
         postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
         return;

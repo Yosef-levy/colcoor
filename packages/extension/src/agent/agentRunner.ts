@@ -12,6 +12,7 @@ import {
   spawnCursorAgentPrint,
   type AgentCliOutputMode,
 } from "./cursorCliSpawn";
+import type { CursorCliMode } from "./cursorCliMode";
 import type { CursorAgentDisplayPart } from "./cursorAgentStreamJson";
 import { resolveToolCallRejection } from "./cursorToolCallApproval";
 import { stripAnsiSgr } from "./stripAnsi";
@@ -50,6 +51,8 @@ export class AgentRunner {
     onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
     /** Cursor CLI `--model`; omit for automatic model selection. */
     cliModel?: string;
+    /** Cursor CLI `--mode`; defaults to Ask in the conversation panel. */
+    cliMode?: CursorCliMode;
     /** Shown in tool-approval modals so parallel runs are distinguishable. */
     toolApprovalBranchLabel?: string;
   }): Promise<AgentRunResult> {
@@ -95,6 +98,7 @@ export class AgentRunner {
         onDisplayParts: input.onDisplayParts,
         outputMode,
         cliModel: input.cliModel?.trim() || undefined,
+        cliMode: input.cliMode,
         promptToolApproval,
         resolveToolRejection: promptToolApproval
           ? (rejection) =>

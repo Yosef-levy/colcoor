@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { processEnvForCursorCli } from "./agentPathEnv";
-import { buildAgentPrintArgs, buildEnvForAgentSpawn, buildAgentResumeArgs, normalizeAgentCliOutputMode } from "./cursorCliSpawn";
+import {
+  buildAgentPrintArgs,
+  buildAgentResumeArgs,
+  buildEnvForAgentSpawn,
+  normalizeAgentCliOutputMode,
+} from "./cursorCliSpawn";
 
 describe("normalizeAgentCliOutputMode", () => {
   it("accepts known values", () => {
@@ -70,6 +75,20 @@ describe("buildAgentPrintArgs", () => {
       prompt,
     ]);
   });
+
+  it("includes --mode when provided", () => {
+    expect(buildAgentPrintArgs(ws, prompt, "text", undefined, "ask")).toEqual([
+      "-p",
+      "--output-format",
+      "text",
+      "--mode",
+      "ask",
+      "--trust",
+      "--workspace",
+      ws,
+      prompt,
+    ]);
+  });
 });
 
 describe("buildAgentResumeArgs", () => {
@@ -78,6 +97,24 @@ describe("buildAgentResumeArgs", () => {
       "-p",
       "--output-format",
       "stream-json",
+      "--trust",
+      "--workspace",
+      "/tmp/ws",
+      "--resume",
+      "sess-abc",
+      "continue please",
+    ]);
+  });
+
+  it("includes --mode on resume when provided", () => {
+    expect(
+      buildAgentResumeArgs("/tmp/ws", "sess-abc", "continue please", "stream-json", undefined, "plan"),
+    ).toEqual([
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--mode",
+      "plan",
       "--trust",
       "--workspace",
       "/tmp/ws",
