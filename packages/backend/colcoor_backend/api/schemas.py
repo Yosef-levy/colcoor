@@ -264,6 +264,100 @@ class NotePatchBody(BaseModel):
     content: str = Field(..., min_length=1)
 
 
+class ConversationListItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    list_id: UUID
+    conversation_id: UUID
+    owner_user_id: UUID
+    event_id: UUID | None
+    selected_text: str
+    anchor_json: dict[str, Any]
+    source_content_hash: str | None = None
+    sort_order: int | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class ConversationListOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    conversation_id: UUID
+    owner_user_id: UUID
+    name: str
+    description: str | None = None
+    color: str
+    sort_order: int
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+    item_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ConversationListsBundleOut(BaseModel):
+    lists: list[ConversationListOut]
+    items: list[ConversationListItemOut]
+
+
+class ConversationListCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
+    color: str | None = Field(default=None, max_length=64)
+    sort_order: int | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class ConversationListPatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
+    color: str | None = Field(default=None, max_length=64)
+    sort_order: int | None = None
+    metadata_json: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> ConversationListPatchBody:
+        if not self.model_fields_set:
+            raise ValueError("at least one List field is required")
+        return self
+
+
+class ConversationListsReorderBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    list_ids: list[UUID] = Field(..., min_length=1)
+
+
+class ConversationListItemCreateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_id: UUID
+    selected_text: str = Field(..., min_length=1, max_length=10000)
+    anchor_json: dict[str, Any]
+    source_content_hash: str | None = Field(default=None, max_length=256)
+    sort_order: int | None = None
+    metadata_json: dict[str, Any] | None = None
+
+
+class ConversationListItemPatchBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    list_id: UUID | None = None
+    sort_order: int | None = None
+    metadata_json: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> ConversationListItemPatchBody:
+        if not self.model_fields_set:
+            raise ValueError("at least one List item field is required")
+        return self
+
+
 class MePatchBody(BaseModel):
     """PATCH /me (api-contracts §9.1). At least one field must be present in the JSON object."""
 

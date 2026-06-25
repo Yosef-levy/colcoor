@@ -213,19 +213,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let drawersPanel: vscode.WebviewPanel | undefined;
   let drawersConversationId: string | undefined;
   let drawersConversationTitle: string | null = null;
-  /** Active Starred vs TODO tab in the drawers webview; kept for server reloads ([ui-features.md] §11). */
-  let drawersPreferredTab: "starred" | "todo" = "starred";
+  /** Active Collections tab in the drawers webview; kept for server reloads ([ui-features.md] §11). */
+  let drawersPreferredTab: "starred" | "todo" | "lists" = "starred";
 
   async function refreshDrawersPanelHtmlFromServer(): Promise<void> {
     if (!drawersPanel || !drawersConversationId) {
       return;
     }
-    const [{ events }, notes, rows] = await Promise.all([
+    const [{ events }, notes, listsBundle, rows] = await Promise.all([
       api.getTree(drawersConversationId),
       api.listNotes(drawersConversationId),
+      api.listConversationLists(drawersConversationId).catch(() => ({ lists: [], items: [] })),
       listConversationsCached(api).catch((): ConversationSummary[] => []),
     ]);
-    const model = buildConversationDrawersModel(events, notes);
+    const model = buildConversationDrawersModel(events, notes, listsBundle.lists, listsBundle.items);
     const row = rows.find((r) => r.id === drawersConversationId);
     const sideChatBtn = row
       ? sideChatOpenButtonCopy(row)
@@ -1008,7 +1009,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const preferredTab =
           arg && typeof arg === "object" && "preferredTab" in arg && arg.preferredTab === "todo"
             ? "todo"
-            : "starred";
+            : arg && typeof arg === "object" && "preferredTab" in arg && arg.preferredTab === "lists"
+              ? "lists"
+              : "starred";
         if (!convId) {
           const row = await pickConversationInteractively();
           if (!row) {
@@ -1018,12 +1021,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           convTitle = row.title;
         }
         try {
-          const [{ events }, notes, rows] = await Promise.all([
+          const [{ events }, notes, listsBundle, rows] = await Promise.all([
             api.getTree(convId),
             api.listNotes(convId),
+            api.listConversationLists(convId).catch(() => ({ lists: [], items: [] })),
             listConversationsCached(api).catch((): ConversationSummary[] => []),
           ]);
-          const model = buildConversationDrawersModel(events, notes);
+          const model = buildConversationDrawersModel(events, notes, listsBundle.lists, listsBundle.items);
           const row = rows.find((r) => r.id === convId);
           const sideChatBtn = row
             ? sideChatOpenButtonCopy(row)
@@ -1056,7 +1060,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }
                 return;
               }
-              if (msg.type === "drawersPreferredTab" && (msg.tab === "starred" || msg.tab === "todo")) {
+              if (
+                msg.type === "drawersPreferredTab" &&
+                (msg.tab === "starred" || msg.tab === "todo" || msg.tab === "lists")
+              ) {
                 drawersPreferredTab = msg.tab;
                 return;
               }

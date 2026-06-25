@@ -252,6 +252,74 @@ class EventStar(Base):
     )
 
 
+class ConversationList(Base):
+    __tablename__ = "conversation_lists"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id",
+            "owner_user_id",
+            "name",
+            name="uq_conversation_lists_owner_name",
+        ),
+        Index("idx_conversation_lists_conversation_owner", "conversation_id", "owner_user_id"),
+        Index("idx_conversation_lists_sort_order", "conversation_id", "owner_user_id", "sort_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    color: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ConversationListItem(Base):
+    __tablename__ = "conversation_list_items"
+    __table_args__ = (
+        Index("idx_conversation_list_items_conversation_owner", "conversation_id", "owner_user_id", "created_at"),
+        Index("idx_conversation_list_items_list_created", "list_id", "created_at"),
+        Index("idx_conversation_list_items_event_id", "event_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    list_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("conversation_lists.id", ondelete="CASCADE"), nullable=False
+    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
+    selected_text: Mapped[str] = mapped_column(Text, nullable=False)
+    anchor_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    source_content_hash: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class SideChatMessage(Base):
     __tablename__ = "side_chat_messages"
     __table_args__ = (

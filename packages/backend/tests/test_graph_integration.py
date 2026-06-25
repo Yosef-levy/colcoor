@@ -1150,3 +1150,105 @@ def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> No
         assert r.json()["avatar_url"] is None
 
     get_settings.cache_clear()
+
+
+def test_conversation_lists_http_crud_and_item_validation(postgres_url) -> None:
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "lists"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        assert r.status_code == 200, r.text
+        root_id = r.json()["events"][0]["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/append-event",
+            headers=_append_event_headers(auth),
+            json={
+                "kind": "user_input",
+                "parent_event_id": root_id,
+                "content": "alpha beta gamma",
+                "author": "end_user",
+            },
+        )
+        assert r.status_code == 200, r.text
+        event_id = r.json()["id"]
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/lists",
+            headers=auth,
+            json={"name": "Questions", "description": "Things to answer"},
+        )
+        assert r.status_code == 200, r.text
+        list_row = r.json()
+        list_id = list_row["id"]
+        assert list_row["name"] == "Questions"
+        assert list_row["item_count"] == 0
+
+        r = client.post(f"/api/v1/conversations/{cid}/lists", headers=auth, json={"name": "questions"})
+        assert r.status_code == 422, r.text
+
+        item_body = {
+            "event_id": event_id,
+            "selected_text": "beta",
+            "anchor_json": {
+                "version": 1,
+                "kind": "message_text_range",
+                "textStart": 6,
+                "textEnd": 10,
+                "exact": "beta",
+                "prefix": "alpha ",
+                "suffix": " gamma",
+                "occurrenceIndex": 0,
+                "messagePlainTextLength": 16,
+            },
+            "source_content_hash": "h32:test",
+        }
+        r = client.post(
+            f"/api/v1/conversations/{cid}/lists/{list_id}/items",
+            headers=auth,
+            json=item_body,
+        )
+        assert r.status_code == 200, r.text
+        item = r.json()
+        assert item["selected_text"] == "beta"
+        assert item["event_id"] == event_id
+
+        r = client.get(f"/api/v1/conversations/{cid}/lists", headers=auth)
+        assert r.status_code == 200, r.text
+        bundle = r.json()
+        assert bundle["lists"][0]["item_count"] == 1
+        assert bundle["items"][0]["id"] == item["id"]
+
+        r = client.get(f"/api/v1/conversations/{cid}/lists/{list_id}/items?q=bet", headers=auth)
+        assert r.status_code == 200, r.text
+        assert [row["id"] for row in r.json()] == [item["id"]]
+
+        other = client.post("/api/v1/conversations", headers=auth, json={"title": "other"})
+        assert other.status_code == 200, other.text
+        other_cid = other.json()["id"]
+        other_tree = client.get(f"/api/v1/conversations/{other_cid}/tree", headers=auth)
+        assert other_tree.status_code == 200, other_tree.text
+        other_event_id = other_tree.json()["events"][0]["id"]
+        r = client.post(
+            f"/api/v1/conversations/{cid}/lists/{list_id}/items",
+            headers=auth,
+            json={**item_body, "event_id": other_event_id},
+        )
+        assert r.status_code == 404, r.text
+
+        r = client.delete(
+            f"/api/v1/conversations/{cid}/lists/{list_id}/items/{item['id']}",
+            headers=auth,
+        )
+        assert r.status_code == 204, r.text
+
+        r = client.delete(f"/api/v1/conversations/{cid}/lists/{list_id}", headers=auth)
+        assert r.status_code == 204, r.text
+
+    get_settings.cache_clear()

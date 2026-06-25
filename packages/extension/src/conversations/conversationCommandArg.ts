@@ -10,7 +10,7 @@ export type ConversationCommandArg =
   | ConversationTreeItem
   | {
       conv?: { id?: string; title?: string | null; pinned?: boolean };
-      preferredTab?: "starred" | "todo";
+      preferredTab?: "starred" | "todo" | "lists";
     };
 
 /** Shown when a command requires a conversation id but none was passed (palette / wrong context). */

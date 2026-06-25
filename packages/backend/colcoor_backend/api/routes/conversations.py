@@ -12,6 +12,14 @@ from colcoor_backend.api.schemas import (
     AppendEventBody,
     ConversationCreate,
     ConversationImageUploadOut,
+    ConversationListCreateBody,
+    ConversationListItemCreateBody,
+    ConversationListItemOut,
+    ConversationListItemPatchBody,
+    ConversationListOut,
+    ConversationListPatchBody,
+    ConversationListsBundleOut,
+    ConversationListsReorderBody,
     ConversationOut,
     ConversationPatch,
     ConversationUserStateOut,
@@ -69,6 +77,17 @@ from colcoor_backend.services.conversation_images import (
     load_conversation_image_bytes,
     store_conversation_image,
 )
+from colcoor_backend.services.conversation_lists import (
+    create_list,
+    create_list_item,
+    delete_list,
+    delete_list_item,
+    list_list_items,
+    list_lists,
+    reorder_lists,
+    update_list,
+    update_list_item,
+)
 from colcoor_backend.storage.protocol import ImageBlobStorage
 from colcoor_backend.services.side_chat import (
     get_user_side_chat_last_read_seq,
@@ -104,6 +123,11 @@ def _conversation_out(
         side_chat_has_unread=side_chat_has_unread,
         side_chat_unread_count=side_chat_unread_count,
     )
+
+
+def _list_out(row: object, item_count: int = 0) -> ConversationListOut:
+    out = ConversationListOut.model_validate(row)
+    return out.model_copy(update={"item_count": item_count})
 
 
 @router.get("", response_model=list[ConversationOut])
@@ -645,6 +669,244 @@ async def delete_conversation_member(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e) or "forbidden",
         ) from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{conversation_id}/lists", response_model=ConversationListsBundleOut)
+async def get_conversation_lists(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    include_items: bool = True,
+) -> ConversationListsBundleOut:
+    try:
+        rows, items, counts = await list_lists(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            include_items=include_items,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    return ConversationListsBundleOut(
+        lists=[_list_out(row, counts.get(row.id, 0)) for row in rows],
+        items=[ConversationListItemOut.model_validate(item) for item in items],
+    )
+
+
+@router.post("/{conversation_id}/lists", response_model=ConversationListOut)
+async def post_conversation_list(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    body: ConversationListCreateBody,
+) -> ConversationListOut:
+    try:
+        row = await create_list(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            name=body.name,
+            description=body.description,
+            color=body.color,
+            sort_order=body.sort_order,
+            metadata_json=body.metadata_json,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return _list_out(row, 0)
+
+
+@router.patch("/{conversation_id}/lists/reorder", response_model=list[ConversationListOut])
+async def patch_conversation_lists_reorder(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    body: ConversationListsReorderBody,
+) -> list[ConversationListOut]:
+    try:
+        rows = await reorder_lists(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            list_ids=body.list_ids,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return [_list_out(row, 0) for row in rows]
+
+
+@router.patch("/{conversation_id}/lists/{list_id}", response_model=ConversationListOut)
+async def patch_conversation_list(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    list_id: UUID,
+    body: ConversationListPatchBody,
+) -> ConversationListOut:
+    try:
+        row = await update_list(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            list_id=list_id,
+            patch=body.model_dump(exclude_unset=True),
+        )
+        _, _, counts = await list_lists(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            include_items=False,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return _list_out(row, counts.get(row.id, 0))
+
+
+@router.delete("/{conversation_id}/lists/{list_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation_list(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    list_id: UUID,
+) -> Response:
+    try:
+        await delete_list(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            list_id=list_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{conversation_id}/lists/{list_id}/items", response_model=list[ConversationListItemOut])
+async def get_conversation_list_items(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    list_id: UUID,
+    q: str | None = Query(default=None, max_length=200),
+    limit: int | None = Query(default=None, ge=1, le=500),
+) -> list[ConversationListItemOut]:
+    try:
+        rows = await list_list_items(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            list_id=list_id,
+            q=q,
+            limit=limit,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    return [ConversationListItemOut.model_validate(row) for row in rows]
+
+
+@router.post("/{conversation_id}/lists/{list_id}/items", response_model=ConversationListItemOut)
+async def post_conversation_list_item(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    list_id: UUID,
+    body: ConversationListItemCreateBody,
+) -> ConversationListItemOut:
+    try:
+        row = await create_list_item(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            list_id=list_id,
+            event_id=body.event_id,
+            selected_text=body.selected_text,
+            anchor_json=body.anchor_json,
+            source_content_hash=body.source_content_hash,
+            sort_order=body.sort_order,
+            metadata_json=body.metadata_json,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return ConversationListItemOut.model_validate(row)
+
+
+@router.patch("/{conversation_id}/lists/{list_id}/items/{item_id}", response_model=ConversationListItemOut)
+async def patch_conversation_list_item(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    list_id: UUID,
+    item_id: UUID,
+    body: ConversationListItemPatchBody,
+) -> ConversationListItemOut:
+    try:
+        row = await update_list_item(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            list_id=list_id,
+            item_id=item_id,
+            patch=body.model_dump(exclude_unset=True),
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+    await session.commit()
+    return ConversationListItemOut.model_validate(row)
+
+
+@router.delete("/{conversation_id}/lists/{list_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation_list_item(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    list_id: UUID,
+    item_id: UUID,
+) -> Response:
+    try:
+        await delete_list_item(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            list_id=list_id,
+            item_id=item_id,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
     await session.commit()

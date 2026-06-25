@@ -8,6 +8,8 @@ import {
 import type { CursorAgentModelEntry } from "../agent/cursorAgentModelCatalog";
 import type {
   ColcoorApiClient,
+  ConversationListItemOut,
+  ConversationListOut,
   ConversationMember,
   ConversationSummary,
   GraphEventNode,
@@ -244,6 +246,9 @@ type WebviewStateMessage = {
   /** Starred / TODO rows for the in-tab lists drawer (same source as conversation drawers). */
   drawersStarred: StarredDrawerRow[];
   drawersTodos: TodoDrawerRow[];
+  /** User-created Lists and selected-text items for the Collections drawer and thread highlights. */
+  drawersLists: ConversationListOut[];
+  drawersListItems: ConversationListItemOut[];
   /** Client-only visited selection stack (max ~20); thread ← / → controls. */
   selectionVisitCanGoBack: boolean;
   selectionVisitCanGoForward: boolean;
@@ -375,6 +380,21 @@ type FromWebview =
         | { kind: "note"; eventId: string; noteId: string }
         | { kind: "sidechat"; seq: number };
     }
+  | { type: "createList" }
+  | { type: "renameList"; listId: string }
+  | { type: "deleteList"; listId: string }
+  | { type: "deleteListItem"; listId: string; itemId: string }
+  | { type: "openListItem"; listId: string; itemId: string }
+  | {
+      type: "createListItem";
+      listId: string;
+      eventId: string;
+      selectedText: string;
+      anchorJson: Record<string, unknown>;
+      sourceContentHash?: string | null;
+    }
+  | { type: "chooseListForSelection"; selection: Record<string, unknown> | null }
+  | { type: "createListItemWithNewList"; selection: Record<string, unknown> | null }
   | { type: "rename" }
   | { type: "togglePin" }
   | { type: "toggleStar" }
@@ -511,6 +531,9 @@ export function createConversationPanelController(
   let lastConversationMembers: ConversationMember[] = [];
   /** Notes list aligned with the last successful tree load (for thread rendering without extra round-trips). */
   let lastNotes: NoteOut[] = [];
+  /** Private user-created Lists and items aligned with the last successful tree load. */
+  let lastConversationLists: ConversationListOut[] = [];
+  let lastConversationListItems: ConversationListItemOut[] = [];
   /** From GET …/caller-state after each successful tree load (domain-model §4). */
   let lastNeedsContextRebuild = false;
   /** One-time dedupe key for stale-tree prompt when selected node disappears after refresh. */
@@ -653,6 +676,215 @@ export function createConversationPanelController(
       const msg = e instanceof Error ? e.message : String(e);
       await loadTreeAndPush(lastPostedBusy, msg);
     }
+  }
+
+  async function refreshListsIntoCachedStateAndPost(): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    try {
+      const bundle = await api.listConversationLists(conversationId);
+      lastConversationLists = bundle.lists;
+      lastConversationListItems = bundle.items;
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+    } catch (e) {
+      await showColcoorApiFailure(e);
+    }
+  }
+
+  function listNameById(listId: string): string {
+    const row = lastConversationLists.find((l) => l.id === listId);
+    return row?.name?.trim() || "List";
+  }
+
+  async function promptCreateList(): Promise<ConversationListOut | null> {
+    if (!conversationId) {
+      return null;
+    }
+    const name = await vscode.window.showInputBox({
+      title: "Create List",
+      prompt: "List name",
+      ignoreFocusOut: true,
+      validateInput: (v) => (v.trim() ? undefined : "List name required"),
+    });
+    if (name == null) {
+      return null;
+    }
+    const description = await vscode.window.showInputBox({
+      title: "Create List",
+      prompt: "Optional description",
+      ignoreFocusOut: true,
+    });
+    try {
+      const row = await api.createConversationList(conversationId, {
+        name: name.trim(),
+        description: description?.trim() || null,
+      });
+      await refreshListsIntoCachedStateAndPost();
+      return row;
+    } catch (e) {
+      await showColcoorApiFailure(e);
+      return null;
+    }
+  }
+
+  async function promptRenameList(listId: string): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    const row = lastConversationLists.find((l) => l.id === listId);
+    if (!row) {
+      void vscode.window.showWarningMessage("Colcoor: List not found.");
+      return;
+    }
+    const name = await vscode.window.showInputBox({
+      title: "Rename List",
+      prompt: "List name",
+      value: row.name,
+      ignoreFocusOut: true,
+      validateInput: (v) => (v.trim() ? undefined : "List name required"),
+    });
+    if (name == null) {
+      return;
+    }
+    try {
+      await api.patchConversationList(conversationId, listId, { name: name.trim() });
+      await refreshListsIntoCachedStateAndPost();
+    } catch (e) {
+      await showColcoorApiFailure(e);
+    }
+  }
+
+  async function confirmDeleteList(listId: string): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    const name = listNameById(listId);
+    const yes = "Delete List";
+    const pick = await vscode.window.showWarningMessage(
+      `Delete List "${name}" and all of its items?`,
+      { modal: true },
+      yes,
+    );
+    if (pick !== yes) {
+      return;
+    }
+    try {
+      await api.deleteConversationList(conversationId, listId);
+      await refreshListsIntoCachedStateAndPost();
+    } catch (e) {
+      await showColcoorApiFailure(e);
+    }
+  }
+
+  async function deleteListItemAndRefresh(listId: string, itemId: string): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    try {
+      await api.deleteConversationListItem(conversationId, listId, itemId);
+      await refreshListsIntoCachedStateAndPost();
+    } catch (e) {
+      await showColcoorApiFailure(e);
+    }
+  }
+
+  function normalizeSelectionPayload(raw: Record<string, unknown> | null | undefined): {
+    eventId: string;
+    selectedText: string;
+    anchorJson: Record<string, unknown>;
+    sourceContentHash: string | null;
+  } | null {
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+    const eventId = typeof raw.eventId === "string" ? raw.eventId.trim() : "";
+    const selectedText = typeof raw.selectedText === "string" ? raw.selectedText.trim() : "";
+    const anchorJson =
+      raw.anchor && typeof raw.anchor === "object" && !Array.isArray(raw.anchor)
+        ? (raw.anchor as Record<string, unknown>)
+        : raw.anchorJson && typeof raw.anchorJson === "object" && !Array.isArray(raw.anchorJson)
+          ? (raw.anchorJson as Record<string, unknown>)
+          : null;
+    const sourceContentHash =
+      typeof raw.sourceContentHash === "string" && raw.sourceContentHash.trim()
+        ? raw.sourceContentHash.trim()
+        : null;
+    if (!eventId || !selectedText || !anchorJson) {
+      return null;
+    }
+    return { eventId, selectedText, anchorJson, sourceContentHash };
+  }
+
+  async function createListItemFromSelection(
+    listId: string,
+    selection: {
+      eventId: string;
+      selectedText: string;
+      anchorJson: Record<string, unknown>;
+      sourceContentHash: string | null;
+    },
+  ): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    try {
+      const item = await api.createConversationListItem(conversationId, listId, {
+        event_id: selection.eventId,
+        selected_text: selection.selectedText,
+        anchor_json: selection.anchorJson,
+        source_content_hash: selection.sourceContentHash,
+      });
+      await refreshListsIntoCachedStateAndPost();
+      try {
+        await panel?.webview.postMessage({
+          type: "focusListItem",
+          listId,
+          itemId: item.id,
+        });
+      } catch {
+        /* webview gone */
+      }
+    } catch (e) {
+      await showColcoorApiFailure(e);
+    }
+  }
+
+  async function chooseListAndCreateItem(rawSelection: Record<string, unknown> | null): Promise<void> {
+    const selection = normalizeSelectionPayload(rawSelection);
+    if (!selection) {
+      void vscode.window.showWarningMessage("Colcoor: selected text is no longer available.");
+      return;
+    }
+    if (lastConversationLists.length === 0) {
+      const created = await promptCreateList();
+      if (created) {
+        await createListItemFromSelection(created.id, selection);
+      }
+      return;
+    }
+    const pick = await vscode.window.showQuickPick(
+      [
+        ...lastConversationLists.map((l) => ({
+          label: l.name,
+          description: `${l.item_count ?? 0} items`,
+          listId: l.id,
+        })),
+        { label: "Create new List...", description: "", listId: "__create__" },
+      ],
+      { title: "Add selected text to List", placeHolder: "Choose a List" },
+    );
+    if (!pick) {
+      return;
+    }
+    if (pick.listId === "__create__") {
+      const created = await promptCreateList();
+      if (created) {
+        await createListItemFromSelection(created.id, selection);
+      }
+      return;
+    }
+    await createListItemFromSelection(pick.listId, selection);
   }
   /**
    * Serialize tree fetches + postMessage so overlapping refreshes (e.g. tree click during send)
@@ -1590,7 +1822,12 @@ export function createConversationPanelController(
         ? pendingUserHtmlForPanelState(true, selectedRun.pendingUserMarkdown)
         : null;
       const waitingForAssistant = Boolean(selectedRun && selectedRun.pendingUserMarkdown === undefined);
-      const drawersModel = buildConversationDrawersModel(events, lastNotes);
+      const drawersModel = buildConversationDrawersModel(
+        events,
+        lastNotes,
+        lastConversationLists,
+        lastConversationListItems,
+      );
       const eventsForWebview = enrichGraphEventsWithComposerDisplay(
         events,
         lastConversationMembers,
@@ -1646,6 +1883,8 @@ export function createConversationPanelController(
         conversationNotes: lastNotes,
         drawersStarred: drawersModel.starred,
         drawersTodos: drawersModel.todos,
+        drawersLists: drawersModel.lists,
+        drawersListItems: drawersModel.listItems,
         selectionVisitCanGoBack: nav.canGoBack,
         selectionVisitCanGoForward: nav.canGoForward,
         sideChatViewerRole: viewerConversationRole,
@@ -1701,7 +1940,12 @@ export function createConversationPanelController(
           side_chat_has_unread: sideChatHasUnread,
           side_chat_unread_count: sideChatUnreadCount,
         });
-        const drawersModelFb = buildConversationDrawersModel([], lastNotes);
+        const drawersModelFb = buildConversationDrawersModel(
+          [],
+          lastNotes,
+          lastConversationLists,
+          lastConversationListItems,
+        );
         const fallback: WebviewStateMessage = {
           type: "state",
           conversationId,
@@ -1745,6 +1989,8 @@ export function createConversationPanelController(
           conversationNotes: lastNotes,
           drawersStarred: drawersModelFb.starred,
           drawersTodos: drawersModelFb.todos,
+          drawersLists: drawersModelFb.lists,
+          drawersListItems: drawersModelFb.listItems,
           selectionVisitCanGoBack: false,
           selectionVisitCanGoForward: false,
           sideChatViewerRole: viewerConversationRole,
@@ -1818,10 +2064,14 @@ export function createConversationPanelController(
               : api.getTree(conversationId);
           const notesP =
             notesPrefetch !== undefined ? Promise.resolve(notesPrefetch) : api.listNotes(conversationId);
+          const listsP = api
+            .listConversationLists(conversationId)
+            .catch(() => ({ lists: [] as ConversationListOut[], items: [] as ConversationListItemOut[] }));
           const membersP = api.listConversationMembers(conversationId).catch((): ConversationMember[] => []);
-          const [{ events }, notes, caller, listRows, members] = await Promise.all([
+          const [{ events }, notes, listsBundle, caller, listRows, members] = await Promise.all([
             treeP,
             notesP,
+            listsP,
             api.getConversationCallerState(conversationId).catch((): null => null),
             skipConversationsList
               ? Promise.resolve([] as ConversationSummary[])
@@ -1862,6 +2112,8 @@ export function createConversationPanelController(
             }
           }
           lastNotes = notes;
+          lastConversationLists = listsBundle.lists;
+          lastConversationListItems = listsBundle.items;
           const lineageById = mergeEventLineageById(lastTreeEvents, events);
           viewerConversationRole = null;
           if (caller) {
@@ -2004,6 +2256,8 @@ export function createConversationPanelController(
           reportPanelApiError(e);
           const msg = e instanceof Error ? e.message : String(e);
           lastNotes = [];
+          lastConversationLists = [];
+          lastConversationListItems = [];
           lastNeedsContextRebuild = false;
           lastSideChatReadSeq = 0;
           viewerUserIdForWebview = null;
@@ -2857,6 +3111,78 @@ export function createConversationPanelController(
           return;
         }
         await vscode.commands.executeCommand("colcoor.referenceSelectedNoteInSideChat");
+        return;
+      }
+      if (msg.type === "createList") {
+        await promptCreateList();
+        return;
+      }
+      if (msg.type === "renameList" && typeof msg.listId === "string") {
+        await promptRenameList(msg.listId);
+        return;
+      }
+      if (msg.type === "deleteList" && typeof msg.listId === "string") {
+        await confirmDeleteList(msg.listId);
+        return;
+      }
+      if (
+        msg.type === "deleteListItem" &&
+        typeof msg.listId === "string" &&
+        typeof msg.itemId === "string"
+      ) {
+        await deleteListItemAndRefresh(msg.listId, msg.itemId);
+        return;
+      }
+      if (
+        msg.type === "openListItem" &&
+        typeof msg.listId === "string" &&
+        typeof msg.itemId === "string"
+      ) {
+        if (!panel) {
+          return;
+        }
+        try {
+          await panel.webview.postMessage({
+            type: "focusListItem",
+            listId: msg.listId,
+            itemId: msg.itemId,
+          });
+        } catch {
+          /* webview gone */
+        }
+        return;
+      }
+      if (
+        msg.type === "createListItem" &&
+        typeof msg.listId === "string" &&
+        typeof msg.eventId === "string" &&
+        typeof msg.selectedText === "string" &&
+        msg.anchorJson &&
+        typeof msg.anchorJson === "object"
+      ) {
+        await createListItemFromSelection(msg.listId, {
+          eventId: msg.eventId,
+          selectedText: msg.selectedText,
+          anchorJson: msg.anchorJson,
+          sourceContentHash:
+            typeof msg.sourceContentHash === "string" ? msg.sourceContentHash : null,
+        });
+        return;
+      }
+      if (msg.type === "chooseListForSelection") {
+        await chooseListAndCreateItem(msg.selection);
+        return;
+      }
+      if (msg.type === "createListItemWithNewList") {
+        const selection = normalizeSelectionPayload(msg.selection);
+        if (!selection) {
+          void vscode.window.showWarningMessage("Colcoor: selected text is no longer available.");
+          return;
+        }
+        const created = await promptCreateList();
+        if (created) {
+          await createListItemFromSelection(created.id, selection);
+        }
         return;
       }
       if (msg.type === "searchHit") {

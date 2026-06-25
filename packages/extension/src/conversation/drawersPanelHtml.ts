@@ -19,7 +19,7 @@ export function getConversationDrawersPanelHtml(
   cspSource: string,
   nonce: string,
   model: ConversationDrawersModel,
-  preferredTab: "starred" | "todo" = "starred",
+  preferredTab: "starred" | "todo" | "lists" = "starred",
   legalPolicyLinks: { label: string; url: string }[] = [],
   /** Open side chat button; when omitted, default label/title are used ([ui-features.md] §10). */
   sideChatButton?: { label: string; title: string },
@@ -51,8 +51,27 @@ export function getConversationDrawersPanelHtml(
         `<li><button type="button" class="jump" data-event-id="${esc(r.eventId)}">${esc(r.label)}</button></li>`,
     )
     .join("");
+  const listRows = model.lists
+    .map((list) => {
+      const items = model.listItems
+        .filter((item) => item.list_id === list.id)
+        .map(
+          (item) =>
+            `<li><button type="button" class="jump" data-event-id="${esc(
+              item.event_id || "",
+            )}" data-list-id="${esc(list.id)}" data-item-id="${esc(item.id)}">${esc(
+              item.selected_text,
+            )}</button></li>`,
+        )
+        .join("");
+      return `<li class="list-group"><div class="list-title"><span class="dot" style="background:${esc(
+        list.color,
+      )}"></span>${esc(list.name)} (${list.item_count})</div><ul>${items || "<li>(empty)</li>"}</ul></li>`;
+    })
+    .join("");
   const showStarred = preferredTab === "starred" ? "block" : "none";
   const showTodo = preferredTab === "todo" ? "block" : "none";
+  const showLists = preferredTab === "lists" ? "block" : "none";
   const policyBlock =
     legalPolicyLinks.length === 0
       ? ""
@@ -89,6 +108,10 @@ export function getConversationDrawersPanelHtml(
     .policy-strip .policy-hint { margin-right: 4px; }
     .policy-strip button.policy { padding: 4px 10px; }
     ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+    .list-group { display: block; }
+    .list-group ul { margin-top: 6px; margin-left: 10px; }
+    .list-title { font-weight: 600; margin: 8px 0 4px; }
+    .dot { display: inline-block; width: 0.72em; height: 0.72em; border-radius: 999px; margin-right: 6px; }
     .jump { width: 100%; text-align: left; white-space: normal; }
   </style>
 </head>
@@ -96,6 +119,7 @@ export function getConversationDrawersPanelHtml(
   <div class="tabs">
     <button type="button" id="tabStarred">Starred (${model.starred.length})</button>
     <button type="button" id="tabTodo">TODO (${model.todos.length})</button>
+    <button type="button" id="tabLists">Lists (${model.lists.length})</button>
   </div>
   <div class="aux">
     <button type="button" id="btnSignIn" title="Sign in to Colcoor with the same account you use in Cursor">Sign in</button>
@@ -128,18 +152,22 @@ export function getConversationDrawersPanelHtml(
   ${policyBlock}
   <ul id="starredList" style="display:${showStarred}">${starredRows || "<li>(none)</li>"}</ul>
   <ul id="todoList" style="display:${showTodo}">${todoRows || "<li>(none)</li>"}</ul>
+  <ul id="listsList" style="display:${showLists}">${listRows || "<li>(no Lists yet)</li>"}</ul>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     function showTab(which) {
       var s = document.getElementById("starredList");
       var t = document.getElementById("todoList");
-      if (!s || !t) return;
+      var l = document.getElementById("listsList");
+      if (!s || !t || !l) return;
       s.style.display = which === "starred" ? "block" : "none";
       t.style.display = which === "todo" ? "block" : "none";
+      l.style.display = which === "lists" ? "block" : "none";
       vscode.postMessage({ type: "drawersPreferredTab", tab: which });
     }
     document.getElementById("tabStarred").addEventListener("click", function () { showTab("starred"); });
     document.getElementById("tabTodo").addEventListener("click", function () { showTab("todo"); });
+    document.getElementById("tabLists").addEventListener("click", function () { showTab("lists"); });
     document.getElementById("btnSignIn").addEventListener("click", function () {
       vscode.postMessage({ type: "signIn" });
     });

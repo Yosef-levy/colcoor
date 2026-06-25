@@ -1,4 +1,4 @@
-import type { GraphEventNode, NoteOut } from "../api/client";
+import type { ConversationListItemOut, ConversationListOut, GraphEventNode, NoteOut } from "../api/client";
 import { isTodoNoteContent } from "../notes/todoNotesFilter";
 import { shortStarredEventLabel, starredTreeEvents } from "./starredTreeEvents";
 import { treeEventSnippet } from "./treeNodeDisplay";
@@ -19,6 +19,8 @@ export type TodoDrawerRow = {
 export type ConversationDrawersModel = {
   starred: StarredDrawerRow[];
   todos: TodoDrawerRow[];
+  lists: ConversationListOut[];
+  listItems: ConversationListItemOut[];
 };
 
 const TODO_DRAWER_FIRST_LINE_MAX = 90;
@@ -35,6 +37,8 @@ function shortTodoLabel(content: string): string {
 export function buildConversationDrawersModel(
   events: readonly GraphEventNode[],
   notes: readonly NoteOut[],
+  lists: readonly ConversationListOut[] = [],
+  listItems: readonly ConversationListItemOut[] = [],
 ): ConversationDrawersModel {
   const visibleEventIds = new Set(events.map((e) => e.id));
   const starred = starredTreeEvents(events)
@@ -56,5 +60,17 @@ export function buildConversationDrawersModel(
       label: shortTodoLabel(n.content),
       createdAt: n.created_at,
     }));
-  return { starred, todos };
+  const sortedLists = lists
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+        Date.parse(a.created_at) - Date.parse(b.created_at) ||
+        a.name.localeCompare(b.name),
+    );
+  const sortedListItems = listItems
+    .filter((item) => item.event_id == null || visibleEventIds.size === 0 || visibleEventIds.has(item.event_id))
+    .slice()
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  return { starred, todos, lists: sortedLists, listItems: sortedListItems };
 }

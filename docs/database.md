@@ -104,7 +104,46 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
-## 8. side_chat_messages
+## 8. conversation_lists
+
+Private user-created Lists inside the conversation Collections UI.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | uuid PK | List row |
+| conversation_id | uuid FK not null | Owning conversation |
+| owner_user_id | uuid FK not null | User who owns this private List |
+| name | text not null | User-visible List name |
+| description | text null | Optional List description |
+| color | text not null | Stable highlight color for this List |
+| sort_order | int not null default 0 | User-defined ordering |
+| metadata_json | jsonb not null default '{}' | Future extensibility |
+| created_at | timestamptz not null | Created |
+| updated_at | timestamptz not null | Last mutation |
+
+---
+
+## 9. conversation_list_items
+
+Private selected-text entries inside user-created Lists. Each row stores the captured text and a best-effort anchor back to its source event.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | uuid PK | List item row |
+| list_id | uuid FK not null | Owning List |
+| conversation_id | uuid FK not null | Denormalized conversation scope for fast owner lookup |
+| owner_user_id | uuid FK not null | User who owns this private List item |
+| event_id | uuid FK null | Source event; set null if source event is hard-deleted |
+| selected_text | text not null | Captured selected text shown in the List |
+| anchor_json | jsonb not null | Versioned range/context anchor used to re-render highlights |
+| source_content_hash | text null | Hash of source message text when captured |
+| sort_order | int null | Optional per-List ordering |
+| metadata_json | jsonb not null default '{}' | Future extensibility |
+| created_at | timestamptz not null | Created |
+
+---
+
+## 10. side_chat_messages
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -125,7 +164,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
-## 9. user_side_chat_state
+## 11. user_side_chat_state
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -135,7 +174,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
-## 10. billing_customers
+## 12. billing_customers
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -148,7 +187,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
-## 11. subscriptions
+## 13. subscriptions
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -168,7 +207,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
-## 12. processed_billing_events
+## 14. processed_billing_events
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -179,7 +218,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
-## 13. usage_monthly
+## 15. usage_monthly
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -195,7 +234,7 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 
 ---
 
-## 14. usage_events
+## 16. usage_events
 
 | Column | Type | Purpose |
 |--------|------|---------|
@@ -322,7 +361,48 @@ CREATE TABLE event_stars (
 );
 CREATE INDEX idx_event_stars_created_at ON event_stars (created_at);
 
--- 8. side_chat_messages
+-- 8. conversation_lists
+CREATE TABLE conversation_lists (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id uuid NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+    owner_user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    name text NOT NULL,
+    description text,
+    color text NOT NULL,
+    sort_order integer NOT NULL DEFAULT 0,
+    metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX uq_conversation_lists_owner_name_lower
+    ON conversation_lists (conversation_id, owner_user_id, lower(name));
+CREATE INDEX idx_conversation_lists_conversation_owner
+    ON conversation_lists (conversation_id, owner_user_id);
+CREATE INDEX idx_conversation_lists_sort_order
+    ON conversation_lists (conversation_id, owner_user_id, sort_order);
+
+-- 9. conversation_list_items
+CREATE TABLE conversation_list_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    list_id uuid NOT NULL REFERENCES conversation_lists (id) ON DELETE CASCADE,
+    conversation_id uuid NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+    owner_user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    event_id uuid REFERENCES events (id) ON DELETE SET NULL,
+    selected_text text NOT NULL,
+    anchor_json jsonb NOT NULL,
+    source_content_hash text,
+    sort_order integer,
+    metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_conversation_list_items_conversation_owner
+    ON conversation_list_items (conversation_id, owner_user_id, created_at);
+CREATE INDEX idx_conversation_list_items_list_created
+    ON conversation_list_items (list_id, created_at);
+CREATE INDEX idx_conversation_list_items_event_id
+    ON conversation_list_items (event_id);
+
+-- 10. side_chat_messages
 CREATE TABLE side_chat_messages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id uuid NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
@@ -345,7 +425,7 @@ CREATE INDEX idx_side_chat_messages_kind ON side_chat_messages (kind);
 CREATE INDEX idx_side_chat_messages_edited_at ON side_chat_messages (edited_at);
 CREATE INDEX idx_side_chat_messages_deleted_at ON side_chat_messages (deleted_at);
 
--- 9. user_side_chat_state
+-- 11. user_side_chat_state
 CREATE TABLE user_side_chat_state (
     conversation_id uuid NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
     user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -353,7 +433,7 @@ CREATE TABLE user_side_chat_state (
     CONSTRAINT pk_user_side_chat_state PRIMARY KEY (conversation_id, user_id)
 );
 
--- 10. billing_customers
+-- 12. billing_customers
 CREATE TABLE billing_customers (
     user_id uuid PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
     provider text NOT NULL DEFAULT 'stripe',
@@ -365,7 +445,7 @@ CREATE TABLE billing_customers (
 );
 CREATE INDEX idx_billing_customers_email ON billing_customers (email);
 
--- 11. subscriptions
+-- 13. subscriptions
 CREATE TABLE subscriptions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -384,7 +464,7 @@ CREATE TABLE subscriptions (
 );
 CREATE INDEX idx_subscriptions_user_id ON subscriptions (user_id);
 
--- 12. processed_billing_events
+-- 14. processed_billing_events
 CREATE TABLE processed_billing_events (
     provider text NOT NULL,
     event_id text NOT NULL,
@@ -393,7 +473,7 @@ CREATE TABLE processed_billing_events (
     CONSTRAINT pk_processed_billing_events PRIMARY KEY (provider, event_id)
 );
 
--- 13. usage_monthly
+-- 15. usage_monthly
 CREATE TABLE usage_monthly (
     user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     month_key text NOT NULL,
@@ -408,7 +488,7 @@ CREATE TABLE usage_monthly (
     CONSTRAINT ck_usage_monthly_month_key CHECK (month_key ~ '^\d{4}-(0[1-9]|1[0-2])$')
 );
 
--- 14. usage_events
+-- 16. usage_events
 CREATE TABLE usage_events (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,

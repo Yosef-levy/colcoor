@@ -1474,6 +1474,72 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       background: var(--vscode-list-activeSelectionBackground);
       color: var(--vscode-list-activeSelectionForeground);
     }
+    .lists-drawer-listbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .lists-drawer-listbar button {
+      font-family: inherit;
+      font-size: 0.88em;
+      border: 1px solid var(--vscode-button-border, transparent);
+      border-radius: 999px;
+      padding: 3px 9px;
+      cursor: pointer;
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .lists-drawer-listbar button[aria-selected="true"] {
+      background: var(--vscode-list-activeSelectionBackground);
+      color: var(--vscode-list-activeSelectionForeground);
+    }
+    .lists-drawer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .lists-drawer-search {
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+    }
+    .list-color-dot {
+      display: inline-block;
+      width: 0.72em;
+      height: 0.72em;
+      border-radius: 999px;
+      margin-right: 6px;
+      vertical-align: -0.05em;
+      border: 1px solid var(--vscode-contrastBorder, transparent);
+    }
+    .list-highlight {
+      border-radius: 3px;
+      padding: 0 1px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+      cursor: pointer;
+      background: color-mix(in srgb, var(--list-highlight-color, #f59e0b) 32%, transparent);
+      border-bottom: 2px solid var(--list-highlight-color, #f59e0b);
+    }
+    .list-highlight:hover,
+    .list-highlight:focus {
+      outline: 1px solid var(--list-highlight-color, #f59e0b);
+      outline-offset: 1px;
+    }
+    .list-highlight-label {
+      position: absolute;
+      z-index: 26000;
+      background: var(--vscode-editorHoverWidget-background);
+      color: var(--vscode-editorHoverWidget-foreground);
+      border: 1px solid var(--vscode-editorHoverWidget-border);
+      border-radius: 4px;
+      padding: 3px 7px;
+      font-size: 0.85em;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+      pointer-events: none;
+    }
     .ux-hint-banner {
       flex-shrink: 0;
       margin-bottom: 8px;
@@ -1601,7 +1667,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button type="button" class="menu-root-btn" id="menuBtnView" aria-haspopup="true" aria-expanded="false" aria-controls="menuPanelView">View</button>
           <div class="menu-panel" id="menuPanelView" role="menu" hidden>
             <button type="button" class="menu-item" role="menuitem" id="btnOpenSearch" title="Search this conversation, notes, and side chat (also − outside fields)">Search…</button>
-            <button type="button" class="menu-item" role="menuitem" id="btnStarredTodoDrawer" title="Starred messages and TODO notes (slide-in drawer; remembers last tab)">Starred &amp; TODO</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnStarredTodoDrawer" title="Collections: Starred, TODO, and user-created Lists (slide-in drawer; remembers last tab)">Collections</button>
             <button type="button" class="menu-item" role="menuitem" id="btnOpenSideChat" title="Open side chat for this conversation">Open side chat</button>
           </div>
         </div>
@@ -1669,13 +1735,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     aria-hidden="true"
   >
     <div class="search-drawer-header">
-      <span id="listsDrawerTitle">Starred &amp; TODO</span>
+      <span id="listsDrawerTitle">Collections</span>
       <button type="button" id="listsDrawerClose" class="btn-secondary">Close</button>
     </div>
     <div class="search-drawer-body">
       <div class="lists-drawer-tabs">
         <button type="button" class="lists-tab" id="listsTabStarred" aria-selected="true">Starred</button>
         <button type="button" class="lists-tab" id="listsTabTodo" aria-selected="false">TODO</button>
+        <button type="button" class="lists-tab" id="listsTabLists" aria-selected="false">Lists</button>
         <button type="button" id="listsDrawerRefresh" class="btn-secondary" title="Reload conversation tree from server">
           Refresh
         </button>
@@ -1683,6 +1750,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <div class="search-drawer-results" id="listsDrawerResultsWrap">
         <ul id="listsDrawerStarredList"></ul>
         <ul id="listsDrawerTodoList" style="display: none"></ul>
+        <div id="listsDrawerListsPane" style="display: none">
+          <div class="lists-drawer-actions">
+            <button type="button" id="listsDrawerCreateList" class="btn-secondary">New List…</button>
+            <button type="button" id="listsDrawerRenameList" class="btn-secondary">Rename…</button>
+            <button type="button" id="listsDrawerDeleteList" class="btn-secondary">Delete…</button>
+          </div>
+          <div class="lists-drawer-listbar" id="listsDrawerListBar"></div>
+          <input
+            type="search"
+            id="listsDrawerListSearch"
+            class="lists-drawer-search"
+            placeholder="Search List items"
+            aria-label="Search List items"
+          />
+          <ul id="listsDrawerListItems"></ul>
+        </div>
       </div>
     </div>
   </div>
@@ -1911,6 +1994,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     </button>
     <button type="button" class="composer-ctx-row" data-msg-action="addNote" role="menuitem">
       <span class="composer-ctx-label">Add note…</span>
+    </button>
+  </div>
+  <div id="selectionListMenu" class="composer-ctx-menu" role="menu" hidden aria-label="Mark selected text">
+    <button type="button" class="composer-ctx-row" data-list-selection-action="mark" role="menuitem">
+      <span class="composer-ctx-label">Mark Selected Text</span>
+    </button>
+    <div id="selectionRecentLists"></div>
+    <button type="button" class="composer-ctx-row" data-list-selection-action="choose" role="menuitem">
+      <span class="composer-ctx-label">Choose another List…</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-list-selection-action="create" role="menuitem">
+      <span class="composer-ctx-label">Create new List…</span>
     </button>
   </div>
   <script nonce="${nonce}">
@@ -2210,6 +2305,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       conversationNotes: [],
       drawersStarred: [],
       drawersTodos: [],
+      drawersLists: [],
+      drawersListItems: [],
       selectionVisitCanGoBack: false,
       selectionVisitCanGoForward: false,
       waitingForAssistant: false,
@@ -3658,6 +3755,142 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return null;
     }
 
+    function listForHighlightId(listId) {
+      var lists = state.drawersLists || [];
+      for (var i = 0; i < lists.length; i++) {
+        if (String(lists[i].id || "") === String(listId || "")) return lists[i];
+      }
+      return null;
+    }
+
+    function textNodesUnder(root) {
+      var out = [];
+      if (!root || !document.createTreeWalker) return out;
+      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: function (node) {
+          if (!node || !node.nodeValue) return NodeFilter.FILTER_REJECT;
+          var p = node.parentElement;
+          if (p && p.closest && p.closest(".list-highlight")) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      });
+      var n;
+      while ((n = walker.nextNode())) out.push(n);
+      return out;
+    }
+
+    function wrapTextRange(root, start, end, attrs) {
+      if (!root || start == null || end == null || end <= start) return false;
+      var nodes = textNodesUnder(root);
+      var pos = 0;
+      var range = document.createRange();
+      var started = false;
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var len = (node.nodeValue || "").length;
+        var nodeStart = pos;
+        var nodeEnd = pos + len;
+        if (!started && start >= nodeStart && start <= nodeEnd) {
+          range.setStart(node, Math.max(0, start - nodeStart));
+          started = true;
+        }
+        if (started && end >= nodeStart && end <= nodeEnd) {
+          range.setEnd(node, Math.max(0, end - nodeStart));
+          var span = document.createElement("span");
+          span.className = "list-highlight";
+          span.setAttribute("tabindex", "0");
+          span.setAttribute("data-list-id", attrs.listId);
+          span.setAttribute("data-list-item-id", attrs.itemId);
+          span.setAttribute("title", attrs.listName);
+          span.style.setProperty("--list-highlight-color", attrs.color);
+          try {
+            range.surroundContents(span);
+            return true;
+          } catch (e) {
+            try {
+              var frag = range.extractContents();
+              span.appendChild(frag);
+              range.insertNode(span);
+              return true;
+            } catch (e2) {
+              return false;
+            }
+          }
+        }
+        pos = nodeEnd;
+      }
+      return false;
+    }
+
+    function anchorRangeForItem(bodyText, item) {
+      var a = item && item.anchor_json && typeof item.anchor_json === "object" ? item.anchor_json : {};
+      var exact = typeof a.exact === "string" ? a.exact : String(item.selected_text || "");
+      var start = typeof a.textStart === "number" ? Math.floor(a.textStart) : -1;
+      var end = typeof a.textEnd === "number" ? Math.floor(a.textEnd) : -1;
+      if (
+        start >= 0 &&
+        end > start &&
+        end <= bodyText.length &&
+        (!exact || bodyText.slice(start, end) === exact)
+      ) {
+        return { start: start, end: end };
+      }
+      if (exact) {
+        var idx = bodyText.indexOf(exact);
+        if (idx >= 0) return { start: idx, end: idx + exact.length };
+      }
+      var selected = String(item.selected_text || "");
+      if (selected) {
+        var idx2 = bodyText.indexOf(selected);
+        if (idx2 >= 0) return { start: idx2, end: idx2 + selected.length };
+      }
+      return null;
+    }
+
+    function applyThreadListHighlights() {
+      var items = state.drawersListItems || [];
+      if (!items.length) return;
+      var byEvent = {};
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i] || {};
+        var eid = it.event_id != null ? String(it.event_id) : "";
+        var lid = it.list_id != null ? String(it.list_id) : "";
+        var itemId = it.id != null ? String(it.id) : "";
+        var list = listForHighlightId(lid);
+        if (!eid || !lid || !itemId || !list) continue;
+        (byEvent[eid] || (byEvent[eid] = [])).push({ item: it, list: list });
+      }
+      Object.keys(byEvent).forEach(function (eventId) {
+        var msg = findThreadMessageElement(eventId);
+        var body = msg && msg.querySelector ? msg.querySelector(".body.md") : null;
+        if (!body) return;
+        var bodyText = String(body.textContent || "");
+        var ranges = [];
+        var rows = byEvent[eventId] || [];
+        for (var r = 0; r < rows.length; r++) {
+          var it = rows[r].item;
+          var list = rows[r].list;
+          var range = anchorRangeForItem(bodyText, it);
+          if (!range) continue;
+          ranges.push({
+            start: range.start,
+            end: range.end,
+            listId: String(list.id),
+            itemId: String(it.id),
+            listName: String(list.name || "List"),
+            color: String(list.color || "#f59e0b"),
+          });
+        }
+        ranges
+          .sort(function (a, b) {
+            return b.start - a.start || b.end - a.end;
+          })
+          .forEach(function (r) {
+            wrapTextRange(body, r.start, r.end, r);
+          });
+      });
+    }
+
     function threadMessageTopInScrollWrap(wrap, msg) {
       if (!wrap || !msg) return 0;
       try {
@@ -3952,6 +4185,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       el.innerHTML = html || emptyStateHtml(EMPTY_COPY.threadEmptyPath);
       if (!html) wireEmptyStateActions(el);
       wireThreadCopyButtons(el);
+      applyThreadListHighlights();
       applyThreadScrollAfterRender(wrap, mode, prevScrollTop, wasAtBottom, scrollTargetEventId);
     }
 
@@ -5581,32 +5815,62 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var closeBtn = document.getElementById("listsDrawerClose");
       var tabStarred = document.getElementById("listsTabStarred");
       var tabTodo = document.getElementById("listsTabTodo");
+      var tabLists = document.getElementById("listsTabLists");
       var btnRefresh = document.getElementById("listsDrawerRefresh");
+      var btnCreateList = document.getElementById("listsDrawerCreateList");
+      var btnRenameList = document.getElementById("listsDrawerRenameList");
+      var btnDeleteList = document.getElementById("listsDrawerDeleteList");
       var ulStarred = document.getElementById("listsDrawerStarredList");
       var ulTodo = document.getElementById("listsDrawerTodoList");
-      if (!backdrop || !drawer || !closeBtn || !tabStarred || !tabTodo || !ulStarred || !ulTodo) {
+      var listsPane = document.getElementById("listsDrawerListsPane");
+      var listBar = document.getElementById("listsDrawerListBar");
+      var listSearch = document.getElementById("listsDrawerListSearch");
+      var ulListItems = document.getElementById("listsDrawerListItems");
+      if (
+        !backdrop ||
+        !drawer ||
+        !closeBtn ||
+        !tabStarred ||
+        !tabTodo ||
+        !tabLists ||
+        !ulStarred ||
+        !ulTodo ||
+        !listsPane ||
+        !listBar ||
+        !listSearch ||
+        !ulListItems
+      ) {
         return;
       }
       var LS_TAB = "colcoor.listsDrawer.tab";
       var listsOpen = false;
       var listsTab = "starred";
+      var selectedListId = "";
+      var focusedListItemId = "";
 
       function showListsTab(which) {
-        listsTab = which === "todo" ? "todo" : "starred";
+        listsTab = which === "todo" || which === "lists" ? which : "starred";
         try {
           localStorage.setItem(LS_TAB, listsTab);
         } catch (e0) {}
         tabStarred.setAttribute("aria-selected", listsTab === "starred" ? "true" : "false");
         tabTodo.setAttribute("aria-selected", listsTab === "todo" ? "true" : "false");
+        tabLists.setAttribute("aria-selected", listsTab === "lists" ? "true" : "false");
         ulStarred.style.display = listsTab === "starred" ? "block" : "none";
         ulTodo.style.display = listsTab === "todo" ? "block" : "none";
+        listsPane.style.display = listsTab === "lists" ? "block" : "none";
+        renderListsRows();
       }
 
       function renderListsRows() {
         ulStarred.replaceChildren();
         ulTodo.replaceChildren();
+        listBar.replaceChildren();
+        ulListItems.replaceChildren();
         var star = state.drawersStarred || [];
         var todos = state.drawersTodos || [];
+        var lists = state.drawersLists || [];
+        var items = state.drawersListItems || [];
         function fill(ul, rows, emptyHint) {
           if (!rows.length) {
             var li0 = document.createElement("li");
@@ -5630,6 +5894,75 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         fill(ulStarred, star, "(no starred messages)");
         fill(ulTodo, todos, "(no TODO notes)");
+        if (!lists.length) {
+          selectedListId = "";
+          var liEmpty = document.createElement("li");
+          liEmpty.className = "empty";
+          liEmpty.innerHTML =
+            '<div class="empty-state-card"><p class="empty-state-title">No Lists yet</p><p class="empty-state-body">Create a List, then mark selected text to collect highlights here.</p></div>';
+          ulListItems.appendChild(liEmpty);
+          if (btnRenameList) btnRenameList.disabled = true;
+          if (btnDeleteList) btnDeleteList.disabled = true;
+          return;
+        }
+        var selectedExists = false;
+        for (var li = 0; li < lists.length; li++) {
+          if (String(lists[li].id) === selectedListId) selectedExists = true;
+        }
+        if (!selectedExists) selectedListId = String(lists[0].id || "");
+        if (btnRenameList) btnRenameList.disabled = !selectedListId;
+        if (btnDeleteList) btnDeleteList.disabled = !selectedListId;
+        for (var l = 0; l < lists.length; l++) {
+          var list = lists[l] || {};
+          var lid = list.id != null ? String(list.id) : "";
+          if (!lid) continue;
+          var b = document.createElement("button");
+          b.type = "button";
+          b.setAttribute("data-list-id", lid);
+          b.setAttribute("aria-selected", lid === selectedListId ? "true" : "false");
+          b.innerHTML =
+            '<span class="list-color-dot" style="background:' +
+            esc(String(list.color || "#888")) +
+            '"></span>' +
+            esc(String(list.name || "Untitled List")) +
+            " (" +
+            String(typeof list.item_count === "number" ? list.item_count : 0) +
+            ")";
+          listBar.appendChild(b);
+        }
+        var q = String(listSearch.value || "").trim().toLowerCase();
+        var rows = items.filter(function (it) {
+          if (String(it.list_id || "") !== selectedListId) return false;
+          if (!q) return true;
+          return String(it.selected_text || "").toLowerCase().indexOf(q) >= 0;
+        });
+        if (!rows.length) {
+          var empty = document.createElement("li");
+          empty.className = "empty";
+          empty.textContent = q ? "No matching items" : "This List has no items";
+          ulListItems.appendChild(empty);
+          return;
+        }
+        for (var ri = 0; ri < rows.length; ri++) {
+          var item = rows[ri] || {};
+          var itemId = item.id != null ? String(item.id) : "";
+          var eventId = item.event_id != null ? String(item.event_id) : "";
+          var row = document.createElement("li");
+          row.setAttribute("tabindex", "0");
+          row.setAttribute("data-list-item-id", itemId);
+          row.setAttribute("data-list-id", selectedListId);
+          if (eventId) row.setAttribute("data-event-id", eventId);
+          if (itemId && itemId === focusedListItemId) row.classList.add("selected");
+          row.innerHTML =
+            '<div class="hit-kind">List item</div>' +
+            '<div class="hit-title">' +
+            esc(String(item.selected_text || "")) +
+            "</div>" +
+            '<div class="hit-snippet">' +
+            esc(String(item.created_at || "")) +
+            '</div><div class="lists-drawer-actions"><button type="button" class="btn-secondary" data-action="jump">Go to source</button><button type="button" class="btn-secondary" data-action="remove">Remove</button></div>';
+          ulListItems.appendChild(row);
+        }
       }
 
       function closeLists() {
@@ -5650,8 +5983,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         backdrop.setAttribute("aria-hidden", "false");
         drawer.setAttribute("aria-hidden", "false");
         closeAllMenus();
-        showListsTab(tab === "todo" ? "todo" : "starred");
-        renderListsRows();
+        showListsTab(tab === "todo" || tab === "lists" ? tab : "starred");
       }
 
       openColcoorListsDrawer = function (t) {
@@ -5680,11 +6012,42 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (!listsOpen) return;
         showListsTab("todo");
       });
+      tabLists.addEventListener("click", function () {
+        if (!listsOpen) return;
+        showListsTab("lists");
+      });
       if (btnRefresh) {
         btnRefresh.addEventListener("click", function () {
           vscode.postMessage({ type: "refresh" });
         });
       }
+      if (btnCreateList) {
+        btnCreateList.addEventListener("click", function () {
+          vscode.postMessage({ type: "createList" });
+        });
+      }
+      if (btnRenameList) {
+        btnRenameList.addEventListener("click", function () {
+          if (!selectedListId) return;
+          vscode.postMessage({ type: "renameList", listId: selectedListId });
+        });
+      }
+      if (btnDeleteList) {
+        btnDeleteList.addEventListener("click", function () {
+          if (!selectedListId) return;
+          vscode.postMessage({ type: "deleteList", listId: selectedListId });
+        });
+      }
+      listSearch.addEventListener("input", function () {
+        renderListsRows();
+      });
+      listBar.addEventListener("click", function (ev) {
+        var btn = ev.target.closest && ev.target.closest("button[data-list-id]");
+        if (!btn) return;
+        selectedListId = btn.getAttribute("data-list-id") || "";
+        focusedListItemId = "";
+        renderListsRows();
+      });
 
       function onListClick(ev) {
         var li = ev.target.closest && ev.target.closest("li[data-event-id]");
@@ -5696,6 +6059,40 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       ulStarred.addEventListener("click", onListClick);
       ulTodo.addEventListener("click", onListClick);
+      ulListItems.addEventListener("click", function (ev) {
+        var actionBtn = ev.target.closest && ev.target.closest("button[data-action]");
+        var li = ev.target.closest && ev.target.closest("li[data-list-item-id]");
+        if (!li) return;
+        var itemId = li.getAttribute("data-list-item-id") || "";
+        var listId = li.getAttribute("data-list-id") || selectedListId;
+        if (actionBtn && actionBtn.getAttribute("data-action") === "remove") {
+          if (itemId && listId) {
+            vscode.postMessage({ type: "deleteListItem", listId: listId, itemId: itemId });
+          }
+          return;
+        }
+        var eid = li.getAttribute("data-event-id") || "";
+        if (eid) {
+          closeLists();
+          vscode.postMessage({
+            type: "searchHit",
+            target: { kind: "tree", eventId: eid, listId: listId, itemId: itemId },
+          });
+        }
+      });
+
+      window.addEventListener("message", function (event) {
+        var m = event.data;
+        if (!m || m.type !== "focusListItem") return;
+        selectedListId = typeof m.listId === "string" ? m.listId : "";
+        focusedListItemId = typeof m.itemId === "string" ? m.itemId : "";
+        openLists("lists");
+        setTimeout(function () {
+          var row = ulListItems.querySelector('li[data-list-item-id="' + CSS.escape(focusedListItemId) + '"]');
+          if (row && row.scrollIntoView) row.scrollIntoView({ block: "center" });
+          if (row && row.focus) row.focus();
+        }, 0);
+      });
 
       document.addEventListener(
         "keydown",
@@ -5754,6 +6151,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           conversationNotes: Array.isArray(m.conversationNotes) ? m.conversationNotes : [],
           drawersStarred: Array.isArray(m.drawersStarred) ? m.drawersStarred : [],
           drawersTodos: Array.isArray(m.drawersTodos) ? m.drawersTodos : [],
+          drawersLists: Array.isArray(m.drawersLists) ? m.drawersLists : [],
+          drawersListItems: Array.isArray(m.drawersListItems) ? m.drawersListItems : [],
           legalPolicyLinks: Array.isArray(m.legalPolicyLinks) ? m.legalPolicyLinks : [],
           contextSavings:
             m.contextSavings && typeof m.contextSavings === "object" ? m.contextSavings : null,
@@ -6086,7 +6485,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var pref = "starred";
       try {
         var v = localStorage.getItem("colcoor.listsDrawer.tab");
-        if (v === "todo" || v === "starred") pref = v;
+        if (v === "todo" || v === "starred" || v === "lists") pref = v;
       } catch (eT) {}
       openColcoorListsDrawer(pref);
     });
@@ -6192,10 +6591,271 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       });
     }
 
+    (function wireSelectionListMenu() {
+      var menu = document.getElementById("selectionListMenu");
+      var recentWrap = document.getElementById("selectionRecentLists");
+      if (!menu || !recentWrap || menu.dataset.wired === "1") return;
+      menu.dataset.wired = "1";
+      var pendingSelection = null;
+      var RECENT_KEY_PREFIX = "colcoor.listsDrawer.recent.";
+
+      function closeSelectionMenu() {
+        menu.hidden = true;
+        pendingSelection = null;
+      }
+
+      function conversationRecentKey() {
+        return RECENT_KEY_PREFIX + String(state.conversationId || "");
+      }
+
+      function readRecentListIds() {
+        try {
+          var raw = localStorage.getItem(conversationRecentKey());
+          var arr = raw ? JSON.parse(raw) : [];
+          return Array.isArray(arr) ? arr.map(String).filter(Boolean) : [];
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function rememberRecentListId(listId) {
+        if (!listId) return;
+        var ids = readRecentListIds().filter(function (id) {
+          return id !== listId;
+        });
+        ids.unshift(listId);
+        ids = ids.slice(0, 5);
+        try {
+          localStorage.setItem(conversationRecentKey(), JSON.stringify(ids));
+        } catch (e) {}
+      }
+
+      function listById(listId) {
+        var lists = state.drawersLists || [];
+        for (var i = 0; i < lists.length; i++) {
+          if (String(lists[i].id || "") === listId) return lists[i];
+        }
+        return null;
+      }
+
+      function simpleHash(text) {
+        var h = 0;
+        for (var i = 0; i < text.length; i++) {
+          h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+        }
+        return "h32:" + (h >>> 0).toString(16);
+      }
+
+      function selectedRangeInfo() {
+        var sel = window.getSelection && window.getSelection();
+        if (!sel || sel.rangeCount !== 1 || sel.isCollapsed) return null;
+        var range = sel.getRangeAt(0);
+        var startBody =
+          range.startContainer &&
+          range.startContainer.parentElement &&
+          range.startContainer.parentElement.closest
+            ? range.startContainer.parentElement.closest(".msg[data-event-id] .body.md")
+            : null;
+        var endBody =
+          range.endContainer &&
+          range.endContainer.parentElement &&
+          range.endContainer.parentElement.closest
+            ? range.endContainer.parentElement.closest(".msg[data-event-id] .body.md")
+            : null;
+        if (!startBody || !endBody || startBody !== endBody) return null;
+        var msg = startBody.closest(".msg[data-event-id]");
+        var eventId = msg && msg.getAttribute ? String(msg.getAttribute("data-event-id") || "").trim() : "";
+        if (!eventId) return null;
+        var selectedText = String(range.toString() || "").trim();
+        if (!selectedText) return null;
+        var pre = range.cloneRange();
+        pre.selectNodeContents(startBody);
+        pre.setEnd(range.startContainer, range.startOffset);
+        var textStart = pre.toString().length;
+        var textEnd = textStart + range.toString().length;
+        var bodyText = String(startBody.textContent || "");
+        return {
+          eventId: eventId,
+          selectedText: selectedText,
+          bodyText: bodyText,
+          anchor: {
+            version: 1,
+            kind: "message_text_range",
+            textStart: textStart,
+            textEnd: textEnd,
+            exact: range.toString(),
+            prefix: bodyText.slice(Math.max(0, textStart - 80), textStart),
+            suffix: bodyText.slice(textEnd, Math.min(bodyText.length, textEnd + 80)),
+            occurrenceIndex: 0,
+            messagePlainTextLength: bodyText.length,
+          },
+          sourceContentHash: simpleHash(bodyText),
+        };
+      }
+
+      function postCreateItem(listId) {
+        if (!pendingSelection || !listId) return;
+        rememberRecentListId(listId);
+        vscode.postMessage({
+          type: "createListItem",
+          listId: listId,
+          eventId: pendingSelection.eventId,
+          selectedText: pendingSelection.selectedText,
+          anchorJson: pendingSelection.anchor,
+          sourceContentHash: pendingSelection.sourceContentHash,
+        });
+        closeSelectionMenu();
+        try {
+          var sel = window.getSelection && window.getSelection();
+          if (sel) sel.removeAllRanges();
+        } catch (e) {}
+      }
+
+      function rebuildSelectionMenuRows() {
+        recentWrap.replaceChildren();
+        var lists = state.drawersLists || [];
+        var recentIds = readRecentListIds().filter(function (id) {
+          return !!listById(id);
+        });
+        var markBtn = menu.querySelector('[data-list-selection-action="mark"] .composer-ctx-label');
+        var last = recentIds.length ? listById(recentIds[0]) : null;
+        if (markBtn) {
+          markBtn.textContent = last ? "Add to " + String(last.name || "List") : "Mark Selected Text";
+        }
+        for (var i = 0; i < Math.min(3, recentIds.length); i++) {
+          var row = listById(recentIds[i]);
+          if (!row) continue;
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "composer-ctx-row";
+          btn.setAttribute("role", "menuitem");
+          btn.setAttribute("data-recent-list-id", String(row.id));
+          btn.innerHTML =
+            '<span class="composer-ctx-label">Add to ' + esc(String(row.name || "List")) + "</span>";
+          recentWrap.appendChild(btn);
+        }
+        var choose = menu.querySelector('[data-list-selection-action="choose"]');
+        if (choose) choose.hidden = lists.length === 0;
+      }
+
+      function positionMenu(x, y) {
+        menu.hidden = false;
+        var rect = menu.getBoundingClientRect();
+        var left = Math.min(x, window.innerWidth - rect.width - 8);
+        var top = Math.min(y, window.innerHeight - rect.height - 8);
+        menu.style.left = Math.max(8, left) + "px";
+        menu.style.top = Math.max(8, top) + "px";
+      }
+
+      document.addEventListener(
+        "contextmenu",
+        function (ev) {
+          var info = selectedRangeInfo();
+          if (!info) {
+            closeSelectionMenu();
+            return;
+          }
+          pendingSelection = info;
+          rebuildSelectionMenuRows();
+          ev.preventDefault();
+          ev.stopPropagation();
+          closeAllMenus();
+          positionMenu(ev.clientX, ev.clientY);
+        },
+        true,
+      );
+
+      menu.addEventListener("click", function (ev) {
+        var recent = ev.target.closest && ev.target.closest("button[data-recent-list-id]");
+        if (recent) {
+          postCreateItem(recent.getAttribute("data-recent-list-id") || "");
+          return;
+        }
+        var btn = ev.target.closest && ev.target.closest("button[data-list-selection-action]");
+        if (!btn) return;
+        var action = btn.getAttribute("data-list-selection-action");
+        var recentIds = readRecentListIds().filter(function (id) {
+          return !!listById(id);
+        });
+        if (action === "mark") {
+          if (recentIds[0]) {
+            postCreateItem(recentIds[0]);
+          } else if ((state.drawersLists || []).length === 0) {
+            vscode.postMessage({ type: "createListItemWithNewList", selection: pendingSelection });
+            closeSelectionMenu();
+          } else {
+            openColcoorListsDrawer("lists");
+            closeSelectionMenu();
+          }
+          return;
+        }
+        if (action === "choose") {
+          vscode.postMessage({ type: "chooseListForSelection", selection: pendingSelection });
+          closeSelectionMenu();
+          return;
+        }
+        if (action === "create") {
+          vscode.postMessage({ type: "createListItemWithNewList", selection: pendingSelection });
+          closeSelectionMenu();
+        }
+      });
+
+      document.addEventListener("click", function (ev) {
+        if (menu.hidden) return;
+        if (ev.target.closest && ev.target.closest("#selectionListMenu")) return;
+        closeSelectionMenu();
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (!menu.hidden && ev.key === "Escape") closeSelectionMenu();
+      });
+    })();
+
     (function wireThreadContextMenu() {
       var thread = document.getElementById("thread");
       if (!thread || thread.dataset.ctxWired === "1") return;
       thread.dataset.ctxWired = "1";
+      var highlightLabel = null;
+      function hideHighlightLabel() {
+        if (highlightLabel && highlightLabel.parentElement) {
+          highlightLabel.parentElement.removeChild(highlightLabel);
+        }
+        highlightLabel = null;
+      }
+      function showHighlightLabel(el) {
+        hideHighlightLabel();
+        var listId = el.getAttribute("data-list-id") || "";
+        var list = listForHighlightId(listId);
+        var name = list ? String(list.name || "List") : "List";
+        highlightLabel = document.createElement("div");
+        highlightLabel.className = "list-highlight-label";
+        highlightLabel.textContent = name;
+        document.body.appendChild(highlightLabel);
+        var rect = el.getBoundingClientRect();
+        var lr = highlightLabel.getBoundingClientRect();
+        highlightLabel.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - lr.width - 8)) + "px";
+        highlightLabel.style.top = Math.max(8, rect.top - lr.height - 6) + "px";
+      }
+      thread.addEventListener("mouseover", function (ev) {
+        var hl = ev.target.closest && ev.target.closest(".list-highlight");
+        if (hl) showHighlightLabel(hl);
+      });
+      thread.addEventListener("mouseout", function (ev) {
+        var hl = ev.target.closest && ev.target.closest(".list-highlight");
+        if (!hl) return;
+        var to = ev.relatedTarget;
+        if (to && hl.contains && hl.contains(to)) return;
+        hideHighlightLabel();
+      });
+      thread.addEventListener("click", function (ev) {
+        var hl = ev.target.closest && ev.target.closest(".list-highlight");
+        if (!hl) return;
+        var listId = hl.getAttribute("data-list-id") || "";
+        var itemId = hl.getAttribute("data-list-item-id") || "";
+        if (!listId || !itemId) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        vscode.postMessage({ type: "openListItem", listId: listId, itemId: itemId });
+      });
       thread.addEventListener("contextmenu", function (ev) {
         if (ev.target.closest && ev.target.closest(".note-edit, .note-delete, .code-copy")) return;
         var msg = ev.target.closest && ev.target.closest(".msg[data-event-id]");

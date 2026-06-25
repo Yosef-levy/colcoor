@@ -133,6 +133,64 @@ export type NoteOut = {
   updated_at: string;
 };
 
+export type ConversationListOut = {
+  id: string;
+  conversation_id: string;
+  owner_user_id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  sort_order: number;
+  metadata_json?: Record<string, unknown>;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationListItemOut = {
+  id: string;
+  list_id: string;
+  conversation_id: string;
+  owner_user_id: string;
+  event_id: string | null;
+  selected_text: string;
+  anchor_json: Record<string, unknown>;
+  source_content_hash: string | null;
+  sort_order: number | null;
+  metadata_json?: Record<string, unknown>;
+  created_at: string;
+};
+
+export type ConversationListsBundleOut = {
+  lists: ConversationListOut[];
+  items: ConversationListItemOut[];
+};
+
+export type ConversationListCreateBody = {
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  sort_order?: number | null;
+  metadata_json?: Record<string, unknown> | null;
+};
+
+export type ConversationListPatchBody = Partial<ConversationListCreateBody>;
+
+export type ConversationListItemCreateBody = {
+  event_id: string;
+  selected_text: string;
+  anchor_json: Record<string, unknown>;
+  source_content_hash?: string | null;
+  sort_order?: number | null;
+  metadata_json?: Record<string, unknown> | null;
+};
+
+export type ConversationListItemPatchBody = {
+  list_id?: string | null;
+  sort_order?: number | null;
+  metadata_json?: Record<string, unknown> | null;
+};
+
 /** GET/PATCH …/me response (api-contracts §9.1). */
 export type MeOut = {
   id: string;
@@ -566,6 +624,106 @@ export class ColcoorApiClient {
     });
     const t = await res.text();
     this.assertOkResponse(res, t, "delete note");
+  }
+
+  async listConversationLists(
+    conversationId: string,
+    options?: { includeItems?: boolean },
+  ): Promise<ConversationListsBundleOut> {
+    const qs =
+      options?.includeItems === false
+        ? `?include_items=${encodeURIComponent("false")}`
+        : "";
+    const res = await this.fetchApi(`/conversations/${conversationId}/lists${qs}`, {
+      method: "GET",
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "list conversation Lists");
+    return JSON.parse(text) as ConversationListsBundleOut;
+  }
+
+  async createConversationList(
+    conversationId: string,
+    body: ConversationListCreateBody,
+  ): Promise<ConversationListOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/lists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "create List");
+    return JSON.parse(text) as ConversationListOut;
+  }
+
+  async patchConversationList(
+    conversationId: string,
+    listId: string,
+    body: ConversationListPatchBody,
+  ): Promise<ConversationListOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/lists/${listId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "update List");
+    return JSON.parse(text) as ConversationListOut;
+  }
+
+  async deleteConversationList(conversationId: string, listId: string): Promise<void> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/lists/${listId}`, {
+      method: "DELETE",
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "delete List");
+  }
+
+  async createConversationListItem(
+    conversationId: string,
+    listId: string,
+    body: ConversationListItemCreateBody,
+  ): Promise<ConversationListItemOut> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/lists/${listId}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "create List item");
+    return JSON.parse(text) as ConversationListItemOut;
+  }
+
+  async patchConversationListItem(
+    conversationId: string,
+    listId: string,
+    itemId: string,
+    body: ConversationListItemPatchBody,
+  ): Promise<ConversationListItemOut> {
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/lists/${listId}/items/${itemId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    const text = await res.text();
+    this.assertOkResponse(res, text, "update List item");
+    return JSON.parse(text) as ConversationListItemOut;
+  }
+
+  async deleteConversationListItem(
+    conversationId: string,
+    listId: string,
+    itemId: string,
+  ): Promise<void> {
+    const res = await this.fetchApi(
+      `/conversations/${conversationId}/lists/${listId}/items/${itemId}`,
+      { method: "DELETE" },
+    );
+    const text = await res.text();
+    this.assertOkResponse(res, text, "delete List item");
   }
 
   /** Owner-only: soft-delete conversation and full graph (DELETE /conversations/{id}). */
