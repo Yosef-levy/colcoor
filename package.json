@@ -1,6 +1,7 @@
 {
   "name": "colcoor",
   "private": true,
+  "license": "BUSL-1.1",
   "workspaces": ["packages/extension"],
   "scripts": {
     "build": "npm run build -w colcoor-extension",

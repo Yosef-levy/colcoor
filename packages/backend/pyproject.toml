@@ -2,6 +2,7 @@
 name = "colcoor-backend"
 version = "0.1.0"
 description = "Colcoor extension-dedicated API (event graph, tree, side chat, auth)"
+license = "BUSL-1.1"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0",

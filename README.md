@@ -1,5 +1,7 @@
 # Colcoor (Cursor extension)
 
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
+
 Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated backend**. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/api-contracts.md`](docs/api-contracts.md). **Roles:** [`docs/permissions.md`](docs/permissions.md). **Usage / billing:** [`docs/billing-usage.md`](docs/billing-usage.md).
 
 ## Layout
@@ -80,3 +82,13 @@ Output directory: **`dist/colcoor-gcp-production-BE…-EXT…/`** (customer entr
 **Extension backend URL:** after setting **`colcoor.backendBaseUrl`** (or **`COLCOOR_API_URL`**), run **Developer: Reload Window** from the Command Palette so Colcoor uses the new API origin.
 
 On a **Docker-only** server without extension dev deps, use **`npm run bundle:gcp-production:skip-vsix`** and copy the `.vsix` from a machine where `npm install` and **`npm run package:extension`** work.
+
+## License
+
+Colcoor is **Source Available (BUSL-1.1)** under the **Business Source License 1.1**. It is not an OSI-approved Open Source project.
+
+Personal use, educational use, academic research, internal non-production evaluation by organizations, forks, and contributions are allowed under the terms in [`LICENSE`](LICENSE).
+
+Organizations need a commercial license for production use, hosted/SaaS offerings, commercial product embedding, OEM distribution, or selling services or products based on Colcoor. See [`COMMERCIAL_LICENSE.md`](COMMERCIAL_LICENSE.md).
+
+**Need a commercial license? Contact <support@colcoor.com>.**
