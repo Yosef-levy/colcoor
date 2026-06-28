@@ -16,6 +16,8 @@ Instead of treating AI conversations as disposable chat history, Colcoor treats 
 
 > **Project status:** Active development.
 
+Website: [colcoor.com](https://www.colcoor.com/)
+
 ## Why Colcoor?
 
 Current AI chat interfaces work well for short conversations, but they begin to break down during long-running research and learning projects:
@@ -108,6 +110,8 @@ Colcoor runs the main assistant through the Cursor agent and preserves the resul
 - Enhanced tool and MCP approval workflows
 - AI-assisted research agents
 - Rich visualization of knowledge graphs
+
+## Repository guide
 
 Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated backend**. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/api-contracts.md`](docs/api-contracts.md). **Roles:** [`docs/permissions.md`](docs/permissions.md). **Usage / billing:** [`docs/billing-usage.md`](docs/billing-usage.md).
 
