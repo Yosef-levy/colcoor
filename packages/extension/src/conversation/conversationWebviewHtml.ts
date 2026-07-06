@@ -24,6 +24,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   const gettingStartedLinesJson = JSON.stringify(GETTING_STARTED_LINES);
   const tryThisNextStepsJson = JSON.stringify(TRY_THIS_NEXT_STEPS);
   const listHighlightColorsJson = JSON.stringify(LIST_HIGHLIGHT_COLOR_GRID);
+  const refreshTreeActionJson = JSON.stringify(COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION);
+  const refreshTreeLabelJson = JSON.stringify(COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL);
 
   const csp = [
     "default-src 'none'",
@@ -1415,6 +1417,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       flex: 1;
       min-height: 0;
       overflow: auto;
+      display: flex;
+      flex-direction: column;
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
       background: var(--vscode-editor-background);
@@ -1588,6 +1592,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     .lists-drawer-color-cell[aria-selected="true"] {
       border-color: var(--vscode-focusBorder, var(--vscode-foreground));
       box-shadow: 0 0 0 1px var(--vscode-widget-shadow);
+    }
+    #listsDrawerListsPane {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    .lists-drawer-list-head {
+      flex-shrink: 0;
+      padding: 8px 10px 0;
+    }
+    #listsDrawerListItems {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
     }
     .list-color-dot {
       display: inline-block;
@@ -1820,56 +1839,64 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
   >
     <div class="search-drawer-header">
       <span id="listsDrawerTitle">Collections</span>
-      <button type="button" id="listsDrawerClose" class="btn-secondary">Close</button>
+      <span class="panel-hint-actions">
+        <button
+          type="button"
+          id="listsDrawerRefresh"
+          class="btn-secondary btn-icon"
+          title=${refreshTreeActionJson}
+          aria-label=${refreshTreeLabelJson}
+        >↻</button>
+        <button type="button" id="listsDrawerClose" class="btn-secondary btn-icon" title="Close Collections" aria-label="Close Collections">×</button>
+      </span>
     </div>
     <div class="search-drawer-body">
       <div class="lists-drawer-tabs">
         <button type="button" class="lists-tab" id="listsTabStarred" aria-selected="true">Starred</button>
         <button type="button" class="lists-tab" id="listsTabTodo" aria-selected="false">TODO</button>
         <button type="button" class="lists-tab" id="listsTabLists" aria-selected="false">Lists</button>
-        <button type="button" id="listsDrawerRefresh" class="btn-secondary" title="Reload conversation tree from server">
-          Refresh
-        </button>
       </div>
       <div class="search-drawer-results" id="listsDrawerResultsWrap">
         <ul id="listsDrawerStarredList"></ul>
         <ul id="listsDrawerTodoList" style="display: none"></ul>
         <div id="listsDrawerListsPane" style="display: none">
-          <div class="lists-drawer-actions">
-            <button type="button" id="listsDrawerCreateList" class="btn-secondary">New List…</button>
-            <button type="button" id="listsDrawerRenameList" class="btn-secondary">Rename…</button>
-            <button type="button" id="listsDrawerDeleteList" class="btn-secondary">Delete…</button>
-          </div>
-          <div class="lists-drawer-listbar" id="listsDrawerListBar"></div>
-          <div id="listsDrawerListMeta" class="lists-drawer-meta" hidden>
-            <p id="listsDrawerListDescription" class="lists-drawer-description"></p>
-            <div class="lists-drawer-colors">
-              <span class="lists-drawer-colors-label">Highlight color</span>
-              <div class="lists-drawer-color-picker">
-                <button
-                  type="button"
-                  id="listsDrawerColorToggle"
-                  class="lists-drawer-color-toggle"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                  aria-label="Highlight color"
-                >
-                  <span id="listsDrawerColorPreview" class="lists-drawer-color-preview" aria-hidden="true"></span>
-                  <span class="lists-drawer-color-chevron" aria-hidden="true">▼</span>
-                </button>
-                <div id="listsDrawerColorMenu" class="lists-drawer-color-menu" hidden role="listbox" aria-label="Highlight colors">
-                  <div id="listsDrawerColorGrid" class="lists-drawer-color-grid"></div>
+          <div class="lists-drawer-list-head">
+            <div class="lists-drawer-actions">
+              <button type="button" id="listsDrawerCreateList" class="btn-secondary">New List…</button>
+              <button type="button" id="listsDrawerRenameList" class="btn-secondary">Rename…</button>
+              <button type="button" id="listsDrawerDeleteList" class="btn-secondary">Delete…</button>
+            </div>
+            <div class="lists-drawer-listbar" id="listsDrawerListBar"></div>
+            <div id="listsDrawerListMeta" class="lists-drawer-meta" hidden>
+              <p id="listsDrawerListDescription" class="lists-drawer-description"></p>
+              <div class="lists-drawer-colors">
+                <span class="lists-drawer-colors-label">Highlight color</span>
+                <div class="lists-drawer-color-picker">
+                  <button
+                    type="button"
+                    id="listsDrawerColorToggle"
+                    class="lists-drawer-color-toggle"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-label="Highlight color"
+                  >
+                    <span id="listsDrawerColorPreview" class="lists-drawer-color-preview" aria-hidden="true"></span>
+                    <span class="lists-drawer-color-chevron" aria-hidden="true">▼</span>
+                  </button>
+                  <div id="listsDrawerColorMenu" class="lists-drawer-color-menu" hidden role="listbox" aria-label="Highlight colors">
+                    <div id="listsDrawerColorGrid" class="lists-drawer-color-grid"></div>
+                  </div>
                 </div>
               </div>
             </div>
+            <input
+              type="search"
+              id="listsDrawerListSearch"
+              class="lists-drawer-search"
+              placeholder="Search List items"
+              aria-label="Search List items"
+            />
           </div>
-          <input
-            type="search"
-            id="listsDrawerListSearch"
-            class="lists-drawer-search"
-            placeholder="Search List items"
-            aria-label="Search List items"
-          />
           <ul id="listsDrawerListItems"></ul>
         </div>
       </div>
@@ -6048,7 +6075,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         tabLists.setAttribute("aria-selected", listsTab === "lists" ? "true" : "false");
         ulStarred.style.display = listsTab === "starred" ? "block" : "none";
         ulTodo.style.display = listsTab === "todo" ? "block" : "none";
-        listsPane.style.display = listsTab === "lists" ? "block" : "none";
+        listsPane.style.display = listsTab === "lists" ? "flex" : "none";
         renderListsRows();
       }
 
