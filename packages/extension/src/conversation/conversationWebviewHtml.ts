@@ -1505,6 +1505,42 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       box-sizing: border-box;
       margin-bottom: 8px;
     }
+    .lists-drawer-meta {
+      margin-bottom: 8px;
+    }
+    .lists-drawer-meta[hidden] {
+      display: none !important;
+    }
+    .lists-drawer-description {
+      margin: 0 0 8px 0;
+      font-size: 0.88em;
+      line-height: 1.4;
+      color: var(--vscode-descriptionForeground);
+    }
+    .lists-drawer-colors {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .lists-drawer-colors-label {
+      font-size: 0.82em;
+      color: var(--vscode-descriptionForeground);
+      margin-right: 2px;
+    }
+    .list-color-swatch {
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border-radius: 999px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      background: var(--swatch-color, #888);
+    }
+    .list-color-swatch[aria-selected="true"] {
+      border-color: var(--vscode-focusBorder, var(--vscode-foreground));
+      box-shadow: 0 0 0 1px var(--vscode-widget-shadow);
+    }
     .list-color-dot {
       display: inline-block;
       width: 0.72em;
@@ -1757,6 +1793,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" id="listsDrawerDeleteList" class="btn-secondary">Delete…</button>
           </div>
           <div class="lists-drawer-listbar" id="listsDrawerListBar"></div>
+          <div id="listsDrawerListMeta" class="lists-drawer-meta" hidden>
+            <p id="listsDrawerListDescription" class="lists-drawer-description"></p>
+            <div class="lists-drawer-colors">
+              <span class="lists-drawer-colors-label">Highlight color</span>
+              <div id="listsDrawerColorSwatches"></div>
+            </div>
+          </div>
           <input
             type="search"
             id="listsDrawerListSearch"
@@ -2001,12 +2044,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       <span class="composer-ctx-label">Mark Selected Text</span>
     </button>
     <div id="selectionRecentLists"></div>
-    <button type="button" class="composer-ctx-row" data-list-selection-action="choose" role="menuitem">
-      <span class="composer-ctx-label">Choose another List…</span>
-    </button>
-    <button type="button" class="composer-ctx-row" data-list-selection-action="create" role="menuitem">
-      <span class="composer-ctx-label">Create new List…</span>
-    </button>
     <button type="button" class="composer-ctx-row" data-list-selection-action="copy" role="menuitem">
       <span class="composer-ctx-label">Copy</span>
     </button>
@@ -5827,6 +5864,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var ulTodo = document.getElementById("listsDrawerTodoList");
       var listsPane = document.getElementById("listsDrawerListsPane");
       var listBar = document.getElementById("listsDrawerListBar");
+      var listMeta = document.getElementById("listsDrawerListMeta");
+      var listDescription = document.getElementById("listsDrawerListDescription");
+      var listColorSwatches = document.getElementById("listsDrawerColorSwatches");
       var listSearch = document.getElementById("listsDrawerListSearch");
       var ulListItems = document.getElementById("listsDrawerListItems");
       if (
@@ -5846,6 +5886,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       }
       var LS_TAB = "colcoor.listsDrawer.tab";
+      var LIST_COLORS = [
+        "#f59e0b",
+        "#10b981",
+        "#3b82f6",
+        "#a855f7",
+        "#ef4444",
+        "#14b8a6",
+        "#f97316",
+        "#84cc16",
+      ];
       var listsOpen = false;
       var listsTab = "starred";
       var selectedListId = "";
@@ -5899,6 +5949,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         fill(ulTodo, todos, "(no TODO notes)");
         if (!lists.length) {
           selectedListId = "";
+          if (listMeta) listMeta.hidden = true;
+          if (listDescription) listDescription.textContent = "";
+          if (listColorSwatches) listColorSwatches.replaceChildren();
           var liEmpty = document.createElement("li");
           liEmpty.className = "empty";
           liEmpty.innerHTML =
@@ -5932,6 +5985,34 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             String(typeof list.item_count === "number" ? list.item_count : 0) +
             ")";
           listBar.appendChild(b);
+        }
+        var selectedList = null;
+        for (var ls = 0; ls < lists.length; ls++) {
+          if (String(lists[ls].id || "") === selectedListId) {
+            selectedList = lists[ls];
+            break;
+          }
+        }
+        if (listMeta) listMeta.hidden = !selectedList;
+        if (selectedList && listDescription) {
+          var desc = selectedList.description != null ? String(selectedList.description).trim() : "";
+          listDescription.textContent = desc || "No description";
+          listDescription.style.fontStyle = desc ? "normal" : "italic";
+        }
+        if (selectedList && listColorSwatches) {
+          listColorSwatches.replaceChildren();
+          var currentColor = String(selectedList.color || "#f59e0b");
+          for (var ci = 0; ci < LIST_COLORS.length; ci++) {
+            var color = LIST_COLORS[ci];
+            var sw = document.createElement("button");
+            sw.type = "button";
+            sw.className = "list-color-swatch";
+            sw.setAttribute("data-list-color", color);
+            sw.setAttribute("aria-label", "Set highlight color " + color);
+            sw.setAttribute("aria-selected", color === currentColor ? "true" : "false");
+            sw.style.setProperty("--swatch-color", color);
+            listColorSwatches.appendChild(sw);
+          }
         }
         var q = String(listSearch.value || "").trim().toLowerCase();
         var rows = items.filter(function (it) {
@@ -6051,6 +6132,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         focusedListItemId = "";
         renderListsRows();
       });
+      if (listColorSwatches) {
+        listColorSwatches.addEventListener("click", function (ev) {
+          var sw = ev.target.closest && ev.target.closest("button[data-list-color]");
+          if (!sw || !selectedListId) return;
+          var color = sw.getAttribute("data-list-color") || "";
+          if (!color) return;
+          vscode.postMessage({ type: "setListColor", listId: selectedListId, color: color });
+        });
+      }
 
       function onListClick(ev) {
         var li = ev.target.closest && ev.target.closest("li[data-event-id]");
@@ -6716,7 +6806,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
       function rebuildSelectionMenuRows() {
         recentWrap.replaceChildren();
-        var lists = state.drawersLists || [];
         var recentIds = readRecentListIds().filter(function (id) {
           return !!listById(id);
         });
@@ -6737,8 +6826,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             '<span class="composer-ctx-label">Add to ' + esc(String(row.name || "List")) + "</span>";
           recentWrap.appendChild(btn);
         }
-        var choose = menu.querySelector('[data-list-selection-action="choose"]');
-        if (choose) choose.hidden = lists.length === 0;
       }
 
       function positionMenu(x, y) {
@@ -6790,16 +6877,6 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             vscode.postMessage({ type: "chooseListForSelection", selection: pendingSelection });
             closeSelectionMenu();
           }
-          return;
-        }
-        if (action === "choose") {
-          vscode.postMessage({ type: "chooseListForSelection", selection: pendingSelection });
-          closeSelectionMenu();
-          return;
-        }
-        if (action === "create") {
-          vscode.postMessage({ type: "createListItemWithNewList", selection: pendingSelection });
-          closeSelectionMenu();
           return;
         }
         if (action === "copy") {

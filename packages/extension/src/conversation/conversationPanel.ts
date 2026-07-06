@@ -382,6 +382,7 @@ type FromWebview =
     }
   | { type: "createList" }
   | { type: "renameList"; listId: string }
+  | { type: "setListColor"; listId: string; color: string }
   | { type: "deleteList"; listId: string }
   | { type: "deleteListItem"; listId: string; itemId: string }
   | { type: "openListItem"; listId: string; itemId: string }
@@ -757,6 +758,22 @@ export function createConversationPanelController(
     }
     try {
       await api.patchConversationList(conversationId, listId, { name: name.trim() });
+      await refreshListsIntoCachedStateAndPost();
+    } catch (e) {
+      await showColcoorApiFailure(e);
+    }
+  }
+
+  async function setListColor(listId: string, color: string): Promise<void> {
+    if (!conversationId) {
+      return;
+    }
+    const trimmed = color.trim();
+    if (!trimmed) {
+      return;
+    }
+    try {
+      await api.patchConversationList(conversationId, listId, { color: trimmed });
       await refreshListsIntoCachedStateAndPost();
     } catch (e) {
       await showColcoorApiFailure(e);
@@ -3131,6 +3148,14 @@ export function createConversationPanelController(
       }
       if (msg.type === "renameList" && typeof msg.listId === "string") {
         await promptRenameList(msg.listId);
+        return;
+      }
+      if (
+        msg.type === "setListColor" &&
+        typeof msg.listId === "string" &&
+        typeof msg.color === "string"
+      ) {
+        await setListColor(msg.listId, msg.color);
         return;
       }
       if (msg.type === "deleteList" && typeof msg.listId === "string") {
