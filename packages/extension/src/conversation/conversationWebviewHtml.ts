@@ -17,11 +17,13 @@ import {
   COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL,
 } from "../util/colcoorApiFailureActions";
 import { SIDE_CHAT_BROADCAST_MENTION } from "../sidechat/sideChatMentions";
+import { LIST_HIGHLIGHT_COLOR_GRID } from "./listHighlightColors";
 
 export function getConversationWebviewHtml(cspSource: string, nonce: string): string {
   const emptyCopyJson = JSON.stringify(WEBVIEW_EMPTY_COPY);
   const gettingStartedLinesJson = JSON.stringify(GETTING_STARTED_LINES);
   const tryThisNextStepsJson = JSON.stringify(TRY_THIS_NEXT_STEPS);
+  const listHighlightColorsJson = JSON.stringify(LIST_HIGHLIGHT_COLOR_GRID);
 
   const csp = [
     "default-src 'none'",
@@ -1521,23 +1523,69 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
     .lists-drawer-colors-label {
       font-size: 0.82em;
       color: var(--vscode-descriptionForeground);
-      margin-right: 2px;
     }
-    .list-color-swatch {
+    .lists-drawer-color-picker {
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .lists-drawer-color-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: auto;
+      font-family: inherit;
+      font-size: 0.88em;
+      padding: 4px 8px;
+      cursor: pointer;
+      border: 1px solid var(--vscode-panel-border);
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    .lists-drawer-color-preview {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      border: 1px solid var(--vscode-contrastBorder, var(--vscode-panel-border));
+      flex-shrink: 0;
+    }
+    .lists-drawer-color-chevron {
+      font-size: 0.72em;
+      line-height: 1;
+      opacity: 0.85;
+    }
+    .lists-drawer-color-menu {
+      position: absolute;
+      z-index: 32000;
+      top: calc(100% + 4px);
+      left: 0;
+      padding: 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    }
+    .lists-drawer-color-menu[hidden] {
+      display: none !important;
+    }
+    .lists-drawer-color-grid {
+      display: grid;
+      gap: 4px;
+    }
+    .lists-drawer-color-cell {
       width: 18px;
       height: 18px;
       padding: 0;
-      border-radius: 999px;
+      border-radius: 3px;
       border: 2px solid transparent;
       cursor: pointer;
       background: var(--swatch-color, #888);
     }
-    .list-color-swatch[aria-selected="true"] {
+    .lists-drawer-color-cell[aria-selected="true"] {
       border-color: var(--vscode-focusBorder, var(--vscode-foreground));
       box-shadow: 0 0 0 1px var(--vscode-widget-shadow);
     }
@@ -1797,7 +1845,22 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <p id="listsDrawerListDescription" class="lists-drawer-description"></p>
             <div class="lists-drawer-colors">
               <span class="lists-drawer-colors-label">Highlight color</span>
-              <div id="listsDrawerColorSwatches"></div>
+              <div class="lists-drawer-color-picker">
+                <button
+                  type="button"
+                  id="listsDrawerColorToggle"
+                  class="lists-drawer-color-toggle"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-label="Highlight color"
+                >
+                  <span id="listsDrawerColorPreview" class="lists-drawer-color-preview" aria-hidden="true"></span>
+                  <span class="lists-drawer-color-chevron" aria-hidden="true">▼</span>
+                </button>
+                <div id="listsDrawerColorMenu" class="lists-drawer-color-menu" hidden role="listbox" aria-label="Highlight colors">
+                  <div id="listsDrawerColorGrid" class="lists-drawer-color-grid"></div>
+                </div>
+              </div>
             </div>
           </div>
           <input
@@ -2366,6 +2429,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       conversationMembers: [],
     };
     const EMPTY_COPY = ${emptyCopyJson};
+    const LIST_COLOR_GRID = ${listHighlightColorsJson};
     const GETTING_STARTED_LINES = ${gettingStartedLinesJson};
     const TRY_THIS_NEXT_STEPS = ${tryThisNextStepsJson};
 
@@ -3819,47 +3883,70 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       return out;
     }
 
+    /** Map a DOM point to an offset in {@link bodyPlainText} (matches textContent indexing). */
+    function bodyPlainTextOffset(body, container, offset) {
+      if (!body || !container) return 0;
+      try {
+        var pre = document.createRange();
+        pre.selectNodeContents(body);
+        pre.setEnd(container, offset);
+        return String(pre.cloneContents().textContent || "").length;
+      } catch (e0) {
+        return 0;
+      }
+    }
+
+    function bodyPlainText(body) {
+      return String((body && body.textContent) || "");
+    }
+
+    function createListHighlightSpan(textNode, localStart, localEnd, attrs) {
+      if (!textNode || localEnd <= localStart) return false;
+      var span = document.createElement("span");
+      span.className = "list-highlight";
+      span.setAttribute("tabindex", "0");
+      span.setAttribute("data-list-id", attrs.listId);
+      span.setAttribute("data-list-item-id", attrs.itemId);
+      span.setAttribute("title", attrs.listName);
+      span.style.setProperty("--list-highlight-color", attrs.color);
+      var range = document.createRange();
+      range.setStart(textNode, localStart);
+      range.setEnd(textNode, localEnd);
+      try {
+        range.surroundContents(span);
+        return true;
+      } catch (e) {
+        try {
+          var frag = range.extractContents();
+          span.appendChild(frag);
+          range.insertNode(span);
+          return true;
+        } catch (e2) {
+          return false;
+        }
+      }
+    }
+
     function wrapTextRange(root, start, end, attrs) {
       if (!root || start == null || end == null || end <= start) return false;
       var nodes = textNodesUnder(root);
       var pos = 0;
-      var range = document.createRange();
-      var started = false;
+      var wrapped = false;
       for (var i = 0; i < nodes.length; i++) {
         var node = nodes[i];
-        var len = (node.nodeValue || "").length;
+        var text = node.nodeValue || "";
+        var len = text.length;
+        if (!len) continue;
         var nodeStart = pos;
         var nodeEnd = pos + len;
-        if (!started && start >= nodeStart && start <= nodeEnd) {
-          range.setStart(node, Math.max(0, start - nodeStart));
-          started = true;
-        }
-        if (started && end >= nodeStart && end <= nodeEnd) {
-          range.setEnd(node, Math.max(0, end - nodeStart));
-          var span = document.createElement("span");
-          span.className = "list-highlight";
-          span.setAttribute("tabindex", "0");
-          span.setAttribute("data-list-id", attrs.listId);
-          span.setAttribute("data-list-item-id", attrs.itemId);
-          span.setAttribute("title", attrs.listName);
-          span.style.setProperty("--list-highlight-color", attrs.color);
-          try {
-            range.surroundContents(span);
-            return true;
-          } catch (e) {
-            try {
-              var frag = range.extractContents();
-              span.appendChild(frag);
-              range.insertNode(span);
-              return true;
-            } catch (e2) {
-              return false;
-            }
-          }
-        }
         pos = nodeEnd;
+        if (nodeEnd <= start || nodeStart >= end) continue;
+        var localStart = Math.max(0, start - nodeStart);
+        var localEnd = Math.min(len, end - nodeStart);
+        if (localEnd <= localStart) continue;
+        if (createListHighlightSpan(node, localStart, localEnd, attrs)) wrapped = true;
       }
-      return false;
+      return wrapped;
     }
 
     function anchorRangeForItem(bodyText, item) {
@@ -3871,7 +3958,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         start >= 0 &&
         end > start &&
         end <= bodyText.length &&
-        (!exact || bodyText.slice(start, end) === exact)
+        bodyText.slice(start, end) === exact
       ) {
         return { start: start, end: end };
       }
@@ -3904,7 +3991,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var msg = findThreadMessageElement(eventId);
         var body = msg && msg.querySelector ? msg.querySelector(".body.md") : null;
         if (!body) return;
-        var bodyText = String(body.textContent || "");
+        var bodyText = bodyPlainText(body);
         var ranges = [];
         var rows = byEvent[eventId] || [];
         for (var r = 0; r < rows.length; r++) {
@@ -5866,7 +5953,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var listBar = document.getElementById("listsDrawerListBar");
       var listMeta = document.getElementById("listsDrawerListMeta");
       var listDescription = document.getElementById("listsDrawerListDescription");
-      var listColorSwatches = document.getElementById("listsDrawerColorSwatches");
+      var listColorPreview = document.getElementById("listsDrawerColorPreview");
+      var listColorToggle = document.getElementById("listsDrawerColorToggle");
+      var listColorMenu = document.getElementById("listsDrawerColorMenu");
+      var listColorGrid = document.getElementById("listsDrawerColorGrid");
       var listSearch = document.getElementById("listsDrawerListSearch");
       var ulListItems = document.getElementById("listsDrawerListItems");
       if (
@@ -5886,20 +5976,67 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         return;
       }
       var LS_TAB = "colcoor.listsDrawer.tab";
-      var LIST_COLORS = [
-        "#f59e0b",
-        "#10b981",
-        "#3b82f6",
-        "#a855f7",
-        "#ef4444",
-        "#14b8a6",
-        "#f97316",
-        "#84cc16",
-      ];
       var listsOpen = false;
       var listsTab = "starred";
       var selectedListId = "";
       var focusedListItemId = "";
+      var listColorGridBuilt = false;
+      var listColorMenuOpen = false;
+
+      function buildListColorGridOnce() {
+        if (!listColorGrid || listColorGridBuilt) return;
+        listColorGrid.replaceChildren();
+        var cols = 0;
+        for (var r0 = 0; r0 < LIST_COLOR_GRID.length; r0++) {
+          cols = Math.max(cols, (LIST_COLOR_GRID[r0] || []).length);
+        }
+        if (cols > 0) listColorGrid.style.gridTemplateColumns = "repeat(" + String(cols) + ", 18px)";
+        for (var r = 0; r < LIST_COLOR_GRID.length; r++) {
+          var gridRow = LIST_COLOR_GRID[r] || [];
+          for (var c = 0; c < gridRow.length; c++) {
+            var color = String(gridRow[c] || "");
+            if (!color) continue;
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "lists-drawer-color-cell";
+            btn.setAttribute("role", "option");
+            btn.setAttribute("data-list-color", color);
+            btn.setAttribute("aria-label", color);
+            btn.style.setProperty("--swatch-color", color);
+            btn.style.background = color;
+            listColorGrid.appendChild(btn);
+          }
+        }
+        listColorGridBuilt = true;
+      }
+
+      function closeListColorMenu() {
+        if (!listColorMenu) return;
+        listColorMenu.hidden = true;
+        listColorMenuOpen = false;
+        if (listColorToggle) listColorToggle.setAttribute("aria-expanded", "false");
+      }
+
+      function openListColorMenu() {
+        if (!listColorMenu || !selectedListId) return;
+        buildListColorGridOnce();
+        listColorMenu.hidden = false;
+        listColorMenuOpen = true;
+        if (listColorToggle) listColorToggle.setAttribute("aria-expanded", "true");
+      }
+
+      function syncListColorPicker(currentColor) {
+        buildListColorGridOnce();
+        var color = String(currentColor || "#f59e0b");
+        if (listColorPreview) listColorPreview.style.background = color;
+        if (listColorGrid) {
+          var cells = listColorGrid.querySelectorAll("button[data-list-color]");
+          for (var i = 0; i < cells.length; i++) {
+            var cell = cells[i];
+            cell.setAttribute("aria-selected", cell.getAttribute("data-list-color") === color ? "true" : "false");
+          }
+        }
+      }
 
       function showListsTab(which) {
         listsTab = which === "todo" || which === "lists" ? which : "starred";
@@ -5951,7 +6088,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           selectedListId = "";
           if (listMeta) listMeta.hidden = true;
           if (listDescription) listDescription.textContent = "";
-          if (listColorSwatches) listColorSwatches.replaceChildren();
+          syncListColorPicker("");
+          closeListColorMenu();
           var liEmpty = document.createElement("li");
           liEmpty.className = "empty";
           liEmpty.innerHTML =
@@ -5999,21 +6137,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           listDescription.textContent = desc || "No description";
           listDescription.style.fontStyle = desc ? "normal" : "italic";
         }
-        if (selectedList && listColorSwatches) {
-          listColorSwatches.replaceChildren();
-          var currentColor = String(selectedList.color || "#f59e0b");
-          for (var ci = 0; ci < LIST_COLORS.length; ci++) {
-            var color = LIST_COLORS[ci];
-            var sw = document.createElement("button");
-            sw.type = "button";
-            sw.className = "list-color-swatch";
-            sw.setAttribute("data-list-color", color);
-            sw.setAttribute("aria-label", "Set highlight color " + color);
-            sw.setAttribute("aria-selected", color === currentColor ? "true" : "false");
-            sw.style.setProperty("--swatch-color", color);
-            listColorSwatches.appendChild(sw);
-          }
-        }
+        if (selectedList) syncListColorPicker(String(selectedList.color || "#f59e0b"));
         var q = String(listSearch.value || "").trim().toLowerCase();
         var rows = items.filter(function (it) {
           if (String(it.list_id || "") !== selectedListId) return false;
@@ -6051,6 +6175,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
 
       function closeLists() {
         listsOpen = false;
+        closeListColorMenu();
         backdrop.classList.remove("open");
         drawer.classList.remove("open");
         backdrop.setAttribute("aria-hidden", "true");
@@ -6132,15 +6257,39 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         focusedListItemId = "";
         renderListsRows();
       });
-      if (listColorSwatches) {
-        listColorSwatches.addEventListener("click", function (ev) {
+      if (listColorToggle) {
+        listColorToggle.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          if (!selectedListId) return;
+          if (listColorMenuOpen) closeListColorMenu();
+          else openListColorMenu();
+        });
+      }
+      if (listColorGrid) {
+        listColorGrid.addEventListener("click", function (ev) {
           var sw = ev.target.closest && ev.target.closest("button[data-list-color]");
           if (!sw || !selectedListId) return;
           var color = sw.getAttribute("data-list-color") || "";
           if (!color) return;
+          syncListColorPicker(color);
+          closeListColorMenu();
           vscode.postMessage({ type: "setListColor", listId: selectedListId, color: color });
         });
       }
+      document.addEventListener(
+        "click",
+        function (ev) {
+          if (!listColorMenuOpen) return;
+          var t = ev.target;
+          if (listColorMenu && t && listColorMenu.contains(t)) return;
+          if (listColorToggle && t && listColorToggle.contains(t)) return;
+          closeListColorMenu();
+        },
+        true,
+      );
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && listColorMenuOpen) closeListColorMenu();
+      });
 
       function onListClick(ev) {
         var li = ev.target.closest && ev.target.closest("li[data-event-id]");
@@ -6761,12 +6910,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (!eventId) return null;
         var selectedText = String(range.toString() || "").trim();
         if (!selectedText) return null;
-        var pre = range.cloneRange();
-        pre.selectNodeContents(startBody);
-        pre.setEnd(range.startContainer, range.startOffset);
-        var textStart = pre.toString().length;
-        var textEnd = textStart + range.toString().length;
-        var bodyText = String(startBody.textContent || "");
+        var textStart = bodyPlainTextOffset(startBody, range.startContainer, range.startOffset);
+        var textEnd = bodyPlainTextOffset(startBody, range.endContainer, range.endOffset);
+        if (textEnd <= textStart) return null;
+        var bodyText = bodyPlainText(startBody);
+        var exact = bodyText.slice(textStart, textEnd);
         return {
           eventId: eventId,
           selectedText: selectedText,
@@ -6776,7 +6924,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             kind: "message_text_range",
             textStart: textStart,
             textEnd: textEnd,
-            exact: range.toString(),
+            exact: exact,
             prefix: bodyText.slice(Math.max(0, textStart - 80), textStart),
             suffix: bodyText.slice(textEnd, Math.min(bodyText.length, textEnd + 80)),
             occurrenceIndex: 0,
