@@ -431,6 +431,8 @@ export type ConversationPanelControllerOptions = {
   api: ColcoorClient;
   agent: AgentRunner;
   getWorkspaceRoot: () => string;
+  /** Offline single-user mode: collaboration features (side chat) are unavailable. */
+  localMode?: boolean;
 };
 
 /**
@@ -496,6 +498,12 @@ export function createConversationPanelController(
   dispose: () => void;
 } {
   const { api, agent, getWorkspaceRoot } = options;
+  const localMode = Boolean(options.localMode);
+  async function notifySideChatUnavailableInLocalMode(): Promise<void> {
+    await vscode.window.showInformationMessage(
+      "Colcoor is in offline (local) mode — side chat is not available. It needs the Colcoor backend and collaborators.",
+    );
+  }
 
   let panel: vscode.WebviewPanel | undefined;
   let webviewReady = false;
@@ -1367,6 +1375,10 @@ export function createConversationPanelController(
   }
 
   async function openInlineSideChatDrawer(): Promise<void> {
+    if (localMode) {
+      await notifySideChatUnavailableInLocalMode();
+      return;
+    }
     if (conversationId) {
       dismissedInlineSideChatByConversationId.delete(conversationId);
     }

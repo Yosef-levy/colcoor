@@ -141,6 +141,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   /** True when the extension is usable without a backend sign-in (offline local mode). */
   const isReady = async (): Promise<boolean> =>
     localMode || Boolean(await session.getBackendAccessToken());
+  /** Inform the user that a collaboration feature is disabled in offline (local) mode. */
+  const notifyCollaborationDisabledInLocalMode = async (feature: string): Promise<void> => {
+    await vscode.window.showInformationMessage(
+      `Colcoor is in offline (local) mode — ${feature} is not available. It needs the Colcoor backend and collaborators.`,
+    );
+  };
   const agent = new AgentRunner(context.secrets);
   markActivationStep("api-and-agent:ready");
 
@@ -148,6 +154,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     api,
     agent,
     getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
+    localMode,
   });
   context.subscriptions.push(new vscode.Disposable(() => conversationPanel.dispose()));
   markActivationStep("conversation-panel:ready");
@@ -545,6 +552,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.listConversationMembers",
       async (item?: ConversationCommandArg) => {
+        if (localMode) {
+          await notifyCollaborationDisabledInLocalMode("members");
+          return;
+        }
         const id = conversationIdFromCommandArg(item);
         if (!id) {
           await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
@@ -571,6 +582,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.addConversationMember",
       async (item?: ConversationCommandArg) => {
+        if (localMode) {
+          await notifyCollaborationDisabledInLocalMode("inviting collaborators");
+          return;
+        }
         const id = conversationIdFromCommandArg(item);
         if (!id) {
           await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
@@ -582,6 +597,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.changeMemberRole",
       async (item?: ConversationCommandArg) => {
+        if (localMode) {
+          await notifyCollaborationDisabledInLocalMode("changing member roles");
+          return;
+        }
         const id = conversationIdFromCommandArg(item);
         if (!id) {
           await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
@@ -631,6 +650,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.removeMemberFromConversation",
       async (item?: ConversationCommandArg) => {
+        if (localMode) {
+          await notifyCollaborationDisabledInLocalMode("removing members");
+          return;
+        }
         const id = conversationIdFromCommandArg(item);
         if (!id) {
           await vscode.window.showWarningMessage(NO_CONVERSATION_FOR_COMMAND_MESSAGE);
@@ -816,6 +839,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.openSideChat",
       async (item?: OpenSideChatCommandArg) => {
+      if (localMode) {
+        await notifyCollaborationDisabledInLocalMode("side chat");
+        return;
+      }
       if (!(await isReady())) {
         await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
         return;
