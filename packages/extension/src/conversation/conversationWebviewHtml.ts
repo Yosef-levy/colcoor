@@ -2007,6 +2007,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     <button type="button" class="composer-ctx-row" data-list-selection-action="create" role="menuitem">
       <span class="composer-ctx-label">Create new List…</span>
     </button>
+    <button type="button" class="composer-ctx-row" data-list-selection-action="copy" role="menuitem">
+      <span class="composer-ctx-label">Copy</span>
+    </button>
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
@@ -6784,7 +6787,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             vscode.postMessage({ type: "createListItemWithNewList", selection: pendingSelection });
             closeSelectionMenu();
           } else {
-            openColcoorListsDrawer("lists");
+            vscode.postMessage({ type: "chooseListForSelection", selection: pendingSelection });
             closeSelectionMenu();
           }
           return;
@@ -6796,6 +6799,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         }
         if (action === "create") {
           vscode.postMessage({ type: "createListItemWithNewList", selection: pendingSelection });
+          closeSelectionMenu();
+          return;
+        }
+        if (action === "copy") {
+          if (pendingSelection && pendingSelection.selectedText) {
+            vscode.postMessage({ type: "copy", text: String(pendingSelection.selectedText) });
+          }
           closeSelectionMenu();
         }
       });
