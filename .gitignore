@@ -33,6 +33,9 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
+# Offline (local) mode conversation storage (colcoor.storageMode=local)
+.colcoor/
+
 # Local backup dumps (scripts write here)
 backups/
 credentials.generated.txt
