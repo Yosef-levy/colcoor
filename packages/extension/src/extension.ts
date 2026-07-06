@@ -1,10 +1,12 @@
 import * as vscode from "vscode";
 import {
   ColcoorApiClient,
+  type ColcoorClient,
   type ConversationMember,
   type ConversationSummary,
   type NoteOut,
 } from "./api/client";
+import { LocalConversationStore } from "./local/localConversationStore";
 import { getAccessTokenInteractive } from "./auth/extensionAccounts";
 import type { ColcoorAuthProvider } from "./auth/extensionAccounts";
 import { CursorSession } from "./auth/cursorSession";
@@ -116,10 +118,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   const session = new CursorSession(context.secrets, SECRET_KEY_BACKEND_JWT);
-  const api = new ColcoorApiClient({
-    baseUrl: effectiveBaseUrl,
-    getAccessToken: () => session.getBackendAccessToken(),
-  });
+
+  // Offline single-user mode: all conversation data is stored under the workspace's
+  // .colcoor folder and no backend/sign-in is used (see the offline standalone plan).
+  const requestedLocalMode = config.get<string>("storageMode") === "local";
+  const activationWorkspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+  if (requestedLocalMode && !activationWorkspaceRoot) {
+    void vscode.window.showErrorMessage(
+      "Colcoor offline (local) mode needs an open workspace folder. Open a folder and reload the window.",
+    );
+  }
+  const localMode = requestedLocalMode && Boolean(activationWorkspaceRoot);
+  void vscode.commands.executeCommand("setContext", "colcoor.localMode", localMode);
+
+  const api: ColcoorClient = localMode
+    ? new LocalConversationStore(activationWorkspaceRoot)
+    : new ColcoorApiClient({
+        baseUrl: effectiveBaseUrl,
+        getAccessToken: () => session.getBackendAccessToken(),
+      });
+  /** True when the extension is usable without a backend sign-in (offline local mode). */
+  const isReady = async (): Promise<boolean> =>
+    localMode || Boolean(await session.getBackendAccessToken());
   const agent = new AgentRunner(context.secrets);
   markActivationStep("api-and-agent:ready");
 
@@ -134,20 +154,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const colcoorLog = vscode.window.createOutputChannel("Colcoor");
   context.subscriptions.push(colcoorLog);
 
-  const treeProvider = new ConversationsTreeProvider(api, async () =>
-    Boolean(await session.getBackendAccessToken()),
-  );
+  const treeProvider = new ConversationsTreeProvider(api, isReady);
   const refreshTree = (): void => {
     invalidateConversationListCache();
     treeProvider.refresh();
   };
 
   async function refreshConversationsWelcomeContext(): Promise<void> {
-    await syncConversationsWelcomeContextKeys(context.secrets, session);
-    refreshAgentModelCatalogWhenSignedIn(
-      context.secrets,
-      Boolean(await session.getBackendAccessToken()),
-    );
+    await syncConversationsWelcomeContextKeys(context.secrets, session, { localMode });
+    refreshAgentModelCatalogWhenSignedIn(context.secrets, await isReady());
   }
   void refreshConversationsWelcomeContext();
   context.subscriptions.push(
@@ -155,10 +170,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (e.key === SECRET_CURSOR_AGENT_API_KEY) {
         void (async () => {
           await refreshConversationsWelcomeContext();
-          refreshAgentModelCatalogWhenSignedIn(
-            context.secrets,
-            Boolean(await session.getBackendAccessToken()),
-          );
+          refreshAgentModelCatalogWhenSignedIn(context.secrets, await isReady());
         })();
       }
     }),
@@ -242,7 +254,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   const autoRefreshTimer = setInterval(async () => {
-    const hasBackendToken = Boolean(await session.getBackendAccessToken());
+    const hasBackendToken = await isReady();
     if (
       shouldAutoRefreshConversations({
         hasBackendToken,
@@ -417,7 +429,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void vscode.window.setStatusBarMessage("Colcoor: conversations list refreshed.", 2500);
     }),
     vscode.commands.registerCommand("colcoor.refreshConversationDrawers", async () => {
-      if (!(await session.getBackendAccessToken())) {
+      if (!(await isReady())) {
         await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
         return;
       }
@@ -797,7 +809,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.openSideChat",
       async (item?: OpenSideChatCommandArg) => {
-      if (!(await session.getBackendAccessToken())) {
+      if (!(await isReady())) {
         await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
         return;
       }
@@ -820,7 +832,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
     vscode.commands.registerCommand("colcoor.editProfile", async () => {
-      if (!(await session.getBackendAccessToken())) {
+      if (!(await isReady())) {
         await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
         return;
       }
@@ -887,7 +899,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.listTodoNotesInConversation",
       async (item?: ConversationCommandArg) => {
-        if (!(await session.getBackendAccessToken())) {
+        if (!(await isReady())) {
           await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
           return;
         }
@@ -944,7 +956,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.listStarredMessagesInConversation",
       async (item?: ConversationCommandArg) => {
-        if (!(await session.getBackendAccessToken())) {
+        if (!(await isReady())) {
           await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
           return;
         }
@@ -1000,7 +1012,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand(
       "colcoor.openConversationDrawers",
       async (arg?: ConversationCommandArg) => {
-        if (!(await session.getBackendAccessToken())) {
+        if (!(await isReady())) {
           await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
           return;
         }

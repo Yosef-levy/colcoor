@@ -1,4 +1,4 @@
-import type { ColcoorApiClient } from "../api/client";
+import type { ColcoorClient } from "../api/client";
 import { ColcoorApiHttpError } from "../api/colcoorApiHttpError";
 import {
   isForbiddenColcoorApiError,
@@ -28,7 +28,7 @@ export type SideChatSseReconnectInfo = {
 };
 
 export type RunInlineSideChatSseLoopOptions = {
-  api: ColcoorApiClient;
+  api: ColcoorClient;
   conversationId: string;
   /** Correlates logs and server metrics (`X-Colcoor-SSE-Session`). */
   sseSessionId: string;

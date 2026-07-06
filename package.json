@@ -10,6 +10,7 @@
     "test:extension": "npm run test -w colcoor-extension",
     "test:backend": "sh -c 'cd packages/backend && if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest -q; else python3 -m pytest -q; fi'",
     "package:extension": "bash scripts/package-extension-to-dist.sh",
+    "package:extension:standalone": "bash scripts/package-extension-standalone-to-dist.sh",
     "ship:artifacts": "bash scripts/ship-artifacts.sh",
     "bundle": "bash scripts/build-gcp-production-bundle.sh",
     "bundle:gcp-production": "bash scripts/build-gcp-production-bundle.sh",

@@ -1,4 +1,4 @@
-import type { ColcoorApiClient, ConversationSummary } from "../api/client";
+import type { ColcoorClient, ConversationSummary } from "../api/client";
 
 let cached: { rows: ConversationSummary[]; atMs: number } | null = null;
 const TTL_MS = 2500;
@@ -11,7 +11,7 @@ export function invalidateConversationListCache(): void {
 /**
  * Short-TTL memo for GET /conversations to coalesce overlapping callers (sidebar, panel chrome, drawers).
  */
-export async function listConversationsCached(api: ColcoorApiClient): Promise<ConversationSummary[]> {
+export async function listConversationsCached(api: ColcoorClient): Promise<ConversationSummary[]> {
   const now = Date.now();
   if (cached && now - cached.atMs < TTL_MS) {
     return cached.rows;

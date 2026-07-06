@@ -1,4 +1,4 @@
-import type { ColcoorApiClient } from "../api/client";
+import type { ColcoorClient } from "../api/client";
 
 type Entry = { mimeType: string; buffer: ArrayBuffer; atMs: number };
 
@@ -13,7 +13,7 @@ function key(conversationId: string, imageId: string): string {
  * Deduplicates GET …/images/:id within a short window (agent temp files + webview data URLs).
  */
 export async function getConversationImageRawCached(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   conversationId: string,
   imageId: string,
 ): Promise<{ mimeType: string; arrayBuffer: ArrayBuffer }> {

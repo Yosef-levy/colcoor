@@ -2,7 +2,7 @@ import type { AgentRunner, AssistantStubKind } from "../agent/agentRunner";
 import type { CursorCliMode } from "../agent/cursorCliMode";
 import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
-import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
+import type { ColcoorClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
@@ -97,7 +97,7 @@ export type UserTurnResult = {
  * Order matches docs/data-flow-and-api.md §1.
  */
 export async function runColcoorUserTurn(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   agent: AgentRunner,
   conversationId: string,
   conversationTitle: string | null | undefined,

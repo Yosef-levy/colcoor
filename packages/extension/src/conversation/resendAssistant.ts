@@ -2,7 +2,7 @@ import type { AgentRunner } from "../agent/agentRunner";
 import type { CursorCliMode } from "../agent/cursorCliMode";
 import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
-import type { ColcoorApiClient, GraphEventNode, NoteOut } from "../api/client";
+import type { ColcoorClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
@@ -47,7 +47,7 @@ export type RunResendAssistantOptions = {
  * @see docs/data-flow-and-api.md §4
  */
 export async function runResendAssistant(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   agent: AgentRunner,
   conversationId: string,
   conversationTitle: string | null | undefined,

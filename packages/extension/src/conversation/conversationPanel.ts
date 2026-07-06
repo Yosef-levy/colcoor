@@ -7,7 +7,7 @@ import {
 } from "../agent/agentModelCatalogCache";
 import type { CursorAgentModelEntry } from "../agent/cursorAgentModelCatalog";
 import type {
-  ColcoorApiClient,
+  ColcoorClient,
   ConversationListItemOut,
   ConversationListOut,
   ConversationMember,
@@ -428,7 +428,7 @@ function randomNonce(): string {
 }
 
 export type ConversationPanelControllerOptions = {
-  api: ColcoorApiClient;
+  api: ColcoorClient;
   agent: AgentRunner;
   getWorkspaceRoot: () => string;
 };

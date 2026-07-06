@@ -1,4 +1,4 @@
-import type { ColcoorApiClient, GraphEventNode } from "../api/client";
+import type { ColcoorClient, GraphEventNode } from "../api/client";
 import { getConversationImageRawCached } from "./conversationImageBytesCache";
 import { parseUserMediaImages } from "./userEventMedia";
 
@@ -17,7 +17,7 @@ type ContentJsonOwner = { id: string; content_json?: Record<string, unknown> | n
  * Bounded to avoid huge webview payloads.
  */
 export async function buildUserImageDataUrlsByOwnerId(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   conversationId: string,
   owners: readonly ContentJsonOwner[],
 ): Promise<Map<string, string[]>> {
@@ -55,7 +55,7 @@ export async function buildUserImageDataUrlsByOwnerId(
 }
 
 export async function buildUserImageDataUrlsByEventId(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   conversationId: string,
   events: readonly GraphEventNode[],
 ): Promise<Map<string, string[]>> {

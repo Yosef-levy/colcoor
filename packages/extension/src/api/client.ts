@@ -243,6 +243,146 @@ export type SideChatPostBody = {
 };
 
 /**
+ * Storage-provider seam shared by the remote {@link ColcoorApiClient} and the offline
+ * local store. Everything the extension needs to read/write conversation data goes
+ * through this interface so the two backends are drop-in interchangeable
+ * (see docs/principles.md and the offline standalone plan).
+ */
+export interface ColcoorClient {
+  getMe(): Promise<MeOut>;
+  patchMe(body: MePatchBody): Promise<MeOut>;
+  cursorExchange(body: CursorExchangeBody): Promise<AuthResponseBody>;
+  listConversations(): Promise<ConversationSummary[]>;
+  createConversation(body: {
+    title?: string | null;
+    metadata_json?: Record<string, unknown> | null;
+  }): Promise<ConversationSummary>;
+  patchConversation(
+    conversationId: string,
+    body: {
+      title?: string | null;
+      metadata_json?: Record<string, unknown> | null;
+      pinned?: boolean;
+    },
+  ): Promise<ConversationSummary>;
+  getTree(conversationId: string): Promise<TreeResponseBody>;
+  listConversationMembers(conversationId: string): Promise<ConversationMember[]>;
+  searchConversationMemberInviteCandidates(
+    conversationId: string,
+    q: string,
+  ): Promise<MemberInviteSearchCandidate[]>;
+  postConversationMember(
+    conversationId: string,
+    body: { user_id: string; role: "editor" | "viewer" },
+  ): Promise<ConversationMember>;
+  patchConversationMemberRole(
+    conversationId: string,
+    memberUserId: string,
+    body: { role: "owner" | "editor" | "viewer" },
+  ): Promise<ConversationMember>;
+  deleteConversationMember(conversationId: string, memberUserId: string): Promise<void>;
+  getConversationCallerState(conversationId: string): Promise<ConversationUserStateOut>;
+  setConversationActive(
+    conversationId: string,
+    body: SetConversationActiveBody,
+  ): Promise<ConversationUserStateOut>;
+  putStar(conversationId: string, eventId: string): Promise<void>;
+  deleteStar(conversationId: string, eventId: string): Promise<void>;
+  deleteEventSubtree(conversationId: string, eventId: string): Promise<EventSubtreeSoftDeleteOut>;
+  undoEventDeletion(conversationId: string, deletionGroupId: string): Promise<RestoreSubtreeOut>;
+  restoreEventSubtree(conversationId: string, eventId: string): Promise<RestoreSubtreeOut>;
+  listNotes(conversationId: string): Promise<NoteOut[]>;
+  createNote(
+    conversationId: string,
+    body: { event_id: string; content: string },
+  ): Promise<NoteOut>;
+  patchNote(
+    conversationId: string,
+    noteId: string,
+    body: { content: string },
+  ): Promise<NoteOut>;
+  deleteNote(conversationId: string, noteId: string): Promise<void>;
+  listConversationLists(
+    conversationId: string,
+    options?: { includeItems?: boolean },
+  ): Promise<ConversationListsBundleOut>;
+  createConversationList(
+    conversationId: string,
+    body: ConversationListCreateBody,
+  ): Promise<ConversationListOut>;
+  patchConversationList(
+    conversationId: string,
+    listId: string,
+    body: ConversationListPatchBody,
+  ): Promise<ConversationListOut>;
+  deleteConversationList(conversationId: string, listId: string): Promise<void>;
+  createConversationListItem(
+    conversationId: string,
+    listId: string,
+    body: ConversationListItemCreateBody,
+  ): Promise<ConversationListItemOut>;
+  patchConversationListItem(
+    conversationId: string,
+    listId: string,
+    itemId: string,
+    body: ConversationListItemPatchBody,
+  ): Promise<ConversationListItemOut>;
+  deleteConversationListItem(
+    conversationId: string,
+    listId: string,
+    itemId: string,
+  ): Promise<void>;
+  deleteConversation(conversationId: string): Promise<EventSubtreeSoftDeleteOut>;
+  restoreDeletedConversation(conversationId: string): Promise<RestoreSubtreeOut>;
+  listSideChatMessages(
+    conversationId: string,
+    afterSeq?: number,
+  ): Promise<SideChatMessageOut[]>;
+  postSideChatMessage(
+    conversationId: string,
+    body: SideChatPostBody,
+  ): Promise<SideChatMessageOut>;
+  patchSideChatMessage(
+    conversationId: string,
+    messageId: string,
+    body: { body: string },
+  ): Promise<SideChatMessageOut>;
+  deleteSideChatMessage(
+    conversationId: string,
+    messageId: string,
+  ): Promise<SideChatMessageOut>;
+  patchSideChatRead(conversationId: string, lastReadSeq: number): Promise<void>;
+  streamSideChatSseEvents(
+    conversationId: string,
+    options?: {
+      afterSeq?: number;
+      signal?: AbortSignal;
+      sseAttempt?: number;
+      sseSession?: string;
+    },
+  ): AsyncGenerator<unknown, void, unknown>;
+  patchEventCheckpointLabel(
+    conversationId: string,
+    eventId: string,
+    checkpoint_label: string | null,
+  ): Promise<void>;
+  appendEvent(
+    conversationId: string,
+    body: AppendEventBody,
+    options?: { idempotencyKey?: string },
+  ): Promise<AppendEventResponse>;
+  uploadConversationImage(
+    conversationId: string,
+    bytes: Uint8Array,
+    mimeType: string,
+  ): Promise<{ id: string; mime_type: string; byte_size: number }>;
+  getConversationImageRaw(
+    conversationId: string,
+    imageId: string,
+  ): Promise<{ mimeType: string; arrayBuffer: ArrayBuffer }>;
+}
+
+/**
  * HTTP client for the extension-dedicated backend.
  * Authenticated requests send Authorization (docs/monetization.md).
  */
@@ -258,7 +398,7 @@ function networkErrorDetail(url: string, err: unknown): string {
   return `Request to ${url} failed (${parts}). ${hint}`;
 }
 
-export class ColcoorApiClient {
+export class ColcoorApiClient implements ColcoorClient {
   private readonly baseUrl: string;
   private readonly getAccessToken: () => Promise<string | undefined>;
 

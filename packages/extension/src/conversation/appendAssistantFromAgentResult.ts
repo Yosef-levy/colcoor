@@ -1,5 +1,5 @@
 import type { AgentRunResult, AssistantStubKind } from "../agent/agentRunner";
-import type { ColcoorApiClient } from "../api/client";
+import type { ColcoorClient } from "../api/client";
 import type { UserTurnResult } from "./runUserTurn";
 import { buildColcoorAgentMeta, mergeAssistantContentJson } from "./agentModelDisplay";
 import { COLCOOR_CONTEXT_SAVINGS_KEY, type ContextSavingsTurn } from "./contextSavings";
@@ -35,7 +35,7 @@ function assistantContentJson(
  * Shared by new-message and resend flows.
  */
 export async function appendAssistantFromAgentResult(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   conversationId: string,
   userMessageEventId: string,
   runResult: AgentRunResult,

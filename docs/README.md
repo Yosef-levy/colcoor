@@ -26,6 +26,7 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 | [authentication.md](authentication.md) | **`cursor_sub`**; **`POST /api/v1/auth/cursor`** |
 | [monetization.md](monetization.md) | Tokens on every request; links **billing-usage** |
 | [architecture.md](architecture.md) | Components and boundaries |
+| [offline-mode.md](offline-mode.md) | Offline single-user mode (`colcoor.storageMode=local`, `.colcoor/` workspace storage) |
 | [production.md](production.md) | Docker, nginx, env, health, release builds (`bundle:gcp-production`) |
 | [multi-vm-deploy.md](multi-vm-deploy.md) | Multiple API VMs, `shared.env`, `deploy-multi-vm.sh` |
 | [gcp-provisioning.md](gcp-provisioning.md) | GCP: Cloud SQL, Redis, GCS, LB scripts |

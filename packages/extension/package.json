@@ -273,7 +273,7 @@
         },
         {
           "command": "colcoor.openSideChat",
-          "when": "view == colcoor.conversations && viewItem == conversation",
+          "when": "view == colcoor.conversations && viewItem == conversation && !colcoor.localMode",
           "group": "1_colcoor@0b"
         },
         {
@@ -283,22 +283,22 @@
         },
         {
           "command": "colcoor.listConversationMembers",
-          "when": "view == colcoor.conversations && viewItem == conversation",
+          "when": "view == colcoor.conversations && viewItem == conversation && !colcoor.localMode",
           "group": "1_colcoor@3"
         },
         {
           "command": "colcoor.addConversationMember",
-          "when": "view == colcoor.conversations && viewItem == conversation",
+          "when": "view == colcoor.conversations && viewItem == conversation && !colcoor.localMode",
           "group": "1_colcoor@4"
         },
         {
           "command": "colcoor.changeMemberRole",
-          "when": "view == colcoor.conversations && viewItem == conversation",
+          "when": "view == colcoor.conversations && viewItem == conversation && !colcoor.localMode",
           "group": "1_colcoor@5"
         },
         {
           "command": "colcoor.removeMemberFromConversation",
-          "when": "view == colcoor.conversations && viewItem == conversation",
+          "when": "view == colcoor.conversations && viewItem == conversation && !colcoor.localMode",
           "group": "1_colcoor@6"
         },
         {
@@ -353,6 +353,19 @@
     "configuration": {
       "title": "Colcoor",
       "properties": {
+        "colcoor.storageMode": {
+          "type": "string",
+          "enum": [
+            "remote",
+            "local"
+          ],
+          "enumDescriptions": [
+            "Use the Colcoor backend: collaboration, side chat, and sign-in.",
+            "Fully offline single-user storage under the workspace .colcoor folder (no sign-in, no collaboration)."
+          ],
+          "default": "remote",
+          "description": "Where conversations are stored. remote: Colcoor backend (default). local: offline single-user files under the workspace .colcoor folder. Reload the window (Developer: Reload Window) after changing this."
+        },
         "colcoor.backendBaseUrl": {
           "type": "string",
           "default": "https://api.colcoor.com",

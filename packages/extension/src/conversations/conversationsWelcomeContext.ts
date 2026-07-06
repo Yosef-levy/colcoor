@@ -14,13 +14,15 @@ export type BackendSessionLike = {
 
 /**
  * Keep `viewsWelcome` visibility in sync with auth and `SECRET_CURSOR_AGENT_API_KEY`.
+ * In offline local mode there is no backend sign-in, so treat the user as signed in.
  */
 export async function syncConversationsWelcomeContextKeys(
   secrets: vscode.SecretStorage,
   session: BackendSessionLike,
+  options?: { localMode?: boolean },
 ): Promise<void> {
   const raw = await session.getBackendAccessToken();
-  const signedIn = Boolean(raw?.trim());
+  const signedIn = Boolean(options?.localMode) || Boolean(raw?.trim());
   const apiKey = (await secrets.get(SECRET_CURSOR_AGENT_API_KEY))?.trim();
   await vscode.commands.executeCommand("setContext", COLCOOR_CONTEXT_BACKEND_SIGNED_IN, signedIn);
   await vscode.commands.executeCommand(

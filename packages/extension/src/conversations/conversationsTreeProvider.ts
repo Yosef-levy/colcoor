@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { ColcoorApiClient, ConversationSummary } from "../api/client";
+import type { ColcoorClient, ConversationSummary } from "../api/client";
 import { listConversationsCached } from "./conversationsListCache";
 import { formatConversationUpdatedAtForTooltip } from "./conversationListUpdatedAt";
 import { conversationUnreadBadgeInfo } from "./conversationUnreadBadge";
@@ -39,7 +39,7 @@ export class ConversationsTreeProvider implements vscode.TreeDataProvider<Conver
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   constructor(
-    private readonly api: ColcoorApiClient,
+    private readonly api: ColcoorClient,
     private readonly getHasToken: () => Promise<boolean>,
   ) {}
 

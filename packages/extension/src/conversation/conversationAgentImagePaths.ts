@@ -2,12 +2,12 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import type { ColcoorApiClient } from "../api/client";
+import type { ColcoorClient } from "../api/client";
 import { getConversationImageRawCached } from "./conversationImageBytesCache";
 import { parseUserMediaImages } from "./userEventMedia";
 
 export async function writeUserMediaToTempFiles(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   conversationId: string,
   contentJson: Record<string, unknown> | undefined,
 ): Promise<string[]> {

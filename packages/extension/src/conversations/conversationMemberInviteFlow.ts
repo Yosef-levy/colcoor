@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import type { ColcoorApiClient, MemberInviteSearchCandidate } from "../api/client";
+import type { ColcoorClient, MemberInviteSearchCandidate } from "../api/client";
 import {
   normalizeMemberInviteLookupQuery,
   validateMemberInviteLookupQuery,
@@ -41,7 +41,7 @@ function candidateQuickPickRow(
  * when needed, then add the member with the chosen role.
  */
 export async function runAddConversationMemberFlow(
-  api: ColcoorApiClient,
+  api: ColcoorClient,
   conversationId: string,
   refreshTree: () => void,
 ): Promise<void> {
