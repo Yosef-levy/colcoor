@@ -120,15 +120,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const session = new CursorSession(context.secrets, SECRET_KEY_BACKEND_JWT);
 
   // Offline single-user mode: all conversation data is stored under the workspace's
-  // .colcoor folder and no backend/sign-in is used (see the offline standalone plan).
-  const requestedLocalMode = config.get<string>("storageMode") === "local";
+  // .colcoor folder and no backend/sign-in is ever used (see the offline standalone plan).
+  // When requested we always stay offline (never fall back to the backend); a missing
+  // workspace folder only warns and defers to first use.
+  const localMode = config.get<string>("storageMode") === "local";
   const activationWorkspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
-  if (requestedLocalMode && !activationWorkspaceRoot) {
+  if (localMode && !activationWorkspaceRoot) {
     void vscode.window.showErrorMessage(
       "Colcoor offline (local) mode needs an open workspace folder. Open a folder and reload the window.",
     );
   }
-  const localMode = requestedLocalMode && Boolean(activationWorkspaceRoot);
   void vscode.commands.executeCommand("setContext", "colcoor.localMode", localMode);
 
   const api: ColcoorClient = localMode
@@ -320,6 +321,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand("colcoor.signIn", async () => {
+      if (localMode) {
+        await vscode.window.showInformationMessage(
+          "Colcoor is in offline (local) mode — sign-in is not needed. Conversations are stored in this workspace's .colcoor folder.",
+        );
+        return;
+      }
       const items: {
         label: string;
         description: string;

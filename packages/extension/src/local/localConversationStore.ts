@@ -125,15 +125,21 @@ function extForMime(mimeType: string): string {
 }
 
 export class LocalConversationStore implements ColcoorClient {
-  private readonly baseDir: string;
+  private readonly workspaceRoot: string;
   private profileCache: LocalProfile | null = null;
 
   constructor(workspaceRoot: string) {
-    const root = workspaceRoot.trim();
-    if (!root) {
+    // Never throw at construction: offline mode must stay active (and never fall back to
+    // the backend) even if no folder is open yet. The clear error is deferred to first use.
+    this.workspaceRoot = workspaceRoot.trim();
+  }
+
+  /** Absolute `.colcoor` root; throws a clear error only when a data operation needs it. */
+  private get baseDir(): string {
+    if (!this.workspaceRoot) {
       throw new Error("Colcoor offline mode requires an open workspace folder.");
     }
-    this.baseDir = path.join(root, ".colcoor");
+    return path.join(this.workspaceRoot, ".colcoor");
   }
 
   // ---------------------------------------------------------------------------

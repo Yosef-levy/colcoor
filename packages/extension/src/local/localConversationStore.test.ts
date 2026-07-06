@@ -19,8 +19,12 @@ afterEach(async () => {
 });
 
 describe("LocalConversationStore", () => {
-  it("throws when constructed without a workspace root", () => {
-    expect(() => new LocalConversationStore("  ")).toThrow();
+  it("stays offline without a workspace: construction succeeds, data ops fail clearly", async () => {
+    const inert = new LocalConversationStore("  ");
+    expect(inert).toBeInstanceOf(LocalConversationStore);
+    // Reads degrade to empty (no crash, no network); writes surface a clear error.
+    expect(await inert.listConversations()).toHaveLength(0);
+    await expect(inert.createConversation({ title: "x" })).rejects.toThrow(/workspace folder/);
   });
 
   it("creates a conversation with a single root user_input event", async () => {
