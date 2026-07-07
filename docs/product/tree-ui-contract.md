@@ -185,4 +185,4 @@ This mode MUST still comply with §2–§8. **Implementation** details (CSS, web
 - [domain-model.md](domain-model.md) — events, `visible_to`, stars, notes, `active_event_id`.
 - [permissions.md](permissions.md) — who may commit/delete private, edit notes, etc.
 - [api-contracts.md](api-contracts.md) — tree and append endpoints.
-- [principles.md](principles.md) — transcript authority and Colcoor vs Cursor split.
+- [principles.md](../principles.md) — transcript authority and Colcoor vs Cursor split.

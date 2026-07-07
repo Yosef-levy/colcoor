@@ -3,7 +3,7 @@
 **Bundle:** `colcoor-gcp-production-BE0.1.0-EXT0.0.1`  
 **Backend:** 0.1.0 · **Extension:** 0.0.1
 
-Install the VSIX and backend image from the **same** bundle folder. Customer operators follow **`README.md`** inside the bundle. See [docs/release-versions.md](docs/release-versions.md).
+Install the VSIX and backend image from the **same** bundle folder. Customer operators follow **`README.md`** inside the bundle. See [docs/release/release-versions.md](docs/release/release-versions.md).
 
 ## Highlights
 
@@ -34,8 +34,8 @@ Install the VSIX and backend image from the **same** bundle folder. Customer ope
 
 ## Quick start
 
-Maintainers: [docs/release-quickstart.md](docs/release-quickstart.md). Customers: **`README.md`** in the bundle.
+Maintainers: [docs/release/release-quickstart.md](docs/release/release-quickstart.md). Customers: **`README.md`** in the bundle.
 
 ## Verify
 
-[docs/release-smoke-test.md](docs/release-smoke-test.md)
+[docs/release/release-smoke-test.md](docs/release/release-smoke-test.md)

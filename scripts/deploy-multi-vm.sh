@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Multi-VM Colcoor deployment helper — same backend image, shared Postgres / Redis / GCS.
 #
-# Typical sequence (see docs/multi-vm-deploy.md):
+# Typical sequence (see docs/ops/multi-vm-deploy.md):
 #   1. Primary VM: edit shared.env (secrets + Cloud SQL / Redis / GCS URLs), then:
 #        ./scripts/deploy-multi-vm.sh write-env --role=primary --shared-env ./shared.env
 #        ./scripts/deploy-multi-vm.sh migrate --shared-env ./shared.env

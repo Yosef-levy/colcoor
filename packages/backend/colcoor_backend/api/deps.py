@@ -13,7 +13,7 @@ from colcoor_backend.core.jwt_tokens import decode_access_token
 
 
 async def bearer_token(authorization: Annotated[str | None, Header()] = None) -> str:
-    """Require Authorization: Bearer <token> on protected routes (docs/monetization.md)."""
+    """Require Authorization: Bearer <token> on protected routes (docs/auth/monetization.md)."""
     if authorization is None or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

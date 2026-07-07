@@ -42,8 +42,8 @@ FORBIDDEN_FILES=(
   scripts/06-backup-postgres.sh
   scripts/07-restore-postgres.sh
   scripts/generate-self-host-secrets.sh
-  docs/self-host.md
-  docs/release-quickstart.md
+  docs/ops/self-host.md
+  docs/release/release-quickstart.md
 )
 
 assert_scripts_executable() {

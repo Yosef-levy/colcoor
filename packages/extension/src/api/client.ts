@@ -384,7 +384,7 @@ export interface ColcoorClient {
 
 /**
  * HTTP client for the extension-dedicated backend.
- * Authenticated requests send Authorization (docs/monetization.md).
+ * Authenticated requests send Authorization (docs/auth/monetization.md).
  */
 function networkErrorDetail(url: string, err: unknown): string {
   const hint =

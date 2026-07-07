@@ -147,4 +147,4 @@ Migration **`011_append_event_idempotency`** adds the append-event idempotency t
 - [gcp-provisioning.md](gcp-provisioning.md) — GCP scripts detail
 - [production.md](production.md) — Compose baseline
 - [pgbouncer.md](pgbouncer.md) — pool theory
-- [side-chat-realtime.md](side-chat-realtime.md) — Redis + SSE
+- [side-chat-realtime.md](../features/side-chat-realtime.md) — Redis + SSE

@@ -44,7 +44,7 @@ export type RunResendAssistantOptions = {
  * Regenerate assistant for an existing user message (no new `user_input`).
  * Transcript = root → that user only; new `assistant_output` shares parent `user_event_id`.
  * `userEventId` is trimmed and CRLF-normalized like other persisted ids from the UI.
- * @see docs/data-flow-and-api.md §4
+ * @see docs/product/data-flow-and-api.md §4
  */
 export async function runResendAssistant(
   api: ColcoorClient,

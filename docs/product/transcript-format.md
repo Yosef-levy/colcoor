@@ -2,7 +2,7 @@
 
 Single reference for the **text** the extension builds and sends to the Cursor agent (**authoritative context**). Uses **wrapper tags** for **USER**, **LLM**, and **NOTE** only — no `<<<TOOL_CALL>>>`, `<<<TOOL_RESULT>>>`, or `<<<SYSTEM>>>` in this product’s transcript.
 
-Ordering and path rules align with [domain-model.md](domain-model.md) and [principles.md](principles.md).
+Ordering and path rules align with [domain-model.md](domain-model.md) and [principles.md](../principles.md).
 
 ---
 
@@ -13,7 +13,7 @@ Ordering and path rules align with [domain-model.md](domain-model.md) and [princ
 3. **Static header** (§2).
 4. **One blank line** before the first body block.
 5. **Body** — messages on the path **root → active node**, each host message followed by its **NOTE** blocks (§3–§5).
-6. **New user turn** — either the last block in the body is the new `<<<USER>>>` … `<<<END USER>>>` or the runner passes user text separately; the combined input to the agent must stay consistent with [principles.md](principles.md).
+6. **New user turn** — either the last block in the body is the new `<<<USER>>>` … `<<<END USER>>>` or the runner passes user text separately; the combined input to the agent must stay consistent with [principles.md](../principles.md).
 
 Use **Unix newlines** (`\n`).
 
@@ -131,4 +131,4 @@ What is 2+2?
 
 - [domain-model.md](domain-model.md) — rebuild flag, path, notes  
 - [data-flow-and-api.md](data-flow-and-api.md) — no server transcript HTTP  
-- [principles.md](principles.md) — authoritative vs augmented context
+- [principles.md](../principles.md) — authoritative vs augmented context

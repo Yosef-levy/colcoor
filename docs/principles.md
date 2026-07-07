@@ -2,7 +2,7 @@
 
 This document **complements and overrides** other files in this folder where noted. **Colcoor** is the orchestrator (tree, transcript, backend); **Cursor** provides execution and code understanding.
 
-**Normative HTTP surface:** [api-contracts.md](api-contracts.md).
+**Normative HTTP surface:** [api-contracts.md](product/api-contracts.md).
 
 ---
 
@@ -38,7 +38,7 @@ The extension is responsible for:
 
 The system **may** use Cursor-native execution (Composer / agent environment) and does **not** need to bypass it completely.
 
-**Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported** paths — see [data-flow-and-api.md](data-flow-and-api.md) §2 (CLI / ACP) and Composer as **fallback**.
+**Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported** paths — see [data-flow-and-api.md](product/data-flow-and-api.md) §2 (CLI / ACP) and Composer as **fallback**.
 
 ---
 
@@ -71,12 +71,12 @@ Colcoor **does not** fully replace or replicate this behavior.
 
 - Transcript is built **only in the extension**.
 - Semantics:
-  - **Path-based** context along the active branch ([domain-model.md](domain-model.md)).
-  - **Rebuild** when `needs_context_rebuild` is true ([domain-model.md](domain-model.md) §4).
+  - **Path-based** context along the active branch ([domain-model.md](product/domain-model.md)).
+  - **Rebuild** when `needs_context_rebuild` is true ([domain-model.md](product/domain-model.md) §4).
   - **No hidden history** in the transcript: only what the tree path and notes encode.
 - **No server transcript endpoints:** the backend does not return or assemble LLM execution transcripts; it stores the event graph only.
 
-Format: [transcript-format.md](transcript-format.md).
+Format: [transcript-format.md](product/transcript-format.md).
 
 ---
 
@@ -130,4 +130,4 @@ The user must **not** be exposed to:
 
 The experience should feel **native**: select node → run → see result. Implementation details belong in logs or developer mode only, not in default UI.
 
-For a **concrete checklist** of screens and controls, see [ui-features.md](ui-features.md). **Conversation tree** state, selection, and separation from actions: [tree-ui-contract.md](tree-ui-contract.md).
+For a **concrete checklist** of screens and controls, see [ui-features.md](product/ui-features.md). **Conversation tree** state, selection, and separation from actions: [tree-ui-contract.md](product/tree-ui-contract.md).

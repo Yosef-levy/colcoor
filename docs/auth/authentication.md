@@ -4,7 +4,7 @@ The extension obtains a **Colcoor API JWT** by calling **`POST /api/v1/auth/curs
 
 There is **no** alternate development-only login HTTP route; the same **`POST /api/v1/auth/cursor`** contract applies in every environment.
 
-**Normative API:** [api-contracts.md](api-contracts.md) §2.1.
+**Normative API:** [api-contracts.md](../product/api-contracts.md) §2.1.
 
 **Billing and quotas:** [monetization.md](monetization.md), [billing-usage.md](billing-usage.md).
 
@@ -26,22 +26,22 @@ There is **no** alternate development-only login HTTP route; the same **`POST /a
 
 ### 2.1 Invalid or expired JWT (HTTP 401) in the extension
 
-When an API response is **401** (missing, invalid, or expired Colcoor JWT per [api-contracts.md](api-contracts.md)), the extension **SHOULD clear the stored Colcoor access token** (local sign-out of the Colcoor session only) **before** or alongside user-facing recovery (e.g. “sign in” toast). That avoids a **stale token** blocking a clean re-authentication flow (user should not need a manual **Sign out** first).
+When an API response is **401** (missing, invalid, or expired Colcoor JWT per [api-contracts.md](../product/api-contracts.md)), the extension **SHOULD clear the stored Colcoor access token** (local sign-out of the Colcoor session only) **before** or alongside user-facing recovery (e.g. “sign in” toast). That avoids a **stale token** blocking a clean re-authentication flow (user should not need a manual **Sign out** first).
 
 ---
 
 ## 3. Backend behavior
 
-1. Verify the supplied access token using the configured verifier(s) (HTTPS profile calls to the identity provider). If verification fails, respond **401** ([api-contracts.md](api-contracts.md)).
+1. Verify the supplied access token using the configured verifier(s) (HTTPS profile calls to the identity provider). If verification fails, respond **401** ([api-contracts.md](../product/api-contracts.md)).
 2. Derive the opaque **`cursor_sub`** string used for lookup (implementation-defined derivation **MUST** be injective per provider so distinct accounts never collide).
 3. **Find or create** **`users`** by **`cursor_sub`**. Update **`email`**, **`display_name`**, **`avatar_url`**, **`last_login_at`** when the verifier returns new profile data.
-4. Issue the Colcoor JWT (**`sub`** claim = internal **`users.id`** uuid). JWT signing and expiry are implementation-defined but **MUST** use a server secret configured out of band ([production.md](production.md)).
+4. Issue the Colcoor JWT (**`sub`** claim = internal **`users.id`** uuid). JWT signing and expiry are implementation-defined but **MUST** use a server secret configured out of band ([production.md](../ops/production.md)).
 
 ---
 
 ## 4. Profile
 
-**`PATCH /api/v1/me`** updates **`display_name`** and/or **`avatar_url`** for the authenticated user ([api-contracts.md](api-contracts.md) §9). The response **MAY** include a new **`access_token`** if claims must change.
+**`PATCH /api/v1/me`** updates **`display_name`** and/or **`avatar_url`** for the authenticated user ([api-contracts.md](../product/api-contracts.md) §9). The response **MAY** include a new **`access_token`** if claims must change.
 
 ---
 
@@ -55,5 +55,5 @@ When an API response is **401** (missing, invalid, or expired Colcoor JWT per [a
 
 ## Related docs
 
-- [database.md](database.md) — **`users`** table.
-- [permissions.md](permissions.md) — authorization after authentication.
+- [database.md](../product/database.md) — **`users`** table.
+- [permissions.md](../product/permissions.md) — authorization after authentication.

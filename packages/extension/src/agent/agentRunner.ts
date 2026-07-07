@@ -1,7 +1,7 @@
 /**
  * Invokes the Cursor agent with Colcoor's authoritative transcript + user message.
  * Prefer Cursor headless CLI (`agent -p`) when enabled; stub remains for offline / CI.
- * @see docs/data-flow-and-api.md §2
+ * @see docs/product/data-flow-and-api.md §2
  */
 
 import * as vscode from "vscode";

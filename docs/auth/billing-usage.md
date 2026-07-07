@@ -1,6 +1,6 @@
 # Billing and usage — Colcoor extension backend
 
-Normative semantics for **metering**, **aggregation**, and **HTTP denial** when limits apply. Plan definitions (`plan_code`, Stripe linkage) live in **`subscriptions`** / **`billing_customers`** ([database.md](database.md)); this document defines **what** is counted and **when**.
+Normative semantics for **metering**, **aggregation**, and **HTTP denial** when limits apply. Plan definitions (`plan_code`, Stripe linkage) live in **`subscriptions`** / **`billing_customers`** ([database.md](../product/database.md)); this document defines **what** is counted and **when**.
 
 ---
 
@@ -60,12 +60,12 @@ Before accepting a metered action (e.g. **`user_input`** append, new conversatio
 | Authenticated, feature allowed, quota exceeded for paid upgrade path | **402** | `detail` explains quota / upgrade |
 | Authenticated, limit exceeded without payment remedy (hard cap) | **403** | `detail` explains cap |
 
-**402** is reserved for **payment / upgrade required** flows; **403** for **forbidden by policy or role** (see also [permissions.md](permissions.md)).
+**402** is reserved for **payment / upgrade required** flows; **403** for **forbidden by policy or role** (see also [permissions.md](../product/permissions.md)).
 
 ---
 
 ## 5. Related docs
 
-- [database.md](database.md) — `usage_monthly`, `usage_events`, `subscriptions` DDL.
+- [database.md](../product/database.md) — `usage_monthly`, `usage_events`, `subscriptions` DDL.
 - [monetization.md](monetization.md) — product intent for tokens on every request and UI behavior.
-- [api-contracts.md](api-contracts.md) — which routes return **402**.
+- [api-contracts.md](../product/api-contracts.md) — which routes return **402**.

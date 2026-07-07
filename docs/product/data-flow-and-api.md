@@ -6,16 +6,16 @@ This document defines **execution order** and **behavioral invariants** for the 
 **Tree, `visible_to`, active state, notes, side chat:** **[domain-model.md](domain-model.md)**  
 **Tree UI (selection vs actions, node state):** **[tree-ui-contract.md](tree-ui-contract.md)**  
 **Transcript text format:** **[transcript-format.md](transcript-format.md)**  
-**Transcript authority vs Cursor context:** **[principles.md](principles.md)**  
+**Transcript authority vs Cursor context:** **[principles.md](../principles.md)**  
 **Roles and 403 rules:** **[permissions.md](permissions.md)**  
-**Usage and 402:** **[billing-usage.md](billing-usage.md)**
+**Usage and 402:** **[billing-usage.md](../auth/billing-usage.md)**
 
 ---
 
 ## 1. Main-thread execution order
 
 1. Caller ensures branch anchor and visibility mode per **[domain-model.md](domain-model.md)** §3–§4.
-2. Extension builds the **transcript** per **[transcript-format.md](transcript-format.md)** and **[principles.md](principles.md)**.
+2. Extension builds the **transcript** per **[transcript-format.md](transcript-format.md)** and **[principles.md](../principles.md)**.
 3. **`POST /api/v1/conversations/{id}/append-event`** with **`kind: user_input`** **before** invoking the agent ([api-contracts.md](api-contracts.md) §6).
 4. Extension invokes the **Cursor agent** (prefer CLI / ACP; see §2).
 5. On success or user interrupt, **`append-event`** with **`kind: assistant_output`** when policy requires a persisted assistant turn ([api-contracts.md](api-contracts.md) §6; error table §3 below).
@@ -28,7 +28,7 @@ There is **no** server-side SSE for main-thread completion. The extension **MUST
 ## 2. Agent handoff (non-normative transport)
 
 - **Working directory:** workspace root (or product multi-root rule).
-- **Inputs:** transcript string + final user message per **[principles.md](principles.md)**.
+- **Inputs:** transcript string + final user message per **[principles.md](../principles.md)**.
 - **Output:** assistant text (stream or final). Optional hints (active file, selection, diff) **may** be passed; Cursor may augment.
 
 **Isolation:** each run **MUST NOT** rely on hidden cross-run state for reasoning; required context is in the transcript payload.

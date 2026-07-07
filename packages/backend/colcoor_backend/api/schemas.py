@@ -14,7 +14,7 @@ class EventKind(str, Enum):
 
 
 class AppendEventBody(BaseModel):
-    """Body for POST .../append-event (docs/data-flow-and-api.md §5)."""
+    """Body for POST .../append-event (docs/product/data-flow-and-api.md §5)."""
 
     kind: EventKind
     parent_event_id: UUID

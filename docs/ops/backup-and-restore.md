@@ -152,7 +152,7 @@ Use a **clean staging VM** (or local machine) to prove you can recover. Do **not
    ```bash
    # Single VM, or once per release before restarting multiple API VMs:
    docker compose -f docker-compose.prod.yml exec backend alembic upgrade head
-   # Or (recommended with shared.env / multi-VM): see docs/multi-vm-deploy.md
+   # Or (recommended with shared.env / multi-VM): see docs/ops/multi-vm-deploy.md
    ./scripts/deploy-multi-vm.sh migrate --shared-env ./shared.env
    ```
 

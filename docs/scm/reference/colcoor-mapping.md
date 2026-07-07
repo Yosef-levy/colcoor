@@ -11,17 +11,17 @@ Maps **SCM** normative concepts to the **Colcoor** open-source reference impleme
 | SCM document | Colcoor `docs/` equivalent |
 |--------------|---------------------------|
 | [adoption/00-positioning.md](../adoption/00-positioning.md) | *(no direct equivalent — new framing)* |
-| [spec/03-domain-model.md](../spec/03-domain-model.md) | [domain-model.md](../../domain-model.md) |
-| [spec/04-persistence-schema.md](../spec/04-persistence-schema.md) | [database.md](../../database.md) |
-| [spec/05-operations-and-state-transitions.md](../spec/05-operations-and-state-transitions.md) | [data-flow-and-api.md](../../data-flow-and-api.md) + implied routes |
-| [spec/06-permissions-and-roles.md](../spec/06-permissions-and-roles.md) | [permissions.md](../../permissions.md) |
-| [spec/07-tree-navigation-contract.md](../spec/07-tree-navigation-contract.md) | [tree-ui-contract.md](../../tree-ui-contract.md) |
-| [spec/08-context-assembly.md](../spec/08-context-assembly.md) | [transcript-format.md](../../transcript-format.md) + [principles.md](../../principles.md) |
-| [spec/09-annotations.md](../spec/09-annotations.md) | [domain-model.md](../../domain-model.md) §5,7 + [ui-features.md](../../ui-features.md) |
-| [spec/10-collaboration.md](../spec/10-collaboration.md) | [domain-model.md](../../domain-model.md) §6 + [ui-features.md](../../ui-features.md) §10 |
-| [spec/11-search-and-discovery.md](../spec/11-search-and-discovery.md) | [ui-features.md](../../ui-features.md) §11 (client-side in extension webview) |
-| [spec/12-ui-capability-checklist.md](../spec/12-ui-capability-checklist.md) | [ui-features.md](../../ui-features.md) |
-| [reference/transport-rest-profile.md](transport-rest-profile.md) | [api-contracts.md](../../api-contracts.md) |
+| [spec/03-domain-model.md](../spec/03-domain-model.md) | [domain-model.md](../../product/domain-model.md) |
+| [spec/04-persistence-schema.md](../spec/04-persistence-schema.md) | [database.md](../../product/database.md) |
+| [spec/05-operations-and-state-transitions.md](../spec/05-operations-and-state-transitions.md) | [data-flow-and-api.md](../../product/data-flow-and-api.md) + implied routes |
+| [spec/06-permissions-and-roles.md](../spec/06-permissions-and-roles.md) | [permissions.md](../../product/permissions.md) |
+| [spec/07-tree-navigation-contract.md](../spec/07-tree-navigation-contract.md) | [tree-ui-contract.md](../../product/tree-ui-contract.md) |
+| [spec/08-context-assembly.md](../spec/08-context-assembly.md) | [transcript-format.md](../../product/transcript-format.md) + [principles.md](../../principles.md) |
+| [spec/09-annotations.md](../spec/09-annotations.md) | [domain-model.md](../../product/domain-model.md) §5,7 + [ui-features.md](../../product/ui-features.md) |
+| [spec/10-collaboration.md](../spec/10-collaboration.md) | [domain-model.md](../../product/domain-model.md) §6 + [ui-features.md](../../product/ui-features.md) §10 |
+| [spec/11-search-and-discovery.md](../spec/11-search-and-discovery.md) | [ui-features.md](../../product/ui-features.md) §11 (client-side in extension webview) |
+| [spec/12-ui-capability-checklist.md](../spec/12-ui-capability-checklist.md) | [ui-features.md](../../product/ui-features.md) |
+| [reference/transport-rest-profile.md](transport-rest-profile.md) | [api-contracts.md](../../product/api-contracts.md) |
 
 ---
 
@@ -77,7 +77,7 @@ Maps **SCM** normative concepts to the **Colcoor** open-source reference impleme
 
 ## 5. Auth (product-specific)
 
-Colcoor uses `POST /api/v1/auth/cursor` with Cursor/VS Code IdP tokens ([authentication.md](../../authentication.md)). SCM maps this to generic **Authenticate** operation only in the REST profile example.
+Colcoor uses `POST /api/v1/auth/cursor` with Cursor/VS Code IdP tokens ([authentication.md](../../auth/authentication.md)). SCM maps this to generic **Authenticate** operation only in the REST profile example.
 
 ---
 

@@ -113,7 +113,7 @@ Colcoor runs the main assistant through the Cursor agent and preserves the resul
 
 ## Repository guide
 
-Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated backend**. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/api-contracts.md`](docs/api-contracts.md). **Roles:** [`docs/permissions.md`](docs/permissions.md). **Usage / billing:** [`docs/billing-usage.md`](docs/billing-usage.md).
+Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated backend**. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/product/api-contracts.md`](docs/product/api-contracts.md). **Roles:** [`docs/product/permissions.md`](docs/product/permissions.md). **Usage / billing:** [`docs/auth/billing-usage.md`](docs/auth/billing-usage.md).
 
 ## Layout
 
@@ -124,7 +124,7 @@ Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated back
 
 ## Database
 
-Canonical PostgreSQL schema (tables, columns, constraints, DDL): **[`docs/database.md`](docs/database.md)**.
+Canonical PostgreSQL schema (tables, columns, constraints, DDL): **[`docs/product/database.md`](docs/product/database.md)**.
 
 ## Prerequisites
 
@@ -160,7 +160,7 @@ GitHub Actions runs lint/build for the extension and ruff/pytest for the backend
 
 ## Production (Linux VM, Docker Compose + nginx)
 
-Full runbook: **[`docs/production.md`](docs/production.md)**. **Multi-VM / GCP:** **[`docs/gcp-provisioning.md`](docs/gcp-provisioning.md)** — `./scripts/deploy-multi-vm.sh deploy-primary`.
+Full runbook: **[`docs/ops/production.md`](docs/ops/production.md)**. **Multi-VM / GCP:** **[`docs/ops/gcp-provisioning.md`](docs/ops/gcp-provisioning.md)** — `./scripts/deploy-multi-vm.sh deploy-primary`.
 
 Quick start from repo root:
 
@@ -180,7 +180,7 @@ From the repo root (requires Docker for the image build):
 npm run ship:artifacts
 ```
 
-See **[`docs/production.md`](docs/production.md)** § Release artifacts for outputs and optional registry push.
+See **[`docs/ops/production.md`](docs/ops/production.md)** § Release artifacts for outputs and optional registry push.
 
 **GCP production bundle** (image `.tar.gz` + VSIX + compose + operator scripts for multi-VM GCE):
 

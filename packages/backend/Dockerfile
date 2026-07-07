@@ -58,5 +58,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 
 ENTRYPOINT ["/usr/local/bin/colcoor-entrypoint.sh"]
 
-# Migrations: COLCOOR_RUN_MIGRATIONS (default true); set false on API replicas. See docs/multi-vm-deploy.md.
+# Migrations: COLCOOR_RUN_MIGRATIONS (default true); set false on API replicas. See docs/ops/multi-vm-deploy.md.
 CMD ["/usr/local/bin/colcoor-start.sh"]

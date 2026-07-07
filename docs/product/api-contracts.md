@@ -42,7 +42,7 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 
 ### 2.1 `POST /api/v1/auth/cursor`
 
-**Purpose:** Exchange a Cursor / VS Code identity-provider access token for a Colcoor API JWT. Provisions or updates **`users`** keyed by **`cursor_sub`** (see [authentication.md](authentication.md)).
+**Purpose:** Exchange a Cursor / VS Code identity-provider access token for a Colcoor API JWT. Provisions or updates **`users`** keyed by **`cursor_sub`** (see [authentication.md](../auth/authentication.md)).
 
 | | |
 |--|--|
@@ -103,7 +103,7 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 | **Auth** | Bearer JWT |
 | **200** | `ConversationOut` |
 | **401** | missing/invalid token |
-| **402** | quota / plan denies new conversation ([billing-usage.md](billing-usage.md)) |
+| **402** | quota / plan denies new conversation ([billing-usage.md](../auth/billing-usage.md)) |
 | **503** | database not configured |
 
 **Request body `ConversationCreate`:**
@@ -334,7 +334,7 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 | **403** | forbidden (membership or role) |
 | **404** | conversation or parent event not found |
 | **422** | validation / parent rules / visibility rules |
-| **402** | usage / plan ([billing-usage.md](billing-usage.md)) |
+| **402** | usage / plan ([billing-usage.md](../auth/billing-usage.md)) |
 
 **Request body `AppendEventBody`:**
 
@@ -592,6 +592,6 @@ Clients **MUST** ignore unknown `type` values.
 ## Related docs
 
 - [data-flow-and-api.md](data-flow-and-api.md) — main-thread execution order (references this file for payloads).
-- [authentication.md](authentication.md) — `cursor_sub` and `/auth/cursor`.
+- [authentication.md](../auth/authentication.md) — `cursor_sub` and `/auth/cursor`.
 - [permissions.md](permissions.md) — role matrix driving **403** decisions.
-- [billing-usage.md](billing-usage.md) — **402** / quota semantics.
+- [billing-usage.md](../auth/billing-usage.md) — **402** / quota semantics.

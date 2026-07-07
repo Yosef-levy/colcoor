@@ -1,6 +1,6 @@
 import type { SecretStorage } from "vscode";
 
-/** Stores Colcoor API JWT in SecretStorage after POST /api/v1/auth/cursor (docs/authentication.md). */
+/** Stores Colcoor API JWT in SecretStorage after POST /api/v1/auth/cursor (docs/auth/authentication.md). */
 export class CursorSession {
   constructor(
     private readonly secrets: SecretStorage,

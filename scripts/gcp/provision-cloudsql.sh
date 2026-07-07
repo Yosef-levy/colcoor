@@ -158,7 +158,7 @@ CONNECTION_NAME=""
 if [[ "$DRY_RUN" != "1" ]]; then
   PRIVATE_IP="$(gcloud sql instances describe "$INSTANCE" --project="$COLCOOR_GCP_PROJECT" --format=json \
     | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((x["ipAddress"] for x in d.get("ipAddresses",[]) if x.get("type")=="PRIVATE"), ""))')"
-  [[ -n "$PRIVATE_IP" ]] || gcp_die "Cloud SQL private IP not found; run VPC peering (see docs/gcp-provisioning.md)"
+  [[ -n "$PRIVATE_IP" ]] || gcp_die "Cloud SQL private IP not found; run VPC peering (see docs/ops/gcp-provisioning.md)"
   CONNECTION_NAME="$(gcloud sql instances describe "$INSTANCE" --project="$COLCOOR_GCP_PROJECT" \
     --format='value(connectionName)')"
 else

@@ -1,6 +1,6 @@
 /**
  * Authoritative transcript text for the Cursor agent.
- * @see ../../../../docs/transcript-format.md (normative)
+ * @see ../../../../docs/product/transcript-format.md (normative)
  * @see ../../../../docs/principles.md (semantics)
  */
 

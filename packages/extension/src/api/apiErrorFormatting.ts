@@ -1,5 +1,5 @@
 /**
- * User-facing API error strings (HTTP 402 plan limits per docs/billing-usage.md).
+ * User-facing API error strings (HTTP 402 plan limits per docs/auth/billing-usage.md).
  */
 
 import { normalizePersistedUserInputText } from "../conversation/normalizeUserInputText";

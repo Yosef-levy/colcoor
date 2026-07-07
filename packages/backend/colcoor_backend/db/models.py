@@ -1,4 +1,4 @@
-"""ORM models — must match docs/database.md."""
+"""ORM models — must match docs/product/database.md."""
 
 from __future__ import annotations
 

@@ -4,7 +4,7 @@
 
 **Out of scope for this spec:** server-driven **web search** and **code execution** on the main thread; **any** thread UI rows for **tool calls**, **tool results**, or **assistant steps** (no tool graph in the thread path).
 
-Default UX: select node → run → see result; no raw transcript or prompt plumbing in default UI ([principles.md](principles.md)).
+Default UX: select node → run → see result; no raw transcript or prompt plumbing in default UI ([principles.md](../principles.md)).
 
 ---
 
@@ -28,7 +28,7 @@ Link or embed **Terms**, **Privacy**, **Refund** as product policy requires.
 
 ### 1.4 Session expiry (HTTP 401)
 
-When the Colcoor API rejects the stored JWT (**HTTP 401** — invalid or expired token), the extension **clears the local Colcoor session** so the user can **Sign in** again without manually signing out first. User-facing messaging still invites sign-in. See [authentication.md](authentication.md).
+When the Colcoor API rejects the stored JWT (**HTTP 401** — invalid or expired token), the extension **clears the local Colcoor session** so the user can **Sign in** again without manually signing out first. User-facing messaging still invites sign-in. See [authentication.md](../auth/authentication.md).
 
 ---
 
@@ -40,7 +40,7 @@ When the Colcoor API rejects the stored JWT (**HTTP 401** — invalid or expired
 
 ## 3. Account management and paywall
 
-- **Account management** — plan, usage, and billing-related information ([monetization.md](monetization.md)).
+- **Account management** — plan, usage, and billing-related information ([monetization.md](../auth/monetization.md)).
 - **Paywall / upgrade** — clear modal when the server denies an action: title, message, upgrade action when offered.
 
 ---

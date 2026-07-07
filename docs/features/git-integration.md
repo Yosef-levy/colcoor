@@ -2,7 +2,7 @@
 
 This document specifies how **Git version control** relates to **Colcoor conversations** in a Cursor workspace. It is **product guidance** for implementers and reviewers; exact APIs and UI copy may evolve.
 
-**Related:** [principles.md](principles.md) (authoritative transcript vs Cursor-augmented context), [architecture.md](architecture.md) §8, [domain-model.md](domain-model.md) (event graph), [tree-ui-contract.md](tree-ui-contract.md) (tree is navigation, not Git), [data-flow-and-api.md](data-flow-and-api.md) (turn order), [ui-features.md](ui-features.md) (checkpoint labels, details panel / detail bar).
+**Related:** [principles.md](../principles.md) (authoritative transcript vs Cursor-augmented context), [architecture.md](../product/architecture.md) §8, [domain-model.md](../product/domain-model.md) (event graph), [tree-ui-contract.md](../product/tree-ui-contract.md) (tree is navigation, not Git), [data-flow-and-api.md](../product/data-flow-and-api.md) (turn order), [ui-features.md](../product/ui-features.md) (checkpoint labels, details panel / detail bar).
 
 ---
 
@@ -33,7 +33,7 @@ The integration goal is **convenience**: while you reason in a branching convers
 
 ### 2.2 Colcoor controls reasoning; Cursor controls execution
 
-- **Transcript** (path root → active node + notes) is built and owned by the extension ([principles.md](principles.md)).
+- **Transcript** (path root → active node + notes) is built and owned by the extension ([principles.md](../principles.md)).
 - **Git read/write in the workspace** is executed by the **Cursor agent** (shell / IDE integration), not by the Colcoor backend.
 - The backend **may** store **metadata pointers** (branch name, PR URL); it **must not** run `git` against the user’s machine.
 
@@ -41,13 +41,13 @@ The integration goal is **convenience**: while you reason in a branching convers
 
 Users should not need to understand transcript plumbing or metadata schemas. In a normal Git repo, **strict** code-sync (§6.6) runs automatically; **passive** Git and manual branch linking are **opt-out**.
 
-- Prefer **Git status, synchronization state, and code-line actions in the details panel** (detail bar and related context panes for the active node) — **not** in the conversation transcript ([tree-ui-contract.md](tree-ui-contract.md) §2, §7).
+- Prefer **Git status, synchronization state, and code-line actions in the details panel** (detail bar and related context panes for the active node) — **not** in the conversation transcript ([tree-ui-contract.md](../product/tree-ui-contract.md) §2, §7).
 - Prefer **clear labels** (“Git branch”, “Checkpoint title”) over overloading one word (“branch”, “commit”) for both domains.
 - In **strict** workflows, **tree selection** is **read-only** for Git (§6.6.5): browsing updates the details panel but **does not** switch the workspace. Colcoor **aligns** the workspace to the selected node’s **active code line** only **before** code-affecting or context-executing actions (or on an explicit **align workspace** action), applying §5.9 first — **no** checkout or dirty-workspace prompts on mere clicks.
 
 ### 2.4 Determinism where Colcoor owns it
 
-Given the same event graph path and notes, transcript construction is deterministic ([principles.md](principles.md)). Git **working tree** state is **environment-dependent** and may change between turns; treat it as **hint context**, not as persisted conversation state.
+Given the same event graph path and notes, transcript construction is deterministic ([principles.md](../principles.md)). Git **working tree** state is **environment-dependent** and may change between turns; treat it as **hint context**, not as persisted conversation state.
 
 ### 2.5 Workspace Git execution serialization
 
@@ -71,13 +71,13 @@ The backend **does not** hold this lock; it applies only where Git runs (extensi
 
 ## 3. Two “branch” concepts (do not conflate)
 
-Developers already use “branch” for Git. Colcoor uses “branch” for **conversation forks** in the event graph ([domain-model.md](domain-model.md) §3).
+Developers already use “branch” for Git. Colcoor uses “branch” for **conversation forks** in the event graph ([domain-model.md](../product/domain-model.md) §3).
 
 | Term in UI/docs | Meaning |
 |-----------------|--------|
 | **Conversation branch** | A fork in the **`events`** tree (`user_input` / `assistant_output` siblings or children). Navigation via tree selection and `active_event_id`. |
 | **Git branch** | A ref in `.git` (`main`, `feature/foo`, …). Manipulated with Git CLI / IDE / host UI. |
-| **Private draft branch** | Colcoor visibility (`visible_to` set) — **not** a Git concept ([permissions.md](permissions.md)). |
+| **Private draft branch** | Colcoor visibility (`visible_to` set) — **not** a Git concept ([permissions.md](../product/permissions.md)). |
 | **Working branch** (this doc) | Optional **metadata** field naming a Git branch associated with a conversation region (§5) — primarily **passive** mode (§5.3.1). |
 | **Code line** | Git snapshot tied to a **code-changing** event (§5.5) — primary unit in **strict** mode. |
 | **Parent code line** | Nearest **code-changing ancestor’s** line on the active path (§5.5.2) — **not** the conversation graph’s parent node. |
@@ -124,15 +124,15 @@ flowchart TB
   - Active file path (relative to workspace root)
   - Selected text (truncated)
   - `git diff --no-color --unified=0` output (truncated)
-- Format: see `workspaceContextAppendix.ts` and [principles.md](principles.md) § “Workspace integration”.
+- Format: see `workspaceContextAppendix.ts` and [principles.md](../principles.md) § “Workspace integration”.
 - This block is **CLI-only appendix** — it is **not** part of the persisted event graph and **not** replayed from the backend on another machine.
 
 **Invariants:**
 
 - Hints are **best-effort** (no repo, dirty state, or command failure → omit diff; do not fail the turn).
 - When workspace classification is **`git_mismatch`** (§6.7), **omit** `git diff` from Layer A unless product explicitly labels it as *current workspace, not linked repo* — prefer omit for agent safety.
-- Hints **must not** replace Cursor’s own code retrieval ([principles.md](principles.md)).
-- Changing Git state **does not** set `needs_context_rebuild` ([domain-model.md](domain-model.md) §4); only graph/note/selection changes do.
+- Hints **must not** replace Cursor’s own code retrieval ([principles.md](../principles.md)).
+- Changing Git state **does not** set `needs_context_rebuild` ([domain-model.md](../product/domain-model.md) §4); only graph/note/selection changes do.
 
 ### 4.2 Layer B — Workflow metadata (optional, product-defined)
 
@@ -140,14 +140,14 @@ flowchart TB
 
 **Storage (recommended):**
 
-- **Conversation-level:** `conversations.metadata_json` ([api-contracts.md](api-contracts.md) §3) — defaults for the whole conversation (default remote, base branch, linked repo root).
+- **Conversation-level:** `conversations.metadata_json` ([api-contracts.md](../product/api-contracts.md) §3) — defaults for the whole conversation (default remote, base branch, linked repo root).
 - **Subtree-level:** optional JSON on events or a dedicated metadata map keyed by `event_id` (implementation choice). Semantics below (§5) are stable even if the physical schema varies.
 
 **Invariants:**
 
 - Metadata is **annotation**, not source of truth for code or for the event graph.
 - Stale metadata (branch deleted, PR merged) **must** degrade gracefully (show “last known”, offer refresh).
-- Viewers **may** read metadata; **editors/owners** **may** write it ([permissions.md](permissions.md)).
+- Viewers **may** read metadata; **editors/owners** **may** write it ([permissions.md](../product/permissions.md)).
 
 ### 4.3 Layer C — Agent Git operations (via Cursor)
 
@@ -215,7 +215,7 @@ Passive and strict modes differ in **who owns Git refs** and **how tightly** con
 
 ### 5.4 Checkpoint labels vs Git commits
 
-[ui-features.md](ui-features.md) defines **checkpoint labels** (`events.checkpoint_label`): **display-only** titles in breadcrumb/tree/search.
+[ui-features.md](../product/ui-features.md) defines **checkpoint labels** (`events.checkpoint_label`): **display-only** titles in breadcrumb/tree/search.
 
 | | Checkpoint label | Git commit |
 |--|------------------|------------|
@@ -230,7 +230,7 @@ Passive and strict modes differ in **who owns Git refs** and **how tightly** con
 
 **Code line** is the product term for the Git snapshot associated with a **code-changing** conversation event — typically a dedicated ref and `commit_sha` in strict mode (§6.6.2), or a linked `working_branch` region in passive mode (§5.3.1). Code lines are **not** conversation nodes; they are **metadata-backed code snapshots** tied to specific events.
 
-**Terminology:** Use **parent code line** and **active code line** in Git UI and docs. Avoid **parent node** when describing Git ancestry — that phrase refers to **`parent_event_id`** in the event graph ([domain-model.md](domain-model.md)) and is a different domain.
+**Terminology:** Use **parent code line** and **active code line** in Git UI and docs. Avoid **parent node** when describing Git ancestry — that phrase refers to **`parent_event_id`** in the event graph ([domain-model.md](../product/domain-model.md)) and is a different domain.
 
 #### 5.5.1 Which events have a code line
 
@@ -314,7 +314,7 @@ Product copy should describe **outcomes** (“incorporate parent changes”, “
 
 **Merge actions and outcomes are Git metadata**, not new conversation content.
 
-- **Do not** insert “merge” or “sync” events into the **`events`** tree as if they were reasoning turns. The conversation graph stays focused on **discussion and decisions** ([domain-model.md](domain-model.md)).
+- **Do not** insert “merge” or “sync” events into the **`events`** tree as if they were reasoning turns. The conversation graph stays focused on **discussion and decisions** ([domain-model.md](../product/domain-model.md)).
 - **Do** record merge/update **outcomes** on the relevant entities: e.g. timestamps, resulting `commit_sha`, relationship state (§5.6), `push_state`, PR status, conflict flags — attached to the **child and/or parent** code-line events or subtree metadata.
 - Users reviewing history see **what was said** in the tree and **how code lines relate** in the details panel — not a parallel thread of Git operations masquerading as dialogue.
 
@@ -603,7 +603,7 @@ When the selected **active code line** is an **ancestor** of the **workspace cod
 
 ### 6.5 Private draft exploration
 
-Private subtrees ([domain-model.md](domain-model.md) §3.3) **may** use a **dedicated Git branch** (metadata only visible to owner until commit-to-shared) or share the team working branch. Default recommendation: **separate `working_branch` for private drafts** that touch code, so unpromoted experiments do not block shared branch checkout.
+Private subtrees ([domain-model.md](../product/domain-model.md) §3.3) **may** use a **dedicated Git branch** (metadata only visible to owner until commit-to-shared) or share the team working branch. Default recommendation: **separate `working_branch` for private drafts** that touch code, so unpromoted experiments do not block shared branch checkout.
 
 Promoting private → shared **does not** merge Git branches automatically; it only changes `visible_to`.
 
@@ -888,7 +888,7 @@ While `git_sync_paused_reason` is set, the user (owner/editor) chooses one path 
 
 ## 7. UI and interaction guidelines
 
-Aligned with [tree-ui-contract.md](tree-ui-contract.md): the tree is **navigation and selection** only; Git belongs in the **details panel** for the **active code line** (§5.5.3), not in the transcript.
+Aligned with [tree-ui-contract.md](../product/tree-ui-contract.md): the tree is **navigation and selection** only; Git belongs in the **details panel** for the **active code line** (§5.5.3), not in the transcript.
 
 ### 7.1 Where Git information lives
 
@@ -899,7 +899,7 @@ Aligned with [tree-ui-contract.md](tree-ui-contract.md): the tree is **navigatio
 | **Details panel** (detail bar + context pane for **selected** node) | **Primary and sole routine interaction surface** for: **selected** active code line, **selection vs workspace** status (§5.5.4), parent association, **relationship state** (§5.6), update/merge **availability**, synchronization **failures** (§6.6.8), **unresolved workspace** prompts when aligning or acting (§5.9), PR links, environment warnings (§6.7), and **semantic actions** (§7.2). Layout is **implementation-defined**. |
 | **Composer** | No Git fields by default; optional advanced “Link send to branch” behind setting. |
 | **Search / drawers** | Search may index checkpoint labels and optional PR titles; not required for MVP. |
-| **Agent trace** | Shell lines show `git …` like any other command ([ui-features.md](ui-features.md) §7) — diagnostic, not a substitute for the details panel. |
+| **Agent trace** | Shell lines show `git …` like any other command ([ui-features.md](../product/ui-features.md) §7) — diagnostic, not a substitute for the details panel. |
 
 **Invariant:** Git-oriented status, synchronization state, update/merge availability, relationship state, synchronization failures, environment warnings, and related actions **must** remain centered in the **details panel** (or equivalent active-node context panel). They **must not** appear as persistent workflow UI in conversation messages, transcript content, or tree rows beyond optional compact indicators (§7.1).
 
@@ -925,7 +925,7 @@ Environment-level blocks (**linked repo** vs **local workspace**, §6.7.3) may s
 
 **Refresh repository information:** “Sync Git metadata” re-reads local refs, branch list, and optionally host PR status — does **not** incorporate parent code (§5.7) and does **not** require workspace alignment or §5.9 by itself. Sending a message or other code-affecting actions apply §6.6.5 and §5.9 as needed.
 
-**Stale tree vs stale Git:** Separate copy — “Conversation updated elsewhere” ([domain-model.md](domain-model.md) §8) vs “Code line out of date with parent” or “Workspace does not match linked repo”.
+**Stale tree vs stale Git:** Separate copy — “Conversation updated elsewhere” ([domain-model.md](../product/domain-model.md) §8) vs “Code line out of date with parent” or “Workspace does not match linked repo”.
 
 ---
 
@@ -939,7 +939,7 @@ Environment-level blocks (**linked repo** vs **local workspace**, §6.7.3) may s
 | Run `git` in workspace | Cursor agent / user |
 | Serialize workspace Git read–modify–write (§2.5) | Extension (per repo / execution context) |
 | Store commits or blobs | Git / remote host |
-| Enforce role for metadata PATCH | Backend ([permissions.md](permissions.md)) |
+| Enforce role for metadata PATCH | Backend ([permissions.md](../product/permissions.md)) |
 
 **Multi-root workspaces:** `git.repo_root` in metadata disambiguates which folder Layer A and branch commands use. If unset, use the folder containing the active editor, else first Git root.
 
@@ -1013,7 +1013,7 @@ Agent runs that perform or assume workspace Git writes **must** acquire the work
 
 ## 11. Invariants (normative)
 
-1. The **source of truth** for reasoning structure is the **event graph** and tree APIs on the Colcoor backend ([domain-model.md](domain-model.md)).
+1. The **source of truth** for reasoning structure is the **event graph** and tree APIs on the Colcoor backend ([domain-model.md](../product/domain-model.md)).
 2. The **source of truth** for code history is **Git** (local + remote).
 3. Git operations (checkout, merge, PR) **do not** replace or silently migrate conversation nodes.
 4. In **passive** mode, conversation branching **does not** imply Git branching unless metadata or explicit user/agent action says so. In **strict** mode (§6.6, **default**), each **new** code-changing event (after any `strict_effective_from` boundary) implies a **new** Git branch and commit; merges are always explicit. Legacy pre-boundary events keep prior metadata without retroactive branch splitting (§6.6.6).
@@ -1043,8 +1043,8 @@ Agent runs that perform or assume workspace Git writes **must** acquire the work
 
 | Capability | MVP (minimal) | Later |
 |------------|---------------|--------|
-| Layer A diff hints | Yes ([principles.md](principles.md)) | Configurable diff scope (staged only, stat) |
-| Checkpoint labels | Yes ([ui-features.md](ui-features.md)) | Link checkpoint ↔ commit SHA |
+| Layer A diff hints | Yes ([principles.md](../principles.md)) | Configurable diff scope (staged only, stat) |
+| Checkpoint labels | Yes ([ui-features.md](../product/ui-features.md)) | Link checkpoint ↔ commit SHA |
 | Conversation `metadata_json` | Yes (schema open) | Validated `git` sub-object |
 | Subtree `working_branch` UI | Optional | Auto-create branch, ahead/behind badges |
 | `git_sync_mode: strict` (default) | Policy + metadata fields + extension pipeline | Code line lifecycle (§5.10), conflict (§5.11), historical recovery (§5.12), deferred alignment (§6.6.5) |
@@ -1060,8 +1060,8 @@ Agent runs that perform or assume workspace Git writes **must** acquire the work
 |------|----------------|
 | Workspace hints | `packages/extension/src/agent/workspaceHintsForAgent.ts`, `workspaceContextAppendix.ts` |
 | Setting | `colcoor.includeWorkspaceHintsInAgentPrompt` |
-| Conversation metadata API | [api-contracts.md](api-contracts.md) §3.2–§3.3 |
-| Checkpoint label API | [api-contracts.md](api-contracts.md) (tree node field `checkpoint_label`) |
+| Conversation metadata API | [api-contracts.md](../product/api-contracts.md) §3.2–§3.3 |
+| Checkpoint label API | [api-contracts.md](../product/api-contracts.md) (tree node field `checkpoint_label`) |
 | Shell / git approval | `packages/extension/src/agent/cursorToolCallApproval*.ts` |
 
 ---

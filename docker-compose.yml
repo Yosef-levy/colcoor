@@ -1,4 +1,4 @@
-# Local stack for the extension-dedicated backend (see docs/architecture.md).
+# Local stack for the extension-dedicated backend (see docs/product/architecture.md).
 services:
   redis:
     image: redis:7-alpine

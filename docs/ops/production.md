@@ -6,7 +6,7 @@ This document describes how to run the **Colcoor extension-dedicated API** on a 
 
 **Runtime:** the HTTP API is **Python 3.12 + FastAPI + Gunicorn (Uvicorn workers)** in [`packages/backend/`](../packages/backend/). The repo root [`package.json`](../package.json) is for the **VS Code/Cursor extension** only, not the API server.
 
-Product boundaries (no main-thread LLM on the server, no transcript-over-HTTP) are unchanged; see [architecture.md](architecture.md) and [principles.md](principles.md).
+Product boundaries (no main-thread LLM on the server, no transcript-over-HTTP) are unchanged; see [architecture.md](../product/architecture.md) and [principles.md](../principles.md).
 
 ---
 
@@ -20,7 +20,7 @@ Product boundaries (no main-thread LLM on the server, no transcript-over-HTTP) a
 | **postgres** | Application data | **No** |
 | **redis** | Side-chat SSE pub/sub | **No** |
 
-Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postgres:5432**. On container start, **`colcoor-start.sh`** runs **`alembic upgrade head`** when **`COLCOOR_RUN_MIGRATIONS=true`** (default on a single node); set **`false`** on horizontal replicas and run migrations once per deploy ([multi-vm-deploy.md](multi-vm-deploy.md)). DDL uses **`DATABASE_MIGRATION_URL`** (direct Postgres). Side-chat SSE wakeups use **Redis** (`REDIS_URL`); see [side-chat-realtime.md](side-chat-realtime.md). Pool sizing and scaling: [pgbouncer.md](pgbouncer.md).
+Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postgres:5432**. On container start, **`colcoor-start.sh`** runs **`alembic upgrade head`** when **`COLCOOR_RUN_MIGRATIONS=true`** (default on a single node); set **`false`** on horizontal replicas and run migrations once per deploy ([multi-vm-deploy.md](multi-vm-deploy.md)). DDL uses **`DATABASE_MIGRATION_URL`** (direct Postgres). Side-chat SSE wakeups use **Redis** (`REDIS_URL`); see [side-chat-realtime.md](../features/side-chat-realtime.md). Pool sizing and scaling: [pgbouncer.md](pgbouncer.md).
 
 ---
 
@@ -30,7 +30,7 @@ Traffic flow: **Internet → nginx → backend:8000 → pgbouncer:6432 → postg
 |------|---------|
 | [`docker-compose.prod.yml`](../docker-compose.prod.yml) | Production stack: `nginx`, `backend`, `pgbouncer`, `postgres`, `redis`, healthchecks |
 | [`pgbouncer/`](../pgbouncer/) | PgBouncer config, entrypoint, Alpine-based image |
-| [`docs/pgbouncer.md`](pgbouncer.md) | Connection scaling, pool env vars, sizing examples |
+| [`docs/ops/pgbouncer.md`](pgbouncer.md) | Connection scaling, pool env vars, sizing examples |
 | [`nginx/nginx.conf`](../nginx/nginx.conf) | Full nginx main config (proxy, rate limits, `/health` + `/ready`) |
 | [`packages/backend/Dockerfile`](../packages/backend/Dockerfile) | Multi-stage image, `colcoor-start.sh` (migrations + Gunicorn) |
 | [`scripts/deploy-multi-vm.sh`](../scripts/deploy-multi-vm.sh) | Multi-VM: `provision-gcp`, `deploy-primary`, `deploy-replica`, migrate |
@@ -276,7 +276,7 @@ After changing **`colcoor.backendBaseUrl`** or **`COLCOOR_API_URL`**, have users
 1. **Firewall / cloud security group:** allow inbound **80** and/or **443** on the VM from the network where you run Cursor (home IP, office VPN, etc.).
 2. **TLS:** use a certificate Node trusts (e.g. Let’s Encrypt). **Self-signed** HTTPS typically causes **fetch / certificate** errors until the system trusts the CA or you terminate TLS with a public cert.
 3. **`CORS_ORIGINS`:** the extension issues requests from the **Node extension host**, not a browser tab, so **empty `CORS_ORIGINS` is fine** for extension-only traffic (see [`.env.example`](../.env.example)). Set `CORS_ORIGINS` when **browser** clients must call the API cross-origin.
-4. **Auth:** production clients **MUST** use **`POST /api/v1/auth/cursor`** only ([authentication.md](authentication.md), [api-contracts.md](api-contracts.md) §2.1).
+4. **Auth:** production clients **MUST** use **`POST /api/v1/auth/cursor`** only ([authentication.md](../auth/authentication.md), [api-contracts.md](../product/api-contracts.md) §2.1).
 
 ---
 
@@ -358,7 +358,7 @@ npm run checksums:release -- dist/colcoor-gcp-production-BE0.1.0-EXT0.0.1
 
 **Zip vs tar.gz:** Ship the **`.tar.gz`**. Zip often strips executable bits on `scripts/*.sh`.
 
-Install and smoke-test: [release-quickstart.md](release-quickstart.md), [release-smoke-test.md](release-smoke-test.md), [enterprise-handoff-checklist.md](enterprise-handoff-checklist.md).
+Install and smoke-test: [release-quickstart.md](../release/release-quickstart.md), [release-smoke-test.md](../release/release-smoke-test.md), [enterprise-handoff-checklist.md](../release/enterprise-handoff-checklist.md).
 
 ### Local development Compose (not shipped to customers)
 
@@ -370,10 +370,10 @@ Use **`docker-compose.yml`** or **`docker-compose.self-host.yml`** from the repo
 
 - [monitoring.md](monitoring.md) — metrics, logs, Grafana, alerts
 - [pgbouncer.md](pgbouncer.md) — connection pooling, sizing, env vars
-- [database.md](database.md) — PostgreSQL schema (DDL)
-- [architecture.md](architecture.md) — backend role vs extension vs Cursor
-- [authentication.md](authentication.md) — Cursor account and JWT intent
-- [data-flow-and-api.md](data-flow-and-api.md) — API contracts (append-event, no transcript HTTP)
-- [monetization.md](monetization.md) — tokens on every request (product intent)
+- [database.md](../product/database.md) — PostgreSQL schema (DDL)
+- [architecture.md](../product/architecture.md) — backend role vs extension vs Cursor
+- [authentication.md](../auth/authentication.md) — Cursor account and JWT intent
+- [data-flow-and-api.md](../product/data-flow-and-api.md) — API contracts (append-event, no transcript HTTP)
+- [monetization.md](../auth/monetization.md) — tokens on every request (product intent)
 
 For local development without the full stack, see the root [README.md](../README.md).

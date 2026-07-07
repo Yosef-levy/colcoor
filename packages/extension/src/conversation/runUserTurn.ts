@@ -94,7 +94,7 @@ export type UserTurnResult = {
 
 /**
  * Persist `user_input`, run the agent with the authoritative transcript, persist `assistant_output`.
- * Order matches docs/data-flow-and-api.md §1.
+ * Order matches docs/product/data-flow-and-api.md §1.
  */
 export async function runColcoorUserTurn(
   api: ColcoorClient,

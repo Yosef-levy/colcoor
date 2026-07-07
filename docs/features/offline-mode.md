@@ -42,7 +42,7 @@ Because the store is rooted at the current workspace folder, **switching workspa
 shows only the conversations you started there.**
 
 Events are stored one-per-line in the same shape used by the backend
-`POST /conversations/{id}/append-event` API (see [api-contracts.md](api-contracts.md)),
+`POST /conversations/{id}/append-event` API (see [api-contracts.md](../product/api-contracts.md)),
 which keeps a future "upload this conversation to the backend" feature a straightforward
 parent-id remapping replay.
 

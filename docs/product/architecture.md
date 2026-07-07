@@ -1,6 +1,6 @@
 # Architecture — Colcoor Cursor extension
 
-See **[principles.md](principles.md)** for the split between **Colcoor** (transcript + structure + persistence) and **Cursor** (execution + optional augmented code context).
+See **[principles.md](../principles.md)** for the split between **Colcoor** (transcript + structure + persistence) and **Cursor** (execution + optional augmented code context).
 
 ## 1. Goal
 
@@ -15,12 +15,12 @@ The Colcoor backend is the **source of truth** for:
 - Notes
 - Side chat
 - Permissions
-- Billing and usage ([monetization.md](monetization.md), [billing-usage.md](billing-usage.md))
+- Billing and usage ([monetization.md](../auth/monetization.md), [billing-usage.md](../auth/billing-usage.md))
 
 The backend **does not**:
 
 - Run the **main-thread** LLM (that is Cursor)
-- Build or serve **execution transcripts** for the agent ([principles.md](principles.md))
+- Build or serve **execution transcripts** for the agent ([principles.md](../principles.md))
 
 ## 3. System components
 
@@ -69,9 +69,9 @@ Persisted and loaded **only** through the Colcoor backend; realtime via **SSE** 
 
 ## 8. Git and workspace
 
-Optional hints to the agent (active file, selection, diff): [principles.md](principles.md). Git metadata vs tree: [git-integration.md](git-integration.md).
+Optional hints to the agent (active file, selection, diff): [principles.md](../principles.md). Git metadata vs tree: [git-integration.md](../features/git-integration.md).
 
 ## 9. Non-goals (MVP)
 
-- **MCP** and **cloud agents** — [principles.md](principles.md).
+- **MCP** and **cloud agents** — [principles.md](../principles.md).
 - Replacing Cursor’s file/symbol intelligence.

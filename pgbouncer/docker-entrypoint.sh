@@ -11,7 +11,7 @@ USERLIST=/etc/pgbouncer/userlist.txt
 printf '"%s" "%s"\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" >"$USERLIST"
 chmod 600 "$USERLIST"
 
-# Writable copy so optional env overrides can patch pool sizing (see docs/pgbouncer.md).
+# Writable copy so optional env overrides can patch pool sizing (see docs/ops/pgbouncer.md).
 INI_WORK=/tmp/pgbouncer.ini
 cp /etc/pgbouncer/pgbouncer.ini "$INI_WORK"
 

@@ -2,7 +2,7 @@
 
 Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID PKs; **`timestamptz`**; **`gen_random_uuid()`** defaults (built-in).
 
-**HTTP mapping:** [api-contracts.md](api-contracts.md). **Identity:** [authentication.md](authentication.md) (`cursor_sub`).
+**HTTP mapping:** [api-contracts.md](api-contracts.md). **Identity:** [authentication.md](../auth/authentication.md) (`cursor_sub`).
 
 ---
 
@@ -59,9 +59,9 @@ Normative DDL for the Colcoor extension-dedicated API. **PostgreSQL 16+.** UUID 
 | actor_user_id | uuid FK null | Human actor when applicable |
 | content_text | text null | Plain body |
 | content_json | jsonb null | Structured payload |
-| checkpoint_label | text null | Optional display-only label for checkpoint / breadcrumb UI ([ui-features.md] §8) |
+| checkpoint_label | text null | Optional display-only label for checkpoint / breadcrumb UI ([ui-features.md](ui-features.md) §8) |
 | visible_to | uuid FK null | **NULL** = shared (all members); **non-NULL** = private draft for that `users.id` only |
-| deleted_at | timestamptz null | Soft delete; the API may **hard-delete** the row after a retention window (see [production.md](production.md) `COLCOOR_EVENT_*`) |
+| deleted_at | timestamptz null | Soft delete; the API may **hard-delete** the row after a retention window (see [production.md](../ops/production.md) `COLCOOR_EVENT_*`) |
 | deletion_group_id | uuid null | Shared id for one subtree soft-delete (undo / restore) |
 | deleted_by_user_id | uuid FK null | User who performed the soft delete (undo eligibility) |
 | created_at | timestamptz not null | Inserted |

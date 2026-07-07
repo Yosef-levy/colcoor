@@ -6,7 +6,7 @@ import logging
 
 SERVICE_NAME = "colcoor-api"
 
-# Tier-1 event types (snake_case, low cardinality). See docs/monitoring.md.
+# Tier-1 event types (snake_case, low cardinality). See docs/ops/monitoring.md.
 KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
     {
         "http_request",
