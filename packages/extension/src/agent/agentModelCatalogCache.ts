@@ -29,6 +29,10 @@ export function getAgentModelCatalog(): AgentModelCatalogSnapshot {
 /** Load models from `agent models` (same auth/env as headless runs). */
 export async function refreshAgentModelCatalog(secrets: vscode.SecretStorage): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("colcoor");
+  if ((cfg.get<string>("provider")?.trim() ?? "anthropic") !== "cursor") {
+    snapshot = { curated: [], all: [], hint: null };
+    return;
+  }
   const mode = cfg.get<string>("agentMode") ?? "auto";
   if (mode === "stub") {
     snapshot = {

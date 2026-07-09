@@ -82,6 +82,8 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.resendAssistant",
       "colcoor.restoreMessageBranch",
       "colcoor.sendMessage",
+      "colcoor.setCursorAgentApiKey",
+      "colcoor.setupCursorCli",
       "colcoor.showNotesOnSelectedMessage",
       "colcoor.stopGeneration",
       "colcoor.testSideChatSound",

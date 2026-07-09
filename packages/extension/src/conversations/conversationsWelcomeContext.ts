@@ -1,19 +1,19 @@
 import * as vscode from "vscode";
 
-import { SECRET_CURSOR_AGENT_API_KEY } from "../agent/cursorAgentApiKey";
+import { hasProviderApiKey } from "../agent/providerApiKey";
 
 /** Set when the Colcoor backend JWT is present (drives conversations `viewsWelcome` `when`). */
 export const COLCOOR_CONTEXT_BACKEND_SIGNED_IN = "colcoor.backendSignedIn";
 
-/** Set when a Cursor agent API key is stored in secret storage. */
-export const COLCOOR_CONTEXT_CURSOR_AGENT_API_KEY_SET = "colcoor.cursorAgentApiKeySet";
+/** Set when an API key is stored for the active provider (drives the assistant-key welcome hint). */
+export const COLCOOR_CONTEXT_PROVIDER_API_KEY_SET = "colcoor.providerApiKeySet";
 
 export type BackendSessionLike = {
   getBackendAccessToken(): Promise<string | undefined>;
 };
 
 /**
- * Keep `viewsWelcome` visibility in sync with auth and `SECRET_CURSOR_AGENT_API_KEY`.
+ * Keep `viewsWelcome` visibility in sync with auth and the active provider's API key.
  * In offline local mode there is no backend sign-in, so treat the user as signed in.
  */
 export async function syncConversationsWelcomeContextKeys(
@@ -23,11 +23,11 @@ export async function syncConversationsWelcomeContextKeys(
 ): Promise<void> {
   const raw = await session.getBackendAccessToken();
   const signedIn = Boolean(options?.localMode) || Boolean(raw?.trim());
-  const apiKey = (await secrets.get(SECRET_CURSOR_AGENT_API_KEY))?.trim();
+  const hasKey = await hasProviderApiKey(secrets);
   await vscode.commands.executeCommand("setContext", COLCOOR_CONTEXT_BACKEND_SIGNED_IN, signedIn);
   await vscode.commands.executeCommand(
     "setContext",
-    COLCOOR_CONTEXT_CURSOR_AGENT_API_KEY_SET,
-    Boolean(apiKey),
+    COLCOOR_CONTEXT_PROVIDER_API_KEY_SET,
+    hasKey,
   );
 }

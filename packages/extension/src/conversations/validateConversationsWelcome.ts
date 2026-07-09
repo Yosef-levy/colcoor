@@ -86,6 +86,8 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.resendAssistant",
   "colcoor.restoreMessageBranch",
   "colcoor.sendMessage",
+  "colcoor.setCursorAgentApiKey",
+  "colcoor.setupCursorCli",
   "colcoor.showNotesOnSelectedMessage",
   "colcoor.stopGeneration",
   "colcoor.testSideChatSound",

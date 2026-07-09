@@ -93,6 +93,8 @@ describe("AgentRunner headless (mocked spawn)", () => {
     configGet.mockClear();
     configGet.mockImplementation((key: string, defaultValue?: unknown) => {
       switch (key) {
+        case "provider":
+          return "cursor";
         case "agentMode":
           return "headless";
         case "agentExecutable":

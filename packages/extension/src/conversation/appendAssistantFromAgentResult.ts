@@ -1,6 +1,7 @@
 import type { AgentRunResult, AssistantStubKind } from "../agent/agentRunner";
 import type { ColcoorClient } from "../api/client";
 import type { UserTurnResult } from "./runUserTurn";
+import { buildAgentSessionJson } from "./agentSessionMapping";
 import { buildColcoorAgentMeta, mergeAssistantContentJson } from "./agentModelDisplay";
 import { COLCOOR_CONTEXT_SAVINGS_KEY, type ContextSavingsTurn } from "./contextSavings";
 import { normalizePersistedUserInputText } from "./normalizeUserInputText";
@@ -23,7 +24,17 @@ function assistantContentJson(
     : undefined;
   const modelId = runResult.cliModelId?.trim();
   const metaJson = buildColcoorAgentMeta(modelId, undefined);
-  const base = mergeAssistantContentJson(traceJson, metaJson);
+  const sessionJson = runResult.providerSessionId
+    ? buildAgentSessionJson({
+        provider: "anthropic",
+        sessionId: runResult.providerSessionId,
+        lastMessageId: runResult.providerMessageId,
+        model: modelId,
+      })
+    : undefined;
+  const metaAndSession =
+    metaJson || sessionJson ? { ...metaJson, ...sessionJson } : undefined;
+  const base = mergeAssistantContentJson(traceJson, metaAndSession);
   if (!contextSavings) {
     return base;
   }

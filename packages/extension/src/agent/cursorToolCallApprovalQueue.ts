@@ -1,11 +1,7 @@
-import type { ToolApprovalDecision } from "./cursorToolCallApproval";
-
 let approvalChain: Promise<unknown> = Promise.resolve();
 
 /** Run one tool-approval modal at a time so parallel agent runs cannot interleave prompts. */
-export function enqueueToolCallApproval(
-  fn: () => Promise<ToolApprovalDecision>,
-): Promise<ToolApprovalDecision> {
+export function enqueueToolCallApproval<T>(fn: () => Promise<T>): Promise<T> {
   const run = approvalChain.then(fn, fn);
   approvalChain = run.then(
     () => undefined,

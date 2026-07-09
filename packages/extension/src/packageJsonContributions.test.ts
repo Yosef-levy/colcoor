@@ -195,12 +195,11 @@ describe("package.json Colcoor contributions", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
     const api = colcoorConversationWelcomes(pkg).find((w) =>
-      String(w.when ?? "").includes("cursorAgentApiKeySet"),
+      String(w.when ?? "").includes("providerApiKeySet"),
     );
     const contents = api?.contents ?? "";
     expect(api?.when).toContain("colcoor.backendSignedIn");
-    expect(contents).toContain("[Set Cursor API key…](command:colcoor.setCursorAgentApiKey)");
-    expect(contents).toContain("[Set up Cursor CLI (agent)…](command:colcoor.setupCursorCli)");
+    expect(contents).toContain("[Set provider API key…](command:colcoor.setProviderApiKey)");
   });
 
   it("documents openLegalPolicySettings for Terms / Privacy / Refund URLs ([ui-features.md] §1.3)", () => {
@@ -249,7 +248,7 @@ describe("package.json Colcoor contributions", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
     const contents = colcoorConversationWelcomes(pkg)
-      .filter((w) => !String(w.when ?? "").includes("cursorAgentApiKeySet"))
+      .filter((w) => !String(w.when ?? "").includes("providerApiKeySet"))
       .map((w) => w.contents ?? "")
       .join("\n");
     expect(contents).not.toContain("command:colcoor.sendMessage");

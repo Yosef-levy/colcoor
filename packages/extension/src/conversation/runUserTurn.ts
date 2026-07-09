@@ -4,6 +4,8 @@ import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
+import { buildLlmRequest } from "./llmRequest";
+import { resolveAgentSessionPlan } from "./agentSessionMapping";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
   appendixForAgentImagePaths,
@@ -149,6 +151,13 @@ export async function runColcoorUserTurn(
     finalUserMessage: trimmed || null,
     finalUserMediaContentJson: mediaJson,
   });
+  const llmRequest = buildLlmRequest({
+    conversationTitle,
+    pathFromRoot: pathTurns,
+    finalUserMessage: trimmed || null,
+    finalUserMediaContentJson: mediaJson,
+  });
+  const agentSession = resolveAgentSessionPlan(events, attach);
   const contextSavings = buildContextSavingsTurn({
     kind: "send",
     linearContextTokensBeforeRun: options?.linearContextTokensBeforeRun ?? 0,
@@ -188,6 +197,8 @@ export async function runColcoorUserTurn(
       cliModel: options?.cliModel,
       cliMode: options?.cliMode,
       toolApprovalBranchLabel: options?.toolApprovalBranchLabel,
+      llmRequest,
+      agentSession,
     });
     return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult, contextSavings);
   } catch (e) {

@@ -27,18 +27,29 @@ The system **does not** attempt to fully control the entire execution environmen
 
 ## Agent integration
 
-The extension integrates with the **Cursor agent** as the main-thread LLM.
+The extension integrates with a **configurable execution provider** as the main-thread LLM. The
+provider is a swappable detail behind a common backend interface; the transcript and event graph
+remain authoritative no matter which provider runs.
 
 The extension is responsible for:
 
 1. Constructing the transcript **deterministically**
 2. Providing the user message
-3. Triggering the agent
+3. Triggering the configured provider
 4. Persisting results via the Colcoor backend
 
-The system **may** use Cursor-native execution (Composer / agent environment) and does **not** need to bypass it completely.
+**Providers (`colcoor.provider`):**
 
-**Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported** paths — see [data-flow-and-api.md](product/data-flow-and-api.md) §2 (CLI / ACP) and Composer as **fallback**.
+- **anthropic** (default): ask mode uses the **Anthropic Messages API**; plan/agent modes use the
+  **Claude Agent SDK**. The user brings their own Anthropic API key — no Cursor account required.
+- **cursor** (legacy): Cursor's headless `agent -p`. Retained for compatibility, not the default.
+
+For stateful (plan/agent) providers, Colcoor persists the provider session id and a fork anchor in
+the assistant event so a later turn can **resume**, **fork-from-the-middle**, or start **fresh**,
+preserving prompt-cache hits across branches.
+
+**Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported**
+API paths.
 
 ---
 

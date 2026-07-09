@@ -4,6 +4,8 @@ import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
+import { buildLlmRequest } from "./llmRequest";
+import { resolveAgentSessionPlan } from "./agentSessionMapping";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
   appendixForAgentImagePaths,
@@ -99,6 +101,12 @@ export async function runResendAssistant(
     pathFromRoot: pathTurns,
     finalUserMessage: undefined,
   });
+  const llmRequest = buildLlmRequest({
+    conversationTitle,
+    pathFromRoot: pathTurns,
+    finalUserMessage: undefined,
+  });
+  const agentSession = resolveAgentSessionPlan(events, userNode);
   const contextSavings = buildContextSavingsTurn({
     kind: "resend",
     linearContextTokensBeforeRun: options?.linearContextTokensBeforeRun ?? 0,
@@ -125,6 +133,8 @@ export async function runResendAssistant(
       cliModel: options?.cliModel,
       cliMode: options?.cliMode,
       toolApprovalBranchLabel: options?.toolApprovalBranchLabel,
+      llmRequest,
+      agentSession,
     });
     return appendAssistantFromAgentResult(
       api,

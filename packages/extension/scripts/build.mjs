@@ -18,7 +18,10 @@ const options = {
   format: "cjs",
   target: "node20",
   sourcemap: true,
-  external: ["vscode"],
+  // `vscode` is provided by the host. `@anthropic-ai/claude-agent-sdk` is ESM-only and ships a
+  // per-platform native binary via optionalDependencies, so it is resolved at runtime from the
+  // packaged node_modules (loaded via dynamic import) rather than bundled.
+  external: ["vscode", "@anthropic-ai/claude-agent-sdk"],
   logLevel: "info",
 };
 
