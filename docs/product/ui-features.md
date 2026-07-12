@@ -115,6 +115,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - **Add NOTE** and **Add message title** (modal or inline).
 - **NOTES (attached)** with edit/delete and **Reference in side chat** on notes.
 - **Reference in side chat** for the selected **message**; short note that **notes are not tree nodes**.
+- **View metadata…** (Message menu or context menu) — per-message **provider usage** (model, mode, tokens, cache hit, cost, duration) and **Colcoor graph fields** (event id, session, checkpoint). Conversation-level context savings stay in the thread bar, not this popup.
 
 ---
 

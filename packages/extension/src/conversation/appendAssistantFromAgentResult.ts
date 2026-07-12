@@ -4,11 +4,17 @@ import type { UserTurnResult } from "./runUserTurn";
 import { buildAgentSessionJson } from "./agentSessionMapping";
 import { buildColcoorAgentMeta, mergeAssistantContentJson } from "./agentModelDisplay";
 import { COLCOOR_CONTEXT_SAVINGS_KEY, type ContextSavingsTurn } from "./contextSavings";
+import {
+  buildProviderUsageJson,
+  finalizeProviderUsage,
+  type ProviderUsagePersistContext,
+} from "./messageProviderUsage";
 import { normalizePersistedUserInputText } from "./normalizeUserInputText";
 
 function assistantContentJson(
   runResult: AgentRunResult,
   contextSavings?: ContextSavingsTurn,
+  usageContext?: ProviderUsagePersistContext,
 ): Record<string, unknown> | undefined {
   const entries = runResult.cursorCliTimeline;
   const displayParts = runResult.cursorCliDisplayParts;
@@ -34,11 +40,14 @@ function assistantContentJson(
     : undefined;
   const metaAndSession =
     metaJson || sessionJson ? { ...metaJson, ...sessionJson } : undefined;
+  const usage = finalizeProviderUsage(runResult.providerUsage, usageContext);
+  const usageJson = usage ? buildProviderUsageJson(usage) : undefined;
   const base = mergeAssistantContentJson(traceJson, metaAndSession);
+  const withUsage = mergeAssistantContentJson(base, usageJson);
   if (!contextSavings) {
-    return base;
+    return withUsage;
   }
-  return { ...(base ?? {}), [COLCOOR_CONTEXT_SAVINGS_KEY]: contextSavings };
+  return { ...(withUsage ?? {}), [COLCOOR_CONTEXT_SAVINGS_KEY]: contextSavings };
 }
 
 /**
@@ -51,6 +60,7 @@ export async function appendAssistantFromAgentResult(
   userMessageEventId: string,
   runResult: AgentRunResult,
   contextSavings?: ContextSavingsTurn,
+  usageContext?: ProviderUsagePersistContext,
 ): Promise<UserTurnResult> {
   const assistantStub: AssistantStubKind | undefined =
     runResult.stub === "none" ? undefined : runResult.stub;
@@ -67,7 +77,7 @@ export async function appendAssistantFromAgentResult(
       content: partial,
       author: "cursor_agent",
       private_branch: false,
-      content_json: assistantContentJson(runResult, contextSavings),
+      content_json: assistantContentJson(runResult, contextSavings, usageContext),
     });
     return {
       userEventId: userMessageEventId,
@@ -85,7 +95,7 @@ export async function appendAssistantFromAgentResult(
     content: assistantText,
     author: "cursor_agent",
     private_branch: false,
-    content_json: assistantContentJson(runResult, contextSavings),
+    content_json: assistantContentJson(runResult, contextSavings, usageContext),
   });
 
   return {

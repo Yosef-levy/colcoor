@@ -1,5 +1,6 @@
 import type { CursorCliMode } from "../cursorCliMode";
 import type { CursorAgentDisplayPart } from "../cursorAgentStreamJson";
+import type { ColcoorProviderUsage } from "../../conversation/messageProviderUsage";
 
 /** How the assistant body was produced (for UI; persisted text stays short when execution is unavailable). */
 export type AssistantStubKind = "none" | "explicit" | "cli_missing";
@@ -19,6 +20,8 @@ export type AgentRunResult = {
   providerSessionId?: string;
   /** Provider message id of the last message in the session, used as a fork anchor. */
   providerMessageId?: string;
+  /** Token/cost/latency envelope for the metadata popup (`colcoor_provider_usage`). */
+  providerUsage?: ColcoorProviderUsage;
 };
 
 /** One role-tagged turn for the stateless chat (ask) path. */

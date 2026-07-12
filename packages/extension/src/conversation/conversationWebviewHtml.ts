@@ -11,6 +11,7 @@ import {
   PRIVATE_BRANCH_LEAD,
 } from "./privateBranchComposerCopy";
 import { treeEventTimeLabelWebviewScriptBlock } from "./treeEventTimeLabel";
+import { messageMetadataWebviewScriptBlock } from "./messageMetadataCore";
 import { TREE_EVENT_DISPLAY_TITLE_MAX, TREE_EVENT_SNIPPET_MAX } from "./treeNodeDisplay";
 import {
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
@@ -1461,6 +1462,78 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .metadata-drawer-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: auto;
+      min-height: 0;
+      flex: 1;
+    }
+    .metadata-drawer-headline {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .metadata-section {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      padding: 10px 12px;
+    }
+    .metadata-section-title {
+      margin: 0 0 8px;
+      font-size: 0.95em;
+      font-weight: 600;
+    }
+    .metadata-dl {
+      display: grid;
+      grid-template-columns: minmax(120px, 38%) 1fr;
+      gap: 4px 12px;
+      margin: 0;
+    }
+    .metadata-dl dt {
+      margin: 0;
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.92em;
+    }
+    .metadata-dd {
+      margin: 0;
+      word-break: break-word;
+    }
+    .metadata-mono {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 0.9em;
+    }
+    .metadata-note {
+      margin: 8px 0 0;
+      font-size: 0.88em;
+      color: var(--vscode-descriptionForeground);
+    }
+    .metadata-advanced {
+      margin-top: 4px;
+    }
+    .metadata-advanced summary {
+      cursor: pointer;
+      color: var(--vscode-textLink-foreground);
+    }
+    .metadata-json {
+      margin: 8px 0 0;
+      padding: 8px;
+      overflow: auto;
+      max-height: 240px;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 0.82em;
+      background: var(--vscode-textBlockQuote-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      white-space: pre;
+    }
+    .metadata-drawer-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
     .lists-drawer-tabs {
       display: flex;
       flex-wrap: wrap;
@@ -1752,6 +1825,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" id="btnCopyThread" title="Copy root → selected path as plain text">Copy thread</button>
             <button type="button" class="menu-item" role="menuitem" id="btnReferenceSideChat" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
             <button type="button" class="menu-item" role="menuitem" id="btnResend">Resend assistant</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnViewMetadata" title="Usage, tokens, and Colcoor graph fields for the selected message">View metadata…</button>
             <button type="button" class="menu-item" role="menuitem" id="btnJumpTip" title="Select the newest leaf on the default branch">Jump to latest</button>
             <hr class="menu-sep" role="separator" />
             <button type="button" class="menu-item" role="menuitem" id="btnDeleteMessageBranch" title="Delete the selected message and all replies under it (owner/editor)">Delete message branch…</button>
@@ -1899,6 +1973,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           </div>
           <ul id="listsDrawerListItems"></ul>
         </div>
+      </div>
+    </div>
+  </div>
+  <div id="metadataDrawerBackdrop" class="search-drawer-backdrop" aria-hidden="true"></div>
+  <div
+    id="metadataDrawer"
+    class="search-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="metadataDrawerTitle"
+    aria-hidden="true"
+  >
+    <div class="search-drawer-header">
+      <span id="metadataDrawerTitle">Message metadata</span>
+      <button type="button" id="metadataDrawerClose" class="btn-secondary">Close</button>
+    </div>
+    <div class="search-drawer-body metadata-drawer-body">
+      <div id="metadataDrawerContent"></div>
+      <div class="metadata-drawer-footer">
+        <button type="button" id="metadataDrawerCopyJson" class="btn-secondary">Copy as JSON</button>
       </div>
     </div>
   </div>
@@ -2124,6 +2218,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     </button>
     <button type="button" class="composer-ctx-row" data-msg-action="copy" role="menuitem">
       <span class="composer-ctx-label">Copy</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="metadata" role="menuitem">
+      <span class="composer-ctx-label">View metadata…</span>
     </button>
     <button type="button" class="composer-ctx-row" data-msg-action="addNote" role="menuitem">
       <span class="composer-ctx-label">Add note…</span>
@@ -2972,6 +3069,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     ${treeEventTimeLabelWebviewScriptBlock()}
+    ${messageMetadataWebviewScriptBlock()}
 
     function eventDisplayTitle(ev) {
       var j = ev.content_json;
@@ -3398,12 +3496,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const starredTodoDrawerBtn = document.getElementById("btnStarredTodoDrawer");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
       const resendBtn = document.getElementById("btnResend");
+      const viewMetadataBtn = document.getElementById("btnViewMetadata");
       const deleteBranchBtn = document.getElementById("btnDeleteMessageBranch");
       if (
         !copyBtn ||
         !editUserBtn ||
         !toggleStarBtn ||
         !resendBtn ||
+        !viewMetadataBtn ||
         !refSideChatBtn ||
         !refNoteSideChatBtn ||
         !addNoteBtn ||
@@ -3443,6 +3543,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         refSideChatBtn.disabled = true;
         refNoteSideChatBtn.disabled = true;
         resendBtn.disabled = true;
+        viewMetadataBtn.disabled = true;
+        viewMetadataBtn.title = "Select a message in the tree first.";
         if (copyThreadBtn) copyThreadBtn.disabled = true;
         if (deleteBranchBtn) {
           deleteBranchBtn.disabled = true;
@@ -3509,6 +3611,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         : canResend
         ? "New assistant reply for this user message (same user row; transcript per docs)."
         : "Pick a user message with text (not the empty root placeholder).";
+      var canMetadata =
+        typeof window.colcoorHasDisplayableMetadata === "function" &&
+        window.colcoorHasDisplayableMetadata(last);
+      viewMetadataBtn.disabled = !canMetadata;
+      viewMetadataBtn.title = canMetadata
+        ? "Usage, tokens, and Colcoor graph fields for the selected message."
+        : "No metadata to show for this selection.";
       const jumpBtn = document.getElementById("btnJumpTip");
       if (jumpBtn) jumpBtn.disabled = false;
       if (deleteBranchBtn) {
@@ -5461,6 +5570,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var title = isUser || isAsst;
       var viewer = state.sideChatViewerRole;
       var addNote = viewer !== "viewer";
+      var metadata =
+        typeof window.colcoorHasDisplayableMetadata === "function" &&
+        window.colcoorHasDisplayableMetadata(ev);
       return {
         continueFromHere: true,
         copy: text.length > 0 || hasMedia,
@@ -5469,6 +5581,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         title: title,
         resend: resend,
         addNote: addNote,
+        metadata: metadata,
         starLabel: ev.starred === true ? "Unstar" : "Star",
       };
     }
@@ -5546,6 +5659,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
                       ? opts.title
                       : act === "resend"
                         ? opts.resend
+                        : act === "metadata"
+                          ? opts.metadata
                         : act === "addNote"
                           ? opts.addNote
                           : false;
@@ -5568,7 +5683,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           !opts.star &&
           !opts.title &&
           !opts.resend &&
-          !opts.addNote
+          !opts.addNote &&
+          !opts.metadata
         ) {
           return;
         }
@@ -5594,6 +5710,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (act === "resend") {
           selectTreeNodeInWebview(eid);
         }
+        if (act === "metadata") {
+          if (typeof window.colcoorOpenMessageMetadataDrawer === "function") {
+            window.colcoorOpenMessageMetadataDrawer(eid);
+          }
+          return;
+        }
         vscode.postMessage({ type: "messageContextAction", eventId: eid, action: act });
       });
       document.addEventListener(
@@ -5609,6 +5731,89 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         "keydown",
         function (ev) {
           if (!menu.hidden && ev.key === "Escape") closeMessageCtxMenu();
+        },
+        true,
+      );
+    })();
+
+    (function wireMetadataDrawer() {
+      var backdrop = document.getElementById("metadataDrawerBackdrop");
+      var drawer = document.getElementById("metadataDrawer");
+      var closeBtn = document.getElementById("metadataDrawerClose");
+      var contentEl = document.getElementById("metadataDrawerContent");
+      var copyBtn = document.getElementById("metadataDrawerCopyJson");
+      var menuBtn = document.getElementById("btnViewMetadata");
+      if (!backdrop || !drawer || !closeBtn || !contentEl || !copyBtn) return;
+      var metadataOpen = false;
+      var metadataCopyJson = null;
+      function findEvent(eventId) {
+        var id = eventId != null ? String(eventId).trim() : "";
+        if (!id) return null;
+        var evs = Array.isArray(state.events) ? state.events : [];
+        for (var i = 0; i < evs.length; i++) {
+          if (evs[i] && String(evs[i].id || "") === id) return evs[i];
+        }
+        return null;
+      }
+      function closeMetadata() {
+        metadataOpen = false;
+        metadataCopyJson = null;
+        backdrop.classList.remove("open");
+        drawer.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+        drawer.setAttribute("aria-hidden", "true");
+        contentEl.replaceChildren();
+      }
+      function openMetadata(eventId) {
+        var ev = findEvent(eventId);
+        if (
+          !ev ||
+          typeof window.colcoorReadMessageMetadata !== "function" ||
+          typeof window.colcoorFormatMessageMetadataHtml !== "function"
+        ) {
+          return;
+        }
+        var vm = window.colcoorReadMessageMetadata(ev);
+        if (!vm) return;
+        try {
+          document.dispatchEvent(new Event("colcoor-close-search-drawer"));
+        } catch (eS) {}
+        try {
+          document.dispatchEvent(new Event("colcoor-close-lists-drawer"));
+        } catch (eL) {}
+        metadataOpen = true;
+        metadataCopyJson = vm.advancedJson;
+        contentEl.innerHTML = window.colcoorFormatMessageMetadataHtml(vm);
+        backdrop.classList.add("open");
+        drawer.classList.add("open");
+        backdrop.setAttribute("aria-hidden", "false");
+        drawer.setAttribute("aria-hidden", "false");
+        closeAllMenus();
+      }
+      window.colcoorOpenMessageMetadataDrawer = openMetadata;
+      backdrop.addEventListener("click", closeMetadata);
+      closeBtn.addEventListener("click", closeMetadata);
+      copyBtn.addEventListener("click", function () {
+        if (!metadataCopyJson) return;
+        var text = JSON.stringify(metadataCopyJson, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function () {});
+        }
+      });
+      if (menuBtn) {
+        menuBtn.addEventListener("click", function () {
+          closeAllMenus();
+          openMetadata(state.selectedEventId);
+        });
+      }
+      document.addEventListener(
+        "keydown",
+        function (ev) {
+          if (!metadataOpen) return;
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            closeMetadata();
+          }
         },
         true,
       );
@@ -6385,6 +6590,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (m && m.type === "focusComposer") {
         var composerTa = document.getElementById("input");
         if (composerTa) composerTa.focus();
+        return;
+      }
+      if (m && m.type === "openMessageMetadata") {
+        var metaEid =
+          typeof m.eventId === "string" && m.eventId.trim()
+            ? m.eventId.trim()
+            : state.selectedEventId;
+        if (typeof window.colcoorOpenMessageMetadataDrawer === "function") {
+          window.colcoorOpenMessageMetadataDrawer(metaEid);
+        }
         return;
       }
       if (m && m.type === "focusSideChatSeq") {

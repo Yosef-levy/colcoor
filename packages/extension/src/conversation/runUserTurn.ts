@@ -1,3 +1,4 @@
+import { resolvePromptCacheTtl } from "../agent/providers/anthropicConfig";
 import type { AgentRunner, AssistantStubKind } from "../agent/agentRunner";
 import type { CursorCliMode } from "../agent/cursorCliMode";
 import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
@@ -200,7 +201,11 @@ export async function runColcoorUserTurn(
       llmRequest,
       agentSession,
     });
-    return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult, contextSavings);
+    return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult, contextSavings, {
+      cliMode: options?.cliMode,
+      agentSession,
+      promptCacheTtl: resolvePromptCacheTtl(),
+    });
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       return { userEventId: userRes.id, contextSavings, cancelled: true };

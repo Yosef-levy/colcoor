@@ -3,6 +3,12 @@ import * as vscode from "vscode";
 import { normalizePersistedUserInputText } from "../../conversation/normalizeUserInputText";
 import { enqueueToolCallApproval } from "../cursorToolCallApprovalQueue";
 import { SECRET_ANTHROPIC_API_KEY } from "../providerApiKey";
+import {
+  agentSessionToContinuation,
+  normalizeProviderMode,
+  providerUsageFromSdkResult,
+  type SdkResultUsageCapture,
+} from "../../conversation/messageProviderUsage";
 import { resolveAgentModel } from "./anthropicConfig";
 import type { AgentBackend, AgentBackendRunInput, AgentRunResult, AgentSessionPlan } from "./types";
 
@@ -15,7 +21,7 @@ type ClaudeAgentSdk = {
   ) => Promise<{ sessionId: string }>;
 };
 
-type SdkMessage = {
+type SdkMessage = SdkResultUsageCapture & {
   type?: string;
   subtype?: string;
   uuid?: string;
@@ -133,6 +139,7 @@ export class ClaudeAgentProvider implements AgentBackend {
       let text = "";
       let sessionId: string | undefined = resumeSessionId;
       let lastMessageId: string | undefined;
+      let sdkResult: SdkResultUsageCapture | undefined;
       for await (const message of iterator) {
         if (typeof message.session_id === "string" && message.session_id.trim()) {
           sessionId = message.session_id.trim();
@@ -150,13 +157,26 @@ export class ClaudeAgentProvider implements AgentBackend {
             text += delta;
             input.onTextDelta?.(text);
           }
-        } else if (message.type === "result" && typeof message.result === "string") {
-          if (message.result.trim() && !text.trim()) {
+        } else if (message.type === "result") {
+          sdkResult = message;
+          if (typeof message.result === "string" && message.result.trim() && !text.trim()) {
             text = message.result;
             input.onTextDelta?.(text);
           }
         }
       }
+
+      const usageOpts = {
+        mode: normalizeProviderMode(input.cliMode),
+        model,
+        continuation: agentSessionToContinuation(plan),
+      };
+      const providerUsage = sdkResult
+        ? providerUsageFromSdkResult(sdkResult, {
+            ...usageOpts,
+            cancelled: input.signal?.aborted === true,
+          })
+        : undefined;
 
       if (input.signal?.aborted) {
         return {
@@ -165,6 +185,7 @@ export class ClaudeAgentProvider implements AgentBackend {
           cancelled: true,
           providerSessionId: sessionId,
           providerMessageId: lastMessageId,
+          providerUsage,
         };
       }
       const resolved = normalizePersistedUserInputText(text);
@@ -177,6 +198,7 @@ export class ClaudeAgentProvider implements AgentBackend {
         cliModelId: model,
         providerSessionId: sessionId,
         providerMessageId: lastMessageId,
+        providerUsage,
       };
     } catch (e) {
       if (isAbortError(e) || input.signal?.aborted) {

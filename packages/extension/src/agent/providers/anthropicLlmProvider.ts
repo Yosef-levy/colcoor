@@ -8,6 +8,10 @@ import {
   resolvePromptCacheTtl,
   type PromptCacheTtl,
 } from "./anthropicConfig";
+import {
+  normalizeProviderMode,
+  providerUsageFromAnthropicMessage,
+} from "../../conversation/messageProviderUsage";
 import type { AgentBackend, AgentBackendRunInput, AgentRunResult, LlmMessage } from "./types";
 
 const DEFAULT_MAX_TOKENS = 8192;
@@ -77,6 +81,7 @@ export class AnthropicLlmProvider implements AgentBackend {
       },
     ];
 
+    const startedAt = Date.now();
     try {
       const stream = client.messages.stream(
         {
@@ -102,7 +107,17 @@ export class AnthropicLlmProvider implements AgentBackend {
       if (!resolved) {
         throw new Error("Anthropic returned an empty response.");
       }
-      return { text: resolved, stub: "none", cliModelId: finalMessage.model || model };
+      const providerUsage = providerUsageFromAnthropicMessage(finalMessage, {
+        mode: normalizeProviderMode(input.cliMode),
+        promptCacheTtl: ttl,
+        durationMs: Date.now() - startedAt,
+      });
+      return {
+        text: resolved,
+        stub: "none",
+        cliModelId: finalMessage.model || model,
+        providerUsage,
+      };
     } catch (e) {
       if (isAbortError(e) || input.signal?.aborted) {
         return { text: normalizePersistedUserInputText(""), stub: "explicit", cancelled: true };

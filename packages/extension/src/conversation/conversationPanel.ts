@@ -48,6 +48,7 @@ import { buildUserImageDataUrlsByEventId } from "./conversationImageDataUrls";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { shouldAutoSelectPersistedUserMessage } from "./persistedUserSelection";
 import { enrichGraphEventsWithComposerDisplay } from "./enrichGraphEventsWithComposerDisplay";
+import { hasDisplayableMetadata } from "./messageMetadataCore";
 import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { pendingUserHtmlForPanelState } from "./pendingUserHtmlForPanelState";
@@ -480,6 +481,8 @@ export function createConversationPanelController(
   jumpToLatestInConversation: () => Promise<void>;
   /** Copy selected tree message body to the system clipboard ([ui-features.md] §7). */
   copySelectedMessage: () => Promise<void>;
+  /** Open metadata drawer for the selected message (usage + graph fields). */
+  viewMessageMetadata: () => Promise<void>;
   /** Reload tree + thread from the API (same as webview “Refresh conversation tree”). */
   refreshConversationTree: (opts?: { quiet?: boolean }) => Promise<void>;
   /** Soft-delete the selected node and its subtree (owner/editor). */
@@ -4348,6 +4351,34 @@ export function createConversationPanelController(
       }
       await vscode.env.clipboard.writeText(text);
       void vscode.window.setStatusBarMessage("Colcoor: message copied to clipboard.", 2500);
+    },
+    async viewMessageMetadata(): Promise<void> {
+      const gate = evaluateContinueFromHere(
+        conversationId,
+        selectedEventId,
+        lastTreeEvents.map((e) => e.id),
+      );
+      if (gate === "no_context") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open a conversation and select a message in the tree.",
+        );
+        return;
+      }
+      if (gate === "not_in_tree") {
+        void vscode.window.showWarningMessage(
+          `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+        );
+        return;
+      }
+      if (!selectedEventId || !panel) {
+        return;
+      }
+      const ev = lastTreeEvents.find((e) => e.id === selectedEventId);
+      if (!ev || !hasDisplayableMetadata(ev)) {
+        void vscode.window.showInformationMessage("Colcoor: no metadata to show for the selected message.");
+        return;
+      }
+      await panel.webview.postMessage({ type: "openMessageMetadata", eventId: selectedEventId });
     },
     async refreshConversationTree(opts?: { quiet?: boolean }): Promise<void> {
       if (!conversationId) {

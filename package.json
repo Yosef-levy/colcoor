@@ -2,6 +2,9 @@
   "name": "colcoor",
   "private": true,
   "license": "BUSL-1.1",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "workspaces": ["packages/extension"],
   "scripts": {
     "build": "npm run build -w colcoor-extension",

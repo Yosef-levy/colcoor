@@ -91,4 +91,34 @@ describe("appendAssistantFromAgentResult", () => {
       },
     });
   });
+
+  it("merges colcoor_provider_usage from run result and turn context", async () => {
+    const appendEvent = vi.fn().mockResolvedValue({ id: "asst-4" });
+    await appendAssistantFromAgentResult(
+      mockApi(appendEvent),
+      "conv",
+      "userEv",
+      {
+        text: "answer",
+        stub: "none",
+        providerUsage: {
+          version: 1,
+          provider: "anthropic",
+          backend: "claude_agent_sdk",
+          mode: "agent",
+          model: "claude-sonnet-4-5",
+          tokens: { input: 10, output: 20 },
+          captured_at: "2026-07-09T12:00:00.000Z",
+        },
+      },
+      undefined,
+      { cliMode: "plan", agentSession: { kind: "resume", sessionId: "sess-1" }, promptCacheTtl: "1h" },
+    );
+    expect(appendEvent.mock.calls[0][1].content_json?.colcoor_provider_usage).toMatchObject({
+      mode: "plan",
+      continuation: "resume",
+      prompt_cache_ttl: "1h",
+      tokens: { input: 10, output: 20 },
+    });
+  });
 });

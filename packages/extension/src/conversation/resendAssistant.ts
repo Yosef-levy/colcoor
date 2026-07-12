@@ -1,3 +1,4 @@
+import { resolvePromptCacheTtl } from "../agent/providers/anthropicConfig";
 import type { AgentRunner } from "../agent/agentRunner";
 import type { CursorCliMode } from "../agent/cursorCliMode";
 import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
@@ -142,6 +143,11 @@ export async function runResendAssistant(
       resolvedUserEventId,
       runResult,
       contextSavings,
+      {
+        cliMode: options?.cliMode,
+        agentSession,
+        promptCacheTtl: resolvePromptCacheTtl(),
+      },
     );
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {

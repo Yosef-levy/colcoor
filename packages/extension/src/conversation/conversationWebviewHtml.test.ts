@@ -207,6 +207,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("composerPrefill");
   });
 
+  it("includes message metadata drawer and menu wiring", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('id="btnViewMetadata"');
+    expect(html).toContain("View metadata…");
+    expect(html).toContain('id="metadataDrawer"');
+    expect(html).toContain('data-msg-action="metadata"');
+    expect(html).toContain("wireMetadataDrawer");
+    expect(html).toContain("colcoorOpenMessageMetadataDrawer");
+    expect(html).toContain('m.type === "openMessageMetadata"');
+  });
+
   it("tree and thread use in-webview message context menu", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="messageCtxMenu"');

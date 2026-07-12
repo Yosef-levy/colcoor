@@ -18,6 +18,7 @@ describe("messageContextMenuOptions", () => {
       title: true,
       resend: true,
       addNote: true,
+      metadata: true,
       starLabel: "Unstar",
     });
   });

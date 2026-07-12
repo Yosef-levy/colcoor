@@ -198,6 +198,11 @@
         "description": "Copy the selected tree message body to the clipboard (conversation panel must be open)."
       },
       {
+        "command": "colcoor.viewMessageMetadata",
+        "title": "Colcoor: View message metadata",
+        "description": "Show usage, tokens, and Colcoor graph fields for the selected message (conversation panel must be open)."
+      },
+      {
         "command": "colcoor.editUserMessage",
         "title": "Colcoor: Edit user message",
         "description": "Select parent and copy the user message into the composer, including image attachments (conversation panel must be open)."

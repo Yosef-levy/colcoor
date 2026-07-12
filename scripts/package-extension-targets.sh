@@ -44,8 +44,9 @@ native_pkg_for_target() {
   esac
 }
 
-# Copy a package from the (hoisted) root node_modules into the extension's node_modules so vsce
-# includes it in the VSIX even with --no-dependencies (see .vscodeignore negations).
+# Copy a package from the (hoisted) root node_modules into the extension's node_modules. vsce
+# --no-dependencies never scans node_modules (it is hardcoded in vsce's file collector), so we
+# inject the staged tree into each VSIX after packaging.
 stage_module() {
   local name="$1"
   local src="$ROOT/node_modules/@anthropic-ai/$name"
@@ -80,9 +81,15 @@ for target in "${TARGETS[@]}"; do
     fi
   fi
 
-  ( cd "$EXT_DIR" && npx --no-install vsce package --no-dependencies --target "$target" \
-      -o "$OUT/colcoor-extension-${EXT_VERSION}-${target}.vsix" )
-  echo "Done: $OUT/colcoor-extension-${EXT_VERSION}-${target}.vsix"
+  vsix="$OUT/colcoor-extension-${EXT_VERSION}-${target}.vsix"
+  ( cd "$EXT_DIR" && npx --no-install vsce package --no-dependencies --target "$target" -o "$vsix" )
+  if [[ -d "$EXT_DIR/node_modules/@anthropic-ai" ]]; then
+    python3 "$ROOT/scripts/lib/inject-vsix-tree.py" \
+      "$vsix" \
+      "$EXT_DIR/node_modules/@anthropic-ai" \
+      "extension/node_modules/@anthropic-ai"
+  fi
+  echo "Done: $vsix"
 done
 
 rm -rf "$EXT_DIR/node_modules/@anthropic-ai"
