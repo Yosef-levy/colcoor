@@ -6,6 +6,7 @@ import { SECRET_ANTHROPIC_API_KEY } from "../providerApiKey";
 import {
   resolveAskModel,
   resolvePromptCacheTtl,
+  resolveRunModel,
   type PromptCacheTtl,
 } from "./anthropicConfig";
 import {
@@ -69,7 +70,7 @@ export class AnthropicLlmProvider implements AgentBackend {
     }
 
     const cfg = vscode.workspace.getConfiguration("colcoor");
-    const model = resolveAskModel(cfg);
+    const model = resolveRunModel(input.cliModel, resolveAskModel(cfg));
     const ttl = resolvePromptCacheTtl(cfg);
 
     const client = new Anthropic({ apiKey });

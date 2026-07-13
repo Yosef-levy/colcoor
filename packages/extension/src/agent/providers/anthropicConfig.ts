@@ -19,6 +19,15 @@ export function resolveAgentModel(cfg = vscode.workspace.getConfiguration("colco
   return cfg.get<string>("agentModel")?.trim() || DEFAULT_AGENT_MODEL;
 }
 
+/** Per-conversation override from the composer, else the configured default. */
+export function resolveRunModel(
+  cliModelOverride: string | undefined,
+  defaultModel: string,
+): string {
+  const override = cliModelOverride?.trim();
+  return override || defaultModel;
+}
+
 export function resolvePromptCacheTtl(
   cfg = vscode.workspace.getConfiguration("colcoor"),
 ): PromptCacheTtl {

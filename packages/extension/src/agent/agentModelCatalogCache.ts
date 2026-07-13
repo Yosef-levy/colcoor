@@ -7,6 +7,8 @@ import {
   type CursorAgentModelEntry,
 } from "./cursorAgentModelCatalog";
 import { listCursorAgentModels } from "./cursorAgentModels";
+import { providerModelCatalogSnapshot } from "./providerModelCatalog";
+import { resolveProviderId } from "./providerApiKey";
 
 export type AgentModelCatalogSnapshot = {
   curated: CursorAgentModelEntry[];
@@ -26,13 +28,10 @@ export function getAgentModelCatalog(): AgentModelCatalogSnapshot {
   return snapshot;
 }
 
-/** Load models from `agent models` (same auth/env as headless runs). */
+/** Load Cursor CLI models or the active provider's catalog for the composer. */
 export async function refreshAgentModelCatalog(secrets: vscode.SecretStorage): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("colcoor");
-  if ((cfg.get<string>("provider")?.trim() ?? "anthropic") !== "cursor") {
-    snapshot = { curated: [], all: [], hint: null };
-    return;
-  }
+  const provider = resolveProviderId();
   const mode = cfg.get<string>("agentMode") ?? "auto";
   if (mode === "stub") {
     snapshot = {
@@ -40,6 +39,10 @@ export async function refreshAgentModelCatalog(secrets: vscode.SecretStorage): P
       all: [],
       hint: "Agent mode is stub — model list unavailable.",
     };
+    return;
+  }
+  if (provider !== "cursor") {
+    snapshot = providerModelCatalogSnapshot(provider);
     return;
   }
   const executable = (cfg.get<string>("agentExecutable") ?? "agent").trim() || "agent";
@@ -83,7 +86,10 @@ export function scheduleRefreshAgentModelCatalog(
       snapshot = {
         curated: [],
         all: [],
-        hint: "Could not list Cursor CLI models.",
+        hint:
+          resolveProviderId() === "cursor"
+            ? "Could not list Cursor CLI models."
+            : "Could not load provider models.",
       };
     })
     .finally(() => {
@@ -96,6 +102,10 @@ export function refreshAgentModelCatalogWhenSignedIn(
   secrets: vscode.SecretStorage,
   hasBackendJwt: boolean,
 ): void {
+  if (resolveProviderId() !== "cursor") {
+    scheduleRefreshAgentModelCatalog(secrets);
+    return;
+  }
   if (!hasBackendJwt) {
     snapshot = { curated: [], all: [], hint: null };
     return;

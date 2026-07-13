@@ -2115,7 +2115,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </div>
         <div class="row">
           <label class="hint" for="agentModel" style="margin:0">Model</label>
-          <select id="agentModel" class="agent-model-select" title="Cursor CLI model for this conversation">
+          <select id="agentModel" class="agent-model-select" title="Model for this conversation">
             <option value="auto">Auto</option>
           </select>
           <label class="hint" for="agentMode" style="margin:0">Mode</label>
@@ -2545,6 +2545,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       agentModelOptions: [],
       agentModelSelected: "auto",
       agentModelsListHint: null,
+      agentModelSource: "provider",
       agentModeSelected: "ask",
       pendingAssistantModelLabel: null,
       gettingStartedVisible: false,
@@ -5125,15 +5126,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         sel.value = "auto";
       }
       sel.disabled = false;
+      var isCursorModels = state.agentModelSource === "cursor";
       var hint =
         state.agentModelsListHint != null && String(state.agentModelsListHint).trim()
           ? String(state.agentModelsListHint).trim()
           : "";
       sel.title = hint
-        ? "Cursor CLI model for this conversation. " + hint
+        ? (isCursorModels ? "Cursor CLI model for this conversation. " : "Provider model for this conversation. ") +
+          hint
         : selected === "auto"
-          ? "Cursor CLI picks the model (same as auto in the CLI list)"
-          : "Use model " + selected + " for sends in this conversation";
+          ? isCursorModels
+            ? "Cursor CLI picks the model (same as auto in the CLI list)"
+            : "Use configured default from Settings (ask/agent model)"
+          : isCursorModels
+            ? "Use model " + selected + " for sends in this conversation"
+            : "Use Anthropic model " + selected + " for sends in this conversation";
     }
 
     function updateAgentModeSelect() {

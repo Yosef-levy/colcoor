@@ -6,6 +6,7 @@ import {
   scheduleRefreshAgentModelCatalog,
 } from "../agent/agentModelCatalogCache";
 import type { CursorAgentModelEntry } from "../agent/cursorAgentModelCatalog";
+import { resolveProviderId } from "../agent/providerApiKey";
 import type {
   ColcoorClient,
   ConversationListItemOut,
@@ -272,12 +273,14 @@ type WebviewStateMessage = {
   pendingSideChatGraphReferenceSummary: string | null;
   /** One-shot composer fill after “Edit message” (consumed on next state post). */
   composerPrefill?: ComposerPrefillPayload | null;
-  /** Curated Cursor CLI models for the composer dropdown (`id` + display `label`). */
+  /** Curated models for the composer dropdown (`id` + display `label`). */
   agentModelOptions: CursorAgentModelEntry[];
   /** `auto` or a model id from {@link agentModelOptions} / full picker. */
   agentModelSelected: string;
-  /** Shown as the model dropdown title when the CLI list is empty or failed. */
+  /** Shown as the model dropdown title when the model list is empty or failed. */
   agentModelsListHint: string | null;
+  /** Whether the dropdown lists Cursor CLI models or direct provider models. */
+  agentModelSource: "cursor" | "provider";
   /** Cursor CLI mode for sends in this conversation. */
   agentModeSelected: CursorCliMode;
   /** Short label for the in-flight assistant reply (tree/thread headers while busy). */
@@ -1675,6 +1678,7 @@ export function createConversationPanelController(
     agentModelOptions: CursorAgentModelEntry[];
     agentModelSelected: string;
     agentModelsListHint: string | null;
+    agentModelSource: "cursor" | "provider";
     agentModeSelected: CursorCliMode;
   } {
     const map = readAgentModelByConversationMap(context.workspaceState);
@@ -1695,16 +1699,20 @@ export function createConversationPanelController(
       agentModelOptions: options,
       agentModelSelected: selected,
       agentModelsListHint: catalog.hint,
+      agentModelSource: resolveProviderId() === "cursor" ? "cursor" : "provider",
       agentModeSelected: modeSelected,
     };
   }
 
   async function showFullAgentModelPicker(): Promise<void> {
     const catalog = getAgentModelCatalog();
+    const isCursorProvider = resolveProviderId() === "cursor";
     if (catalog.all.length === 0) {
       scheduleRefreshAgentModelCatalog(context.secrets);
       void vscode.window.showInformationMessage(
-        "Colcoor: loading Cursor CLI models… Try again in a moment, or check API key / `agent` on PATH.",
+        isCursorProvider
+          ? "Colcoor: loading Cursor CLI models… Try again in a moment, or check API key / `agent` on PATH."
+          : "Colcoor: provider models are unavailable. Check agent mode and provider settings.",
       );
       return;
     }
@@ -1719,7 +1727,9 @@ export function createConversationPanelController(
     const items: PickItem[] = [
       {
         label: "Auto",
-        description: "Cursor picks the model",
+        description: isCursorProvider
+          ? "Cursor picks the model"
+          : "Use configured default (Settings → ask/agent model)",
         modelId: AGENT_MODEL_AUTO,
         picked: current === AGENT_MODEL_AUTO,
       },
@@ -1731,8 +1741,8 @@ export function createConversationPanelController(
       })),
     ];
     const pick = await vscode.window.showQuickPick(items, {
-      title: "Colcoor — Cursor CLI model",
-      placeHolder: "Full list from `agent models`",
+      title: isCursorProvider ? "Colcoor — Cursor CLI model" : "Colcoor — Anthropic model",
+      placeHolder: isCursorProvider ? "Full list from `agent models`" : "Available Anthropic models",
       matchOnDescription: true,
     });
     if (!pick) {
@@ -2868,6 +2878,14 @@ export function createConversationPanelController(
   const subscription = vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration("colcoor.conversationAgentTraceOpen") && panel && webviewReady && conversationId) {
       postState(lastTreeEvents, false, null);
+    } else if (
+      e.affectsConfiguration("colcoor.provider") ||
+      e.affectsConfiguration("colcoor.agentMode")
+    ) {
+      scheduleRefreshCachedAgentModels();
+      if (panel && webviewReady && conversationId) {
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+      }
     } else if (e.affectsConfiguration("colcoor") && panel) {
       void vscode.window.showInformationMessage(
         "Colcoor settings changed — close and reopen the conversation panel if the backend URL or agent mode should apply.",

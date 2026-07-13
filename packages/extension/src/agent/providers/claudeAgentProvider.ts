@@ -9,7 +9,7 @@ import {
   providerUsageFromSdkResult,
   type SdkResultUsageCapture,
 } from "../../conversation/messageProviderUsage";
-import { resolveAgentModel } from "./anthropicConfig";
+import { resolveAgentModel, resolveRunModel } from "./anthropicConfig";
 import type { AgentBackend, AgentBackendRunInput, AgentRunResult, AgentSessionPlan } from "./types";
 
 /** Minimal surface of `@anthropic-ai/claude-agent-sdk` that Colcoor depends on. */
@@ -94,7 +94,7 @@ export class ClaudeAgentProvider implements AgentBackend {
 
     const sdk = await loadSdk();
     const cfg = vscode.workspace.getConfiguration("colcoor");
-    const model = resolveAgentModel(cfg);
+    const model = resolveRunModel(input.cliModel, resolveAgentModel(cfg));
     const cwd = input.workspaceRoot.trim() || process.cwd();
     const plan = input.agentSession ?? { kind: "fresh" };
 
