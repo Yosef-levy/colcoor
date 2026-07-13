@@ -163,7 +163,14 @@ export function graphPathToTranscriptTurns(
       if (i === 0 && !text.trim() && attached.length === 0 && !hasUserMediaImages(ev.content_json ?? undefined)) {
         continue;
       }
-      turns.push({ role: "user", content: combinedUser, notes: attached });
+      turns.push({
+        role: "user",
+        content: combinedUser,
+        notes: attached,
+        ...(hasUserMediaImages(ev.content_json ?? undefined)
+          ? { userMediaContentJson: ev.content_json ?? undefined }
+          : {}),
+      });
     } else if (ev.kind === "assistant_output") {
       turns.push({ role: "assistant", content: text, notes: attached });
     }

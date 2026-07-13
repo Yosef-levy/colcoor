@@ -24,10 +24,21 @@ export type AgentRunResult = {
   providerUsage?: ColcoorProviderUsage;
 };
 
+/** Base64 image part for Messages API vision (ask path). */
+export type LlmImagePart = {
+  mimeType: string;
+  dataBase64: string;
+};
+
 /** One role-tagged turn for the stateless chat (ask) path. */
 export type LlmMessage = {
   role: "user" | "assistant";
   content: string;
+  /**
+   * Hydrated image bytes for Anthropic vision blocks. Present only on user turns after
+   * `hydrateLlmRequestImages`; ignored by plan/agent/CLI backends.
+   */
+  images?: LlmImagePart[];
 };
 
 /** Structured request for a stateless LLM completion (ask mode). */

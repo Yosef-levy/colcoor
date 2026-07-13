@@ -6,6 +6,7 @@ import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
 import { buildLlmRequest } from "./llmRequest";
+import { hydrateLlmRequestImages } from "./hydrateLlmRequestImages";
 import { resolveAgentSessionPlan } from "./agentSessionMapping";
 import { appendAssistantFromAgentResult } from "./appendAssistantFromAgentResult";
 import {
@@ -152,10 +153,14 @@ export async function runColcoorUserTurn(
     finalUserMessage: trimmed || null,
     finalUserMediaContentJson: mediaJson,
   });
-  const llmRequest = buildLlmRequest({
+  const llmRequestBase = buildLlmRequest({
     conversationTitle,
     pathFromRoot: pathTurns,
     finalUserMessage: trimmed || null,
+    finalUserMediaContentJson: mediaJson,
+  });
+  const llmRequest = await hydrateLlmRequestImages(api, conversationId, llmRequestBase, {
+    pathFromRoot: pathTurns,
     finalUserMediaContentJson: mediaJson,
   });
   const agentSession = resolveAgentSessionPlan(events, attach);

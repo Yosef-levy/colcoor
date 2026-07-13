@@ -199,6 +199,9 @@ export function providerUsageFromAnthropicMessage(
     promptCacheTtl?: PromptCacheTtl;
     cancelled?: boolean;
     durationMs?: number;
+    /** When set, overrides `message.usage` (e.g. summed multi-round ask tool loops). */
+    tokens?: ColcoorProviderUsageTokens;
+    numTurns?: number;
   },
 ): ColcoorProviderUsage {
   return {
@@ -212,9 +215,38 @@ export function providerUsageFromAnthropicMessage(
     cancelled: opts.cancelled === true ? true : undefined,
     prompt_cache_ttl: opts.promptCacheTtl,
     duration_ms: opts.durationMs,
-    tokens: mapAnthropicUsage(message.usage),
+    ...(opts.numTurns != null ? { num_turns: opts.numTurns } : {}),
+    tokens: opts.tokens ?? mapAnthropicUsage(message.usage),
     captured_at: new Date().toISOString(),
   };
+}
+
+/** Sum token counters across Messages API rounds (tool / pause_turn loops). */
+export function sumAnthropicUsageTokens(
+  usages: readonly Anthropic.Usage[],
+): ColcoorProviderUsageTokens {
+  const out: ColcoorProviderUsageTokens = { input: 0, output: 0 };
+  for (const usage of usages) {
+    const m = mapAnthropicUsage(usage);
+    out.input += m.input;
+    out.output += m.output;
+    if (m.cache_read != null) {
+      out.cache_read = (out.cache_read ?? 0) + m.cache_read;
+    }
+    if (m.cache_creation != null) {
+      out.cache_creation = (out.cache_creation ?? 0) + m.cache_creation;
+    }
+    if (m.cache_creation_5m != null) {
+      out.cache_creation_5m = (out.cache_creation_5m ?? 0) + m.cache_creation_5m;
+    }
+    if (m.cache_creation_1h != null) {
+      out.cache_creation_1h = (out.cache_creation_1h ?? 0) + m.cache_creation_1h;
+    }
+    if (m.thinking != null) {
+      out.thinking = (out.thinking ?? 0) + m.thinking;
+    }
+  }
+  return out;
 }
 
 export function providerUsageFromSdkResult(

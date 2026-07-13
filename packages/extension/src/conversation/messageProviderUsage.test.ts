@@ -5,6 +5,7 @@ import {
   providerUsageFromAnthropicMessage,
   providerUsageFromSdkResult,
   readColcoorProviderUsage,
+  sumAnthropicUsageTokens,
 } from "./messageProviderUsage";
 
 describe("messageProviderUsage", () => {
@@ -44,6 +45,41 @@ describe("messageProviderUsage", () => {
       thinking: 50,
     });
     expect(readColcoorProviderUsage({ colcoor_provider_usage: usage })).toEqual(usage);
+  });
+
+  it("sums Anthropic usage across tool-loop rounds", () => {
+    const summed = sumAnthropicUsageTokens([
+      {
+        input_tokens: 10,
+        output_tokens: 2,
+        cache_read_input_tokens: 100,
+        cache_creation_input_tokens: 0,
+        cache_creation: null,
+        output_tokens_details: null,
+        inference_geo: null,
+        server_tool_use: null,
+        service_tier: "standard",
+      },
+      {
+        input_tokens: 20,
+        output_tokens: 5,
+        cache_read_input_tokens: 50,
+        cache_creation_input_tokens: 3,
+        cache_creation: { ephemeral_5m_input_tokens: 3, ephemeral_1h_input_tokens: 0 },
+        output_tokens_details: { thinking_tokens: 1 },
+        inference_geo: null,
+        server_tool_use: null,
+        service_tier: "standard",
+      },
+    ]);
+    expect(summed).toMatchObject({
+      input: 30,
+      output: 7,
+      cache_read: 150,
+      cache_creation: 3,
+      cache_creation_5m: 3,
+      thinking: 1,
+    });
   });
 
   it("maps Claude Agent SDK result usage", () => {

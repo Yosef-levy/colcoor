@@ -33,6 +33,11 @@ export type TranscriptPathTurn = {
   role: "user" | "assistant";
   content: string;
   notes: TranscriptNoteInput[];
+  /**
+   * Durable `colcoor_user_media` envelope from the graph event (user turns only).
+   * Used to hydrate Messages API image blocks; not part of the text transcript body.
+   */
+  userMediaContentJson?: Record<string, unknown> | null;
 };
 
 export type BuildAuthoritativeTranscriptParams = {

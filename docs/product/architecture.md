@@ -78,8 +78,9 @@ This **documentation set** defines the Colcoor extension product **on its own**.
 
 ## 6. Main-thread boundary
 
-- No server-side main-thread streaming completion API; use **`append-event`** + Cursor agent ([data-flow-and-api.md](data-flow-and-api.md)).
-- **Server-side web search and code execution** as Colcoor-driven main-thread tools are **out of scope** for this product.
+- No server-side main-thread streaming completion API; use **`append-event`** plus the configured provider ([data-flow-and-api.md](data-flow-and-api.md)).
+- **Colcoor-hosted** web search and code execution as main-thread tools remain **out of scope**.
+- Ask mode (Anthropic Messages API) may enable **Anthropic-hosted** server tools (`web_search`, `web_fetch`) and a workspace-scoped client `read_file` tool; Colcoor does not run its own search or code-execution backend.
 
 ## 7. Side chat
 
