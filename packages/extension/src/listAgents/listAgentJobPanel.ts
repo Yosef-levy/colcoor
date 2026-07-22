@@ -148,12 +148,15 @@ export function createListAgentJobPanelController(
     pendingSnapshotJobId = jobId;
     const root = workspaceRoot();
     const { manifest, state, runLog, jobPath } = await loadJobSnapshot(root, jobId);
-    let rows: VerifiedProposalRow[] | undefined;
-    try {
-      const raw = await fs.readFile(path.join(jobPath, "out", "verification.json"), "utf8");
-      rows = (JSON.parse(raw) as { rows: VerifiedProposalRow[] }).rows;
-    } catch {
-      rows = undefined;
+    let rows: VerifiedProposalRow[] = [];
+    if (manifest.kind === "list-builder") {
+      try {
+        const raw = await fs.readFile(path.join(jobPath, "out", "verification.json"), "utf8");
+        const parsed = JSON.parse(raw) as { rows?: VerifiedProposalRow[] };
+        rows = Array.isArray(parsed.rows) ? parsed.rows : [];
+      } catch {
+        rows = [];
+      }
     }
     let progressTail = "";
     try {
@@ -187,6 +190,19 @@ export function createListAgentJobPanelController(
     pendingSnapshotJobId = jobId;
     ensurePanel();
     panel!.title = `Colcoor job ${jobId.slice(0, 8)}`;
+    // Clear stale UI immediately before disk load (prior builder proposals / logs).
+    await panel!.webview.postMessage({
+      type: "jobSnapshot",
+      jobId,
+      kind: "",
+      conversationId: "",
+      status: "loading",
+      phase: "loading",
+      error: null,
+      scan: { covered: 0, total: 0, complete: false },
+      runLog: "",
+      rows: [],
+    });
     await postSnapshot(jobId);
   }
 

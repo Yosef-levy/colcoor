@@ -33,11 +33,15 @@ export function getListAgentJobPanelHtml(cspSource: string, nonce: string): stri
   <div class="row err" id="error" hidden></div>
   <h2 style="font-size:1rem">Progress</h2>
   <div class="log" id="log"></div>
-  <h2 style="font-size:1rem">Semantic review</h2>
+  <h2 style="font-size:1rem" id="reviewHeading">Semantic review</h2>
+  <div id="reviewSection">
   <p class="hint" id="reviewHint">Waiting for verified proposals…</p>
   <ul class="proposals" id="proposals"></ul>
-  <div class="actions">
+  <div class="actions" id="reviewActions">
     <button type="button" id="btnCommit" disabled>Commit accepted</button>
+  </div>
+  </div>
+  <div class="actions">
     <button type="button" class="secondary" id="btnCancel">Cancel run</button>
     <button type="button" class="secondary" id="btnRefresh">Reload from disk</button>
   </div>
@@ -113,14 +117,29 @@ export function getListAgentJobPanelHtml(cspSource: string, nonce: string): stri
         errEl.hidden = true;
         errEl.textContent = "";
       }
-      if (typeof m.runLog === "string" && m.runLog.length) {
-        logEl.textContent = m.runLog;
-        logEl.scrollTop = logEl.scrollHeight;
-      }
-      if (Array.isArray(m.rows)) {
-        renderReview(m.rows);
-      } else if (m.status === "ready_for_review" || m.status === "needs_user_decision") {
-        reviewHint.textContent = "Job is " + m.status + " but verification rows were not found. Try Reload from disk.";
+      // Always replace progress log (including empty) so a prior job cannot linger.
+      logEl.textContent = typeof m.runLog === "string" ? m.runLog : "";
+      logEl.scrollTop = logEl.scrollHeight;
+
+      var isBuilder = m.kind === "list-builder";
+      var reviewHeading = document.getElementById("reviewHeading");
+      var reviewSection = document.getElementById("reviewSection");
+      if (reviewHeading) reviewHeading.hidden = !isBuilder;
+      if (reviewSection) reviewSection.hidden = !isBuilder;
+
+      // Always reset review rows for this snapshot (operator / missing file → []).
+      var rows = Array.isArray(m.rows) ? m.rows : [];
+      if (isBuilder) {
+        renderReview(rows);
+        if (
+          rows.length === 0 &&
+          (m.status === "ready_for_review" || m.status === "needs_user_decision")
+        ) {
+          reviewHint.textContent =
+            "Job is " + m.status + " but verification rows were not found. Try Reload from disk.";
+        }
+      } else {
+        renderReview([]);
       }
     }
 
