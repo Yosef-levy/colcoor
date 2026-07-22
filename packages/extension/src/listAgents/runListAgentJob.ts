@@ -162,8 +162,11 @@ async function runAgentText(
   readonlyBuilder: boolean,
 ): Promise<string> {
   let lastDelta = "";
+  // Fresh Claude Agent sessions use only `transcriptText` (not `userMessage`).
+  // Main-thread turns already embed the user turn in the transcript; list jobs must combine.
+  const combinedPrompt = `${transcriptText.trim()}\n\n---\n\n${userMessage.trim()}\n`;
   const result = await opts.agent.run({
-    transcriptText,
+    transcriptText: combinedPrompt,
     userMessage,
     workspaceRoot: opts.workspaceRoot,
     signal: opts.signal,
