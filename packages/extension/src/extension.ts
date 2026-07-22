@@ -10,6 +10,7 @@ import { registerNavigationCommands } from "./commands/registerNavigationCommand
 import { registerSendMessageCommands } from "./commands/registerSendMessageCommands";
 import { registerSettingsCommands } from "./commands/registerSettingsCommands";
 import { registerSetupCommands } from "./commands/registerSetupCommands";
+import { registerListAgentCommands } from "./commands/registerListAgentCommands";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const { deps, completeActivation } = await bootstrapColcoor(context);
@@ -24,6 +25,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ...registerNavigationCommands(deps),
     ...registerDrawersCommands(deps),
     ...registerSendMessageCommands(deps),
+    ...registerListAgentCommands(deps),
   );
 
   scheduleCursorCliPresenceCheck(context);

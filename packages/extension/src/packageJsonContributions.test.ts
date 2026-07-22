@@ -76,6 +76,9 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.copySelectedMessage");
     expect(cmds).toContain("colcoor.refreshConversationTree");
     expect(cmds).toContain("colcoor.refreshConversationDrawers");
+    expect(cmds).toContain("colcoor.buildListFromConversation");
+    expect(cmds).toContain("colcoor.runAgentOnLists");
+    expect(cmds).toContain("colcoor.openListAgentJobs");
   });
 
   it("matches showColcoorApiFailure toast action labels to command titles ([ui-features.md] §12)", () => {

@@ -421,6 +421,9 @@ const WEBVIEW_ACCOUNT_COMMAND_ALLOWLIST = new Set<string>([
   "colcoor.setupCursorCli",
   "colcoor.setCursorAgentApiKey",
   "colcoor.signOut",
+  "colcoor.buildListFromConversation",
+  "colcoor.runAgentOnLists",
+  "colcoor.openListAgentJobs",
 ]);
 
 function randomNonce(): string {

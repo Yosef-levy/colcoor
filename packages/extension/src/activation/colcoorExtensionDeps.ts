@@ -33,4 +33,5 @@ export type ColcoorExtensionDeps = {
   pickConversationInteractively: () => Promise<PickedConversation | undefined>;
   refreshConversationsWelcomeContext: () => Promise<void>;
   drawers: DrawersPanelController;
+  listAgentJobs: import("../listAgents/listAgentJobPanel").ListAgentJobPanelController;
 };

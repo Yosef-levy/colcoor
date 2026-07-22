@@ -1939,6 +1939,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               <button type="button" id="listsDrawerCreateList" class="btn-secondary">New List…</button>
               <button type="button" id="listsDrawerRenameList" class="btn-secondary">Rename…</button>
               <button type="button" id="listsDrawerDeleteList" class="btn-secondary">Delete…</button>
+              <button type="button" id="listsDrawerBuildFromConversation" class="btn-secondary" title="Build a list from conversation criteria via agent">Build from conversation…</button>
+              <button type="button" id="listsDrawerRunAgentOnLists" class="btn-secondary" title="Run operator agent on selected lists">Run agent on lists…</button>
+              <button type="button" id="listsDrawerOpenJobs" class="btn-secondary" title="Open list agent jobs">Jobs…</button>
             </div>
             <div class="lists-drawer-listbar" id="listsDrawerListBar"></div>
             <div id="listsDrawerListMeta" class="lists-drawer-meta" hidden>
@@ -6186,6 +6189,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var btnCreateList = document.getElementById("listsDrawerCreateList");
       var btnRenameList = document.getElementById("listsDrawerRenameList");
       var btnDeleteList = document.getElementById("listsDrawerDeleteList");
+      var btnBuildFromConversation = document.getElementById("listsDrawerBuildFromConversation");
+      var btnRunAgentOnLists = document.getElementById("listsDrawerRunAgentOnLists");
+      var btnOpenJobs = document.getElementById("listsDrawerOpenJobs");
       var ulStarred = document.getElementById("listsDrawerStarredList");
       var ulTodo = document.getElementById("listsDrawerTodoList");
       var listsPane = document.getElementById("listsDrawerListsPane");
@@ -6484,6 +6490,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         btnDeleteList.addEventListener("click", function () {
           if (!selectedListId) return;
           vscode.postMessage({ type: "deleteList", listId: selectedListId });
+        });
+      }
+      if (btnBuildFromConversation) {
+        btnBuildFromConversation.addEventListener("click", function () {
+          vscode.postMessage({ type: "executeColcoorCommand", command: "colcoor.buildListFromConversation" });
+        });
+      }
+      if (btnRunAgentOnLists) {
+        btnRunAgentOnLists.addEventListener("click", function () {
+          vscode.postMessage({ type: "executeColcoorCommand", command: "colcoor.runAgentOnLists" });
+        });
+      }
+      if (btnOpenJobs) {
+        btnOpenJobs.addEventListener("click", function () {
+          vscode.postMessage({ type: "executeColcoorCommand", command: "colcoor.openListAgentJobs" });
         });
       }
       listSearch.addEventListener("input", function () {

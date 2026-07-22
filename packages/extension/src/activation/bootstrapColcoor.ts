@@ -8,6 +8,7 @@ import { SECRET_CURSOR_AGENT_API_KEY } from "../agent/cursorAgentApiKey";
 import { SECRET_ANTHROPIC_API_KEY } from "../agent/providerApiKey";
 import { createConversationPanelController } from "../conversation/conversationPanel";
 import { createDrawersPanelController } from "../conversation/drawersPanelController";
+import { createListAgentJobPanelController } from "../listAgents/listAgentJobPanel";
 import { notifyUserTurnOutcomeAndSyncConversationPanel } from "../conversation/userTurnOutcomeNotify";
 import { invalidateConversationListCache } from "../conversations/conversationsListCache";
 import { syncConversationsWelcomeContextKeys } from "../conversations/conversationsWelcomeContext";
@@ -135,6 +136,13 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
     pickConversationInteractively,
   });
 
+  const listAgentJobs = createListAgentJobPanelController(context, {
+    api,
+    agent,
+    getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
+  });
+  context.subscriptions.push(new vscode.Disposable(() => listAgentJobs.dispose()));
+
   const treeView = vscode.window.createTreeView("colcoor.conversations", {
     treeDataProvider: treeProvider,
     showCollapseAll: false,
@@ -175,6 +183,7 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
     pickConversationInteractively,
     refreshConversationsWelcomeContext,
     drawers,
+    listAgentJobs,
   };
 
   return {

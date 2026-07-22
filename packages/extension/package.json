@@ -170,6 +170,21 @@
         "description": "Reload starred and TODO lists in the open drawers panel from the server."
       },
       {
+        "command": "colcoor.buildListFromConversation",
+        "title": "Colcoor: Build list from conversation…",
+        "description": "Freeze the conversation and run the list-builder agent to propose list items by criteria."
+      },
+      {
+        "command": "colcoor.runAgentOnLists",
+        "title": "Colcoor: Run agent on lists…",
+        "description": "Run the list-operator agent on one or more lists with a user request."
+      },
+      {
+        "command": "colcoor.openListAgentJobs",
+        "title": "Colcoor: Open list agent jobs…",
+        "description": "Pick a frozen list-agent job and reopen its progress panel."
+      },
+      {
         "command": "colcoor.referenceSelectedMessageInSideChat",
         "title": "Colcoor: Reference selected message in side chat"
       },
