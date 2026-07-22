@@ -43,7 +43,7 @@ Visibility: V1 packages include **shared** events only (\`visible_to\` null), ex
 
 - **Read-only for agents:** \`manifest.json\`, \`SCHEMA.md\`, \`request.md\`, \`events.jsonl\`, \`notes.jsonl\`, \`lists.json\`
 - **Builder may write:** \`out/proposals*.json\`, \`out/repairs*.json\` (controller owns \`scan_state.json\` / \`state.json\`)
-- **Operator may write:** \`out/*\` and workspace files only when \`request.md\` requires it
+- **Operator may write:** any files under the workspace root (same as the main conversation agent; user approvals apply). Job \`out/\` is optional for bookkeeping; prefer paths named in \`request.md\`.
 
 ## Proposals (builder)
 

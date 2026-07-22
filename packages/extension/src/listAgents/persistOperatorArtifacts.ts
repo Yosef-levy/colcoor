@@ -9,11 +9,11 @@ export type PersistedArtifact = {
 
 /**
  * Extract controller-persisted artifacts from agent final text.
- * Preferred fence forms:
- *   ```path:out/explanations.md
+ * Fence forms (workspace-relative paths):
+ *   ```path:explanations.md
  *   ...content...
  *   ```
- *   ```file:out/explanations.md
+ *   ```file:docs/notes.md
  *   ...
  *   ```
  */
@@ -31,67 +31,82 @@ export function extractPathFencedArtifacts(text: string): Array<{ relPath: strin
   return out;
 }
 
-/** Filenames mentioned in the user request (e.g. explanations.md). */
-export function guessOutputFilenamesFromRequest(requestText: string): string[] {
-  const names = new Set<string>();
-  const re = /\b([A-Za-z0-9._/-]+\.(?:md|txt|json|csv|html))\b/g;
+/** Paths/filenames mentioned in the user request (e.g. explanations.md, docs/a.md). */
+export function guessOutputPathsFromRequest(requestText: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const re = /\b((?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.(?:md|txt|json|csv|html))\b/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(requestText)) !== null) {
     const name = m[1].replace(/^\.\//, "");
-    if (!name.includes("request.md") && !name.includes("SCHEMA.md")) {
-      names.add(path.basename(name));
-    }
+    if (name.includes("request.md") || name.includes("SCHEMA.md")) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
   }
-  return [...names];
+  return names;
 }
 
-function isSafeJobRelPath(relPath: string): boolean {
-  const norm = path.normalize(relPath).replace(/\\/g, "/");
-  if (norm.startsWith("..") || norm.includes("/../") || path.isAbsolute(norm)) return false;
-  return true;
+/** @deprecated use guessOutputPathsFromRequest */
+export function guessOutputFilenamesFromRequest(requestText: string): string[] {
+  return guessOutputPathsFromRequest(requestText).map((p) => path.basename(p));
+}
+
+function isInsideRoot(root: string, candidate: string): boolean {
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(candidate);
+  return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep);
 }
 
 /**
- * Resolve artifact paths into the job directory.
- * `out/foo.md` and `foo.md` land under `jobPath/out/`.
- * Other relative paths are under `jobPath/` only if they stay inside the job dir.
+ * Resolve an artifact path under the workspace (same freedom as the main-thread agent).
+ * Rejects escapes outside `workspaceRoot`.
  */
+export function resolveWorkspaceArtifactPath(
+  workspaceRoot: string,
+  relOrAbsPath: string,
+): string | null {
+  let cleaned = relOrAbsPath.trim().replace(/\\/g, "/");
+  if (cleaned.startsWith("file://")) {
+    cleaned = cleaned.slice("file://".length);
+  }
+  if (cleaned.startsWith("./")) cleaned = cleaned.slice(2);
+
+  const abs = path.isAbsolute(cleaned)
+    ? path.resolve(cleaned)
+    : path.resolve(workspaceRoot, cleaned);
+
+  if (!isInsideRoot(workspaceRoot, abs)) return null;
+  return abs;
+}
+
+/** @deprecated prefer resolveWorkspaceArtifactPath */
 export function resolveArtifactPath(jobPath: string, relPath: string): string | null {
+  // Legacy: job-scoped. Map bare names to job/out/ for old tests/callers.
   let cleaned = relPath.trim().replace(/\\/g, "/");
   if (cleaned.startsWith("./")) cleaned = cleaned.slice(2);
-  // Strip absolute job path prefix if the model echoed it.
-  const jobPosix = jobPath.replace(/\\/g, "/");
-  if (cleaned.startsWith(jobPosix + "/")) {
-    cleaned = cleaned.slice(jobPosix.length + 1);
-  }
-  if (cleaned.startsWith(".colcoor/jobs/")) {
-    const idx = cleaned.indexOf("/out/");
-    if (idx >= 0) cleaned = cleaned.slice(idx + 1); // out/...
-    else return null;
-  }
   if (!cleaned.startsWith("out/") && !cleaned.includes("/")) {
     cleaned = `out/${cleaned}`;
   }
-  if (!isSafeJobRelPath(cleaned)) return null;
+  const norm = path.normalize(cleaned).replace(/\\/g, "/");
+  if (norm.startsWith("..") || path.isAbsolute(norm)) return null;
   const abs = path.resolve(jobPath, cleaned);
-  if (!abs.startsWith(path.resolve(jobPath) + path.sep) && abs !== path.resolve(jobPath)) {
-    return null;
-  }
+  if (!isInsideRoot(jobPath, abs)) return null;
   return abs;
 }
 
 export async function persistExtractedArtifacts(
-  jobPath: string,
+  workspaceRoot: string,
   artifacts: Array<{ relPath: string; content: string }>,
 ): Promise<PersistedArtifact[]> {
   const written: PersistedArtifact[] = [];
   for (const art of artifacts) {
-    const abs = resolveArtifactPath(jobPath, art.relPath);
+    const abs = resolveWorkspaceArtifactPath(workspaceRoot, art.relPath);
     if (!abs) continue;
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, art.content, "utf8");
     written.push({
-      relPath: path.relative(jobPath, abs).replace(/\\/g, "/"),
+      relPath: path.relative(workspaceRoot, abs).replace(/\\/g, "/") || path.basename(abs),
       absolutePath: abs,
       bytes: Buffer.byteLength(art.content, "utf8"),
     });
@@ -100,41 +115,52 @@ export async function persistExtractedArtifacts(
 }
 
 /**
- * If the agent did not use path fences but the request named an .md file and the
- * final reply looks like a document, write it to out/<name>.
+ * If the agent did not use path fences but the request named a file and the
+ * final reply looks like a document, write it to that workspace-relative path.
  */
 export function fallbackMarkdownArtifact(
   requestText: string,
   finalText: string,
 ): { relPath: string; content: string } | null {
-  const names = guessOutputFilenamesFromRequest(requestText).filter((n) => n.endsWith(".md"));
-  if (names.length === 0) return null;
+  const paths = guessOutputPathsFromRequest(requestText).filter((n) => n.endsWith(".md"));
+  if (paths.length === 0) return null;
   const body = finalText.trim();
   if (body.length < 200) return null;
-  // Prefer content that looks like markdown documentation, not a short apology.
   if (/permission issue|I apologize for the technical difficulty/i.test(body) && body.length < 1500) {
-    // Still allow if there is a substantial "## " structure after the apology.
     if (!/^#{1,3}\s/m.test(body)) return null;
   }
-  const name = names[0];
+  // Prefer path as written in the request (e.g. explanations.md at project root).
+  let relPath = paths[0];
+  const lower = requestText.toLowerCase();
+  if (
+    (lower.includes("project root") ||
+      lower.includes("workspace root") ||
+      lower.includes("repo root") ||
+      lower.includes("root folder")) &&
+    !relPath.includes("/")
+  ) {
+    relPath = paths[0]; // already basename at root
+  }
   const content = body.endsWith("\n") ? body : body + "\n";
-  return { relPath: `out/${name}`, content };
+  return { relPath, content };
 }
 
 export async function persistOperatorReplyArtifacts(
+  workspaceRoot: string,
   jobPath: string,
   requestText: string,
   finalText: string,
 ): Promise<PersistedArtifact[]> {
   const fenced = extractPathFencedArtifacts(finalText);
-  let written = await persistExtractedArtifacts(jobPath, fenced);
+  let written = await persistExtractedArtifacts(workspaceRoot, fenced);
   if (written.length === 0) {
     const fallback = fallbackMarkdownArtifact(requestText, finalText);
     if (fallback) {
-      written = await persistExtractedArtifacts(jobPath, [fallback]);
+      written = await persistExtractedArtifacts(workspaceRoot, [fallback]);
     }
   }
   if (written.length > 0) {
+    await fs.mkdir(path.join(jobPath, "out"), { recursive: true });
     await fs.writeFile(
       path.join(jobPath, "out", "persisted_artifacts.json"),
       JSON.stringify({ written }, null, 2) + "\n",

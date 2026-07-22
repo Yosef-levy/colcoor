@@ -21,7 +21,7 @@ Jobs freeze under `.colcoor/jobs/<job_id>/`:
 ## Capability profiles
 
 - **list-builder-readonly** — read package; write proposals under the job dir; Colcoor verifies and commits after review.
-- **list-operator-workspace** — may edit workspace files when the request requires it; normal tool approvals.
+- **list-operator-workspace** — read/write freely under the workspace root (same as the main conversation agent); normal tool approvals. Job `out/` is for controller logs/bookkeeping; deliverables go where `request.md` specifies.
 
 ## Builder flow
 

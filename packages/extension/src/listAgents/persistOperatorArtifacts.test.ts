@@ -1,15 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach } from "vitest";
 
 import {
   extractPathFencedArtifacts,
   fallbackMarkdownArtifact,
-  guessOutputFilenamesFromRequest,
+  guessOutputPathsFromRequest,
   persistOperatorReplyArtifacts,
-  resolveArtifactPath,
+  resolveWorkspaceArtifactPath,
 } from "./persistOperatorArtifacts";
 
 describe("persistOperatorArtifacts", () => {
@@ -19,28 +18,31 @@ describe("persistOperatorArtifacts", () => {
   });
 
   it("extracts path-fenced artifacts", () => {
-    const text = `Here you go:\n\n\`\`\`path:out/explanations.md\n# Hello\n\nWorld\n\`\`\`\n`;
+    const text = `Here you go:\n\n\`\`\`path:explanations.md\n# Hello\n\nWorld\n\`\`\`\n`;
     expect(extractPathFencedArtifacts(text)).toEqual([
-      { relPath: "out/explanations.md", content: "# Hello\n\nWorld\n" },
+      { relPath: "explanations.md", content: "# Hello\n\nWorld\n" },
     ]);
   });
 
-  it("guesses filenames from the request", () => {
-    expect(guessOutputFilenamesFromRequest("Create explanations.md for all concepts")).toEqual([
-      "explanations.md",
-    ]);
+  it("guesses paths from the request including root filenames", () => {
+    expect(
+      guessOutputPathsFromRequest("explain all concepts in a new file - explanations.md in the project root folder"),
+    ).toEqual(["explanations.md"]);
   });
 
-  it("resolves safe out paths", async () => {
-    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "colcoor-art-"));
-    expect(resolveArtifactPath(tmp, "explanations.md")?.endsWith(`${path.sep}out${path.sep}explanations.md`)).toBe(
-      true,
+  it("resolves workspace paths and rejects escapes", async () => {
+    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "colcoor-ws-"));
+    expect(resolveWorkspaceArtifactPath(tmp, "explanations.md")).toBe(
+      path.join(tmp, "explanations.md"),
     );
-    expect(resolveArtifactPath(tmp, "../etc/passwd")).toBeNull();
+    expect(resolveWorkspaceArtifactPath(tmp, "docs/a.md")).toBe(path.join(tmp, "docs", "a.md"));
+    expect(resolveWorkspaceArtifactPath(tmp, "../etc/passwd")).toBeNull();
   });
 
-  it("falls back to writing request-named md from final reply", async () => {
-    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "colcoor-art-"));
+  it("writes request-named md to workspace root from final reply", async () => {
+    tmp = await fs.mkdtemp(path.join(os.tmpdir(), "colcoor-ws-"));
+    const job = path.join(tmp, ".colcoor", "jobs", "j1");
+    await fs.mkdir(path.join(job, "out"), { recursive: true });
     const body =
       "## Concept 1\n\n" +
       "x".repeat(250) +
@@ -49,12 +51,13 @@ describe("persistOperatorArtifacts", () => {
       "\n";
     const written = await persistOperatorReplyArtifacts(
       tmp,
-      "Please write explanations.md covering the list",
+      job,
+      "explain concepts in explanations.md in the project root folder",
       body,
     );
     expect(written).toHaveLength(1);
-    expect(written[0].relPath).toBe("out/explanations.md");
-    const disk = await fs.readFile(path.join(tmp, "out", "explanations.md"), "utf8");
+    expect(written[0].relPath).toBe("explanations.md");
+    const disk = await fs.readFile(path.join(tmp, "explanations.md"), "utf8");
     expect(disk).toContain("## Concept 1");
   });
 
