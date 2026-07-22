@@ -52,6 +52,8 @@ export function createListAgentJobPanelController(
   let panel: vscode.WebviewPanel | undefined;
   let currentJobId: string | undefined;
   let activeRun: ActiveRun | undefined;
+  let webviewReady = false;
+  let pendingSnapshotJobId: string | undefined;
 
   function workspaceRoot(): string {
     const root = deps.getWorkspaceRoot();
@@ -72,26 +74,33 @@ export function createListAgentJobPanelController(
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, retainContextWhenHidden: true },
     );
-    const nonce = randomBytes(16).toString("hex");
-    panel.webview.html = getListAgentJobPanelHtml(panel.webview.cspSource, nonce);
-    panel.onDidDispose(() => {
-      panel = undefined;
-      // Closing UI does not cancel the run
-    });
+    webviewReady = false;
+
+    // Register message handler BEFORE setting HTML so the initial `ready` is not lost.
     panel.webview.onDidReceiveMessage(async (msg: unknown) => {
       const m = msg as {
         type?: string;
         acceptedIds?: string[];
         rejectedIds?: string[];
       };
-      if (!m?.type || !currentJobId) return;
+      if (!m?.type) return;
       try {
-        if (m.type === "ready" || m.type === "reloadJob") {
+        if (m.type === "ready") {
+          webviewReady = true;
+          const jobId = pendingSnapshotJobId ?? currentJobId;
+          if (jobId) {
+            await postSnapshot(jobId);
+          }
+          return;
+        }
+        if (!currentJobId) return;
+        if (m.type === "reloadJob") {
           await postSnapshot(currentJobId);
         } else if (m.type === "cancelJob") {
           await requestJobCancel(workspaceRoot(), currentJobId);
           activeRun?.abort.abort();
           void vscode.window.showInformationMessage("Colcoor: cancel requested for list agent job.");
+          await postSnapshot(currentJobId);
         } else if (m.type === "commitReview") {
           const root = workspaceRoot();
           await applyUserReviewAndCommit(
@@ -111,17 +120,32 @@ export function createListAgentJobPanelController(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         void vscode.window.showErrorMessage(`Colcoor list agent: ${message}`);
+        if (currentJobId) {
+          await postSnapshot(currentJobId).catch(() => undefined);
+        }
       }
     });
+
+    panel.onDidDispose(() => {
+      panel = undefined;
+      webviewReady = false;
+      // Closing UI does not cancel the run
+    });
+
+    const nonce = randomBytes(16).toString("hex");
+    panel.webview.html = getListAgentJobPanelHtml(panel.webview.cspSource, nonce);
     context.subscriptions.push(panel);
     return panel;
   }
 
   function postProgress(ev: ListAgentProgressEvent): void {
-    panel?.webview.postMessage({ type: "progressEvent", event: ev });
+    if (!panel) return;
+    void panel.webview.postMessage({ type: "progressEvent", event: ev });
   }
 
   async function postSnapshot(jobId: string): Promise<void> {
+    if (!panel) return;
+    pendingSnapshotJobId = jobId;
     const root = workspaceRoot();
     const { manifest, state, runLog, jobPath } = await loadJobSnapshot(root, jobId);
     let rows: VerifiedProposalRow[] | undefined;
@@ -131,7 +155,14 @@ export function createListAgentJobPanelController(
     } catch {
       rows = undefined;
     }
-    panel?.webview.postMessage({
+    let progressTail = "";
+    try {
+      progressTail = await fs.readFile(path.join(jobPath, "out", "progress.jsonl"), "utf8");
+    } catch {
+      progressTail = "";
+    }
+    const combinedLog = [runLog?.trim(), progressTail?.trim()].filter(Boolean).join("\n");
+    await panel.webview.postMessage({
       type: "jobSnapshot",
       jobId,
       kind: manifest.kind,
@@ -139,14 +170,21 @@ export function createListAgentJobPanelController(
       status: state.status,
       phase: state.phase,
       error: state.error,
-      scan: state.scan_coverage_summary,
-      runLog,
+      scan: {
+        covered: state.scan_coverage_summary.covered_lines,
+        total: state.scan_coverage_summary.total_lines,
+        complete: state.scan_coverage_summary.complete,
+        covered_lines: state.scan_coverage_summary.covered_lines,
+        total_lines: state.scan_coverage_summary.total_lines,
+      },
+      runLog: combinedLog,
       rows,
     });
   }
 
   async function openJob(jobId: string): Promise<void> {
     currentJobId = jobId;
+    pendingSnapshotJobId = jobId;
     ensurePanel();
     panel!.title = `Colcoor job ${jobId.slice(0, 8)}`;
     await postSnapshot(jobId);

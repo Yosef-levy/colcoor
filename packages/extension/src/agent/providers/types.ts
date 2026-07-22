@@ -75,6 +75,11 @@ export type AgentBackendRunInput = {
   cliMode?: CursorCliMode;
   /** Shown in tool-approval modals so parallel runs are distinguishable. */
   toolApprovalBranchLabel?: string;
+  /**
+   * Tool names the agent must not use (Claude Agent SDK `disallowedTools`).
+   * Used by list-builder-readonly to block workspace writes.
+   */
+  disallowedTools?: string[];
   /** Structured messages for the stateless ask path (provider backends). */
   llmRequest?: LlmRequest;
   /** Continuation plan for stateful agent backends (provider backends). */

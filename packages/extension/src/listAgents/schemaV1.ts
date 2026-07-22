@@ -13,7 +13,7 @@ export const LIST_AGENT_SCHEMA_MD = `# List agent package contract (list-agent-p
 | \`notes.jsonl\` | Lite notes for exported events |
 | \`lists.json\` | Lite lists + items (operator jobs; builder may be empty) |
 | \`scan_state.json\` | Controller-owned scan coverage (builder) |
-| \`out/\` | Proposals, repairs, rejected, artifacts |
+| \`out/\` | Proposals, repairs, rejected, artifacts, \`progress.jsonl\`, \`agent_output.txt\` |
 | \`run_log.jsonl\` | Append-only progress log |
 
 ## Event fields (events.jsonl)

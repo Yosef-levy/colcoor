@@ -212,19 +212,22 @@ async function writeCommonPackageFiles(
 }> {
   await fs.mkdir(path.join(jobPath, "out"), { recursive: true });
   const schemaBody = LIST_AGENT_SCHEMA_MD;
+  // Normalize trailing newlines before hashing so manifest digests match on-disk bytes.
+  const requestBody = requestText.endsWith("\n") ? requestText : `${requestText}\n`;
+  const listsBody = listsJson.endsWith("\n") ? listsJson : `${listsJson}\n`;
   await writeText(path.join(jobPath, "SCHEMA.md"), schemaBody);
-  await writeText(path.join(jobPath, "request.md"), requestText.endsWith("\n") ? requestText : requestText + "\n");
+  await writeText(path.join(jobPath, "request.md"), requestBody);
   await writeText(path.join(jobPath, "events.jsonl"), eventsJsonl);
   await writeText(path.join(jobPath, "notes.jsonl"), notesJsonl);
-  await writeText(path.join(jobPath, "lists.json"), listsJson.endsWith("\n") ? listsJson : listsJson + "\n");
+  await writeText(path.join(jobPath, "lists.json"), listsBody);
   await writeText(path.join(jobPath, "run_log.jsonl"), "");
 
   const files: ListAgentJobManifest["files"] = {
     "SCHEMA.md": fileMeta(schemaBody),
-    "request.md": fileMeta(requestText),
+    "request.md": fileMeta(requestBody),
     "events.jsonl": fileMeta(eventsJsonl),
     "notes.jsonl": fileMeta(notesJsonl),
-    "lists.json": fileMeta(listsJson),
+    "lists.json": fileMeta(listsBody),
   };
   return { schema_sha256: files["SCHEMA.md"].sha256, files };
 }

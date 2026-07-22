@@ -15,7 +15,7 @@ Jobs freeze under `.colcoor/jobs/<job_id>/`:
 | `events.jsonl` | Lite events in **DFS preorder** |
 | `notes.jsonl` / `lists.json` | Lite notes and lists |
 | `scan_state.json` | Controller-owned scan coverage (builder) |
-| `out/` | Proposals, repairs, rejected, artifacts |
+| `out/` | Proposals, repairs, rejected, artifacts, `progress.jsonl`, `agent_output.txt` |
 | `run_log.jsonl` | Append-only progress |
 
 ## Capability profiles
