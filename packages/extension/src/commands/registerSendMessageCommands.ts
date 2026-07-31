@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { resolveProviderId } from "../agent/providerApiKey";
 import {
   isPrivateBranchFromPrivacyPick,
   sendMessagePrivacyQuickPickItems,
@@ -14,6 +15,12 @@ import {
 import { collectMultilineTextInUntitledEditor } from "../conversations/firstMessageMultilineEditor";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import type { ColcoorExtensionDeps } from "../activation/colcoorExtensionDeps";
+import {
+  dispatchSlashCommand,
+  resolveProviderCommandCatalog,
+  resolveProviderSlashCapabilities,
+} from "./slash";
+import { CURSOR_CLI_MODE_ASK } from "../agent/cursorCliMode";
 
 export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.Disposable[] {
   const {
@@ -87,6 +94,89 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
         const privateBranch = isPrivateBranchFromPrivacyPick(privacyPick);
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
         try {
+          if (normalized.startsWith("/")) {
+            const providerId = resolveProviderId();
+            const agentModeRaw =
+              vscode.workspace.getConfiguration("colcoor").get<string>("agentMode") ?? "auto";
+            const agentMode =
+              agentModeRaw === "headless" || agentModeRaw === "stub" || agentModeRaw === "auto"
+                ? agentModeRaw
+                : "auto";
+            const capabilities = resolveProviderSlashCapabilities({
+              providerId,
+              cliMode: CURSOR_CLI_MODE_ASK,
+              agentMode,
+            });
+            const slash = dispatchSlashCommand({
+              text: normalized,
+              ctx: {
+                conversationId: convId,
+                providerId,
+                cliMode: CURSOR_CLI_MODE_ASK,
+                agentMode,
+                workspaceRoot,
+                capabilities,
+                selectedModel: "auto",
+                modelOptions: [],
+                providerCommands: capabilities.supportsProviderCommands
+                  ? resolveProviderCommandCatalog(workspaceRoot)
+                  : [],
+              },
+            });
+            if (slash) {
+              if (slash.action === "local" || slash.action === "error") {
+                void vscode.window.showInformationMessage(
+                  slash.message.length > 400 ? `${slash.message.slice(0, 397)}…` : slash.message,
+                );
+                return;
+              }
+              if (slash.action === "resend") {
+                void vscode.window.showInformationMessage(
+                  "Colcoor: use the conversation panel to resend with /colcoor-resend.",
+                );
+                return;
+              }
+              if (slash.action === "turn-transform") {
+                const body = slash.userMessage.trim();
+                if (!body) {
+                  void vscode.window.showInformationMessage(slash.message ?? "Done.");
+                  return;
+                }
+                const result = await runColcoorUserTurn(
+                  api,
+                  agent,
+                  convId,
+                  convTitle,
+                  body,
+                  workspaceRoot,
+                  {
+                    ...(slash.patch.privateBranch || privateBranch ? { privateBranch: true } : {}),
+                    ...(slash.patch.cliMode ? { cliMode: slash.patch.cliMode } : {}),
+                    ...(slash.patch.cliModel ? { cliModel: slash.patch.cliModel } : {}),
+                  },
+                );
+                await notifyUserTurnOutcomeAndSyncConversationPanel(result);
+                return;
+              }
+              if (slash.action === "provider") {
+                const result = await runColcoorUserTurn(
+                  api,
+                  agent,
+                  convId,
+                  convTitle,
+                  slash.userMessage,
+                  workspaceRoot,
+                  {
+                    ...(privateBranch ? { privateBranch: true } : {}),
+                    slashMeta: slash.slashMeta,
+                    providerSlashCommand: slash.userMessage,
+                  },
+                );
+                await notifyUserTurnOutcomeAndSyncConversationPanel(result);
+                return;
+              }
+            }
+          }
           const result = await runColcoorUserTurn(
             api,
             agent,

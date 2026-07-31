@@ -17,7 +17,7 @@ vi.mock("vscode", () => ({
 
 import type { AgentRunner } from "../agent/agentRunner";
 import type { ColcoorApiClient, GraphEventNode } from "../api/client";
-import { runColcoorUserTurn } from "./runUserTurn";
+import { COLOOR_SLASH_META_KEY, runColcoorUserTurn } from "./runUserTurn";
 
 function ev(
   p: Pick<GraphEventNode, "id" | "parent_event_id" | "kind" | "content_text" | "created_at">,
@@ -162,6 +162,28 @@ describe("runColcoorUserTurn", () => {
     });
 
     expect(appendEvent.mock.calls[0][1].parent_event_id).toBe("asst1");
+  });
+
+  it("persists colcoor_slash_meta and forwards providerSlashCommand to the agent", async () => {
+    const run = vi.fn().mockResolvedValue({ text: "ok", stub: "none" as const });
+    const agent = { run } as unknown as AgentRunner;
+    const appendEvent = vi.fn().mockResolvedValueOnce({ id: "u-new" }).mockResolvedValueOnce({ id: "a-new" });
+    const api = {
+      getTree: vi.fn().mockResolvedValue({ events: linearTree() }),
+      listNotes: vi.fn().mockResolvedValue([]),
+      appendEvent,
+    } as unknown as ColcoorApiClient;
+
+    await runColcoorUserTurn(api, agent, "conv1", null, "/deploy staging", "", {
+      prefetchedGraph: { events: linearTree(), notes: [] },
+      slashMeta: { command: "deploy", args: "staging", source: "skill" },
+      providerSlashCommand: "/deploy staging",
+    });
+
+    expect(appendEvent.mock.calls[0][1].content_json).toEqual({
+      [COLOOR_SLASH_META_KEY]: { command: "deploy", args: "staging", source: "skill" },
+    });
+    expect(run.mock.calls[0][0].providerSlashCommand).toBe("/deploy staging");
   });
 
   it("persists user_input under an explicit reply parent", async () => {

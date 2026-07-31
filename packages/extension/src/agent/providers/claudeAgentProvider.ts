@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { updateProviderCommandCatalogFromSdk } from "../../commands/slash/providerCommandCatalog";
 import { normalizePersistedUserInputText } from "../../conversation/normalizeUserInputText";
 import { enqueueToolCallApproval } from "../cursorToolCallApprovalQueue";
 import { SECRET_ANTHROPIC_API_KEY } from "../providerApiKey";
@@ -12,13 +13,28 @@ import {
 import { resolveAgentModel, resolveRunModel } from "./anthropicConfig";
 import type { AgentBackend, AgentBackendRunInput, AgentRunResult, AgentSessionPlan } from "./types";
 
+type SdkSlashCommand = {
+  name: string;
+  description: string;
+  argumentHint: string;
+  aliases?: string[];
+};
+
 /** Minimal surface of `@anthropic-ai/claude-agent-sdk` that Colcoor depends on. */
 type ClaudeAgentSdk = {
-  query: (args: { prompt: string; options?: Record<string, unknown> }) => AsyncIterable<SdkMessage>;
+  query: (args: { prompt: string; options?: Record<string, unknown> }) => ClaudeAgentQuery;
   forkSession?: (
     sessionId: string,
     options?: { upToId?: string; dir?: string },
   ) => Promise<{ sessionId: string }>;
+};
+
+/**
+ * Query is both an AsyncIterable and a control surface (`supportedCommands`, etc.).
+ * We retain the object instead of narrowing to AsyncIterable so slash-command discovery works.
+ */
+type ClaudeAgentQuery = AsyncIterable<SdkMessage> & {
+  supportedCommands?: () => Promise<SdkSlashCommand[]>;
 };
 
 type SdkMessage = SdkResultUsageCapture & {
@@ -28,6 +44,7 @@ type SdkMessage = SdkResultUsageCapture & {
   session_id?: string;
   result?: string;
   message?: { content?: Array<{ type?: string; text?: string }> };
+  commands?: SdkSlashCommand[];
 };
 
 let sdkPromise: Promise<ClaudeAgentSdk> | undefined;
@@ -49,10 +66,20 @@ async function loadSdk(): Promise<ClaudeAgentSdk> {
   return sdkPromise;
 }
 
-/** The prompt to send: full transcript for a fresh session, otherwise just the new user message. */
+/**
+ * The prompt to send: full transcript for a fresh session, otherwise just the new user message.
+ * Provider-native slash commands (`/context`, `/skill-name`) are passed as `userMessage` on
+ * resume/fork so they are not buried inside a re-sent transcript.
+ */
 function promptForPlan(input: AgentBackendRunInput, plan: AgentSessionPlan): string {
   const appendix = input.workspaceContextAppendix ?? "";
   if (plan.kind === "fresh") {
+    // Prefer raw slash invocation as the prompt when this turn is a provider command on a fresh session,
+    // so `/context` is not buried after a long transcript.
+    if (input.providerSlashCommand?.trim()) {
+      const cmd = input.providerSlashCommand.trim();
+      return appendix ? `${cmd}${appendix}` : cmd;
+    }
     return appendix ? `${input.transcriptText}${appendix}` : input.transcriptText;
   }
   const base = input.userMessage.trim() || input.transcriptText;
@@ -122,6 +149,26 @@ async function bridgeToolApproval(
   });
 }
 
+async function refreshCommandCatalog(
+  query: ClaudeAgentQuery,
+  workspaceRoot: string,
+  onCatalog?: (commands: ReturnType<typeof updateProviderCommandCatalogFromSdk>) => void,
+): Promise<void> {
+  if (typeof query.supportedCommands !== "function") {
+    return;
+  }
+  try {
+    const commands = await query.supportedCommands();
+    if (!Array.isArray(commands)) {
+      return;
+    }
+    const catalog = updateProviderCommandCatalogFromSdk(workspaceRoot, commands);
+    onCatalog?.(catalog);
+  } catch {
+    /* discovery is best-effort; do not fail the turn */
+  }
+}
+
 export class ClaudeAgentProvider implements AgentBackend {
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
@@ -166,7 +213,7 @@ export class ClaudeAgentProvider implements AgentBackend {
     }
 
     try {
-      const iterator = sdk.query({
+      const query = sdk.query({
         prompt: promptForPlan(input, plan),
         options: {
           cwd,
@@ -175,6 +222,8 @@ export class ClaudeAgentProvider implements AgentBackend {
           env: { ...process.env, ANTHROPIC_API_KEY: apiKey },
           executable: process.execPath,
           abortController,
+          // Enable discovered skills so `/skill-name` and the Skill tool work.
+          skills: "all",
           ...(input.disallowedTools?.length
             ? { disallowedTools: input.disallowedTools }
             : {}),
@@ -191,16 +240,27 @@ export class ClaudeAgentProvider implements AgentBackend {
         },
       });
 
+      // Best-effort initial discovery (may resolve after initialize).
+      void refreshCommandCatalog(query, cwd, input.onProviderCommandsChanged);
+
       let text = "";
       let sessionId: string | undefined = resumeSessionId;
       let lastMessageId: string | undefined;
       let sdkResult: SdkResultUsageCapture | undefined;
-      for await (const message of iterator) {
+      for await (const message of query) {
         if (typeof message.session_id === "string" && message.session_id.trim()) {
           sessionId = message.session_id.trim();
         }
         if (typeof message.uuid === "string" && message.uuid.trim()) {
           lastMessageId = message.uuid.trim();
+        }
+        if (
+          message.type === "system" &&
+          message.subtype === "commands_changed" &&
+          Array.isArray(message.commands)
+        ) {
+          const catalog = updateProviderCommandCatalogFromSdk(cwd, message.commands);
+          input.onProviderCommandsChanged?.(catalog);
         }
         if (message.type === "assistant") {
           const blocks = message.message?.content ?? [];
@@ -220,6 +280,9 @@ export class ClaudeAgentProvider implements AgentBackend {
           }
         }
       }
+
+      // Refresh once more after the turn in case initialize completed mid-stream.
+      await refreshCommandCatalog(query, cwd, input.onProviderCommandsChanged);
 
       const usageOpts = {
         mode: normalizeProviderMode(input.cliMode),

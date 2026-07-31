@@ -59,6 +59,17 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("emitMainComposerSend");
   });
 
+  it("composer exposes slash-command picker, discovery button, and result banner", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonceSlashCmd");
+    expect(html).toContain('id="composerSlashPicker"');
+    expect(html).toContain('id="btnSlashCommands"');
+    expect(html).toContain('id="slashCommandResult"');
+    expect(html).toContain("updateComposerSlashPicker");
+    expect(html).toContain("applyComposerSlashPick");
+    expect(html).toContain('e.key === "ArrowDown"');
+    expect(html).toContain("dismissSlashResult");
+  });
+
   it("omits detail breadcrumb strip; checkpoint_label still used in tree/thread/search ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("checkpoint_label");
@@ -76,14 +87,14 @@ describe("getConversationWebviewHtml", () => {
   it("uses dir=auto on the composer textarea for RTL-capable typing", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain(
-      '<textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>',
+      '<textarea id="input" dir="auto" placeholder="Message… Type / for commands. Shift+Enter for newline, Enter to send"></textarea>',
     );
   });
 
   it("renders an in-flight pending user row before streaming assistant ([ui-features.md] §7)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("pendingUserHtml: null");
-    expect(html).toContain("if (state.pendingUserHtml)");
+    expect(html).toContain("if (selectedRunActive && state.pendingUserHtml)");
     expect(html).toContain('class="msg user pending-send"');
     expect(html).toContain("state.pendingUserHtml");
     expect(html).toContain("streamingDisplayParts: []");
@@ -294,9 +305,10 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("min-width: 100%;");
     expect(html).toContain("width: max-content;");
-    expect(html).not.toContain("max-width: 100%;");
     expect(html).toContain("flex: 0 0 240px;");
     expect(html).toContain("width: 240px;");
+    // Tree nodes stay fixed-width; images/legal chrome may still use max-width: 100%.
+    expect(html).toMatch(/\.node\s*\{[^}]*flex:\s*0\s+0\s+240px;/);
   });
 
   it("shows staged main-thread reference row and clear postMessage in inline side chat", () => {
@@ -383,7 +395,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("preserveThreadScroll");
     expect(html).toContain("function restoreThreadScroll(wrap, scrollTop)");
     expect(html).toContain("render({ preserveThreadScroll: m.preserveThreadScroll === true })");
-    expect(html).toContain("renderThread({ mode: threadScrollMode })");
+    expect(html).toContain("var threadRenderOpts = { mode: threadScrollMode };");
     expect(html).toContain("restoreThreadScroll(wrap, prevScrollTop)");
   });
 
@@ -550,7 +562,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "referenceNoteInSideChat" });');
   });
 
-  it("places Starred under Message, TODO notes under Note, Starred & TODO under View (slide-in lists drawer)", () => {
+  it("places Starred under Message, TODO notes under Note, Collections under View (slide-in lists drawer)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="btnStarredDrawer"');
     expect(html).toMatch(/id="menuPanelMessage"[\s\S]*?id="btnStarredDrawer"/);
@@ -559,7 +571,7 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toMatch(/id="menuPanelNote"[\s\S]*?id="btnTodoDrawer"/);
     expect(html).toContain('id="btnStarredTodoDrawer"');
     expect(html).toMatch(/id="menuPanelView"[\s\S]*?id="btnStarredTodoDrawer"/);
-    expect(html).toContain("Starred &amp; TODO");
+    expect(html).toContain(">Collections</button>");
     expect(html).toContain("if (starredDrawerBtn) starredDrawerBtn.disabled = false;");
     expect(html).toContain("if (todoDrawerBtn) todoDrawerBtn.disabled = false;");
     expect(html).toContain("if (starredTodoDrawerBtn) starredTodoDrawerBtn.disabled = false;");

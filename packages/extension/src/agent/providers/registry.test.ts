@@ -11,7 +11,7 @@ vi.mock("vscode", () => ({
 }));
 
 import type { SecretStorage } from "vscode";
-import { selectAgentBackend } from "./registry";
+import { resolveProviderCapabilities, selectAgentBackend } from "./registry";
 import { AnthropicLlmProvider } from "./anthropicLlmProvider";
 import { ClaudeAgentProvider } from "./claudeAgentProvider";
 import { CursorCliAgentProvider } from "./cursorCliAgentProvider";
@@ -73,3 +73,25 @@ describe("selectAgentBackend", () => {
     }
   });
 });
+
+describe("resolveProviderCapabilities", () => {
+  it("enables slash/skills only for Anthropic plan/agent", () => {
+    withConfig({ provider: "anthropic" });
+    expect(
+      resolveProviderCapabilities({ providerId: "anthropic", agentMode: "auto", cliMode: "ask" })
+        .supportsProviderCommands,
+    ).toBe(false);
+    expect(
+      resolveProviderCapabilities({ providerId: "anthropic", agentMode: "auto", cliMode: "agent" }),
+    ).toMatchObject({
+      supportsProviderCommands: true,
+      supportsSkills: true,
+      supportsSessionFork: true,
+    });
+    expect(
+      resolveProviderCapabilities({ providerId: "cursor", agentMode: "auto", cliMode: "agent" })
+        .supportsProviderCommands,
+    ).toBe(false);
+  });
+});
+

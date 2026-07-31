@@ -84,6 +84,14 @@ export type AgentBackendRunInput = {
   llmRequest?: LlmRequest;
   /** Continuation plan for stateful agent backends (provider backends). */
   agentSession?: AgentSessionPlan;
+  /**
+   * Raw provider-native slash invocation (e.g. `/context`, `/skill-name`).
+   * Claude Agent SDK uses this as the prompt on fresh sessions so the command is not
+   * buried inside a full transcript.
+   */
+  providerSlashCommand?: string;
+  /** Fired when the Claude Agent SDK reports/refreshes its slash-command catalog. */
+  onProviderCommandsChanged?: (commands: import("../../commands/slash/types").SlashCommand[]) => void;
 };
 
 /** A pluggable execution backend behind {@link AgentRunner}. */
@@ -93,3 +101,18 @@ export interface AgentBackend {
 
 /** Supplier that provides the ask (LLM) and plan/agent (agentic) APIs. */
 export type ProviderId = "anthropic" | "cursor";
+
+/**
+ * Slash-command / skill capabilities for a provider × mode selection.
+ * Kept on the provider types surface so orchestration can gate commands without
+ * inspecting concrete backend classes.
+ */
+export type ProviderCapabilities = {
+  supportsProviderCommands: boolean;
+  supportsSkills: boolean;
+  supportsProviderContext: boolean;
+  supportsDisallowedTools: boolean;
+  supportsSessionFork: boolean;
+  supportsStructuredMessages: boolean;
+  supportsDisplayParts: boolean;
+};

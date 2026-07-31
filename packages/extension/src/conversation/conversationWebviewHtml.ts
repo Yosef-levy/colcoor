@@ -557,6 +557,82 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
       padding: 8px;
+      position: relative;
+    }
+    .composer-slash-result {
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 0.92em;
+    }
+    .composer-slash-result[hidden] {
+      display: none !important;
+    }
+    .composer-slash-result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .composer-slash-result-body :first-child { margin-top: 0; }
+    .composer-slash-result-body :last-child { margin-bottom: 0; }
+    .composer-input-wrap {
+      position: relative;
+    }
+    .composer-slash-picker {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      margin-bottom: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 60;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    }
+    .composer-slash-picker[hidden] {
+      display: none !important;
+    }
+    .composer-slash-item {
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 8px 10px;
+      border: none;
+      border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      background: transparent;
+      color: var(--vscode-foreground);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .composer-slash-item:last-child {
+      border-bottom: none;
+    }
+    .composer-slash-item:hover,
+    .composer-slash-item.slash-item-active {
+      background: var(--vscode-list-hoverBackground);
+      color: var(--vscode-list-hoverForeground);
+    }
+    .composer-slash-item.slash-item-unavailable {
+      opacity: 0.65;
+    }
+    .composer-slash-item .slash-item-name {
+      font-weight: 600;
+    }
+    .composer-slash-item .slash-item-meta {
+      display: block;
+      margin-top: 2px;
+      opacity: 0.85;
+      font-size: 0.9em;
     }
     .composer textarea {
       width: 100%;
@@ -2088,7 +2164,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </div>
       </div>
       <div class="composer">
-        <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
+        <div id="slashCommandResult" class="composer-slash-result" hidden>
+          <div class="composer-slash-result-header">
+            <span class="hint">Slash command</span>
+            <button type="button" id="btnDismissSlashResult" class="btn-secondary btn-icon" title="Dismiss" aria-label="Dismiss slash result">×</button>
+          </div>
+          <div id="slashCommandResultBody" class="composer-slash-result-body"></div>
+        </div>
+        <div class="composer-input-wrap">
+          <div id="composerSlashPicker" class="composer-slash-picker" hidden></div>
+          <textarea id="input" dir="auto" placeholder="Message… Type / for commands. Shift+Enter for newline, Enter to send"></textarea>
+        </div>
         <div id="pendingConversationImages" class="composer-pending-images" style="display:none"></div>
         <label id="privateBranchLabel" class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
           <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" />
@@ -2117,6 +2203,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <span class="hint" id="queuedSendBadge" style="display:none"></span>
         </div>
         <div class="row">
+          <button
+            type="button"
+            id="btnSlashCommands"
+            class="btn-secondary btn-icon"
+            title="Slash commands (Colcoor uses /colcoor-… prefix)"
+            aria-label="Open slash commands"
+          >/</button>
           <label class="hint" for="agentModel" style="margin:0">Model</label>
           <select id="agentModel" class="agent-model-select" title="Model for this conversation">
             <option value="auto">Auto</option>
@@ -2555,7 +2648,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       tryThisNextVisible: false,
       soloCollaboratorHintDismissed: false,
       conversationMembers: [],
+      slashCommands: [],
+      slashResultHtml: null,
     };
+    var composerSlashLastMatches = [];
+    var composerSlashSelIndex = 0;
     const EMPTY_COPY = ${emptyCopyJson};
     const LIST_COLOR_GRID = ${listHighlightColorsJson};
     const GETTING_STARTED_LINES = ${gettingStartedLinesJson};
@@ -5442,6 +5539,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (priv) priv.disabled = false;
         updateAgentModelSelect();
         updateAgentModeSelect();
+        updateSlashResultBanner();
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
           var activeCount =
@@ -6711,6 +6809,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           conversationMembers: Array.isArray(m.conversationMembers)
             ? m.conversationMembers
             : [],
+          slashCommands: Array.isArray(m.slashCommands) ? m.slashCommands : [],
+          slashResultHtml:
+            typeof m.slashResultHtml === "string" && m.slashResultHtml.trim()
+              ? m.slashResultHtml
+              : null,
         };
         render({ preserveThreadScroll: m.preserveThreadScroll === true });
         if (m.composerPrefill) {
@@ -6759,9 +6862,156 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         ".";
     }, 32000);
 
+    function closeComposerSlashPicker() {
+      var el = document.getElementById("composerSlashPicker");
+      if (el) {
+        el.hidden = true;
+        el.replaceChildren();
+      }
+      composerSlashLastMatches = [];
+      composerSlashSelIndex = 0;
+    }
+
+    function composerSlashActiveContext(ta) {
+      if (!ta) return null;
+      var v = String(ta.value || "");
+      var caret = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length;
+      var before = v.slice(0, caret);
+      var lead = before.match(/^(\\s*)\\/([A-Za-z0-9_.:-]*)$/);
+      if (!lead) return null;
+      var ws = lead[1] || "";
+      return { start: ws.length, end: caret, query: lead[2] || "" };
+    }
+
+    function filterComposerSlashCommands(query) {
+      var q = String(query || "").toLowerCase();
+      var catalog = Array.isArray(state.slashCommands) ? state.slashCommands : [];
+      if (!q) return catalog.slice(0, 24);
+      var starts = [];
+      var contains = [];
+      for (var i = 0; i < catalog.length; i++) {
+        var c = catalog[i] || {};
+        var name = String(c.name || "").toLowerCase();
+        var desc = String(c.description || "").toLowerCase();
+        if (name.startsWith(q)) starts.push(c);
+        else if (name.indexOf(q) >= 0 || desc.indexOf(q) >= 0) contains.push(c);
+      }
+      return starts.concat(contains).slice(0, 24);
+    }
+
+    function highlightComposerSlashPicker() {
+      var box = document.getElementById("composerSlashPicker");
+      if (!box || box.hidden) return;
+      var btns = box.querySelectorAll("button.composer-slash-item");
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle("slash-item-active", i === composerSlashSelIndex);
+      }
+    }
+
+    function renderComposerSlashPicker(matches) {
+      var box = document.getElementById("composerSlashPicker");
+      if (!box) return;
+      box.replaceChildren();
+      composerSlashLastMatches = matches;
+      composerSlashSelIndex = Math.min(
+        composerSlashSelIndex,
+        Math.max(0, matches.length - 1)
+      );
+      if (!matches.length) {
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      for (var j = 0; j < matches.length; j++) {
+        var c = matches[j] || {};
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className =
+          "composer-slash-item" + (c.available === false ? " slash-item-unavailable" : "");
+        btn.setAttribute("data-idx", String(j));
+        var name = "/" + String(c.name || "");
+        var hint = c.argumentHint ? " " + String(c.argumentHint) : "";
+        var source = c.source ? String(c.source) : "colcoor";
+        var meta = String(c.description || "");
+        if (c.available === false && c.unavailableReason) {
+          meta += " — " + String(c.unavailableReason);
+        }
+        btn.innerHTML =
+          '<span class="slash-item-name"></span><span class="slash-item-meta"></span>';
+        btn.querySelector(".slash-item-name").textContent = name + hint + " · " + source;
+        btn.querySelector(".slash-item-meta").textContent = meta;
+        box.appendChild(btn);
+      }
+      highlightComposerSlashPicker();
+    }
+
+    function applyComposerSlashPick(c) {
+      var ta = document.getElementById("input");
+      if (!ta || !c || !c.name) return;
+      var insert = "/" + String(c.name);
+      if (c.argumentHint) insert += " ";
+      var ctx = composerSlashActiveContext(ta);
+      var v = String(ta.value || "");
+      var next;
+      var pos;
+      if (ctx) {
+        next = v.slice(0, ctx.start) + insert + v.slice(ctx.end);
+        pos = ctx.start + insert.length;
+      } else {
+        next = insert;
+        pos = insert.length;
+      }
+      ta.value = next;
+      try {
+        ta.setSelectionRange(pos, pos);
+      } catch (ePick) {}
+      closeComposerSlashPicker();
+      updateComposerSendEnabled();
+      scheduleComposerFocus(ta);
+    }
+
+    function updateComposerSlashPicker() {
+      var ta = document.getElementById("input");
+      var ctx = composerSlashActiveContext(ta);
+      if (!ctx) {
+        closeComposerSlashPicker();
+        return;
+      }
+      renderComposerSlashPicker(filterComposerSlashCommands(ctx.query));
+    }
+
+    function openComposerSlashPickerAll() {
+      var ta = document.getElementById("input");
+      if (!ta) return;
+      var v = String(ta.value || "");
+      if (!v.trim() || !/^\\s*\\//.test(v)) {
+        ta.value = "/";
+        try {
+          ta.setSelectionRange(1, 1);
+        } catch (eOpen) {}
+      }
+      scheduleComposerFocus(ta);
+      updateComposerSlashPicker();
+    }
+
+    function updateSlashResultBanner() {
+      var box = document.getElementById("slashCommandResult");
+      var body = document.getElementById("slashCommandResultBody");
+      if (!box || !body) return;
+      var html = state.slashResultHtml;
+      if (typeof html === "string" && html.trim()) {
+        body.innerHTML = html;
+        box.hidden = false;
+      } else {
+        body.innerHTML = "";
+        box.hidden = true;
+      }
+    }
+
     function emitMainComposerSend(busySendMode) {
       const ta = document.getElementById("input");
       if (!ta) return;
+      closeComposerSlashPicker();
       const text = ta.value ? ta.value.trim() : "";
       const imgs = pendingSendImages.slice();
       const refs = pendingSendImageRefs.map(function (r) {
@@ -7570,8 +7820,35 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     })();
 
     document.getElementById("input").addEventListener("input", function () {
+      updateComposerSlashPicker();
       updateComposerSendEnabled();
     });
+
+    (function wireComposerSlashUi() {
+      var picker = document.getElementById("composerSlashPicker");
+      if (picker) {
+        picker.addEventListener("click", function (ev) {
+          var t = ev.target && ev.target.closest && ev.target.closest("button.composer-slash-item");
+          if (!t) return;
+          var idx = parseInt(t.getAttribute("data-idx") || "-1", 10);
+          if (!isFinite(idx) || idx < 0) return;
+          var row = composerSlashLastMatches[idx];
+          if (row) applyComposerSlashPick(row);
+        });
+      }
+      var slashBtn = document.getElementById("btnSlashCommands");
+      if (slashBtn) {
+        slashBtn.addEventListener("click", function () {
+          openComposerSlashPickerAll();
+        });
+      }
+      var dismiss = document.getElementById("btnDismissSlashResult");
+      if (dismiss) {
+        dismiss.addEventListener("click", function () {
+          vscode.postMessage({ type: "dismissSlashResult" });
+        });
+      }
+    })();
 
     document.getElementById("input").addEventListener("paste", function (ev) {
       var cd = ev.clipboardData;
@@ -7612,6 +7889,36 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
 
     document.getElementById("input").addEventListener("keydown", (e) => {
+      var picker = document.getElementById("composerSlashPicker");
+      var pickerOpen = picker && !picker.hidden && composerSlashLastMatches.length > 0;
+      if (pickerOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeComposerSlashPicker();
+          return;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          composerSlashSelIndex = Math.min(
+            composerSlashSelIndex + 1,
+            composerSlashLastMatches.length - 1
+          );
+          highlightComposerSlashPicker();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          composerSlashSelIndex = Math.max(composerSlashSelIndex - 1, 0);
+          highlightComposerSlashPicker();
+          return;
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey)) {
+          e.preventDefault();
+          var row = composerSlashLastMatches[composerSlashSelIndex];
+          if (row) applyComposerSlashPick(row);
+          return;
+        }
+      }
       if (!shouldSendOnEnter(e)) return;
       if (state.selectedRun && state.waitingForAssistant) {
         var qb = document.getElementById("btnQueueAfterReply");

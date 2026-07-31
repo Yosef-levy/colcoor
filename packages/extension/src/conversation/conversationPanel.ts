@@ -7,6 +7,15 @@ import {
 } from "../agent/agentModelCatalogCache";
 import type { CursorAgentModelEntry } from "../agent/cursorAgentModelCatalog";
 import { resolveProviderId } from "../agent/providerApiKey";
+import {
+  buildColcoorContextSummaryLines,
+  buildSlashCommandCatalog,
+  dispatchSlashCommand,
+  resolveProviderCommandCatalog,
+  resolveProviderSlashCapabilities,
+  type SlashCommand,
+  type SlashCommandResult,
+} from "../commands/slash";
 import type {
   ColcoorClient,
   ConversationListItemOut,
@@ -53,6 +62,7 @@ import { hasDisplayableMetadata } from "./messageMetadataCore";
 import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { pendingUserHtmlForPanelState } from "./pendingUserHtmlForPanelState";
+import { markdownToSafeHtml } from "./threadMarkdown";
 import {
   staleTreeMissingSelectionPromptKey,
   staleTreeRemoteCollaboratorGrowthFingerprint,
@@ -301,11 +311,23 @@ type WebviewStateMessage = {
     email?: string | null;
     handle?: string | null;
   }[];
+  /** Slash-command catalog for the main composer autocomplete. */
+  slashCommands: {
+    name: string;
+    description: string;
+    argumentHint?: string;
+    source: string;
+    available: boolean;
+    unavailableReason?: string;
+  }[];
+  /** Transient HTML for local slash-command results (help/context/skills); not persisted. */
+  slashResultHtml: string | null;
 };
 
 type FromWebview =
   | { type: "ready" }
   | { type: "audioUnlocked" }
+  | { type: "dismissSlashResult" }
   | {
       type: "send";
       text: string;
@@ -608,6 +630,8 @@ export function createConversationPanelController(
   /** Last state flags sent to webview; reused for lightweight local selection refreshes. */
   let lastPostedBusy = false;
   let lastPostedError: string | null = null;
+  /** Transient sanitized HTML for local slash-command results (cleared on dismiss / next send). */
+  let slashResultHtml: string | null = null;
   /** True between the first `postState` of a tree load and the final snapshot (clears stale error UI). */
   let conversationTreeLoading = false;
 
@@ -1707,6 +1731,145 @@ export function createConversationPanelController(
     };
   }
 
+  function settingsAgentMode(): string {
+    const raw = vscode.workspace.getConfiguration("colcoor").get<string>("agentMode") ?? "auto";
+    return raw === "headless" || raw === "stub" || raw === "auto" ? raw : "auto";
+  }
+
+  function slashCommandCatalogForWebview(): WebviewStateMessage["slashCommands"] {
+    const catalog = buildSlashCommandCatalog(buildSlashCommandContext());
+    return catalog.map((c) => ({
+      name: c.name,
+      description: c.description,
+      ...(c.argumentHint ? { argumentHint: c.argumentHint } : {}),
+      source: c.source,
+      available: c.availability.kind === "available",
+      ...(c.availability.kind === "unavailable"
+        ? { unavailableReason: c.availability.reason }
+        : {}),
+    }));
+  }
+
+  function buildSlashCommandContext() {
+    const providerId = resolveProviderId();
+    const cliMode = cliModeForConversationRuns();
+    const agentMode = settingsAgentMode();
+    const capabilities = resolveProviderSlashCapabilities({ providerId, cliMode, agentMode });
+    const modelFields = agentModelFieldsForWebview();
+    const ws = getWorkspaceRoot();
+    const providerCommands: SlashCommand[] = capabilities.supportsProviderCommands
+      ? resolveProviderCommandCatalog(ws)
+      : [];
+    return {
+      conversationId: conversationId ?? "",
+      providerId,
+      cliMode,
+      agentMode,
+      workspaceRoot: ws,
+      capabilities,
+      selectedModel: modelFields.agentModelSelected,
+      modelOptions: modelFields.agentModelOptions.map((m) => ({ id: m.id, label: m.label })),
+      providerCommands,
+      contextSummaryLines: conversationId
+        ? buildColcoorContextSummaryLines({
+            conversationId,
+            providerId,
+            cliMode,
+            selectedModel: modelFields.agentModelSelected,
+            capabilities,
+            events: lastTreeEvents,
+            conversationMetadataJson,
+          })
+        : undefined,
+    };
+  }
+
+  function setSlashResultMarkdown(markdown: string | null): void {
+    slashResultHtml = markdown?.trim() ? markdownToSafeHtml(markdown) : null;
+  }
+
+  function refreshSlashCatalogInWebview(): void {
+    if (!panel || !conversationId || !webviewReady) {
+      return;
+    }
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+  }
+
+  async function applySlashCommandResult(
+    result: SlashCommandResult,
+    sendArgs: {
+      privateBranch: boolean;
+      pastedImages?: { dataUrl: string }[];
+      imageRefs?: ColcoorUserMediaImageRef[];
+      busySendMode?: "queue" | "branch";
+    },
+  ): Promise<void> {
+    if (result.action === "error") {
+      setSlashResultMarkdown(result.message);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+      return;
+    }
+    if (result.action === "local") {
+      setSlashResultMarkdown(result.message);
+      if (result.statusBar) {
+        void vscode.window.setStatusBarMessage(`Colcoor: ${result.statusBar}`, 3000);
+      }
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+      return;
+    }
+    if (result.action === "resend") {
+      setSlashResultMarkdown(null);
+      if (result.message) {
+        void vscode.window.setStatusBarMessage(`Colcoor: ${result.message}`, 2500);
+      }
+      await handleResend();
+      return;
+    }
+    if (result.action === "turn-transform") {
+      if (!conversationId) {
+        return;
+      }
+      if (result.patch.cliMode) {
+        await writeSelectedAgentModeForConversation(
+          context.workspaceState,
+          conversationId,
+          result.patch.cliMode,
+        );
+      }
+      if (result.patch.cliModel) {
+        await writeSelectedAgentModelForConversation(
+          context.workspaceState,
+          conversationId,
+          result.patch.cliModel,
+        );
+      }
+      const body = normalizePersistedUserInputText(result.userMessage);
+      if (!body) {
+        setSlashResultMarkdown(result.message ?? "Done.");
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+        return;
+      }
+      setSlashResultMarkdown(null);
+      const priv = result.patch.privateBranch ?? sendArgs.privateBranch;
+      await handleSendAfterSlash(body, priv, sendArgs.pastedImages, sendArgs.imageRefs, sendArgs.busySendMode);
+      return;
+    }
+    if (result.action === "provider") {
+      setSlashResultMarkdown(null);
+      await handleSendAfterSlash(
+        result.userMessage,
+        sendArgs.privateBranch,
+        sendArgs.pastedImages,
+        sendArgs.imageRefs,
+        sendArgs.busySendMode,
+        {
+          slashMeta: result.slashMeta,
+          providerSlashCommand: result.userMessage,
+        },
+      );
+    }
+  }
+
   async function showFullAgentModelPicker(): Promise<void> {
     const catalog = getAgentModelCatalog();
     const isCursorProvider = resolveProviderId() === "cursor";
@@ -1957,6 +2120,8 @@ export function createConversationPanelController(
           email: m.email ?? null,
           handle: m.handle ?? null,
         })),
+        slashCommands: slashCommandCatalogForWebview(),
+        slashResultHtml,
         ...(options?.preserveThreadScroll ? { preserveThreadScroll: true } : {}),
       };
       pendingComposerPrefill = null;
@@ -2052,6 +2217,8 @@ export function createConversationPanelController(
           pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
           ...agentModelFieldsForWebview(),
           pendingAssistantModelLabel: null,
+          slashCommands: slashCommandCatalogForWebview(),
+          slashResultHtml,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -2525,6 +2692,44 @@ export function createConversationPanelController(
       return;
     }
 
+    // Local / provider slash commands are dispatched before creating a user turn.
+    if (trimmed.startsWith("/")) {
+      const slash = dispatchSlashCommand({ text: trimmed, ctx: buildSlashCommandContext() });
+      if (slash) {
+        await applySlashCommandResult(slash, {
+          privateBranch,
+          pastedImages,
+          imageRefs,
+          busySendMode,
+        });
+        return;
+      }
+    }
+
+    await handleSendAfterSlash(trimmed, privateBranch, pastedImages, imageRefs, busySendMode);
+  }
+
+  async function handleSendAfterSlash(
+    text: string,
+    privateBranch: boolean,
+    pastedImages?: { dataUrl: string }[],
+    imageRefs?: ColcoorUserMediaImageRef[],
+    busySendMode?: "queue" | "branch",
+    slashOpts?: {
+      slashMeta?: { command: string; args: string; source: string };
+      providerSlashCommand?: string;
+    },
+  ): Promise<void> {
+    const trimmed = normalizePersistedUserInputText(text);
+    const hasPasted =
+      Array.isArray(pastedImages) && pastedImages.some((x) => typeof x?.dataUrl === "string" && x.dataUrl.trim());
+    const hasRefs =
+      Array.isArray(imageRefs) &&
+      imageRefs.some((r) => typeof r?.id === "string" && r.id.trim() && typeof r?.mime_type === "string");
+    if ((!trimmed && !hasPasted && !hasRefs) || !conversationId || !selectedEventId) {
+      return;
+    }
+
     const selectedRun = findRunForEventId(selectedEventId);
     if (selectedRun && selectedRun.userEventId) {
       if (!busySendMode) {
@@ -2560,6 +2765,8 @@ export function createConversationPanelController(
           imageRefs,
           replyParentEventId: parent,
           selectPersistedUser: true,
+          slashMeta: slashOpts?.slashMeta,
+          providerSlashCommand: slashOpts?.providerSlashCommand,
         });
         return;
       }
@@ -2572,6 +2779,8 @@ export function createConversationPanelController(
       imageRefs,
       replyParentEventId: selectedEventId,
       selectPersistedUser: true,
+      slashMeta: slashOpts?.slashMeta,
+      providerSlashCommand: slashOpts?.providerSlashCommand,
     });
   }
 
@@ -2583,6 +2792,8 @@ export function createConversationPanelController(
     replyParentEventId: string;
     selectPersistedUser: boolean;
     existingUserEventId?: string;
+    slashMeta?: { command: string; args: string; source: string };
+    providerSlashCommand?: string;
   }): Promise<void> {
     if (!conversationId) {
       return;
@@ -2653,6 +2864,13 @@ export function createConversationPanelController(
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
           ...(userMediaContentJson ? { userMediaContentJson } : {}),
+          ...(args.slashMeta ? { slashMeta: args.slashMeta } : {}),
+          ...(args.providerSlashCommand
+            ? { providerSlashCommand: args.providerSlashCommand }
+            : {}),
+          onProviderCommandsChanged: () => {
+            refreshSlashCatalogInWebview();
+          },
           onUserMessagePersisted: async ({ userEventId }) => {
             run.pendingUserMarkdown = undefined;
             run.userEventId = userEventId;
@@ -3683,6 +3901,11 @@ export function createConversationPanelController(
       }
       if (msg.type === "editMessageTitle") {
         await editMessageTitleForEvent();
+        return;
+      }
+      if (msg.type === "dismissSlashResult") {
+        setSlashResultMarkdown(null);
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {

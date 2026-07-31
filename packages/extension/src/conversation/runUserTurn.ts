@@ -30,6 +30,8 @@ import {
   pathFromRootToTip,
 } from "./treeEvents";
 
+export const COLOOR_SLASH_META_KEY = "colcoor_slash_meta";
+
 const CHECKPOINT_LABEL_MAX_LEN = 256;
 
 function normalizeOptionalCheckpointLabel(raw: string | undefined): string | undefined {
@@ -82,7 +84,39 @@ export type RunUserTurnOptions = {
   linearContextTokensBeforeRun?: number;
   /** Shown in tool-approval modals so parallel runs are distinguishable. */
   toolApprovalBranchLabel?: string;
+  /**
+   * Structured slash-command metadata merged into `user_input.content_json`
+   * (under `colcoor_slash_meta`) for provider/skill invocations.
+   */
+  slashMeta?: {
+    command: string;
+    args: string;
+    source: string;
+  };
+  /** Raw provider-native slash text forwarded to the Claude Agent SDK prompt strategy. */
+  providerSlashCommand?: string;
+  /** Propagated to the agent backend when the SDK refreshes its command catalog. */
+  onProviderCommandsChanged?: (commands: import("../commands/slash/types").SlashCommand[]) => void;
 };
+
+function mergeUserContentJson(
+  mediaJson: Record<string, unknown> | null | undefined,
+  slashMeta: RunUserTurnOptions["slashMeta"] | undefined,
+): Record<string, unknown> | undefined {
+  const base =
+    mediaJson && typeof mediaJson === "object" && !Array.isArray(mediaJson)
+      ? { ...mediaJson }
+      : undefined;
+  if (!slashMeta?.command?.trim()) {
+    return base;
+  }
+  const meta = {
+    command: slashMeta.command.trim(),
+    args: slashMeta.args ?? "",
+    source: slashMeta.source ?? "provider",
+  };
+  return { ...(base ?? {}), [COLOOR_SLASH_META_KEY]: meta };
+}
 
 export type UserTurnResult = {
   userEventId: string;
@@ -172,6 +206,7 @@ export async function runColcoorUserTurn(
   });
 
   const cp = normalizeOptionalCheckpointLabel(options?.checkpointLabel);
+  const contentJson = mergeUserContentJson(mediaJson, options?.slashMeta);
   const userRes = await api.appendEvent(conversationId, {
     kind: "user_input",
     parent_event_id: attach.id,
@@ -179,7 +214,7 @@ export async function runColcoorUserTurn(
     author: "end_user",
     private_branch: options?.privateBranch ?? false,
     ...(cp !== undefined ? { checkpoint_label: cp } : {}),
-    ...(mediaJson ? { content_json: mediaJson } : {}),
+    ...(contentJson ? { content_json: contentJson } : {}),
   });
 
   await options?.onUserMessagePersisted?.({ userEventId: userRes.id });
@@ -205,6 +240,8 @@ export async function runColcoorUserTurn(
       toolApprovalBranchLabel: options?.toolApprovalBranchLabel,
       llmRequest,
       agentSession,
+      providerSlashCommand: options?.providerSlashCommand,
+      onProviderCommandsChanged: options?.onProviderCommandsChanged,
     });
     return appendAssistantFromAgentResult(api, conversationId, userRes.id, runResult, contextSavings, {
       cliMode: options?.cliMode,
