@@ -125,6 +125,11 @@
         "title": "Colcoor: Delete conversation…"
       },
       {
+        "command": "colcoor.restoreDeletedConversation",
+        "title": "Colcoor: Restore deleted conversation…",
+        "description": "Restore a soft-deleted conversation from Recently Deleted (owner/editor)."
+      },
+      {
         "command": "colcoor.renameConversation",
         "title": "Colcoor: Rename conversation…"
       },
@@ -340,6 +345,11 @@
           "command": "colcoor.deleteConversation",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "2_colcoor_delete@0"
+        },
+        {
+          "command": "colcoor.restoreDeletedConversation",
+          "when": "view == colcoor.conversations && viewItem == deletedConversation",
+          "group": "1_colcoor@0"
         }
       ]
     },

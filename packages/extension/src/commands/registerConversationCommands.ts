@@ -11,6 +11,7 @@ import {
 } from "../conversations/conversationCommandArg";
 import { listConversationsCached } from "../conversations/conversationsListCache";
 import { normalizedOptionalFollowUpPrompt } from "../conversations/newConversationFirstMessage";
+import { pickDeletedConversationInteractively } from "../conversations/pickDeletedConversationInteractively";
 import { normalizedConversationTitle } from "../conversations/renameConversationTitle";
 import { pinnedVerb, toggledPinnedState } from "../conversations/togglePinnedConversation";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
@@ -162,6 +163,36 @@ export function registerConversationCommands(deps: ColcoorExtensionDeps): vscode
         } catch (e) {
           await showColcoorApiFailure(e);
           return false;
+        }
+      },
+    ),
+    vscode.commands.registerCommand(
+      "colcoor.restoreDeletedConversation",
+      async (item?: ConversationCommandArg) => {
+        if (!(await isReady())) {
+          await vscode.window.showWarningMessage("Colcoor: sign in first (Colcoor: Sign in).");
+          return;
+        }
+        let convId = conversationIdFromCommandArg(item);
+        let convTitle: string | null | undefined = conversationDisplayTitleFromCommandArg(item);
+        if (!convId) {
+          const row = await pickDeletedConversationInteractively(api);
+          if (!row) {
+            return;
+          }
+          convId = row.id;
+          convTitle = row.title;
+        }
+        try {
+          const out = await api.restoreDeletedConversation(convId);
+          refreshTree();
+          await conversationPanel.reveal(convId, convTitle ?? null);
+          void vscode.window.setStatusBarMessage(
+            `Colcoor: restored ${out.restored_count} message(s) in “${convTitle?.trim() ? convTitle : "(untitled)"}”.`,
+            3500,
+          );
+        } catch (e) {
+          await showColcoorApiFailure(e);
         }
       },
     ),

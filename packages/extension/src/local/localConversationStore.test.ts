@@ -146,6 +146,95 @@ describe("LocalConversationStore", () => {
     expect(afterRestore.events.map((e) => e.id).sort()).toEqual([root.id, user.id, asst.id].sort());
   });
 
+  it("restores a soft-deleted subtree via restoreEventSubtree", async () => {
+    const conv = await store.createConversation({ title: null });
+    const root = (await store.getTree(conv.id)).events[0];
+    const user = await store.appendEvent(conv.id, {
+      kind: "user_input",
+      parent_event_id: root.id,
+      content: "branch",
+      author: "end_user",
+    });
+    const asst = await store.appendEvent(conv.id, {
+      kind: "assistant_output",
+      parent_event_id: user.id,
+      content: "reply",
+      author: "cursor_agent",
+    });
+
+    await store.deleteEventSubtree(conv.id, user.id);
+    const restored = await store.restoreEventSubtree(conv.id, asst.id);
+    expect(restored.restored_count).toBe(2);
+    const afterRestore = await store.getTree(conv.id);
+    expect(afterRestore.events.map((e) => e.id).sort()).toEqual([root.id, user.id, asst.id].sort());
+  });
+
+  it("soft-deletes a whole conversation with a shared deletion group and restores it", async () => {
+    const conv = await store.createConversation({ title: "Gone" });
+    const root = (await store.getTree(conv.id)).events[0];
+    await store.appendEvent(conv.id, {
+      kind: "user_input",
+      parent_event_id: root.id,
+      content: "hi",
+      author: "end_user",
+    });
+
+    const del = await store.deleteConversation(conv.id);
+    expect(del.deleted_count).toBeGreaterThanOrEqual(2);
+    expect(del.deletion_group_id).toBeTruthy();
+    expect((await store.listConversations()).map((c) => c.id)).not.toContain(conv.id);
+    const deletedList = await store.listDeletedConversations();
+    expect(deletedList.map((c) => c.id)).toContain(conv.id);
+    expect(deletedList.find((c) => c.id === conv.id)?.deleted_at).toBeTruthy();
+    await expect(store.getTree(conv.id)).rejects.toThrow(/conversation not found/);
+
+    const metaRaw = JSON.parse(
+      await fs.readFile(
+        path.join(workspaceRoot, ".colcoor", "conversations", conv.id, "meta.json"),
+        "utf8",
+      ),
+    ) as { deleted_at: string | null; deletion_group_id: string | null };
+    expect(metaRaw.deleted_at).toBeTruthy();
+    expect(metaRaw.deletion_group_id).toBe(del.deletion_group_id);
+
+    const eventsRaw = (
+      await fs.readFile(
+        path.join(workspaceRoot, ".colcoor", "conversations", conv.id, "events.jsonl"),
+        "utf8",
+      )
+    )
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { deleted_at: string | null; deletion_group_id: string | null });
+    expect(eventsRaw.every((e) => e.deleted_at && e.deletion_group_id === del.deletion_group_id)).toBe(
+      true,
+    );
+
+    const restored = await store.restoreDeletedConversation(conv.id);
+    expect(restored.restored_count).toBe(del.deleted_count);
+    expect((await store.listConversations()).map((c) => c.id)).toContain(conv.id);
+    expect((await store.listDeletedConversations()).map((c) => c.id)).not.toContain(conv.id);
+    expect((await store.getTree(conv.id)).events.length).toBe(del.deleted_count);
+  });
+
+  it("undoes a conversation delete via the shared deletion group", async () => {
+    const conv = await store.createConversation({ title: "Undo me" });
+    const del = await store.deleteConversation(conv.id);
+    expect(del.deletion_group_id).toBeTruthy();
+    const undone = await store.undoEventDeletion(conv.id, del.deletion_group_id as string);
+    expect(undone.restored_count).toBe(del.deleted_count);
+    expect((await store.listConversations()).map((c) => c.id)).toContain(conv.id);
+    expect((await store.getTree(conv.id)).events.length).toBe(del.deleted_count);
+  });
+
+  it("idempotent conversation delete returns zero after already deleted", async () => {
+    const conv = await store.createConversation({ title: null });
+    const first = await store.deleteConversation(conv.id);
+    expect(first.deleted_count).toBeGreaterThan(0);
+    const second = await store.deleteConversation(conv.id);
+    expect(second).toEqual({ deleted_count: 0, deletion_group_id: null });
+  });
+
   it("refuses to delete the conversation root", async () => {
     const conv = await store.createConversation({ title: null });
     const root = (await store.getTree(conv.id)).events[0];

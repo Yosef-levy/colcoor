@@ -584,6 +584,20 @@ async def list_conversations_for_user(
     return list(res.all())
 
 
+async def list_deleted_conversations_for_user(
+    session: AsyncSession, user_id: uuid.UUID
+) -> list[tuple[Conversation, ConversationMember]]:
+    """Soft-deleted conversations the caller is still a member of (Recently Deleted)."""
+    stmt = (
+        select(Conversation, ConversationMember)
+        .join(ConversationMember, ConversationMember.conversation_id == Conversation.id)
+        .where(ConversationMember.user_id == user_id, Conversation.deleted_at.isnot(None))
+        .order_by(Conversation.deleted_at.desc())
+    )
+    res = await session.execute(stmt)
+    return list(res.all())
+
+
 async def get_conversation_member(
     session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
 ) -> ConversationMember | None:

@@ -54,6 +54,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
     expect([...CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS].sort()).toEqual([
       "colcoor.addConversationMember",
       "colcoor.addNoteToSelectedMessage",
+      "colcoor.buildListFromConversation",
       "colcoor.changeMemberRole",
       "colcoor.continueFromHere",
       "colcoor.copyConversationId",
@@ -69,6 +70,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.openConversation",
       "colcoor.openConversationDrawers",
       "colcoor.openLegalPolicySettings",
+      "colcoor.openListAgentJobs",
       "colcoor.openSettings",
       "colcoor.openSideChat",
       "colcoor.openSideChatSoundSettings",
@@ -80,7 +82,9 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.removeMemberFromConversation",
       "colcoor.renameConversation",
       "colcoor.resendAssistant",
+      "colcoor.restoreDeletedConversation",
       "colcoor.restoreMessageBranch",
+      "colcoor.runAgentOnLists",
       "colcoor.sendMessage",
       "colcoor.setCursorAgentApiKey",
       "colcoor.setupCursorCli",
@@ -89,6 +93,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.testSideChatSound",
       "colcoor.togglePinnedConversation",
       "colcoor.toggleStarSelectedMessage",
+      "colcoor.viewMessageMetadata",
     ]);
   });
 

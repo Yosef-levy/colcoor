@@ -28,6 +28,8 @@ export type ConversationSummary = {
   pinned: boolean;
   /** ISO 8601; used for sidebar ordering and “last updated”. */
   updated_at?: string;
+  /** ISO 8601 when soft-deleted; present on GET …/conversations/deleted. */
+  deleted_at?: string | null;
   /** True when side-chat max seq is ahead of this user’s read cursor (GET /conversations). */
   side_chat_has_unread?: boolean;
   /** Count of unread, non-deleted side-chat rows for the caller (GET /conversations). */
@@ -253,6 +255,8 @@ export interface ColcoorClient {
   patchMe(body: MePatchBody): Promise<MeOut>;
   cursorExchange(body: CursorExchangeBody): Promise<AuthResponseBody>;
   listConversations(): Promise<ConversationSummary[]>;
+  /** Soft-deleted conversations the caller can restore (Recently Deleted). */
+  listDeletedConversations(): Promise<ConversationSummary[]>;
   createConversation(body: {
     title?: string | null;
     metadata_json?: Record<string, unknown> | null;
@@ -536,6 +540,14 @@ export class ColcoorApiClient implements ColcoorClient {
     const res = await this.fetchApi("/conversations", { method: "GET" });
     const text = await res.text();
     this.assertOkResponse(res, text, "list conversations");
+    return JSON.parse(text) as ConversationSummary[];
+  }
+
+  /** Soft-deleted conversations available for restore (GET /conversations/deleted). */
+  async listDeletedConversations(): Promise<ConversationSummary[]> {
+    const res = await this.fetchApi("/conversations/deleted", { method: "GET" });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "list deleted conversations");
     return JSON.parse(text) as ConversationSummary[];
   }
 

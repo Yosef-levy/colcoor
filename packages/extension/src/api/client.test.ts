@@ -396,6 +396,52 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.method).toBe("GET");
   });
 
+  it("listDeletedConversations GETs /conversations/deleted", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify([
+          {
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            title: "Deleted",
+            pinned: false,
+            updated_at: "2026-01-02T00:00:00Z",
+            deleted_at: "2026-01-02T00:00:00Z",
+          },
+        ]),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const rows = await api.listDeletedConversations();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].deleted_at).toBe("2026-01-02T00:00:00Z");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/conversations/deleted");
+    expect(init.method).toBe("GET");
+  });
+
+  it("restoreDeletedConversation POSTs …/restore-deleted", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ restored_count: 3 }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const out = await api.restoreDeletedConversation("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    expect(out.restored_count).toBe(3);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/restore-deleted");
+    expect(init.method).toBe("POST");
+  });
+
   it("getMe sends GET /api/v1/me", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

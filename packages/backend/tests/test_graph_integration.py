@@ -831,6 +831,13 @@ def test_soft_delete_conversation_undo_and_restore(monkeypatch: pytest.MonkeyPat
         assert r.status_code == 200, r.text
         assert cid not in {row["id"] for row in r.json()}
 
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        deleted_rows = r.json()
+        assert cid in {row["id"] for row in deleted_rows}
+        match = next(row for row in deleted_rows if row["id"] == cid)
+        assert match.get("deleted_at")
+
         r = client.post(
             f"/api/v1/conversations/{cid}/events/undo-delete",
             headers=auth,
@@ -855,12 +862,59 @@ def test_soft_delete_conversation_undo_and_restore(monkeypatch: pytest.MonkeyPat
         r = client.get("/api/v1/conversations", headers=auth)
         assert cid in {row["id"] for row in r.json()}
 
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid not in {row["id"] for row in r.json()}
+
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
         assert r.status_code == 200, r.text
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
         assert r.status_code == 200, r.text
         assert r.json()["deleted_count"] == 0
         assert r.json()["deletion_group_id"] is None
+
+    get_settings.cache_clear()
+
+
+def test_list_deleted_conversations_and_restore_from_list(
+    monkeypatch: pytest.MonkeyPatch, postgres_url: str
+) -> None:
+    """GET /conversations/deleted lists soft-deleted rows; restore-deleted clears them from that list."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "trash"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid not in {row["id"] for row in r.json()}
+
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
+        assert r.status_code == 200, r.text
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert cid not in {row["id"] for row in r.json()}
+
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid in {row["id"] for row in r.json()}
+
+        r = client.post(f"/api/v1/conversations/{cid}/restore-deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json()["restored_count"] >= 1
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert cid in {row["id"] for row in r.json()}
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert cid not in {row["id"] for row in r.json()}
 
     get_settings.cache_clear()
 

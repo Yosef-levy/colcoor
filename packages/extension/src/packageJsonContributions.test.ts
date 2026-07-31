@@ -300,6 +300,22 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).not.toContain("command:colcoor.changeMemberRole");
     expect(contents).not.toContain("command:colcoor.removeMemberFromConversation");
     expect(contents).not.toContain("command:colcoor.deleteConversation");
+    expect(contents).not.toContain("command:colcoor.restoreDeletedConversation");
+  });
+
+  it("registers restore deleted conversation and scopes it to deleted rows", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: {
+        commands?: { command?: string }[];
+        menus?: { "view/item/context"?: { command?: string; when?: string }[] };
+      };
+    };
+    const commands = pkg.contributes?.commands ?? [];
+    expect(commands.some((c) => c.command === "colcoor.restoreDeletedConversation")).toBe(true);
+    const menus = pkg.contributes?.menus?.["view/item/context"] ?? [];
+    const restore = menus.find((m) => m.command === "colcoor.restoreDeletedConversation");
+    expect(restore?.when).toContain("viewItem == deletedConversation");
   });
 
 });

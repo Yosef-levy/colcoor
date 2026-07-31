@@ -145,7 +145,7 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
 
   const treeView = vscode.window.createTreeView("colcoor.conversations", {
     treeDataProvider: treeProvider,
-    showCollapseAll: false,
+    showCollapseAll: true,
   });
   context.subscriptions.push(treeView);
   markActivationStep("tree-view:ready");

@@ -19,8 +19,22 @@ This is a **runtime setting** on the same extension build — it is not a separa
    activation, so a reload is required after changing the setting.
 
 When local mode is active you do **not** need to sign in. The conversations view,
-creating conversations, branching, notes, stars, lists, and running the Cursor agent all
-work exactly as in remote mode.
+creating conversations, branching, notes, stars, lists, soft-delete / restore, and
+running the Cursor agent all work exactly as in remote mode.
+
+## Soft-delete and restore (local)
+
+Local mode mirrors the backend batch semantics:
+
+- **Delete message branch** tombstones the subtree with a shared `deletion_group_id` in
+  `events.jsonl`. Immediate **Undo** (and **Restore message branch…**) clear that batch.
+- **Delete conversation** tombstones every live event **and** sets `meta.json`
+  `deleted_at` / `deletion_group_id` to the same group. The conversation leaves the live
+  sidebar list and appears under **Recently Deleted**.
+- **Restore deleted conversation…** (Command Palette or the deleted-row context menu)
+  restores the shared group so `meta.json` and events become live again.
+- Offline local storage does **not** enforce the remote 5-minute undo window or the
+  14-day hard purge; deleted folders remain on disk until you remove them.
 
 ## Where data is stored
 

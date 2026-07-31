@@ -109,6 +109,10 @@ class ConversationOut(BaseModel):
     metadata_json: dict[str, Any] | None = None
     pinned: bool
     updated_at: datetime
+    deleted_at: datetime | None = Field(
+        default=None,
+        description="Set when the conversation is soft-deleted; populated on GET …/conversations/deleted",
+    )
     side_chat_has_unread: bool = Field(
         default=False,
         description="True when max non-deleted side-chat seq exceeds caller last_read_seq",

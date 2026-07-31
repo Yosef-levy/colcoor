@@ -58,6 +58,7 @@ export function conversationsWelcomeContents(
 export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.addConversationMember",
   "colcoor.addNoteToSelectedMessage",
+  "colcoor.buildListFromConversation",
   "colcoor.changeMemberRole",
   "colcoor.continueFromHere",
   "colcoor.copyConversationId",
@@ -73,6 +74,7 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.openConversation",
   "colcoor.openConversationDrawers",
   "colcoor.openLegalPolicySettings",
+  "colcoor.openListAgentJobs",
   "colcoor.openSettings",
   "colcoor.openSideChat",
   "colcoor.openSideChatSoundSettings",
@@ -84,7 +86,9 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.removeMemberFromConversation",
   "colcoor.renameConversation",
   "colcoor.resendAssistant",
+  "colcoor.restoreDeletedConversation",
   "colcoor.restoreMessageBranch",
+  "colcoor.runAgentOnLists",
   "colcoor.sendMessage",
   "colcoor.setCursorAgentApiKey",
   "colcoor.setupCursorCli",
@@ -93,6 +97,7 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.testSideChatSound",
   "colcoor.togglePinnedConversation",
   "colcoor.toggleStarSelectedMessage",
+  "colcoor.viewMessageMetadata",
 ]);
 
 /**

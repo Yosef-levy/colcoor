@@ -55,6 +55,7 @@ from colcoor_backend.services.graph import (
     delete_note_row,
     list_conversation_members,
     list_conversations_for_user,
+    list_deleted_conversations_for_user,
     list_events_for_tree,
     list_notes_visible,
     patch_conversation_for_user,
@@ -113,6 +114,7 @@ def _conversation_out(
     *,
     side_chat_has_unread: bool = False,
     side_chat_unread_count: int = 0,
+    include_deleted_at: bool = False,
 ) -> ConversationOut:
     return ConversationOut(
         id=conv.id,
@@ -120,6 +122,7 @@ def _conversation_out(
         metadata_json=conv.metadata_json,
         pinned=member.pinned,
         updated_at=conv.updated_at,
+        deleted_at=conv.deleted_at if include_deleted_at else None,
         side_chat_has_unread=side_chat_has_unread,
         side_chat_unread_count=side_chat_unread_count,
     )
@@ -147,6 +150,16 @@ async def list_conversations(
         )
         for c, m in rows
     ]
+
+
+@router.get("/deleted", response_model=list[ConversationOut])
+async def list_deleted_conversations(
+    session: DbSession,
+    user_id: CurrentUserId,
+) -> list[ConversationOut]:
+    """Soft-deleted conversations the caller can restore (Recently Deleted)."""
+    rows = await list_deleted_conversations_for_user(session, user_id)
+    return [_conversation_out(c, m, include_deleted_at=True) for c, m in rows]
 
 
 @router.post("", response_model=ConversationOut)
