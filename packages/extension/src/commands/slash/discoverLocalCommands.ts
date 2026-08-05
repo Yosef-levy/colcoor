@@ -1,46 +1,120 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { SlashCommand } from "./types";
 import { isColcoorSlashName } from "./types";
 
+export type DiscoverLocalOptions = {
+  /**
+   * Override scan roots for tests. When set, only these roots are scanned with
+   * Claude + Cursor relative paths under each root (no implicit home dirs).
+   */
+  roots?: string[];
+  /** Override home directory (defaults to `os.homedir()`). */
+  homeDir?: string;
+};
+
 /**
- * Discover provider-native slash commands from Claude Code–compatible directories:
- * - `.claude/skills/<name>/SKILL.md`
- * - `.claude/commands/<name>.md`
+ * Discover provider-native slash commands / skills from disk.
  *
- * Used for autocomplete before/without an active SDK session.
+ * Default scan order (first wins on name collision):
+ * 1. `<workspace>/.cursor/skills`
+ * 2. `~/.cursor/skills`
+ * 3. `~/.cursor/skills-cursor` (Cursor built-ins)
+ * 4. `<workspace|~>/.claude/skills` and `.claude/commands`
  */
-export function discoverLocalProviderCommands(workspaceRoot: string): SlashCommand[] {
-  const root = workspaceRoot.trim();
-  if (!root) {
-    return [];
-  }
+export function discoverLocalProviderCommands(
+  workspaceRoot: string,
+  options?: DiscoverLocalOptions,
+): SlashCommand[] {
   const out: SlashCommand[] = [];
   const seen = new Set<string>();
 
-  const skillsDir = join(root, ".claude", "skills");
-  if (existsSync(skillsDir) && safeIsDir(skillsDir)) {
-    for (const entry of safeReaddir(skillsDir)) {
-      const skillMd = join(skillsDir, entry, "SKILL.md");
-      if (!existsSync(skillMd) || !safeIsFile(skillMd)) {
+  const pushAll = (commands: SlashCommand[]): void => {
+    for (const cmd of commands) {
+      const key = cmd.name.toLowerCase();
+      if (seen.has(key)) {
         continue;
       }
-      const meta = parseFrontmatterNameDescription(safeRead(skillMd));
-      const name = (meta.name || entry).trim().toLowerCase();
-      if (!name || isColcoorSlashName(name) || seen.has(name)) {
-        continue;
-      }
-      seen.add(name);
-      out.push({
-        name,
-        description: meta.description || `Skill: ${name}`,
-        argumentHint: meta.argumentHint,
-        source: "skill",
-        execution: "provider",
-        availability: { kind: "available" },
-      });
+      seen.add(key);
+      out.push(cmd);
     }
+  };
+
+  if (options?.roots?.length) {
+    for (const root of options.roots) {
+      const r = root.trim();
+      if (!r) {
+        continue;
+      }
+      pushAll(discoverSkillsInDir(join(r, ".cursor", "skills")));
+      pushAll(discoverSkillsInDir(join(r, ".cursor", "skills-cursor")));
+      pushAll(discoverInClaudeRoot(r));
+    }
+    return out;
+  }
+
+  const workspace = workspaceRoot.trim();
+  const home = (options?.homeDir ?? homedir()).trim();
+
+  if (workspace) {
+    pushAll(discoverSkillsInDir(join(workspace, ".cursor", "skills")));
+  }
+  if (home) {
+    pushAll(discoverSkillsInDir(join(home, ".cursor", "skills")));
+    pushAll(discoverSkillsInDir(join(home, ".cursor", "skills-cursor")));
+  }
+  if (workspace) {
+    pushAll(discoverInClaudeRoot(workspace));
+  }
+  if (home && home !== workspace) {
+    pushAll(discoverInClaudeRoot(home));
+  }
+  return out;
+}
+
+/** Scan `<dir>/<name>/SKILL.md` trees (Cursor / Claude Agent Skills layout). */
+function discoverSkillsInDir(skillsDir: string): SlashCommand[] {
+  const out: SlashCommand[] = [];
+  const seen = new Set<string>();
+  if (!existsSync(skillsDir) || !safeIsDir(skillsDir)) {
+    return out;
+  }
+  for (const entry of safeReaddir(skillsDir)) {
+    const skillMd = join(skillsDir, entry, "SKILL.md");
+    if (!existsSync(skillMd) || !safeIsFile(skillMd)) {
+      continue;
+    }
+    const meta = parseFrontmatterNameDescription(safeRead(skillMd));
+    const name = (meta.name || entry).trim().toLowerCase();
+    if (!name || isColcoorSlashName(name) || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    out.push({
+      name,
+      description: meta.description || `Skill: ${name}`,
+      argumentHint: meta.argumentHint,
+      source: "skill",
+      execution: "provider",
+      availability: { kind: "available" },
+    });
+  }
+  return out;
+}
+
+function discoverInClaudeRoot(root: string): SlashCommand[] {
+  const out: SlashCommand[] = [];
+  const seen = new Set<string>();
+
+  for (const cmd of discoverSkillsInDir(join(root, ".claude", "skills"))) {
+    const key = cmd.name.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(cmd);
   }
 
   const commandsDir = join(root, ".claude", "commands");
@@ -91,10 +165,9 @@ export function providerCommandsFromSdk(
       continue;
     }
     seen.add(name);
-    // SDK lists both built-in commands and skills; treat skill-like names as skills when
-    // description mentions skill, otherwise provider. Host may refine via source.
     const desc = (c.description ?? "").trim() || name;
-    const looksLikeSkill = /skill/i.test(desc) || Boolean(c.argumentHint);
+    // Prefer "provider" for built-ins; skills usually come from disk SKILL.md discovery.
+    const looksLikeSkill = /\bskill\b/i.test(desc) && !/alias of/i.test(desc);
     out.push({
       name,
       description: desc,
@@ -139,13 +212,40 @@ function parseFrontmatterNameDescription(raw: string): {
   return { name, description, argumentHint };
 }
 
+/**
+ * Parse a YAML scalar that may be:
+ * - `key: value`
+ * - `key: "quoted"`
+ * - `key: >-` / `|` folded/literal block with indented continuation lines
+ */
 function matchYamlScalar(block: string, key: string): string | undefined {
-  const re = new RegExp(`^${key}:\\s*(.+)$`, "im");
+  const re = new RegExp(`^${key}:\\s*(.*)$`, "im");
   const m = block.match(re);
   if (!m) {
     return undefined;
   }
   let v = (m[1] ?? "").trim();
+  if (!v || v === ">" || v === ">-" || v === "|" || v === "|-") {
+    // Folded/literal block: collect following indented lines.
+    const lines = block.split(/\r?\n/);
+    const keyLineIdx = lines.findIndex((line) => new RegExp(`^${key}:\\s*`, "i").test(line));
+    if (keyLineIdx < 0) {
+      return undefined;
+    }
+    const collected: string[] = [];
+    for (let i = keyLineIdx + 1; i < lines.length; i++) {
+      const line = lines[i] ?? "";
+      if (/^\S/.test(line)) {
+        break;
+      }
+      const trimmed = line.replace(/^\s+/, "");
+      if (trimmed) {
+        collected.push(trimmed);
+      }
+    }
+    const joined = collected.join(" ").trim();
+    return joined || undefined;
+  }
   if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
     v = v.slice(1, -1);
   }

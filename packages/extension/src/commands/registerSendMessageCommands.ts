@@ -118,9 +118,7 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
                 capabilities,
                 selectedModel: "auto",
                 modelOptions: [],
-                providerCommands: capabilities.supportsProviderCommands
-                  ? resolveProviderCommandCatalog(workspaceRoot)
-                  : [],
+                providerCommands: resolveProviderCommandCatalog(workspaceRoot, providerId),
               },
             });
             if (slash) {

@@ -6933,12 +6933,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         var hint = c.argumentHint ? " " + String(c.argumentHint) : "";
         var source = c.source ? String(c.source) : "colcoor";
         var meta = String(c.description || "");
-        if (c.available === false && c.unavailableReason) {
-          meta += " — " + String(c.unavailableReason);
+        if (c.available === false) {
+          meta +=
+            " — " +
+            (c.unavailableReason
+              ? String(c.unavailableReason)
+              : "Unavailable for the current provider/mode");
         }
         btn.innerHTML =
           '<span class="slash-item-name"></span><span class="slash-item-meta"></span>';
-        btn.querySelector(".slash-item-name").textContent = name + hint + " · " + source;
+        var status = c.available === false ? " (unavailable)" : "";
+        btn.querySelector(".slash-item-name").textContent = name + hint + " · " + source + status;
         btn.querySelector(".slash-item-meta").textContent = meta;
         box.appendChild(btn);
       }
@@ -6962,12 +6967,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         pos = insert.length;
       }
       ta.value = next;
-      try {
-        ta.setSelectionRange(pos, pos);
-      } catch (ePick) {}
       closeComposerSlashPicker();
       updateComposerSendEnabled();
-      scheduleComposerFocus(ta);
+      // Focus from picker click can reset caret; restore after focus settles.
+      var placeCaret = function () {
+        try {
+          ta.focus();
+          ta.setSelectionRange(pos, pos);
+        } catch (ePick) {}
+      };
+      placeCaret();
+      try {
+        requestAnimationFrame(placeCaret);
+      } catch (eRaf) {
+        setTimeout(placeCaret, 0);
+      }
     }
 
     function updateComposerSlashPicker() {
@@ -6984,14 +6998,32 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var ta = document.getElementById("input");
       if (!ta) return;
       var v = String(ta.value || "");
-      if (!v.trim() || !/^\\s*\\//.test(v)) {
+      // Discovery requires a leading slash. Replace non-slash text so the picker can open.
+      if (!/^\\s*\\//.test(v)) {
         ta.value = "/";
-        try {
-          ta.setSelectionRange(1, 1);
-        } catch (eOpen) {}
+        v = "/";
       }
-      scheduleComposerFocus(ta);
-      updateComposerSlashPicker();
+      var lead = v.match(/^(\\s*)\\//);
+      var caret = lead ? lead[0].length : 1;
+      // Focus from the slash button can reset the caret to 0; set selection after focus.
+      var placeCaret = function () {
+        try {
+          ta.focus();
+          ta.setSelectionRange(caret, caret);
+        } catch (eOpen) {}
+      };
+      placeCaret();
+      try {
+        requestAnimationFrame(function () {
+          placeCaret();
+          updateComposerSlashPicker();
+        });
+      } catch (eRaf) {
+        setTimeout(function () {
+          placeCaret();
+          updateComposerSlashPicker();
+        }, 0);
+      }
     }
 
     function updateSlashResultBanner() {

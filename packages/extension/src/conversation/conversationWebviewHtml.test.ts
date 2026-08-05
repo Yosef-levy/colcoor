@@ -70,6 +70,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain("dismissSlashResult");
   });
 
+  it("places the caret after `/` when opening slash commands from the discovery button", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonceSlashCaret");
+    expect(html).toContain("function openComposerSlashPickerAll()");
+    expect(html).toContain("ta.setSelectionRange(caret, caret)");
+    expect(html).toMatch(
+      /function openComposerSlashPickerAll\(\)[\s\S]*?requestAnimationFrame\(function \(\) \{\s*placeCaret\(\);/,
+    );
+  });
+
   it("omits detail breadcrumb strip; checkpoint_label still used in tree/thread/search ([ui-features.md] §8)", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain("checkpoint_label");

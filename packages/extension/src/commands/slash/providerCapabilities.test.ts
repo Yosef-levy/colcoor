@@ -33,7 +33,7 @@ describe("resolveProviderSlashCapabilities", () => {
     }
   });
 
-  it("disables provider commands for Cursor CLI", () => {
+  it("enables provider command pass-through for Cursor CLI", () => {
     expect(
       resolveProviderSlashCapabilities({
         providerId: "cursor",
@@ -41,8 +41,8 @@ describe("resolveProviderSlashCapabilities", () => {
         agentMode: "auto",
       }),
     ).toMatchObject({
-      supportsProviderCommands: false,
-      supportsSkills: false,
+      supportsProviderCommands: true,
+      supportsSkills: true,
     });
   });
 

@@ -1,18 +1,19 @@
 import { COLCOOR_SLASH_COMMANDS } from "./colcoorCommands";
-import { isColcoorSlashName, type SlashCommand, type SlashCommandContext } from "./types";
+import {
+  isColcoorSlashName,
+  type ProviderSlashCapabilities,
+  type SlashCommand,
+  type SlashCommandContext,
+} from "./types";
 
 /**
  * Merge Colcoor built-ins with provider-native commands.
- * Provider commands that collide with `/colcoor-*` are dropped (Colcoor wins the namespace).
- * Unprefixed Colcoor aliases are never added.
+ * Provider commands are always reflected in the catalog; availability depends on
+ * provider × mode capabilities. Collisions with `/colcoor-*` are dropped.
  */
 export function buildSlashCommandCatalog(ctx: SlashCommandContext): SlashCommand[] {
   const out: SlashCommand[] = COLCOOR_SLASH_COMMANDS.map((c) => ({ ...c }));
   const reserved = new Set(out.map((c) => c.name.toLowerCase()));
-
-  if (!ctx.capabilities.supportsProviderCommands && !ctx.capabilities.supportsSkills) {
-    return out;
-  }
 
   for (const cmd of ctx.providerCommands) {
     const key = cmd.name.trim().toLowerCase();
@@ -20,38 +21,52 @@ export function buildSlashCommandCatalog(ctx: SlashCommandContext): SlashCommand
       continue;
     }
     if (isColcoorSlashName(key) || reserved.has(key)) {
-      // Reject collisions: never let a provider override /colcoor-* or duplicate a Colcoor name.
       continue;
     }
     reserved.add(key);
-    const available =
-      cmd.source === "skill"
-        ? ctx.capabilities.supportsSkills
-        : ctx.capabilities.supportsProviderCommands;
     out.push({
       ...cmd,
       name: key,
-      availability: available
-        ? cmd.availability.kind === "available"
-          ? { kind: "available" }
-          : cmd.availability
-        : {
-            kind: "unavailable",
-            reason:
-              cmd.source === "skill"
-                ? "Skills require Anthropic Plan/Agent mode (Claude Agent SDK)."
-                : "Provider commands require Anthropic Plan/Agent mode (Claude Agent SDK).",
-          },
+      availability: availabilityForProviderCommand(cmd, ctx),
     });
   }
   return out;
 }
 
+function availabilityForProviderCommand(
+  cmd: SlashCommand,
+  ctx: SlashCommandContext,
+): SlashCommand["availability"] {
+  const caps = ctx.capabilities;
+  const executable =
+    cmd.source === "skill" ? caps.supportsSkills : caps.supportsProviderCommands;
+  if (executable) {
+    return cmd.availability.kind === "available"
+      ? { kind: "available" }
+      : cmd.availability;
+  }
+  return { kind: "unavailable", reason: unavailableReason(ctx, caps) };
+}
+
+export function unavailableReason(
+  ctx: Pick<SlashCommandContext, "providerId" | "cliMode">,
+  caps: ProviderSlashCapabilities,
+): string {
+  if (ctx.providerId === "anthropic" && !caps.supportsProviderCommands && !caps.supportsSkills) {
+    return `Requires Anthropic Plan or Agent mode (current mode: ${ctx.cliMode}). Use /colcoor-plan or /colcoor-agent.`;
+  }
+  if (ctx.providerId === "cursor" && !caps.supportsProviderCommands && !caps.supportsSkills) {
+    return "Provider slash commands are disabled in stub mode.";
+  }
+  return "Unavailable for the current provider/mode.";
+}
+
 /** Filter catalog for autocomplete by prefix query (without leading slash). */
 export function filterSlashCommands(catalog: SlashCommand[], query: string): SlashCommand[] {
   const q = query.trim().toLowerCase();
+  const rank = (c: SlashCommand): number => (c.availability.kind === "available" ? 0 : 1);
   if (!q) {
-    return catalog.slice(0, 24);
+    return [...catalog].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)).slice(0, 24);
   }
   const starts: SlashCommand[] = [];
   const contains: SlashCommand[] = [];
@@ -63,5 +78,7 @@ export function filterSlashCommands(catalog: SlashCommand[], query: string): Sla
       contains.push(c);
     }
   }
-  return [...starts, ...contains].slice(0, 24);
+  return [...starts, ...contains]
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+    .slice(0, 24);
 }

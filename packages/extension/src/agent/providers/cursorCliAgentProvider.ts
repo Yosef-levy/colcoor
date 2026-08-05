@@ -35,8 +35,13 @@ export class CursorCliAgentProvider implements AgentBackend {
       input.workspaceContextAppendix == null
         ? ""
         : normalizePersistedUserInputText(input.workspaceContextAppendix);
-    const promptForCli =
-      appendix.length > 0 ? `${input.transcriptText}${appendix}` : input.transcriptText;
+    // Provider slash invocations (`/context`, `/skill-name`, …) are sent as the CLI prompt
+    // so they are not buried inside a full transcript re-send.
+    const slash = input.providerSlashCommand?.trim();
+    const basePrompt = slash
+      ? slash
+      : input.transcriptText;
+    const promptForCli = appendix.length > 0 ? `${basePrompt}${appendix}` : basePrompt;
 
     try {
       const storedKey = await this.secrets.get(SECRET_CURSOR_AGENT_API_KEY);

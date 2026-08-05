@@ -5,7 +5,9 @@ import type { ProviderSlashCapabilities } from "./types";
 
 /**
  * Slash-command capabilities for the active provider × mode combination.
- * Claude Agent SDK (plan/agent) is the only backend with native commands/skills today.
+ * - Anthropic Plan/Agent: Claude Agent SDK native commands/skills
+ * - Cursor: pass-through of `/command` text to the headless CLI prompt
+ * - Anthropic Ask: Messages API has no Claude Code command surface
  */
 export function resolveProviderSlashCapabilities(params: {
   providerId: ProviderId;
@@ -22,8 +24,8 @@ export function resolveProviderSlashCapabilities(params: {
   }
   if (params.providerId === "cursor") {
     return {
-      supportsProviderCommands: false,
-      supportsSkills: false,
+      supportsProviderCommands: true,
+      supportsSkills: true,
       supportsProviderContext: false,
       supportsDisallowedTools: false,
     };

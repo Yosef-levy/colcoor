@@ -89,9 +89,12 @@ describe("resolveProviderCapabilities", () => {
       supportsSessionFork: true,
     });
     expect(
-      resolveProviderCapabilities({ providerId: "cursor", agentMode: "auto", cliMode: "agent" })
-        .supportsProviderCommands,
-    ).toBe(false);
+      resolveProviderCapabilities({ providerId: "cursor", agentMode: "auto", cliMode: "agent" }),
+    ).toMatchObject({
+      supportsProviderCommands: true,
+      supportsSkills: true,
+      supportsDisplayParts: true,
+    });
   });
 });
 

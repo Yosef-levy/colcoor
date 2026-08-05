@@ -21,7 +21,8 @@ export {
   setCachedProviderCommands,
   updateProviderCommandCatalogFromSdk,
 } from "./providerCommandCatalog";
-export { buildSlashCommandCatalog, filterSlashCommands } from "./registry";
+export { buildSlashCommandCatalog, filterSlashCommands, unavailableReason } from "./registry";
+export { seedProviderCommands } from "./seedProviderCommands";
 export {
   COLCOOR_SLASH_PREFIX,
   isColcoorSlashName,

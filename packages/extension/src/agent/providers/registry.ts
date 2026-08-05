@@ -56,8 +56,9 @@ export function resolveProviderCapabilities(params: {
   }
   if (providerId === "cursor") {
     return {
-      supportsProviderCommands: false,
-      supportsSkills: false,
+      // Slash text is forwarded as the Cursor CLI prompt (no separate command API).
+      supportsProviderCommands: true,
+      supportsSkills: true,
       supportsProviderContext: false,
       supportsDisallowedTools: false,
       supportsSessionFork: false,

@@ -212,10 +212,16 @@ function formatHelp(catalog: SlashCommand[], ctx: SlashCommandContext): string {
     for (const c of provider) {
       lines.push(formatCatalogLine(c));
     }
-  } else if (!ctx.capabilities.supportsProviderCommands) {
+    if (!ctx.capabilities.supportsProviderCommands && !ctx.capabilities.supportsSkills) {
+      lines.push(
+        "",
+        "_Executable in Anthropic Plan/Agent mode (Claude Agent SDK). Unavailable entries stay listed so you can discover them._",
+      );
+    }
+  } else {
     lines.push(
       "",
-      "_Provider-native commands and skills are available in Anthropic Plan/Agent mode (Claude Agent SDK)._",
+      "_No provider commands discovered. Add `.claude/skills` / `.claude/commands`, or use Anthropic Plan/Agent so the SDK can report built-ins._",
     );
   }
   return lines.join("\n");
@@ -223,31 +229,36 @@ function formatHelp(catalog: SlashCommand[], ctx: SlashCommandContext): string {
 
 function formatSkills(catalog: SlashCommand[], ctx: SlashCommandContext): string {
   const skills = catalog.filter((c) => c.source === "skill" || c.source === "provider");
-  if (!ctx.capabilities.supportsSkills && !ctx.capabilities.supportsProviderCommands) {
-    return [
-      "**Skills**",
-      "",
-      "Skills and provider slash commands require **Anthropic** provider in **Plan** or **Agent** mode (Claude Agent SDK).",
-      "",
-      `Current: provider=\`${ctx.providerId}\`, mode=\`${ctx.cliMode}\`.`,
-      "",
-      "Use `/colcoor-plan` or `/colcoor-agent` to switch, then run `/colcoor-skills` again.",
-    ].join("\n");
-  }
   if (skills.length === 0) {
     return [
       "**Skills / provider commands**",
       "",
-      "No provider commands discovered yet. They appear after a Claude Agent SDK session starts, or when `.claude/skills` / `.claude/commands` are present in the workspace.",
+      "No provider commands discovered yet.",
       "",
-      "Invoke a skill with `/skill-name` (provider-native, not `/colcoor-…`).",
+      "- Anthropic Plan/Agent: built-ins (e.g. `/context`) and `.claude` skills/commands.",
+      "- Cursor: built-ins and `.claude` skills are forwarded to the Cursor CLI prompt.",
+      "- Anthropic Ask: provider commands are listed but require Plan/Agent to run.",
+      "",
+      `Current: provider=\`${ctx.providerId}\`, mode=\`${ctx.cliMode}\`.`,
     ].join("\n");
   }
-  const lines = ["**Skills / provider commands**", ""];
+  const lines = [
+    "**Skills / provider commands**",
+    "",
+    `Provider: \`${ctx.providerId}\` · Mode: \`${ctx.cliMode}\``,
+    "",
+  ];
   for (const c of skills) {
     lines.push(formatCatalogLine(c));
   }
-  lines.push("", "Invoke with `/name` (provider-native names, not the `/colcoor-` prefix).");
+  if (!ctx.capabilities.supportsProviderCommands && !ctx.capabilities.supportsSkills) {
+    lines.push(
+      "",
+      "_These are listed for discovery. To run them, switch to Anthropic Plan or Agent (`/colcoor-plan` / `/colcoor-agent`), or use the Cursor provider._",
+    );
+  } else {
+    lines.push("", "Invoke with `/name` (provider-native names, not the `/colcoor-` prefix).");
+  }
   return lines.join("\n");
 }
 

@@ -162,7 +162,7 @@ async function refreshCommandCatalog(
     if (!Array.isArray(commands)) {
       return;
     }
-    const catalog = updateProviderCommandCatalogFromSdk(workspaceRoot, commands);
+    const catalog = updateProviderCommandCatalogFromSdk(workspaceRoot, commands, "anthropic");
     onCatalog?.(catalog);
   } catch {
     /* discovery is best-effort; do not fail the turn */
@@ -259,7 +259,7 @@ export class ClaudeAgentProvider implements AgentBackend {
           message.subtype === "commands_changed" &&
           Array.isArray(message.commands)
         ) {
-          const catalog = updateProviderCommandCatalogFromSdk(cwd, message.commands);
+          const catalog = updateProviderCommandCatalogFromSdk(cwd, message.commands, "anthropic");
           input.onProviderCommandsChanged?.(catalog);
         }
         if (message.type === "assistant") {

@@ -1757,9 +1757,9 @@ export function createConversationPanelController(
     const capabilities = resolveProviderSlashCapabilities({ providerId, cliMode, agentMode });
     const modelFields = agentModelFieldsForWebview();
     const ws = getWorkspaceRoot();
-    const providerCommands: SlashCommand[] = capabilities.supportsProviderCommands
-      ? resolveProviderCommandCatalog(ws)
-      : [];
+    // Always load seeds + disk + SDK cache so the picker reflects provider commands even when
+    // the current mode cannot execute them (shown as unavailable).
+    const providerCommands: SlashCommand[] = resolveProviderCommandCatalog(ws, providerId);
     return {
       conversationId: conversationId ?? "",
       providerId,
