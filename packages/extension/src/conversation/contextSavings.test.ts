@@ -43,14 +43,14 @@ describe("context savings", () => {
       parent_event_id: "root",
       kind: "user_input",
       created_at: "2026-01-01T00:00:01Z",
-      content_text: "A".repeat(1000),
+      content_text: "A".repeat(4000),
     });
     const branchAReply = node({
       id: "branch-a-reply",
       parent_event_id: "branch-a",
       kind: "assistant_output",
       created_at: "2026-01-01T00:00:02Z",
-      content_text: "B".repeat(1000),
+      content_text: "B".repeat(4000),
     });
     const branchB = node({
       id: "branch-b",
