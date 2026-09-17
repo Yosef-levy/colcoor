@@ -24,6 +24,8 @@ import {
   SECRET_KEY_BACKEND_JWT,
   type ColcoorExtensionDeps,
 } from "./colcoorExtensionDeps";
+import { ConversationTemplateRepository } from "../templates/conversationTemplates";
+import { createTemplateManagerPanelController } from "../templates/templateManagerPanel";
 
 export type BootstrapColcoorResult = {
   deps: ColcoorExtensionDeps;
@@ -142,6 +144,9 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
     getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
   });
   context.subscriptions.push(new vscode.Disposable(() => listAgentJobs.dispose()));
+  const conversationTemplates = new ConversationTemplateRepository(context.globalStorageUri);
+  const templateManager = createTemplateManagerPanelController(context, conversationTemplates);
+  context.subscriptions.push(new vscode.Disposable(() => templateManager.dispose()));
 
   const treeView = vscode.window.createTreeView("colcoor.conversations", {
     treeDataProvider: treeProvider,
@@ -184,6 +189,8 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
     refreshConversationsWelcomeContext,
     drawers,
     listAgentJobs,
+    conversationTemplates,
+    templateManager,
   };
 
   return {

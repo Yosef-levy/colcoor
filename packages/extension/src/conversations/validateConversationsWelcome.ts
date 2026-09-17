@@ -58,6 +58,7 @@ export function conversationsWelcomeContents(
 export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.addConversationMember",
   "colcoor.addNoteToSelectedMessage",
+  "colcoor.applyConversationTemplate",
   "colcoor.buildListFromConversation",
   "colcoor.changeMemberRole",
   "colcoor.continueFromHere",
@@ -71,6 +72,7 @@ export const CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS = new Set<string>([
   "colcoor.listConversationMembers",
   "colcoor.listStarredMessagesInConversation",
   "colcoor.listTodoNotesInConversation",
+  "colcoor.manageConversationTemplates",
   "colcoor.openConversation",
   "colcoor.openConversationDrawers",
   "colcoor.openLegalPolicySettings",

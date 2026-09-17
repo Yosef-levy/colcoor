@@ -7,7 +7,7 @@ import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import type { ColcoorExtensionDeps } from "../activation/colcoorExtensionDeps";
 
 export function registerSettingsCommands(deps: ColcoorExtensionDeps): vscode.Disposable[] {
-  const { api, conversationPanel, isReady } = deps;
+  const { api, conversationPanel, isReady, templateManager } = deps;
   return [
     vscode.commands.registerCommand("colcoor.openSettings", async () => {
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query));
@@ -19,6 +19,11 @@ export function registerSettingsCommands(deps: ColcoorExtensionDeps): vscode.Dis
           label: "Extension settings…",
           description: "VS Code Settings → Colcoor",
           commandId: "colcoor.openSettings",
+        },
+        {
+          label: "Conversation templates…",
+          description: "Create, edit, import, and export local templates",
+          commandId: "colcoor.manageConversationTemplates",
         },
         {
           label: "Legal policy URLs (Terms, Privacy, Refund)…",
@@ -49,6 +54,9 @@ export function registerSettingsCommands(deps: ColcoorExtensionDeps): vscode.Dis
       if (picked && "commandId" in picked && typeof (picked as HubPick).commandId === "string") {
         await vscode.commands.executeCommand((picked as HubPick).commandId);
       }
+    }),
+    vscode.commands.registerCommand("colcoor.manageConversationTemplates", () => {
+      templateManager.show();
     }),
     vscode.commands.registerCommand("colcoor.openLegalPolicySettings", async () => {
       await openColcoorSettings((cmd, query) => vscode.commands.executeCommand(cmd, query), {

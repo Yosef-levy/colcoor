@@ -83,6 +83,17 @@ class LicenseStatusResponse(BaseModel):
 class ConversationCreate(BaseModel):
     title: str | None = None
     metadata_json: dict[str, Any] | None = None
+    root_notes: list[str] = Field(default_factory=list, max_length=32)
+
+    @field_validator("root_notes")
+    @classmethod
+    def _validate_root_notes(cls, notes: list[str]) -> list[str]:
+        for note in notes:
+            if not note.strip():
+                raise ValueError("root notes cannot be empty")
+            if len(note) > 12_000:
+                raise ValueError("root notes must be at most 12000 characters")
+        return notes
 
 
 class ConversationPatch(BaseModel):
@@ -266,6 +277,24 @@ class NotePatchBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(..., min_length=1)
+
+
+class RootNotesCreateBody(BaseModel):
+    """Append template notes that are not already present on the root event."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    notes: list[str] = Field(..., min_length=1, max_length=32)
+
+    @field_validator("notes")
+    @classmethod
+    def _validate_notes(cls, notes: list[str]) -> list[str]:
+        for note in notes:
+            if not note.strip():
+                raise ValueError("root notes cannot be empty")
+            if len(note) > 12_000:
+                raise ValueError("root notes must be at most 12000 characters")
+        return notes
 
 
 class ConversationListItemOut(BaseModel):

@@ -54,6 +54,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
     expect([...CONVERSATIONS_WELCOME_COMMAND_EXCLUSIONS].sort()).toEqual([
       "colcoor.addConversationMember",
       "colcoor.addNoteToSelectedMessage",
+      "colcoor.applyConversationTemplate",
       "colcoor.buildListFromConversation",
       "colcoor.changeMemberRole",
       "colcoor.continueFromHere",
@@ -67,6 +68,7 @@ describe("colcoorCommandsMissingFromConversationsWelcome", () => {
       "colcoor.listConversationMembers",
       "colcoor.listStarredMessagesInConversation",
       "colcoor.listTodoNotesInConversation",
+      "colcoor.manageConversationTemplates",
       "colcoor.openConversation",
       "colcoor.openConversationDrawers",
       "colcoor.openLegalPolicySettings",

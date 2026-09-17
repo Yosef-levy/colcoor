@@ -37,6 +37,7 @@ Standalone **product specification** for the **Colcoor Cursor extension** and it
 
 | Doc | Purpose |
 |-----|---------|
+| [conversation-templates.md](features/conversation-templates.md) | Optional built-in/custom root-note templates and local template management |
 | [offline-mode.md](features/offline-mode.md) | Offline single-user mode (`colcoor.storageMode=local`, `.colcoor/` workspace storage) |
 | [list-agents.md](features/list-agents.md) | List-builder / list-operator jobs (freeze, verify, review) |
 | [git-integration.md](features/git-integration.md) | Optional Git metadata |

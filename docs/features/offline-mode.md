@@ -22,6 +22,11 @@ When local mode is active you do **not** need to sign in. The conversations view
 creating conversations, branching, notes, stars, lists, soft-delete / restore, and
 running the Cursor agent all work exactly as in remote mode.
 
+Conversation-template definitions are also available offline. Built-ins ship with the extension and
+custom definitions live in the extension's machine-local global storage, so they are not tied to the
+open workspace. Applying a template writes the instantiated notes to the conversation root in
+`notes.jsonl`; `<conversation_id>` placeholders are resolved before writing.
+
 ## Soft-delete and restore (local)
 
 Local mode mirrors the backend batch semantics:
@@ -43,6 +48,7 @@ All data lives under `<workspace>/.colcoor/`:
 ```
 .colcoor/
   profile.json                      # local single-user identity
+  docs/                             # optional template-generated trackers (for example syllabi)
   conversations/
     <conversation-id>/
       meta.json                     # title, pins, active node, timestamps

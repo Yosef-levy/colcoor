@@ -16,6 +16,8 @@ import { normalizedConversationTitle } from "../conversations/renameConversation
 import { pinnedVerb, toggledPinnedState } from "../conversations/togglePinnedConversation";
 import { showColcoorApiFailure } from "../util/showColcoorApiFailure";
 import type { ColcoorExtensionDeps } from "../activation/colcoorExtensionDeps";
+import { pickConversationTemplate } from "../templates/pickConversationTemplate";
+import type { ConversationTemplate } from "../templates/conversationTemplates";
 
 export function registerConversationCommands(deps: ColcoorExtensionDeps): vscode.Disposable[] {
   const {
@@ -27,6 +29,7 @@ export function registerConversationCommands(deps: ColcoorExtensionDeps): vscode
     pickConversationInteractively,
     notifyUserTurnOutcomeAndSyncConversationPanel,
     drawers,
+    conversationTemplates,
   } = deps;
   return [
     vscode.commands.registerCommand("colcoor.newConversation", async () => {
@@ -38,6 +41,21 @@ export function registerConversationCommands(deps: ColcoorExtensionDeps): vscode
       if (title === undefined) {
         return;
       }
+      let template: ConversationTemplate | null | undefined;
+      try {
+        template = await pickConversationTemplate(
+          conversationTemplates,
+          "New Colcoor conversation — template",
+        );
+      } catch (e) {
+        await vscode.window.showErrorMessage(
+          `Colcoor templates: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        return;
+      }
+      if (template === undefined) {
+        return;
+      }
       const firstMessageRaw = await vscode.window.showInputBox({
         title: "New Colcoor conversation",
         prompt:
@@ -47,7 +65,10 @@ export function registerConversationCommands(deps: ColcoorExtensionDeps): vscode
       const firstMessage = normalizedOptionalFollowUpPrompt(firstMessageRaw);
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
       try {
-        const conv = await api.createConversation({ title: normalizedConversationTitle(title) });
+        const conv = await api.createConversation({
+          title: normalizedConversationTitle(title),
+          root_notes: template?.notes,
+        });
         refreshTree();
         await conversationPanel.reveal(conv.id, conv.title);
         await conversationPanel.armTryThisNextForConversation(conv.id);
@@ -70,6 +91,36 @@ export function registerConversationCommands(deps: ColcoorExtensionDeps): vscode
         await showColcoorApiFailure(e);
       }
     }),
+    vscode.commands.registerCommand(
+      "colcoor.applyConversationTemplate",
+      async (item?: ConversationCommandArg) => {
+        let convId = conversationIdFromCommandArg(item);
+        let convTitle = conversationDisplayTitleFromCommandArg(item);
+        if (!convId) {
+          const row = await pickConversationInteractively();
+          if (!row) return;
+          convId = row.id;
+          convTitle = row.title;
+        }
+        try {
+          const template = await pickConversationTemplate(
+            conversationTemplates,
+            `Apply template to ${convTitle?.trim() ? `“${convTitle}”` : "(untitled)"}`,
+          );
+          if (!template) return;
+          const created = await api.appendMissingRootNotes(convId, { notes: template.notes });
+          refreshTree();
+          await conversationPanel.refreshIfShowingConversation(convId);
+          await vscode.window.showInformationMessage(
+            created.length
+              ? `Colcoor: added ${created.length} root note(s) from “${template.name}”.`
+              : `Colcoor: “${template.name}” was already fully applied.`,
+          );
+        } catch (e) {
+          await showColcoorApiFailure(e);
+        }
+      },
+    ),
     vscode.commands.registerCommand("colcoor.refreshConversations", () => {
       refreshTree();
       void vscode.window.setStatusBarMessage("Colcoor: conversations list refreshed.", 2500);

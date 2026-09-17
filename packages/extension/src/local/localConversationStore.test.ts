@@ -45,6 +45,38 @@ describe("LocalConversationStore", () => {
     expect(list.map((c) => c.id)).toContain(conv.id);
   });
 
+  it("creates instantiated template notes on the root", async () => {
+    const conv = await store.createConversation({
+      title: "Templated",
+      root_notes: ["Conversation <conversation_id>", " Keep this exact. "],
+    });
+    const root = (await store.getTree(conv.id)).events[0];
+    const notes = await store.listNotes(conv.id);
+    expect(notes).toHaveLength(2);
+    expect(notes.every((note) => note.event_id === root.id)).toBe(true);
+    expect(notes.map((note) => note.content)).toEqual([
+      `Conversation ${conv.id}`,
+      "Keep this exact.",
+    ]);
+  });
+
+  it("appends only missing exact root notes after placeholder substitution", async () => {
+    const conv = await store.createConversation({
+      title: "Templated",
+      root_notes: ["Existing", "ID <conversation_id>"],
+    });
+    const first = await store.appendMissingRootNotes(conv.id, {
+      notes: [" Existing\r\n", "ID <conversation_id>", "New"],
+    });
+    expect(first.map((note) => note.content)).toEqual(["New"]);
+    expect(await store.appendMissingRootNotes(conv.id, { notes: ["New"] })).toEqual([]);
+    expect((await store.listNotes(conv.id)).map((note) => note.content)).toEqual([
+      "Existing",
+      `ID ${conv.id}`,
+      "New",
+    ]);
+  });
+
   it("appends user_input then assistant_output and advances the active node", async () => {
     const conv = await store.createConversation({ title: null });
     const root = (await store.getTree(conv.id)).events[0];

@@ -9,6 +9,42 @@ describe("ColcoorApiClient note mutations", () => {
     vi.restoreAllMocks();
   });
 
+  it("sends root notes when creating a conversation", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({ id: "c", title: "T", pinned: false, updated_at: "2026-01-01" }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.createConversation({ title: "T", root_notes: ["Rule"] });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      title: "T",
+      root_notes: ["Rule"],
+    });
+  });
+
+  it("posts a batch of missing root notes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => "[]",
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.appendMissingRootNotes("conversation-id", { notes: ["Rule"] });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/conversations/conversation-id/root-notes");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ notes: ["Rule"] }));
+  });
+
   it("patchNote sends PATCH with JSON body to notes subresource", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

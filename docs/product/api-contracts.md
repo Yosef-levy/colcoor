@@ -120,10 +120,11 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 
 **Request body `ConversationCreate`:**
 
-| Field | Type | Required |
-|-------|------|----------|
-| `title` | string \| null | no |
-| `metadata_json` | object \| null | no |
+| Field | Type | Required | Constraints / semantics |
+|-------|------|----------|-------------------------|
+| `title` | string \| null | no | |
+| `metadata_json` | object \| null | no | |
+| `root_notes` | array of string | no | At most 32 non-empty notes, each at most 12,000 characters. Created on the bootstrap root in the same transaction. Literal `<conversation_id>` tokens are resolved before persistence. |
 
 ### 3.3 `PATCH /api/v1/conversations/{conversation_id}`
 
@@ -412,6 +413,20 @@ Upload limits: MIME types `image/png`, `image/jpeg`, `image/webp`, `image/gif` o
 
 | **200** | `NoteOut` |
 | **403** | viewer role |
+
+### 7.2a `POST /api/v1/conversations/{conversation_id}/root-notes`
+
+**Purpose:** Instantiate a template's notes on the live conversation root. Owner/editor only.
+Line endings and outer whitespace are normalized, literal `<conversation_id>` tokens are replaced,
+and content already present exactly on the root is omitted.
+
+**Request body:** `{ "notes": ["first note", "second note"] }` (1–32 non-empty strings, at most
+12,000 characters each).
+
+| **200** | array of newly created `NoteOut` rows; empty when every note already exists |
+| **403** | viewer role or not a member |
+| **404** | conversation or live root not found |
+| **422** | note count/content validation error |
 
 ### 7.3 `PATCH /api/v1/conversations/{conversation_id}/notes/{note_id}`
 

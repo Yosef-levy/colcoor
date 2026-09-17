@@ -19,9 +19,10 @@ from colcoor_backend.core.config import get_settings
 from colcoor_backend.core.jwt_tokens import create_access_token
 from colcoor_backend.db import models  # noqa: F401 — register mappers
 from colcoor_backend.db.base import Base
-from colcoor_backend.db.models import ConversationUserState, Event, User
+from colcoor_backend.db.models import ConversationMember, ConversationUserState, Event, Note, User
 from colcoor_backend.services.event_purge import purge_soft_deleted_events
 from colcoor_backend.services.graph import (
+    append_missing_root_notes,
     append_graph_event,
     create_conversation_with_owner,
     create_note_on_event,
@@ -1306,3 +1307,83 @@ def test_conversation_lists_http_crud_and_item_validation(postgres_url) -> None:
         assert r.status_code == 204, r.text
 
     get_settings.cache_clear()
+
+
+def test_template_root_notes_create_and_append_idempotently(session_factory) -> None:
+    async def run() -> None:
+        async with session_factory() as session:
+            owner = User(
+                cursor_sub=f"template-owner-{uuid.uuid4()}",
+                email="template-owner@example.test",
+                display_name="Owner",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            session.add(owner)
+            await session.flush()
+            await session.refresh(owner)
+            conversation, _ = await create_conversation_with_owner(
+                session,
+                user_id=owner.id,
+                title="Template",
+                root_notes=["ID <conversation_id>", "Existing"],
+            )
+            await session.commit()
+
+        async with session_factory() as session:
+            created = await append_missing_root_notes(
+                session,
+                conversation.id,
+                owner.id,
+                [" ID <conversation_id>\r\n", "Existing", "New"],
+            )
+            await session.commit()
+            assert [note.content for note in created] == ["New"]
+            contents = (
+                await session.execute(
+                    select(Note.content)
+                    .join(Event, Event.id == Note.event_id)
+                    .where(Event.conversation_id == conversation.id)
+                )
+            ).scalars().all()
+            assert set(contents) == {f"ID {conversation.id}", "Existing", "New"}
+
+    asyncio.run(run())
+
+
+def test_template_root_notes_reject_viewer(session_factory) -> None:
+    async def run() -> None:
+        async with session_factory() as session:
+            owner = User(
+                cursor_sub=f"template-owner-{uuid.uuid4()}",
+                email="owner@example.test",
+                display_name="Owner",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            viewer = User(
+                cursor_sub=f"template-viewer-{uuid.uuid4()}",
+                email="viewer@example.test",
+                display_name="Viewer",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            session.add_all([owner, viewer])
+            await session.flush()
+            await session.refresh(owner)
+            await session.refresh(viewer)
+            conversation, _ = await create_conversation_with_owner(
+                session, user_id=owner.id, title="Template"
+            )
+            session.add(
+                ConversationMember(
+                    conversation_id=conversation.id,
+                    user_id=viewer.id,
+                    role="viewer",
+                    pinned=False,
+                )
+            )
+            await session.commit()
+            with pytest.raises(PermissionError):
+                await append_missing_root_notes(
+                    session, conversation.id, viewer.id, ["Forbidden"]
+                )
+
+    asyncio.run(run())

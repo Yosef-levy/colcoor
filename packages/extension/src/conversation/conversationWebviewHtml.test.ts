@@ -636,9 +636,11 @@ describe("getConversationWebviewHtml", () => {
     const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
     expect(html).toContain('id="menuPanelConversation"');
     expect(html).toContain('data-conv-action="rename"');
+    expect(html).toContain('data-conv-action="applyTemplate"');
     expect(html).toContain('data-conv-action="togglePin"');
     expect(html).toContain('data-conv-action="restoreMessageBranch"');
     expect(html).toContain('vscode.postMessage({ type: "rename" });');
+    expect(html).toContain('vscode.postMessage({ type: "applyConversationTemplate" });');
     expect(html).toContain('vscode.postMessage({ type: "togglePin" });');
     expect(html).toContain('vscode.postMessage({ type: "restoreMessageBranch" });');
   });

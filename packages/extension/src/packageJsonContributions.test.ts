@@ -68,6 +68,8 @@ describe("package.json Colcoor contributions", () => {
     const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };
     const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
     expect(cmds).toContain("colcoor.newConversation");
+    expect(cmds).toContain("colcoor.applyConversationTemplate");
+    expect(cmds).toContain("colcoor.manageConversationTemplates");
     expect(cmds).toContain("colcoor.openSideChat");
     expect(cmds).toContain("colcoor.showColcoorMenu");
     expect(cmds).toContain("colcoor.continueFromHere");
@@ -79,6 +81,21 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.buildListFromConversation");
     expect(cmds).toContain("colcoor.runAgentOnLists");
     expect(cmds).toContain("colcoor.openListAgentJobs");
+  });
+
+  it("offers template application from conversation rows", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: {
+        menus?: {
+          "view/item/context"?: Array<{ command?: string; when?: string }>;
+        };
+      };
+    };
+    const row = pkg.contributes?.menus?.["view/item/context"]?.find(
+      (item) => item.command === "colcoor.applyConversationTemplate",
+    );
+    expect(row?.when).toContain("viewItem == conversation");
   });
 
   it("matches showColcoorApiFailure toast action labels to command titles ([ui-features.md] §12)", () => {

@@ -54,7 +54,7 @@
       {
         "command": "colcoor.showColcoorMenu",
         "title": "Colcoor: Menu…",
-        "description": "Profile, extension settings, legal URLs, side-chat sounds, CLI/API setup, and Help (about)."
+        "description": "Conversation templates, profile, extension settings, legal URLs, side-chat sounds, CLI/API setup, and Help (about)."
       },
       {
         "command": "colcoor.openLegalPolicySettings",
@@ -75,6 +75,16 @@
         "command": "colcoor.newConversation",
         "title": "Colcoor: New conversation",
         "icon": "$(add)"
+      },
+      {
+        "command": "colcoor.applyConversationTemplate",
+        "title": "Colcoor: Apply conversation template…",
+        "description": "Append the selected template's missing notes to the conversation root."
+      },
+      {
+        "command": "colcoor.manageConversationTemplates",
+        "title": "Colcoor: Manage conversation templates…",
+        "description": "Create, edit, import, and export machine-local conversation templates."
       },
       {
         "command": "colcoor.refreshConversations",
@@ -337,6 +347,11 @@
           "group": "1_colcoor@7"
         },
         {
+          "command": "colcoor.applyConversationTemplate",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@7b"
+        },
+        {
           "command": "colcoor.togglePinnedConversation",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@8"
@@ -388,26 +403,15 @@
     "configuration": {
       "title": "Colcoor",
       "properties": {
-        "colcoor.storageMode": {
-          "type": "string",
-          "enum": [
-            "remote",
-            "local"
-          ],
-          "enumDescriptions": [
-            "Use the Colcoor backend: collaboration, side chat, and sign-in.",
-            "Fully offline single-user storage under the workspace .colcoor folder (no sign-in, no collaboration)."
-          ],
-          "default": "remote",
-          "description": "Where conversations are stored. remote: Colcoor backend (default). local: offline single-user files under the workspace .colcoor folder. Reload the window (Developer: Reload Window) after changing this."
-        },
         "colcoor.backendBaseUrl": {
           "type": "string",
+          "order": 1,
           "default": "https://api.colcoor.com",
           "description": "API origin only (no path, no trailing slash). Defaults to https://api.colcoor.com. For self-managed GCP deployments, set this to your load balancer IP or URL."
         },
         "colcoor.provider": {
           "type": "string",
+          "order": 2,
           "enum": [
             "anthropic",
             "cursor"
@@ -418,6 +422,20 @@
           ],
           "default": "anthropic",
           "description": "Which supplier runs the assistant. anthropic (default): direct Anthropic APIs with your own key, no Cursor account. cursor: legacy Cursor CLI backend."
+        },
+        "colcoor.storageMode": {
+          "type": "string",
+          "order": 3,
+          "enum": [
+            "remote",
+            "local"
+          ],
+          "enumDescriptions": [
+            "Use the Colcoor backend: collaboration, side chat, and sign-in.",
+            "Fully offline single-user storage under the workspace .colcoor folder (no sign-in, no collaboration)."
+          ],
+          "default": "remote",
+          "description": "Where conversations are stored. remote: Colcoor backend (default). local: offline single-user files under the workspace .colcoor folder. Reload the window (Developer: Reload Window) after changing this."
         },
         "colcoor.askModel": {
           "type": "string",

@@ -1884,6 +1884,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" data-conv-action="changeMemberRole" title="Change a member role">Change role…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="removeMember" title="Remove a member from this conversation">Remove member…</button>
             <hr class="menu-sep" role="separator" />
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="applyTemplate">Apply conversation template…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="rename">Rename…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="togglePin">Pin</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="restoreMessageBranch" title="Restore a soft-deleted message branch by event id">Restore message branch (soft-deleted)…</button>
@@ -2835,6 +2836,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           else if (ca === "addMember") vscode.postMessage({ type: "addMember" });
           else if (ca === "changeMemberRole") vscode.postMessage({ type: "changeMemberRole" });
           else if (ca === "removeMember") vscode.postMessage({ type: "removeMember" });
+          else if (ca === "applyTemplate") vscode.postMessage({ type: "applyConversationTemplate" });
           else if (ca === "rename") vscode.postMessage({ type: "rename" });
           else if (ca === "togglePin") vscode.postMessage({ type: "togglePin" });
           else if (ca === "restoreMessageBranch") vscode.postMessage({ type: "restoreMessageBranch" });

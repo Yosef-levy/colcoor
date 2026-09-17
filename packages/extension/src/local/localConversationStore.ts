@@ -107,6 +107,37 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+const MAX_ROOT_NOTES = 32;
+const MAX_ROOT_NOTE_LENGTH = 12_000;
+
+export function instantiateRootNoteContents(
+  notes: readonly string[],
+  conversationId: string,
+): string[] {
+  if (notes.length > MAX_ROOT_NOTES) {
+    throw new Error(`A template may contain at most ${MAX_ROOT_NOTES} notes.`);
+  }
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const note of notes) {
+    if (typeof note !== "string") throw new Error("Template notes must be strings.");
+    const content = note
+      .replaceAll("<conversation_id>", conversationId)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .trim();
+    if (!content) throw new Error("Template notes cannot be empty.");
+    if (content.length > MAX_ROOT_NOTE_LENGTH) {
+      throw new Error(`Template notes must be at most ${MAX_ROOT_NOTE_LENGTH} characters.`);
+    }
+    if (!seen.has(content)) {
+      seen.add(content);
+      output.push(content);
+    }
+  }
+  return output;
+}
+
 function offlineUnsupported(feature: string): Error {
   return new Error(`${feature} is not available in Colcoor offline (local) mode.`);
 }
@@ -347,6 +378,7 @@ export class LocalConversationStore implements ColcoorClient {
   async createConversation(body: {
     title?: string | null;
     metadata_json?: Record<string, unknown> | null;
+    root_notes?: string[];
   }): Promise<ConversationSummary> {
     const profile = await this.ensureProfile();
     const now = nowIso();
@@ -380,8 +412,19 @@ export class LocalConversationStore implements ColcoorClient {
       needs_context_rebuild: false,
       side_chat_last_read_seq: 0,
     };
+    const rootNotes = instantiateRootNoteContents(body.root_notes ?? [], conversationId).map(
+      (content, index): StoredNote => ({
+        id: randomUUID(),
+        event_id: rootId,
+        author_user_id: profile.id,
+        content,
+        created_at: new Date(Date.parse(now) + index).toISOString(),
+        updated_at: new Date(Date.parse(now) + index).toISOString(),
+      }),
+    );
     await fs.mkdir(this.convDir(conversationId), { recursive: true });
     await this.writeJsonl(this.eventsPath(conversationId), [root]);
+    await this.writeJsonl(this.notesPath(conversationId), rootNotes);
     await this.writeJson(this.metaPath(conversationId), meta);
     return this.metaToSummary(meta);
   }
@@ -801,6 +844,45 @@ export class LocalConversationStore implements ColcoorClient {
     };
     await this.appendJsonl(this.notesPath(conversationId), note);
     return note;
+  }
+
+  async appendMissingRootNotes(
+    conversationId: string,
+    body: { notes: string[] },
+  ): Promise<NoteOut[]> {
+    const profile = await this.ensureProfile();
+    const meta = await this.loadLiveMeta(conversationId);
+    const events = await this.readJsonl<StoredEvent>(this.eventsPath(conversationId));
+    const root = events.find((event) => event.parent_event_id === null && !event.deleted_at);
+    if (!root) throw new Error(`conversation root not found: ${conversationId}`);
+    const existing = await this.readJsonl<StoredNote>(this.notesPath(conversationId));
+    const existingRootContents = new Set(
+      existing
+        .filter((note) => note.event_id === root.id)
+        .map((note) =>
+          note.content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim(),
+        ),
+    );
+    const now = nowIso();
+    const created = instantiateRootNoteContents(body.notes, conversationId)
+      .filter((content) => !existingRootContents.has(content))
+      .map(
+        (content, index): StoredNote => ({
+          id: randomUUID(),
+          event_id: root.id,
+          author_user_id: profile.id,
+          content,
+          created_at: new Date(Date.parse(now) + index + 1).toISOString(),
+          updated_at: new Date(Date.parse(now) + index + 1).toISOString(),
+        }),
+      );
+    if (created.length > 0) {
+      await this.writeJsonl(this.notesPath(conversationId), [...existing, ...created]);
+      meta.needs_context_rebuild = true;
+      meta.updated_at = now;
+      await this.writeJson(this.metaPath(conversationId), meta);
+    }
+    return created;
   }
 
   async patchNote(

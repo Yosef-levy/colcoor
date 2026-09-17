@@ -92,6 +92,7 @@ async def create_conversation_with_owner(
     user_id: uuid.UUID,
     title: str | None,
     metadata_json: dict | None = None,
+    root_notes: list[str] | None = None,
 ) -> tuple[Conversation, ConversationMember]:
     now = datetime.now(tz=UTC)
     conv = Conversation(title=title, metadata_json=metadata_json)
@@ -116,6 +117,17 @@ async def create_conversation_with_owner(
     )
     session.add(root)
     await session.flush()
+    for index, content in enumerate(instantiate_template_note_contents(root_notes or [], conv.id)):
+        note_time = now + timedelta(microseconds=index)
+        session.add(
+            Note(
+                event_id=root.id,
+                author_user_id=user_id,
+                content=content,
+                created_at=note_time,
+                updated_at=note_time,
+            )
+        )
     session.add(
         ConversationUserState(
             conversation_id=conv.id,
@@ -129,6 +141,33 @@ async def create_conversation_with_owner(
     await session.refresh(conv)
     await session.refresh(member)
     return conv, member
+
+
+def instantiate_template_note_contents(
+    notes: list[str], conversation_id: uuid.UUID
+) -> list[str]:
+    """Resolve template placeholders and canonicalize exact duplicates."""
+    if len(notes) > 32:
+        raise ValueError("at most 32 root notes are allowed")
+    output: list[str] = []
+    seen: set[str] = set()
+    for raw in notes:
+        if not isinstance(raw, str):
+            raise ValueError("root notes must be strings")
+        content = (
+            raw.replace("<conversation_id>", str(conversation_id))
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .strip()
+        )
+        if not content:
+            raise ValueError("root notes cannot be empty")
+        if len(content) > 12_000:
+            raise ValueError("root notes must be at most 12000 characters")
+        if content not in seen:
+            seen.add(content)
+            output.append(content)
+    return output
 
 
 async def load_event(
@@ -857,6 +896,57 @@ async def create_note_on_event(
     await _set_needs_context_rebuild_all_members(session, conversation_id)
     await session.refresh(note)
     return note
+
+
+async def append_missing_root_notes(
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    user_id: uuid.UUID,
+    contents: list[str],
+) -> list[Note]:
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    await require_live_conversation(session, conversation_id)
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot add notes")
+    root_result = await session.execute(
+        select(Event).where(
+            Event.conversation_id == conversation_id,
+            Event.parent_event_id.is_(None),
+            Event.deleted_at.is_(None),
+        ).with_for_update()
+    )
+    root = root_result.scalar_one_or_none()
+    if root is None:
+        raise LookupError("conversation root not found")
+    existing_result = await session.execute(select(Note.content).where(Note.event_id == root.id))
+    existing = {
+        content.replace("\r\n", "\n").replace("\r", "\n").strip()
+        for content in existing_result.scalars().all()
+    }
+    now = datetime.now(tz=UTC)
+    created: list[Note] = []
+    for index, content in enumerate(instantiate_template_note_contents(contents, conversation_id)):
+        if content in existing:
+            continue
+        note_time = now + timedelta(microseconds=index + 1)
+        note = Note(
+            event_id=root.id,
+            author_user_id=user_id,
+            content=content,
+            created_at=note_time,
+            updated_at=note_time,
+        )
+        session.add(note)
+        created.append(note)
+        existing.add(content)
+    if created:
+        await session.flush()
+        await _set_needs_context_rebuild_all_members(session, conversation_id)
+        for note in created:
+            await session.refresh(note)
+    return created
 
 
 async def update_note_content(

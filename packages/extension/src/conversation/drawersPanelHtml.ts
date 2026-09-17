@@ -51,9 +51,9 @@ export function getConversationDrawersPanelHtml(
         `<li><button type="button" class="jump" data-event-id="${esc(r.eventId)}">${esc(r.label)}</button></li>`,
     )
     .join("");
-  const listRows = model.lists
+  const listRows = (model.lists ?? [])
     .map((list) => {
-      const items = model.listItems
+      const items = (model.listItems ?? [])
         .filter((item) => item.list_id === list.id)
         .map(
           (item) =>
@@ -119,7 +119,7 @@ export function getConversationDrawersPanelHtml(
   <div class="tabs">
     <button type="button" id="tabStarred">Starred (${model.starred.length})</button>
     <button type="button" id="tabTodo">TODO (${model.todos.length})</button>
-    <button type="button" id="tabLists">Lists (${model.lists.length})</button>
+    <button type="button" id="tabLists">Lists (${(model.lists ?? []).length})</button>
   </div>
   <div class="aux">
     <button type="button" id="btnSignIn" title="Sign in to Colcoor with the same account you use in Cursor">Sign in</button>

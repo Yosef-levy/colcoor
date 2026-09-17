@@ -260,6 +260,7 @@ export interface ColcoorClient {
   createConversation(body: {
     title?: string | null;
     metadata_json?: Record<string, unknown> | null;
+    root_notes?: string[];
   }): Promise<ConversationSummary>;
   patchConversation(
     conversationId: string,
@@ -300,6 +301,10 @@ export interface ColcoorClient {
     conversationId: string,
     body: { event_id: string; content: string },
   ): Promise<NoteOut>;
+  appendMissingRootNotes(
+    conversationId: string,
+    body: { notes: string[] },
+  ): Promise<NoteOut[]>;
   patchNote(
     conversationId: string,
     noteId: string,
@@ -555,11 +560,16 @@ export class ColcoorApiClient implements ColcoorClient {
   async createConversation(body: {
     title?: string | null;
     metadata_json?: Record<string, unknown> | null;
+    root_notes?: string[];
   }): Promise<ConversationSummary> {
     const res = await this.fetchApi("/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: body.title ?? null }),
+      body: JSON.stringify({
+        title: body.title ?? null,
+        metadata_json: body.metadata_json ?? null,
+        root_notes: body.root_notes ?? [],
+      }),
     });
     const text = await res.text();
     this.assertOkResponse(res, text, "create conversation");
@@ -753,6 +763,20 @@ export class ColcoorApiClient implements ColcoorClient {
     const text = await res.text();
     this.assertOkResponse(res, text, "create note");
     return JSON.parse(text) as NoteOut;
+  }
+
+  async appendMissingRootNotes(
+    conversationId: string,
+    body: { notes: string[] },
+  ): Promise<NoteOut[]> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/root-notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "apply conversation template");
+    return JSON.parse(text) as NoteOut[];
   }
 
   async patchNote(

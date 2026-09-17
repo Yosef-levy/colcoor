@@ -423,6 +423,7 @@ type FromWebview =
   | { type: "chooseListForSelection"; selection: Record<string, unknown> | null }
   | { type: "createListItemWithNewList"; selection: Record<string, unknown> | null }
   | { type: "rename" }
+  | { type: "applyConversationTemplate" }
   | { type: "togglePin" }
   | { type: "toggleStar" }
   | { type: "addNote" }
@@ -483,6 +484,8 @@ export function createConversationPanelController(
   ) => Promise<void>;
   /** Close the webview panel if it is showing this conversation (e.g. after delete). */
   closeIfShowingConversation: (conversationId: string) => void;
+  /** Refresh notes in the webview when it is showing this conversation. */
+  refreshIfShowingConversation: (conversationId: string) => Promise<void>;
   /** Star or unstar the selected tree node via API (command palette). */
   toggleStarSelectedMessage: () => Promise<void>;
   /** Attach a note to the selected event (owner/editor); refreshes tree. */
@@ -3879,6 +3882,12 @@ export function createConversationPanelController(
         await handleRename();
         return;
       }
+      if (msg.type === "applyConversationTemplate" && conversationId) {
+        await vscode.commands.executeCommand("colcoor.applyConversationTemplate", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
+        return;
+      }
       if (msg.type === "togglePin") {
         await handleTogglePin();
         return;
@@ -4357,6 +4366,11 @@ export function createConversationPanelController(
   }
 
   return {
+    async refreshIfShowingConversation(convId: string): Promise<void> {
+      if (conversationId === convId && panel) {
+        await mergeNotesIntoCachedTreeAndPost();
+      }
+    },
     async reveal(convId: string, title: string | null): Promise<void> {
       const cid = normalizeOptionalGraphEventId(convId);
       if (cid === undefined) {
