@@ -2,6 +2,9 @@
   "name": "colcoor",
   "private": true,
   "license": "BUSL-1.1",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "workspaces": ["packages/extension"],
   "scripts": {
     "build": "npm run build -w colcoor-extension",
@@ -11,6 +14,8 @@
     "test:backend": "sh -c 'cd packages/backend && if [ -x .venv/bin/python ]; then .venv/bin/python -m pytest -q; else python3 -m pytest -q; fi'",
     "package:extension": "bash scripts/package-extension-to-dist.sh",
     "package:extension:standalone": "bash scripts/package-extension-standalone-to-dist.sh",
+    "package:extension:targets": "bash scripts/package-extension-targets.sh",
+    "publish:extension": "bash scripts/publish-extension.sh",
     "ship:artifacts": "bash scripts/ship-artifacts.sh",
     "bundle": "bash scripts/build-gcp-production-bundle.sh",
     "bundle:gcp-production": "bash scripts/build-gcp-production-bundle.sh",

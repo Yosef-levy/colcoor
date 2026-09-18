@@ -144,6 +144,9 @@ export function scheduleCursorCliPresenceCheck(context: vscode.ExtensionContext)
 
 async function runCursorCliPresenceCheck(context: vscode.ExtensionContext): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("colcoor");
+  if ((cfg.get<string>("provider")?.trim() ?? "anthropic") !== "cursor") {
+    return;
+  }
   if (!cfg.get<boolean>("promptForCursorCliOnActivate")) {
     return;
   }

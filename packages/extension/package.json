@@ -2,7 +2,7 @@
   "name": "colcoor-extension",
   "displayName": "Colcoor",
   "icon": "media/icon.png",
-  "description": "Collaborative Conversation Orchestrator for Cursor.",
+  "description": "Collaborative Conversation Orchestrator: branching AI conversations for VS Code.",
   "version": "0.0.1",
   "publisher": "colcoor",
   "license": "BUSL-1.1",
@@ -23,12 +23,17 @@
   "contributes": {
     "commands": [
       {
+        "command": "colcoor.setProviderApiKey",
+        "title": "Colcoor: Set provider API key",
+        "description": "Store the API key for the active provider (Anthropic by default) used to run the assistant."
+      },
+      {
         "command": "colcoor.setupCursorCli",
-        "title": "Colcoor: Set up Cursor CLI (agent)"
+        "title": "Colcoor: Set up Cursor CLI (agent) [legacy]"
       },
       {
         "command": "colcoor.setCursorAgentApiKey",
-        "title": "Colcoor: Set Cursor API key for agent"
+        "title": "Colcoor: Set Cursor API key for agent [legacy]"
       },
       {
         "command": "colcoor.signIn",
@@ -49,7 +54,7 @@
       {
         "command": "colcoor.showColcoorMenu",
         "title": "Colcoor: Menu…",
-        "description": "Profile, extension settings, legal URLs, side-chat sounds, CLI/API setup, and Help (about)."
+        "description": "Conversation templates, profile, extension settings, legal URLs, side-chat sounds, CLI/API setup, and Help (about)."
       },
       {
         "command": "colcoor.openLegalPolicySettings",
@@ -70,6 +75,16 @@
         "command": "colcoor.newConversation",
         "title": "Colcoor: New conversation",
         "icon": "$(add)"
+      },
+      {
+        "command": "colcoor.applyConversationTemplate",
+        "title": "Colcoor: Apply conversation template…",
+        "description": "Append the selected template's missing notes to the conversation root."
+      },
+      {
+        "command": "colcoor.manageConversationTemplates",
+        "title": "Colcoor: Manage conversation templates…",
+        "description": "Create, edit, import, and export machine-local conversation templates."
       },
       {
         "command": "colcoor.refreshConversations",
@@ -120,6 +135,11 @@
         "title": "Colcoor: Delete conversation…"
       },
       {
+        "command": "colcoor.restoreDeletedConversation",
+        "title": "Colcoor: Restore deleted conversation…",
+        "description": "Restore a soft-deleted conversation from Recently Deleted (owner/editor)."
+      },
+      {
         "command": "colcoor.renameConversation",
         "title": "Colcoor: Rename conversation…"
       },
@@ -165,6 +185,21 @@
         "description": "Reload starred and TODO lists in the open drawers panel from the server."
       },
       {
+        "command": "colcoor.buildListFromConversation",
+        "title": "Colcoor: Build list from conversation…",
+        "description": "Freeze the conversation and run the list-builder agent to propose list items by criteria."
+      },
+      {
+        "command": "colcoor.runAgentOnLists",
+        "title": "Colcoor: Run agent on lists…",
+        "description": "Run the list-operator agent on one or more lists with a user request."
+      },
+      {
+        "command": "colcoor.openListAgentJobs",
+        "title": "Colcoor: Open list agent jobs…",
+        "description": "Pick a frozen list-agent job and reopen its progress panel."
+      },
+      {
         "command": "colcoor.referenceSelectedMessageInSideChat",
         "title": "Colcoor: Reference selected message in side chat"
       },
@@ -191,6 +226,11 @@
         "command": "colcoor.copySelectedMessage",
         "title": "Colcoor: Copy selected message",
         "description": "Copy the selected tree message body to the clipboard (conversation panel must be open)."
+      },
+      {
+        "command": "colcoor.viewMessageMetadata",
+        "title": "Colcoor: View message metadata",
+        "description": "Show usage, tokens, and Colcoor graph fields for the selected message (conversation panel must be open)."
       },
       {
         "command": "colcoor.editUserMessage",
@@ -243,8 +283,8 @@
       },
       {
         "view": "colcoor.conversations",
-        "when": "colcoor.backendSignedIn && !colcoor.cursorAgentApiKeySet",
-        "contents": "\n**Agent:** no Cursor API key is stored yet. Colcoor needs it to run the agent locally.\n[Set Cursor API key…](command:colcoor.setCursorAgentApiKey)\n[Set up Cursor CLI (agent)…](command:colcoor.setupCursorCli)"
+        "when": "colcoor.backendSignedIn && !colcoor.providerApiKeySet",
+        "contents": "\n**Assistant:** no provider API key is stored yet. Colcoor needs one to run the assistant.\n[Set provider API key…](command:colcoor.setProviderApiKey)"
       }
     ],
     "menus": {
@@ -307,6 +347,11 @@
           "group": "1_colcoor@7"
         },
         {
+          "command": "colcoor.applyConversationTemplate",
+          "when": "view == colcoor.conversations && viewItem == conversation",
+          "group": "1_colcoor@7b"
+        },
+        {
           "command": "colcoor.togglePinnedConversation",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "1_colcoor@8"
@@ -315,6 +360,11 @@
           "command": "colcoor.deleteConversation",
           "when": "view == colcoor.conversations && viewItem == conversation",
           "group": "2_colcoor_delete@0"
+        },
+        {
+          "command": "colcoor.restoreDeletedConversation",
+          "when": "view == colcoor.conversations && viewItem == deletedConversation",
+          "group": "1_colcoor@0"
         }
       ]
     },
@@ -353,8 +403,29 @@
     "configuration": {
       "title": "Colcoor",
       "properties": {
+        "colcoor.backendBaseUrl": {
+          "type": "string",
+          "order": 1,
+          "default": "https://api.colcoor.com",
+          "description": "API origin only (no path, no trailing slash). Defaults to https://api.colcoor.com. For self-managed GCP deployments, set this to your load balancer IP or URL."
+        },
+        "colcoor.provider": {
+          "type": "string",
+          "order": 2,
+          "enum": [
+            "anthropic",
+            "cursor"
+          ],
+          "enumDescriptions": [
+            "Use Anthropic APIs directly: ask mode via the Messages API, plan/agent via the Claude Agent SDK. Bring your own Anthropic API key.",
+            "Legacy: run the Cursor headless CLI (`agent -p`). Requires a Cursor account and the `agent` binary on PATH."
+          ],
+          "default": "anthropic",
+          "description": "Which supplier runs the assistant. anthropic (default): direct Anthropic APIs with your own key, no Cursor account. cursor: legacy Cursor CLI backend."
+        },
         "colcoor.storageMode": {
           "type": "string",
+          "order": 3,
           "enum": [
             "remote",
             "local"
@@ -366,10 +437,24 @@
           "default": "remote",
           "description": "Where conversations are stored. remote: Colcoor backend (default). local: offline single-user files under the workspace .colcoor folder. Reload the window (Developer: Reload Window) after changing this."
         },
-        "colcoor.backendBaseUrl": {
+        "colcoor.askModel": {
           "type": "string",
-          "default": "https://api.colcoor.com",
-          "description": "API origin only (no path, no trailing slash). Defaults to https://api.colcoor.com. For self-managed GCP deployments, set this to your load balancer IP or URL."
+          "default": "claude-sonnet-4-5",
+          "description": "Model id for Ask mode (Anthropic Messages API). Ignored when colcoor.provider is cursor."
+        },
+        "colcoor.agentModel": {
+          "type": "string",
+          "default": "claude-sonnet-4-5",
+          "description": "Model id for Plan/Agent mode (Claude Agent SDK). Ignored when colcoor.provider is cursor."
+        },
+        "colcoor.promptCacheTtl": {
+          "type": "string",
+          "enum": [
+            "5m",
+            "1h"
+          ],
+          "default": "1h",
+          "description": "Anthropic prompt cache duration for the shared transcript prefix. 1h keeps cache hits warm across slow branching at a higher write cost; 5m is cheaper for rapid back-to-back turns."
         },
         "colcoor.agentMode": {
           "type": "string",
@@ -379,12 +464,12 @@
             "stub"
           ],
           "default": "auto",
-          "description": "How to run the main-thread assistant after your message is saved. auto: try Cursor CLI `agent -p` when on PATH, otherwise stub. headless: always run CLI (fails loudly if missing or errors). stub: placeholder reply only."
+          "description": "How to run the main-thread assistant after your message is saved. auto/headless: run the configured provider. stub: placeholder reply only (offline / CI)."
         },
         "colcoor.agentExecutable": {
           "type": "string",
           "default": "agent",
-          "description": "Executable name or absolute path for Cursor headless `agent` (see https://cursor.com/docs/cli/headless). Colcoor prepends ~/.local/bin (and a few common dirs) to PATH because the editor often does not load ~/.bashrc; use an absolute path if yours is elsewhere."
+          "description": "[legacy Cursor CLI] Executable name or absolute path for Cursor headless `agent` (see https://cursor.com/docs/cli/headless). Only used when colcoor.provider is cursor. Colcoor prepends ~/.local/bin (and a few common dirs) to PATH because the editor often does not load ~/.bashrc; use an absolute path if yours is elsewhere."
         },
         "colcoor.agentTimeoutMs": {
           "type": "number",
@@ -401,12 +486,12 @@
             "text"
           ],
           "default": "stream-json-partial",
-          "description": "How Cursor `agent -p` prints stdout (see https://cursor.com/docs/cli/reference/output-format). stream-json-partial: NDJSON + --stream-partial-output (fine-grained UI streaming). stream-json: NDJSON without partial deltas. text: final answer only (works on older CLI; minimal streaming)."
+          "description": "[legacy Cursor CLI] How Cursor `agent -p` prints stdout (see https://cursor.com/docs/cli/reference/output-format). Only used when colcoor.provider is cursor. stream-json-partial: NDJSON + --stream-partial-output (fine-grained UI streaming). stream-json: NDJSON without partial deltas. text: final answer only (works on older CLI; minimal streaming)."
         },
         "colcoor.agentPromptShellApproval": {
           "type": "boolean",
           "default": true,
-          "description": "When the Cursor CLI rejects a tool call (shell, read, write, web fetch, MCP, etc.), show a Colcoor prompt with Skip or Add to allowlist. Shell commands also offer Run once locally. Add to allowlist updates your ~/.cursor/cli-config.json for future runs; Run executes a rejected shell command once and resumes the agent with the output; Skip resumes without running the tool."
+          "description": "[legacy Cursor CLI] When the Cursor CLI rejects a tool call (shell, read, write, web fetch, MCP, etc.), show a Colcoor prompt with Skip or Add to allowlist. Only used when colcoor.provider is cursor. Add to allowlist updates your ~/.cursor/cli-config.json for future runs; Run executes a rejected shell command once and resumes the agent with the output; Skip resumes without running the tool."
         },
         "colcoor.includeWorkspaceHintsInAgentPrompt": {
           "type": "boolean",
@@ -416,7 +501,7 @@
         "colcoor.promptForCursorCliOnActivate": {
           "type": "boolean",
           "default": true,
-          "description": "If the Cursor CLI (`agent`) is not on PATH, show a setup hint a few seconds after load (only when agent mode is not stub). Colcoor cannot bundle the CLI; use Colcoor: Set up Cursor CLI or the official installer."
+          "description": "[legacy Cursor CLI] If the Cursor CLI (`agent`) is not on PATH, show a setup hint a few seconds after load (only when colcoor.provider is cursor and agent mode is not stub). Colcoor cannot bundle the CLI; use Colcoor: Set up Cursor CLI or the official installer."
         },
         "colcoor.conversationAgentTraceOpen": {
           "type": "boolean",
@@ -470,11 +555,14 @@
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.28.0",
     "eslint": "^9.16.0",
+    "ovsx": "^1.0.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
     "vitest": "^3.0.5"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.205",
+    "@anthropic-ai/sdk": "^0.110.0",
     "marked": "^9.1.6",
     "sanitize-html": "^2.17.2",
     "temml": "^0.13.2"

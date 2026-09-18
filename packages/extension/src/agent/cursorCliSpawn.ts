@@ -15,7 +15,7 @@ import {
   mergeAgentDisplayPartsAcrossResume,
   mergeAgentStdoutAcrossResume,
 } from "./cursorCliStdoutMerge";
-import type { CursorCliMode } from "./cursorCliMode";
+import { cursorCliModeFlag, type CursorCliMode } from "./cursorCliMode";
 import { withWorkspaceAgentSpawn } from "./cursorCliWorkspaceLock";
 
 const MAX_CAPTURE_BYTES = 24 * 1024 * 1024;
@@ -44,7 +44,7 @@ export function buildAgentPrintArgs(
   cliMode?: CursorCliMode,
 ): string[] {
   const modelFlag = model?.trim() ? (["--model", model.trim()] as const) : [];
-  const cliModeFlag = cliMode?.trim() ? (["--mode", cliMode.trim()] as const) : [];
+  const cliModeFlag = cursorCliModeFlag(cliMode);
   const tail = agentPrintTail(workspaceRoot, prompt);
   switch (mode) {
     case "text":
@@ -73,7 +73,7 @@ export function buildAgentResumeArgs(
   cliMode?: CursorCliMode,
 ): string[] {
   const modelFlag = model?.trim() ? (["--model", model.trim()] as const) : [];
-  const cliModeFlag = cliMode?.trim() ? (["--mode", cliMode.trim()] as const) : [];
+  const cliModeFlag = cursorCliModeFlag(cliMode);
   const cwd = workspaceRoot.trim() || process.cwd();
   const tail = [
     "--trust",
@@ -400,7 +400,7 @@ export async function spawnCursorAgentPrint(params: {
   outputMode?: AgentCliOutputMode;
   /** When set, passed as `--model` (omit for Cursor default / automatic). */
   cliModel?: string;
-  /** Cursor CLI `--mode`; Colcoor defaults this to Ask mode. */
+  /** Cursor CLI mode. `ask`/`plan` become `--mode`; `agent` omits the flag (CLI default). */
   cliMode?: CursorCliMode;
   /** When true (default), detect tool rejections and invoke `resolveToolRejection`. */
   promptToolApproval?: boolean;

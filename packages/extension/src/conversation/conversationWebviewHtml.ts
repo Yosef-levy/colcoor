@@ -11,6 +11,7 @@ import {
   PRIVATE_BRANCH_LEAD,
 } from "./privateBranchComposerCopy";
 import { treeEventTimeLabelWebviewScriptBlock } from "./treeEventTimeLabel";
+import { messageMetadataWebviewScriptBlock } from "./messageMetadataCore";
 import { TREE_EVENT_DISPLAY_TITLE_MAX, TREE_EVENT_SNIPPET_MAX } from "./treeNodeDisplay";
 import {
   COLOOR_API_FAILURE_REFRESH_CONVERSATION_TREE_ACTION,
@@ -556,6 +557,82 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       border: 1px solid var(--vscode-panel-border);
       border-radius: 4px;
       padding: 8px;
+      position: relative;
+    }
+    .composer-slash-result {
+      margin-bottom: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 0.92em;
+    }
+    .composer-slash-result[hidden] {
+      display: none !important;
+    }
+    .composer-slash-result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .composer-slash-result-body :first-child { margin-top: 0; }
+    .composer-slash-result-body :last-child { margin-bottom: 0; }
+    .composer-input-wrap {
+      position: relative;
+    }
+    .composer-slash-picker {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      margin-bottom: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 60;
+      background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+      border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      border-radius: 6px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    }
+    .composer-slash-picker[hidden] {
+      display: none !important;
+    }
+    .composer-slash-item {
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 8px 10px;
+      border: none;
+      border-bottom: 1px solid var(--vscode-widget-border, var(--vscode-panel-border));
+      background: transparent;
+      color: var(--vscode-foreground);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .composer-slash-item:last-child {
+      border-bottom: none;
+    }
+    .composer-slash-item:hover,
+    .composer-slash-item.slash-item-active {
+      background: var(--vscode-list-hoverBackground);
+      color: var(--vscode-list-hoverForeground);
+    }
+    .composer-slash-item.slash-item-unavailable {
+      opacity: 0.65;
+    }
+    .composer-slash-item .slash-item-name {
+      font-weight: 600;
+    }
+    .composer-slash-item .slash-item-meta {
+      display: block;
+      margin-top: 2px;
+      opacity: 0.85;
+      font-size: 0.9em;
     }
     .composer textarea {
       width: 100%;
@@ -1461,6 +1538,78 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .metadata-drawer-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: auto;
+      min-height: 0;
+      flex: 1;
+    }
+    .metadata-drawer-headline {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .metadata-section {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      padding: 10px 12px;
+    }
+    .metadata-section-title {
+      margin: 0 0 8px;
+      font-size: 0.95em;
+      font-weight: 600;
+    }
+    .metadata-dl {
+      display: grid;
+      grid-template-columns: minmax(120px, 38%) 1fr;
+      gap: 4px 12px;
+      margin: 0;
+    }
+    .metadata-dl dt {
+      margin: 0;
+      color: var(--vscode-descriptionForeground);
+      font-size: 0.92em;
+    }
+    .metadata-dd {
+      margin: 0;
+      word-break: break-word;
+    }
+    .metadata-mono {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 0.9em;
+    }
+    .metadata-note {
+      margin: 8px 0 0;
+      font-size: 0.88em;
+      color: var(--vscode-descriptionForeground);
+    }
+    .metadata-advanced {
+      margin-top: 4px;
+    }
+    .metadata-advanced summary {
+      cursor: pointer;
+      color: var(--vscode-textLink-foreground);
+    }
+    .metadata-json {
+      margin: 8px 0 0;
+      padding: 8px;
+      overflow: auto;
+      max-height: 240px;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 0.82em;
+      background: var(--vscode-textBlockQuote-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 4px;
+      white-space: pre;
+    }
+    .metadata-drawer-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--vscode-panel-border);
+    }
     .lists-drawer-tabs {
       display: flex;
       flex-wrap: wrap;
@@ -1735,6 +1884,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" data-conv-action="changeMemberRole" title="Change a member role">Change role…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="removeMember" title="Remove a member from this conversation">Remove member…</button>
             <hr class="menu-sep" role="separator" />
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="applyTemplate">Apply conversation template…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="rename">Rename…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="togglePin">Pin</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="restoreMessageBranch" title="Restore a soft-deleted message branch by event id">Restore message branch (soft-deleted)…</button>
@@ -1752,6 +1902,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" id="btnCopyThread" title="Copy root → selected path as plain text">Copy thread</button>
             <button type="button" class="menu-item" role="menuitem" id="btnReferenceSideChat" title="Open side chat and prefill a reference to the selected message">Reference in side chat</button>
             <button type="button" class="menu-item" role="menuitem" id="btnResend">Resend assistant</button>
+            <button type="button" class="menu-item" role="menuitem" id="btnViewMetadata" title="Usage, tokens, and Colcoor graph fields for the selected message">View metadata…</button>
             <button type="button" class="menu-item" role="menuitem" id="btnJumpTip" title="Select the newest leaf on the default branch">Jump to latest</button>
             <hr class="menu-sep" role="separator" />
             <button type="button" class="menu-item" role="menuitem" id="btnDeleteMessageBranch" title="Delete the selected message and all replies under it (owner/editor)">Delete message branch…</button>
@@ -1865,6 +2016,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
               <button type="button" id="listsDrawerCreateList" class="btn-secondary">New List…</button>
               <button type="button" id="listsDrawerRenameList" class="btn-secondary">Rename…</button>
               <button type="button" id="listsDrawerDeleteList" class="btn-secondary">Delete…</button>
+              <button type="button" id="listsDrawerBuildFromConversation" class="btn-secondary" title="Build a list from conversation criteria via agent">Build from conversation…</button>
+              <button type="button" id="listsDrawerRunAgentOnLists" class="btn-secondary" title="Run operator agent on selected lists">Run agent on lists…</button>
+              <button type="button" id="listsDrawerOpenJobs" class="btn-secondary" title="Open list agent jobs">Jobs…</button>
             </div>
             <div class="lists-drawer-listbar" id="listsDrawerListBar"></div>
             <div id="listsDrawerListMeta" class="lists-drawer-meta" hidden>
@@ -1899,6 +2053,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           </div>
           <ul id="listsDrawerListItems"></ul>
         </div>
+      </div>
+    </div>
+  </div>
+  <div id="metadataDrawerBackdrop" class="search-drawer-backdrop" aria-hidden="true"></div>
+  <div
+    id="metadataDrawer"
+    class="search-drawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="metadataDrawerTitle"
+    aria-hidden="true"
+  >
+    <div class="search-drawer-header">
+      <span id="metadataDrawerTitle">Message metadata</span>
+      <button type="button" id="metadataDrawerClose" class="btn-secondary">Close</button>
+    </div>
+    <div class="search-drawer-body metadata-drawer-body">
+      <div id="metadataDrawerContent"></div>
+      <div class="metadata-drawer-footer">
+        <button type="button" id="metadataDrawerCopyJson" class="btn-secondary">Copy as JSON</button>
       </div>
     </div>
   </div>
@@ -1991,7 +2165,17 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         </div>
       </div>
       <div class="composer">
-        <textarea id="input" dir="auto" placeholder="Message… Shift+Enter for newline, Enter to send"></textarea>
+        <div id="slashCommandResult" class="composer-slash-result" hidden>
+          <div class="composer-slash-result-header">
+            <span class="hint">Slash command</span>
+            <button type="button" id="btnDismissSlashResult" class="btn-secondary btn-icon" title="Dismiss" aria-label="Dismiss slash result">×</button>
+          </div>
+          <div id="slashCommandResultBody" class="composer-slash-result-body"></div>
+        </div>
+        <div class="composer-input-wrap">
+          <div id="composerSlashPicker" class="composer-slash-picker" hidden></div>
+          <textarea id="input" dir="auto" placeholder="Message… Type / for commands. Shift+Enter for newline, Enter to send"></textarea>
+        </div>
         <div id="pendingConversationImages" class="composer-pending-images" style="display:none"></div>
         <label id="privateBranchLabel" class="priv hint" title="${PRIVATE_BRANCH_LABEL_TITLE}">
           <input type="checkbox" id="privateBranch" title="${PRIVATE_BRANCH_LABEL_TITLE}" />
@@ -2020,8 +2204,15 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <span class="hint" id="queuedSendBadge" style="display:none"></span>
         </div>
         <div class="row">
+          <button
+            type="button"
+            id="btnSlashCommands"
+            class="btn-secondary btn-icon"
+            title="Slash commands (Colcoor uses /colcoor-… prefix)"
+            aria-label="Open slash commands"
+          >/</button>
           <label class="hint" for="agentModel" style="margin:0">Model</label>
-          <select id="agentModel" class="agent-model-select" title="Cursor CLI model for this conversation">
+          <select id="agentModel" class="agent-model-select" title="Model for this conversation">
             <option value="auto">Auto</option>
           </select>
           <label class="hint" for="agentMode" style="margin:0">Mode</label>
@@ -2124,6 +2315,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     </button>
     <button type="button" class="composer-ctx-row" data-msg-action="copy" role="menuitem">
       <span class="composer-ctx-label">Copy</span>
+    </button>
+    <button type="button" class="composer-ctx-row" data-msg-action="metadata" role="menuitem">
+      <span class="composer-ctx-label">View metadata…</span>
     </button>
     <button type="button" class="composer-ctx-row" data-msg-action="addNote" role="menuitem">
       <span class="composer-ctx-label">Add note…</span>
@@ -2448,13 +2642,18 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       agentModelOptions: [],
       agentModelSelected: "auto",
       agentModelsListHint: null,
+      agentModelSource: "provider",
       agentModeSelected: "ask",
       pendingAssistantModelLabel: null,
       gettingStartedVisible: false,
       tryThisNextVisible: false,
       soloCollaboratorHintDismissed: false,
       conversationMembers: [],
+      slashCommands: [],
+      slashResultHtml: null,
     };
+    var composerSlashLastMatches = [];
+    var composerSlashSelIndex = 0;
     const EMPTY_COPY = ${emptyCopyJson};
     const LIST_COLOR_GRID = ${listHighlightColorsJson};
     const GETTING_STARTED_LINES = ${gettingStartedLinesJson};
@@ -2637,6 +2836,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           else if (ca === "addMember") vscode.postMessage({ type: "addMember" });
           else if (ca === "changeMemberRole") vscode.postMessage({ type: "changeMemberRole" });
           else if (ca === "removeMember") vscode.postMessage({ type: "removeMember" });
+          else if (ca === "applyTemplate") vscode.postMessage({ type: "applyConversationTemplate" });
           else if (ca === "rename") vscode.postMessage({ type: "rename" });
           else if (ca === "togglePin") vscode.postMessage({ type: "togglePin" });
           else if (ca === "restoreMessageBranch") vscode.postMessage({ type: "restoreMessageBranch" });
@@ -2972,6 +3172,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
 
     ${treeEventTimeLabelWebviewScriptBlock()}
+    ${messageMetadataWebviewScriptBlock()}
 
     function eventDisplayTitle(ev) {
       var j = ev.content_json;
@@ -3398,12 +3599,14 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       const starredTodoDrawerBtn = document.getElementById("btnStarredTodoDrawer");
       const openSideChatBtn = document.getElementById("btnOpenSideChat");
       const resendBtn = document.getElementById("btnResend");
+      const viewMetadataBtn = document.getElementById("btnViewMetadata");
       const deleteBranchBtn = document.getElementById("btnDeleteMessageBranch");
       if (
         !copyBtn ||
         !editUserBtn ||
         !toggleStarBtn ||
         !resendBtn ||
+        !viewMetadataBtn ||
         !refSideChatBtn ||
         !refNoteSideChatBtn ||
         !addNoteBtn ||
@@ -3443,6 +3646,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         refSideChatBtn.disabled = true;
         refNoteSideChatBtn.disabled = true;
         resendBtn.disabled = true;
+        viewMetadataBtn.disabled = true;
+        viewMetadataBtn.title = "Select a message in the tree first.";
         if (copyThreadBtn) copyThreadBtn.disabled = true;
         if (deleteBranchBtn) {
           deleteBranchBtn.disabled = true;
@@ -3509,6 +3714,13 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         : canResend
         ? "New assistant reply for this user message (same user row; transcript per docs)."
         : "Pick a user message with text (not the empty root placeholder).";
+      var canMetadata =
+        typeof window.colcoorHasDisplayableMetadata === "function" &&
+        window.colcoorHasDisplayableMetadata(last);
+      viewMetadataBtn.disabled = !canMetadata;
+      viewMetadataBtn.title = canMetadata
+        ? "Usage, tokens, and Colcoor graph fields for the selected message."
+        : "No metadata to show for this selection.";
       const jumpBtn = document.getElementById("btnJumpTip");
       if (jumpBtn) jumpBtn.disabled = false;
       if (deleteBranchBtn) {
@@ -5016,15 +5228,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         sel.value = "auto";
       }
       sel.disabled = false;
+      var isCursorModels = state.agentModelSource === "cursor";
       var hint =
         state.agentModelsListHint != null && String(state.agentModelsListHint).trim()
           ? String(state.agentModelsListHint).trim()
           : "";
       sel.title = hint
-        ? "Cursor CLI model for this conversation. " + hint
+        ? (isCursorModels ? "Cursor CLI model for this conversation. " : "Provider model for this conversation. ") +
+          hint
         : selected === "auto"
-          ? "Cursor CLI picks the model (same as auto in the CLI list)"
-          : "Use model " + selected + " for sends in this conversation";
+          ? isCursorModels
+            ? "Cursor CLI picks the model (same as auto in the CLI list)"
+            : "Use configured default from Settings (ask/agent model)"
+          : isCursorModels
+            ? "Use model " + selected + " for sends in this conversation"
+            : "Use Anthropic model " + selected + " for sends in this conversation";
     }
 
     function updateAgentModeSelect() {
@@ -5323,6 +5541,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (priv) priv.disabled = false;
         updateAgentModelSelect();
         updateAgentModeSelect();
+        updateSlashResultBanner();
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
           var activeCount =
@@ -5461,6 +5680,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var title = isUser || isAsst;
       var viewer = state.sideChatViewerRole;
       var addNote = viewer !== "viewer";
+      var metadata =
+        typeof window.colcoorHasDisplayableMetadata === "function" &&
+        window.colcoorHasDisplayableMetadata(ev);
       return {
         continueFromHere: true,
         copy: text.length > 0 || hasMedia,
@@ -5469,6 +5691,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         title: title,
         resend: resend,
         addNote: addNote,
+        metadata: metadata,
         starLabel: ev.starred === true ? "Unstar" : "Star",
       };
     }
@@ -5546,6 +5769,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
                       ? opts.title
                       : act === "resend"
                         ? opts.resend
+                        : act === "metadata"
+                          ? opts.metadata
                         : act === "addNote"
                           ? opts.addNote
                           : false;
@@ -5568,7 +5793,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           !opts.star &&
           !opts.title &&
           !opts.resend &&
-          !opts.addNote
+          !opts.addNote &&
+          !opts.metadata
         ) {
           return;
         }
@@ -5594,6 +5820,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (act === "resend") {
           selectTreeNodeInWebview(eid);
         }
+        if (act === "metadata") {
+          if (typeof window.colcoorOpenMessageMetadataDrawer === "function") {
+            window.colcoorOpenMessageMetadataDrawer(eid);
+          }
+          return;
+        }
         vscode.postMessage({ type: "messageContextAction", eventId: eid, action: act });
       });
       document.addEventListener(
@@ -5609,6 +5841,89 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         "keydown",
         function (ev) {
           if (!menu.hidden && ev.key === "Escape") closeMessageCtxMenu();
+        },
+        true,
+      );
+    })();
+
+    (function wireMetadataDrawer() {
+      var backdrop = document.getElementById("metadataDrawerBackdrop");
+      var drawer = document.getElementById("metadataDrawer");
+      var closeBtn = document.getElementById("metadataDrawerClose");
+      var contentEl = document.getElementById("metadataDrawerContent");
+      var copyBtn = document.getElementById("metadataDrawerCopyJson");
+      var menuBtn = document.getElementById("btnViewMetadata");
+      if (!backdrop || !drawer || !closeBtn || !contentEl || !copyBtn) return;
+      var metadataOpen = false;
+      var metadataCopyJson = null;
+      function findEvent(eventId) {
+        var id = eventId != null ? String(eventId).trim() : "";
+        if (!id) return null;
+        var evs = Array.isArray(state.events) ? state.events : [];
+        for (var i = 0; i < evs.length; i++) {
+          if (evs[i] && String(evs[i].id || "") === id) return evs[i];
+        }
+        return null;
+      }
+      function closeMetadata() {
+        metadataOpen = false;
+        metadataCopyJson = null;
+        backdrop.classList.remove("open");
+        drawer.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+        drawer.setAttribute("aria-hidden", "true");
+        contentEl.replaceChildren();
+      }
+      function openMetadata(eventId) {
+        var ev = findEvent(eventId);
+        if (
+          !ev ||
+          typeof window.colcoorReadMessageMetadata !== "function" ||
+          typeof window.colcoorFormatMessageMetadataHtml !== "function"
+        ) {
+          return;
+        }
+        var vm = window.colcoorReadMessageMetadata(ev);
+        if (!vm) return;
+        try {
+          document.dispatchEvent(new Event("colcoor-close-search-drawer"));
+        } catch (eS) {}
+        try {
+          document.dispatchEvent(new Event("colcoor-close-lists-drawer"));
+        } catch (eL) {}
+        metadataOpen = true;
+        metadataCopyJson = vm.advancedJson;
+        contentEl.innerHTML = window.colcoorFormatMessageMetadataHtml(vm);
+        backdrop.classList.add("open");
+        drawer.classList.add("open");
+        backdrop.setAttribute("aria-hidden", "false");
+        drawer.setAttribute("aria-hidden", "false");
+        closeAllMenus();
+      }
+      window.colcoorOpenMessageMetadataDrawer = openMetadata;
+      backdrop.addEventListener("click", closeMetadata);
+      closeBtn.addEventListener("click", closeMetadata);
+      copyBtn.addEventListener("click", function () {
+        if (!metadataCopyJson) return;
+        var text = JSON.stringify(metadataCopyJson, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function () {});
+        }
+      });
+      if (menuBtn) {
+        menuBtn.addEventListener("click", function () {
+          closeAllMenus();
+          openMetadata(state.selectedEventId);
+        });
+      }
+      document.addEventListener(
+        "keydown",
+        function (ev) {
+          if (!metadataOpen) return;
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            closeMetadata();
+          }
         },
         true,
       );
@@ -5974,6 +6289,9 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var btnCreateList = document.getElementById("listsDrawerCreateList");
       var btnRenameList = document.getElementById("listsDrawerRenameList");
       var btnDeleteList = document.getElementById("listsDrawerDeleteList");
+      var btnBuildFromConversation = document.getElementById("listsDrawerBuildFromConversation");
+      var btnRunAgentOnLists = document.getElementById("listsDrawerRunAgentOnLists");
+      var btnOpenJobs = document.getElementById("listsDrawerOpenJobs");
       var ulStarred = document.getElementById("listsDrawerStarredList");
       var ulTodo = document.getElementById("listsDrawerTodoList");
       var listsPane = document.getElementById("listsDrawerListsPane");
@@ -6274,6 +6592,21 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           vscode.postMessage({ type: "deleteList", listId: selectedListId });
         });
       }
+      if (btnBuildFromConversation) {
+        btnBuildFromConversation.addEventListener("click", function () {
+          vscode.postMessage({ type: "executeColcoorCommand", command: "colcoor.buildListFromConversation" });
+        });
+      }
+      if (btnRunAgentOnLists) {
+        btnRunAgentOnLists.addEventListener("click", function () {
+          vscode.postMessage({ type: "executeColcoorCommand", command: "colcoor.runAgentOnLists" });
+        });
+      }
+      if (btnOpenJobs) {
+        btnOpenJobs.addEventListener("click", function () {
+          vscode.postMessage({ type: "executeColcoorCommand", command: "colcoor.openListAgentJobs" });
+        });
+      }
       listSearch.addEventListener("input", function () {
         renderListsRows();
       });
@@ -6387,6 +6720,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (composerTa) composerTa.focus();
         return;
       }
+      if (m && m.type === "openMessageMetadata") {
+        var metaEid =
+          typeof m.eventId === "string" && m.eventId.trim()
+            ? m.eventId.trim()
+            : state.selectedEventId;
+        if (typeof window.colcoorOpenMessageMetadataDrawer === "function") {
+          window.colcoorOpenMessageMetadataDrawer(metaEid);
+        }
+        return;
+      }
       if (m && m.type === "focusSideChatSeq") {
         var fs = typeof m.seq === "number" && Number.isFinite(m.seq) ? Math.floor(m.seq) : 0;
         if (fs > 0) {
@@ -6468,6 +6811,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           conversationMembers: Array.isArray(m.conversationMembers)
             ? m.conversationMembers
             : [],
+          slashCommands: Array.isArray(m.slashCommands) ? m.slashCommands : [],
+          slashResultHtml:
+            typeof m.slashResultHtml === "string" && m.slashResultHtml.trim()
+              ? m.slashResultHtml
+              : null,
         };
         render({ preserveThreadScroll: m.preserveThreadScroll === true });
         if (m.composerPrefill) {
@@ -6516,9 +6864,188 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         ".";
     }, 32000);
 
+    function closeComposerSlashPicker() {
+      var el = document.getElementById("composerSlashPicker");
+      if (el) {
+        el.hidden = true;
+        el.replaceChildren();
+      }
+      composerSlashLastMatches = [];
+      composerSlashSelIndex = 0;
+    }
+
+    function composerSlashActiveContext(ta) {
+      if (!ta) return null;
+      var v = String(ta.value || "");
+      var caret = typeof ta.selectionStart === "number" ? ta.selectionStart : v.length;
+      var before = v.slice(0, caret);
+      var lead = before.match(/^(\\s*)\\/([A-Za-z0-9_.:-]*)$/);
+      if (!lead) return null;
+      var ws = lead[1] || "";
+      return { start: ws.length, end: caret, query: lead[2] || "" };
+    }
+
+    function filterComposerSlashCommands(query) {
+      var q = String(query || "").toLowerCase();
+      var catalog = Array.isArray(state.slashCommands) ? state.slashCommands : [];
+      if (!q) return catalog.slice(0, 24);
+      var starts = [];
+      var contains = [];
+      for (var i = 0; i < catalog.length; i++) {
+        var c = catalog[i] || {};
+        var name = String(c.name || "").toLowerCase();
+        var desc = String(c.description || "").toLowerCase();
+        if (name.startsWith(q)) starts.push(c);
+        else if (name.indexOf(q) >= 0 || desc.indexOf(q) >= 0) contains.push(c);
+      }
+      return starts.concat(contains).slice(0, 24);
+    }
+
+    function highlightComposerSlashPicker() {
+      var box = document.getElementById("composerSlashPicker");
+      if (!box || box.hidden) return;
+      var btns = box.querySelectorAll("button.composer-slash-item");
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle("slash-item-active", i === composerSlashSelIndex);
+      }
+    }
+
+    function renderComposerSlashPicker(matches) {
+      var box = document.getElementById("composerSlashPicker");
+      if (!box) return;
+      box.replaceChildren();
+      composerSlashLastMatches = matches;
+      composerSlashSelIndex = Math.min(
+        composerSlashSelIndex,
+        Math.max(0, matches.length - 1)
+      );
+      if (!matches.length) {
+        box.hidden = true;
+        return;
+      }
+      box.hidden = false;
+      for (var j = 0; j < matches.length; j++) {
+        var c = matches[j] || {};
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className =
+          "composer-slash-item" + (c.available === false ? " slash-item-unavailable" : "");
+        btn.setAttribute("data-idx", String(j));
+        var name = "/" + String(c.name || "");
+        var hint = c.argumentHint ? " " + String(c.argumentHint) : "";
+        var source = c.source ? String(c.source) : "colcoor";
+        var meta = String(c.description || "");
+        if (c.available === false) {
+          meta +=
+            " — " +
+            (c.unavailableReason
+              ? String(c.unavailableReason)
+              : "Unavailable for the current provider/mode");
+        }
+        btn.innerHTML =
+          '<span class="slash-item-name"></span><span class="slash-item-meta"></span>';
+        var status = c.available === false ? " (unavailable)" : "";
+        btn.querySelector(".slash-item-name").textContent = name + hint + " · " + source + status;
+        btn.querySelector(".slash-item-meta").textContent = meta;
+        box.appendChild(btn);
+      }
+      highlightComposerSlashPicker();
+    }
+
+    function applyComposerSlashPick(c) {
+      var ta = document.getElementById("input");
+      if (!ta || !c || !c.name) return;
+      var insert = "/" + String(c.name);
+      if (c.argumentHint) insert += " ";
+      var ctx = composerSlashActiveContext(ta);
+      var v = String(ta.value || "");
+      var next;
+      var pos;
+      if (ctx) {
+        next = v.slice(0, ctx.start) + insert + v.slice(ctx.end);
+        pos = ctx.start + insert.length;
+      } else {
+        next = insert;
+        pos = insert.length;
+      }
+      ta.value = next;
+      closeComposerSlashPicker();
+      updateComposerSendEnabled();
+      // Focus from picker click can reset caret; restore after focus settles.
+      var placeCaret = function () {
+        try {
+          ta.focus();
+          ta.setSelectionRange(pos, pos);
+        } catch (ePick) {}
+      };
+      placeCaret();
+      try {
+        requestAnimationFrame(placeCaret);
+      } catch (eRaf) {
+        setTimeout(placeCaret, 0);
+      }
+    }
+
+    function updateComposerSlashPicker() {
+      var ta = document.getElementById("input");
+      var ctx = composerSlashActiveContext(ta);
+      if (!ctx) {
+        closeComposerSlashPicker();
+        return;
+      }
+      renderComposerSlashPicker(filterComposerSlashCommands(ctx.query));
+    }
+
+    function openComposerSlashPickerAll() {
+      var ta = document.getElementById("input");
+      if (!ta) return;
+      var v = String(ta.value || "");
+      // Discovery requires a leading slash. Replace non-slash text so the picker can open.
+      if (!/^\\s*\\//.test(v)) {
+        ta.value = "/";
+        v = "/";
+      }
+      var lead = v.match(/^(\\s*)\\//);
+      var caret = lead ? lead[0].length : 1;
+      // Focus from the slash button can reset the caret to 0; set selection after focus.
+      var placeCaret = function () {
+        try {
+          ta.focus();
+          ta.setSelectionRange(caret, caret);
+        } catch (eOpen) {}
+      };
+      placeCaret();
+      try {
+        requestAnimationFrame(function () {
+          placeCaret();
+          updateComposerSlashPicker();
+        });
+      } catch (eRaf) {
+        setTimeout(function () {
+          placeCaret();
+          updateComposerSlashPicker();
+        }, 0);
+      }
+    }
+
+    function updateSlashResultBanner() {
+      var box = document.getElementById("slashCommandResult");
+      var body = document.getElementById("slashCommandResultBody");
+      if (!box || !body) return;
+      var html = state.slashResultHtml;
+      if (typeof html === "string" && html.trim()) {
+        body.innerHTML = html;
+        box.hidden = false;
+      } else {
+        body.innerHTML = "";
+        box.hidden = true;
+      }
+    }
+
     function emitMainComposerSend(busySendMode) {
       const ta = document.getElementById("input");
       if (!ta) return;
+      closeComposerSlashPicker();
       const text = ta.value ? ta.value.trim() : "";
       const imgs = pendingSendImages.slice();
       const refs = pendingSendImageRefs.map(function (r) {
@@ -7327,8 +7854,35 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     })();
 
     document.getElementById("input").addEventListener("input", function () {
+      updateComposerSlashPicker();
       updateComposerSendEnabled();
     });
+
+    (function wireComposerSlashUi() {
+      var picker = document.getElementById("composerSlashPicker");
+      if (picker) {
+        picker.addEventListener("click", function (ev) {
+          var t = ev.target && ev.target.closest && ev.target.closest("button.composer-slash-item");
+          if (!t) return;
+          var idx = parseInt(t.getAttribute("data-idx") || "-1", 10);
+          if (!isFinite(idx) || idx < 0) return;
+          var row = composerSlashLastMatches[idx];
+          if (row) applyComposerSlashPick(row);
+        });
+      }
+      var slashBtn = document.getElementById("btnSlashCommands");
+      if (slashBtn) {
+        slashBtn.addEventListener("click", function () {
+          openComposerSlashPickerAll();
+        });
+      }
+      var dismiss = document.getElementById("btnDismissSlashResult");
+      if (dismiss) {
+        dismiss.addEventListener("click", function () {
+          vscode.postMessage({ type: "dismissSlashResult" });
+        });
+      }
+    })();
 
     document.getElementById("input").addEventListener("paste", function (ev) {
       var cd = ev.clipboardData;
@@ -7369,6 +7923,36 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     });
 
     document.getElementById("input").addEventListener("keydown", (e) => {
+      var picker = document.getElementById("composerSlashPicker");
+      var pickerOpen = picker && !picker.hidden && composerSlashLastMatches.length > 0;
+      if (pickerOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeComposerSlashPicker();
+          return;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          composerSlashSelIndex = Math.min(
+            composerSlashSelIndex + 1,
+            composerSlashLastMatches.length - 1
+          );
+          highlightComposerSlashPicker();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          composerSlashSelIndex = Math.max(composerSlashSelIndex - 1, 0);
+          highlightComposerSlashPicker();
+          return;
+        }
+        if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey)) {
+          e.preventDefault();
+          var row = composerSlashLastMatches[composerSlashSelIndex];
+          if (row) applyComposerSlashPick(row);
+          return;
+        }
+      }
       if (!shouldSendOnEnter(e)) return;
       if (state.selectedRun && state.waitingForAssistant) {
         var qb = document.getElementById("btnQueueAfterReply");

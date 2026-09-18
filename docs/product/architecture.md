@@ -49,10 +49,28 @@ flowchart LR
 
 1. Construct the transcript **deterministically** ([domain-model.md](domain-model.md), [transcript-format.md](transcript-format.md)).
 2. Provide the **user message** for the turn.
-3. **Trigger** the agent (prefer programmatic CLI/ACP; Composer-style fallback if needed).
+3. **Trigger** the configured execution backend.
 4. **Persist** results with **`append-event`** and other Colcoor APIs.
 
 Prefer **stable programmatic** integration over fragile UI automation.
+
+### 4.1 Pluggable execution backends
+
+Execution is delegated to a **provider** chosen by the `colcoor.provider` setting; the transcript and
+event graph stay authoritative regardless of provider. A single dispatcher (`AgentRunner`) selects a
+backend per turn by mode:
+
+- **ask** → a stateless **LLM API** (default: Anthropic Messages API). The shared transcript prefix
+  is byte-stable across sibling branches, so a prompt-cache breakpoint gives cache hits when branching.
+- **plan / agent** → a stateful **agentic API** (default: Claude Agent SDK). Colcoor persists the
+  provider session id (and a fork anchor) in the assistant event's `content_json`
+  (`colcoor_agent_session`) so a new turn can **resume** the session's tip, **fork** it when branching
+  from the middle, or start **fresh** — avoiding a new session (and its startup cost) per message.
+- Cursor's headless CLI (`agent -p`) remains available as a **legacy** backend (`colcoor.provider =
+  cursor`) but is no longer the default; it requires a Cursor account.
+
+Providers implement a common `AgentBackend` interface, so additional suppliers can be added without
+changing the turn orchestration.
 
 ## 5. Independence
 
@@ -60,8 +78,9 @@ This **documentation set** defines the Colcoor extension product **on its own**.
 
 ## 6. Main-thread boundary
 
-- No server-side main-thread streaming completion API; use **`append-event`** + Cursor agent ([data-flow-and-api.md](data-flow-and-api.md)).
-- **Server-side web search and code execution** as Colcoor-driven main-thread tools are **out of scope** for this product.
+- No server-side main-thread streaming completion API; use **`append-event`** plus the configured provider ([data-flow-and-api.md](data-flow-and-api.md)).
+- **Colcoor-hosted** web search and code execution as main-thread tools remain **out of scope**.
+- Ask mode (Anthropic Messages API) may enable **Anthropic-hosted** server tools (`web_search`, `web_fetch`) and a workspace-scoped client `read_file` tool; Colcoor does not run its own search or code-execution backend.
 
 ## 7. Side chat
 

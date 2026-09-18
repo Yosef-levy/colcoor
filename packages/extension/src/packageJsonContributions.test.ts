@@ -68,6 +68,8 @@ describe("package.json Colcoor contributions", () => {
     const pkg = JSON.parse(raw) as { contributes?: { commands?: Array<{ command?: string }> } };
     const cmds = pkg.contributes?.commands?.map((c) => c.command) ?? [];
     expect(cmds).toContain("colcoor.newConversation");
+    expect(cmds).toContain("colcoor.applyConversationTemplate");
+    expect(cmds).toContain("colcoor.manageConversationTemplates");
     expect(cmds).toContain("colcoor.openSideChat");
     expect(cmds).toContain("colcoor.showColcoorMenu");
     expect(cmds).toContain("colcoor.continueFromHere");
@@ -76,6 +78,24 @@ describe("package.json Colcoor contributions", () => {
     expect(cmds).toContain("colcoor.copySelectedMessage");
     expect(cmds).toContain("colcoor.refreshConversationTree");
     expect(cmds).toContain("colcoor.refreshConversationDrawers");
+    expect(cmds).toContain("colcoor.buildListFromConversation");
+    expect(cmds).toContain("colcoor.runAgentOnLists");
+    expect(cmds).toContain("colcoor.openListAgentJobs");
+  });
+
+  it("offers template application from conversation rows", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: {
+        menus?: {
+          "view/item/context"?: Array<{ command?: string; when?: string }>;
+        };
+      };
+    };
+    const row = pkg.contributes?.menus?.["view/item/context"]?.find(
+      (item) => item.command === "colcoor.applyConversationTemplate",
+    );
+    expect(row?.when).toContain("viewItem == conversation");
   });
 
   it("matches showColcoorApiFailure toast action labels to command titles ([ui-features.md] §12)", () => {
@@ -195,12 +215,11 @@ describe("package.json Colcoor contributions", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
     const api = colcoorConversationWelcomes(pkg).find((w) =>
-      String(w.when ?? "").includes("cursorAgentApiKeySet"),
+      String(w.when ?? "").includes("providerApiKeySet"),
     );
     const contents = api?.contents ?? "";
     expect(api?.when).toContain("colcoor.backendSignedIn");
-    expect(contents).toContain("[Set Cursor API key…](command:colcoor.setCursorAgentApiKey)");
-    expect(contents).toContain("[Set up Cursor CLI (agent)…](command:colcoor.setupCursorCli)");
+    expect(contents).toContain("[Set provider API key…](command:colcoor.setProviderApiKey)");
   });
 
   it("documents openLegalPolicySettings for Terms / Privacy / Refund URLs ([ui-features.md] §1.3)", () => {
@@ -249,7 +268,7 @@ describe("package.json Colcoor contributions", () => {
     const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
     const pkg = JSON.parse(raw) as { contributes?: { viewsWelcome?: ViewsWelcomeRow[] } };
     const contents = colcoorConversationWelcomes(pkg)
-      .filter((w) => !String(w.when ?? "").includes("cursorAgentApiKeySet"))
+      .filter((w) => !String(w.when ?? "").includes("providerApiKeySet"))
       .map((w) => w.contents ?? "")
       .join("\n");
     expect(contents).not.toContain("command:colcoor.sendMessage");
@@ -298,6 +317,22 @@ describe("package.json Colcoor contributions", () => {
     expect(contents).not.toContain("command:colcoor.changeMemberRole");
     expect(contents).not.toContain("command:colcoor.removeMemberFromConversation");
     expect(contents).not.toContain("command:colcoor.deleteConversation");
+    expect(contents).not.toContain("command:colcoor.restoreDeletedConversation");
+  });
+
+  it("registers restore deleted conversation and scopes it to deleted rows", () => {
+    const raw = readFileSync(resolve(__dirname, "../package.json"), "utf8");
+    const pkg = JSON.parse(raw) as {
+      contributes?: {
+        commands?: { command?: string }[];
+        menus?: { "view/item/context"?: { command?: string; when?: string }[] };
+      };
+    };
+    const commands = pkg.contributes?.commands ?? [];
+    expect(commands.some((c) => c.command === "colcoor.restoreDeletedConversation")).toBe(true);
+    const menus = pkg.contributes?.menus?.["view/item/context"] ?? [];
+    const restore = menus.find((m) => m.command === "colcoor.restoreDeletedConversation");
+    expect(restore?.when).toContain("viewItem == deletedConversation");
   });
 
 });

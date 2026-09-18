@@ -33,6 +33,7 @@ from colcoor_backend.api.schemas import (
     NoteCreateBody,
     NoteOut,
     NotePatchBody,
+    RootNotesCreateBody,
     SetActiveBody,
     EventSubtreeSoftDeleteOut,
     RestoreSubtreeOut,
@@ -47,6 +48,7 @@ from colcoor_backend.services.append_event_idempotency import (
 )
 from colcoor_backend.services.graph import (
     add_conversation_member,
+    append_missing_root_notes,
     create_conversation_with_owner,
     create_note_on_event,
     restore_soft_deleted_conversation_graph,
@@ -55,6 +57,7 @@ from colcoor_backend.services.graph import (
     delete_note_row,
     list_conversation_members,
     list_conversations_for_user,
+    list_deleted_conversations_for_user,
     list_events_for_tree,
     list_notes_visible,
     patch_conversation_for_user,
@@ -113,6 +116,7 @@ def _conversation_out(
     *,
     side_chat_has_unread: bool = False,
     side_chat_unread_count: int = 0,
+    include_deleted_at: bool = False,
 ) -> ConversationOut:
     return ConversationOut(
         id=conv.id,
@@ -120,6 +124,7 @@ def _conversation_out(
         metadata_json=conv.metadata_json,
         pinned=member.pinned,
         updated_at=conv.updated_at,
+        deleted_at=conv.deleted_at if include_deleted_at else None,
         side_chat_has_unread=side_chat_has_unread,
         side_chat_unread_count=side_chat_unread_count,
     )
@@ -149,18 +154,34 @@ async def list_conversations(
     ]
 
 
+@router.get("/deleted", response_model=list[ConversationOut])
+async def list_deleted_conversations(
+    session: DbSession,
+    user_id: CurrentUserId,
+) -> list[ConversationOut]:
+    """Soft-deleted conversations the caller can restore (Recently Deleted)."""
+    rows = await list_deleted_conversations_for_user(session, user_id)
+    return [_conversation_out(c, m, include_deleted_at=True) for c, m in rows]
+
+
 @router.post("", response_model=ConversationOut)
 async def create_conversation(
     session: DbSession,
     user_id: CurrentUserId,
     body: ConversationCreate,
 ) -> ConversationOut:
-    conv, member = await create_conversation_with_owner(
-        session,
-        user_id=user_id,
-        title=body.title,
-        metadata_json=body.metadata_json,
-    )
+    try:
+        conv, member = await create_conversation_with_owner(
+            session,
+            user_id=user_id,
+            title=body.title,
+            metadata_json=body.metadata_json,
+            root_notes=body.root_notes,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+        ) from None
     await session.commit()
     unread_counts = await side_chat_unread_count_by_conversation_ids(session, user_id, [conv.id])
     return _conversation_out(
@@ -951,6 +972,32 @@ async def post_conversation_note(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
     return NoteOut.model_validate(note)
+
+
+@router.post("/{conversation_id}/root-notes", response_model=list[NoteOut])
+async def post_missing_root_notes(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+    body: RootNotesCreateBody,
+) -> list[NoteOut]:
+    try:
+        notes = await append_missing_root_notes(
+            session,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            contents=body.notes,
+        )
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
+        ) from None
+    await session.commit()
+    return [NoteOut.model_validate(note) for note in notes]
 
 
 @router.patch("/{conversation_id}/notes/{note_id}", response_model=NoteOut)

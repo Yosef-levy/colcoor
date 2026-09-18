@@ -19,9 +19,10 @@ from colcoor_backend.core.config import get_settings
 from colcoor_backend.core.jwt_tokens import create_access_token
 from colcoor_backend.db import models  # noqa: F401 — register mappers
 from colcoor_backend.db.base import Base
-from colcoor_backend.db.models import ConversationUserState, Event, User
+from colcoor_backend.db.models import ConversationMember, ConversationUserState, Event, Note, User
 from colcoor_backend.services.event_purge import purge_soft_deleted_events
 from colcoor_backend.services.graph import (
+    append_missing_root_notes,
     append_graph_event,
     create_conversation_with_owner,
     create_note_on_event,
@@ -831,6 +832,13 @@ def test_soft_delete_conversation_undo_and_restore(monkeypatch: pytest.MonkeyPat
         assert r.status_code == 200, r.text
         assert cid not in {row["id"] for row in r.json()}
 
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        deleted_rows = r.json()
+        assert cid in {row["id"] for row in deleted_rows}
+        match = next(row for row in deleted_rows if row["id"] == cid)
+        assert match.get("deleted_at")
+
         r = client.post(
             f"/api/v1/conversations/{cid}/events/undo-delete",
             headers=auth,
@@ -855,12 +863,59 @@ def test_soft_delete_conversation_undo_and_restore(monkeypatch: pytest.MonkeyPat
         r = client.get("/api/v1/conversations", headers=auth)
         assert cid in {row["id"] for row in r.json()}
 
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid not in {row["id"] for row in r.json()}
+
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
         assert r.status_code == 200, r.text
         r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
         assert r.status_code == 200, r.text
         assert r.json()["deleted_count"] == 0
         assert r.json()["deletion_group_id"] is None
+
+    get_settings.cache_clear()
+
+
+def test_list_deleted_conversations_and_restore_from_list(
+    monkeypatch: pytest.MonkeyPatch, postgres_url: str
+) -> None:
+    """GET /conversations/deleted lists soft-deleted rows; restore-deleted clears them from that list."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "trash"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid not in {row["id"] for row in r.json()}
+
+        r = client.delete(f"/api/v1/conversations/{cid}", headers=auth)
+        assert r.status_code == 200, r.text
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert cid not in {row["id"] for row in r.json()}
+
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert cid in {row["id"] for row in r.json()}
+
+        r = client.post(f"/api/v1/conversations/{cid}/restore-deleted", headers=auth)
+        assert r.status_code == 200, r.text
+        assert r.json()["restored_count"] >= 1
+
+        r = client.get("/api/v1/conversations", headers=auth)
+        assert cid in {row["id"] for row in r.json()}
+        r = client.get("/api/v1/conversations/deleted", headers=auth)
+        assert cid not in {row["id"] for row in r.json()}
 
     get_settings.cache_clear()
 
@@ -1252,3 +1307,83 @@ def test_conversation_lists_http_crud_and_item_validation(postgres_url) -> None:
         assert r.status_code == 204, r.text
 
     get_settings.cache_clear()
+
+
+def test_template_root_notes_create_and_append_idempotently(session_factory) -> None:
+    async def run() -> None:
+        async with session_factory() as session:
+            owner = User(
+                cursor_sub=f"template-owner-{uuid.uuid4()}",
+                email="template-owner@example.test",
+                display_name="Owner",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            session.add(owner)
+            await session.flush()
+            await session.refresh(owner)
+            conversation, _ = await create_conversation_with_owner(
+                session,
+                user_id=owner.id,
+                title="Template",
+                root_notes=["ID <conversation_id>", "Existing"],
+            )
+            await session.commit()
+
+        async with session_factory() as session:
+            created = await append_missing_root_notes(
+                session,
+                conversation.id,
+                owner.id,
+                [" ID <conversation_id>\r\n", "Existing", "New"],
+            )
+            await session.commit()
+            assert [note.content for note in created] == ["New"]
+            contents = (
+                await session.execute(
+                    select(Note.content)
+                    .join(Event, Event.id == Note.event_id)
+                    .where(Event.conversation_id == conversation.id)
+                )
+            ).scalars().all()
+            assert set(contents) == {f"ID {conversation.id}", "Existing", "New"}
+
+    asyncio.run(run())
+
+
+def test_template_root_notes_reject_viewer(session_factory) -> None:
+    async def run() -> None:
+        async with session_factory() as session:
+            owner = User(
+                cursor_sub=f"template-owner-{uuid.uuid4()}",
+                email="owner@example.test",
+                display_name="Owner",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            viewer = User(
+                cursor_sub=f"template-viewer-{uuid.uuid4()}",
+                email="viewer@example.test",
+                display_name="Viewer",
+                last_login_at=datetime.now(tz=UTC),
+            )
+            session.add_all([owner, viewer])
+            await session.flush()
+            await session.refresh(owner)
+            await session.refresh(viewer)
+            conversation, _ = await create_conversation_with_owner(
+                session, user_id=owner.id, title="Template"
+            )
+            session.add(
+                ConversationMember(
+                    conversation_id=conversation.id,
+                    user_id=viewer.id,
+                    role="viewer",
+                    pinned=False,
+                )
+            )
+            await session.commit()
+            with pytest.raises(PermissionError):
+                await append_missing_root_notes(
+                    session, conversation.id, viewer.id, ["Forbidden"]
+                )
+
+    asyncio.run(run())

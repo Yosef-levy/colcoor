@@ -64,6 +64,8 @@ type ConvMeta = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** Shared with soft-deleted events when the whole conversation is deleted. */
+  deletion_group_id?: string | null;
   active_event_id: string;
   needs_context_rebuild: boolean;
   side_chat_last_read_seq: number;
@@ -103,6 +105,37 @@ const DEFAULT_PROFILE: LocalProfile = {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+const MAX_ROOT_NOTES = 32;
+const MAX_ROOT_NOTE_LENGTH = 12_000;
+
+export function instantiateRootNoteContents(
+  notes: readonly string[],
+  conversationId: string,
+): string[] {
+  if (notes.length > MAX_ROOT_NOTES) {
+    throw new Error(`A template may contain at most ${MAX_ROOT_NOTES} notes.`);
+  }
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const note of notes) {
+    if (typeof note !== "string") throw new Error("Template notes must be strings.");
+    const content = note
+      .replaceAll("<conversation_id>", conversationId)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .trim();
+    if (!content) throw new Error("Template notes cannot be empty.");
+    if (content.length > MAX_ROOT_NOTE_LENGTH) {
+      throw new Error(`Template notes must be at most ${MAX_ROOT_NOTE_LENGTH} characters.`);
+    }
+    if (!seen.has(content)) {
+      seen.add(content);
+      output.push(content);
+    }
+  }
+  return output;
 }
 
 function offlineUnsupported(feature: string): Error {
@@ -286,6 +319,7 @@ export class LocalConversationStore implements ColcoorClient {
       metadata_json: meta.metadata_json,
       pinned: meta.pinned,
       updated_at: meta.updated_at,
+      deleted_at: meta.deleted_at ?? null,
       side_chat_has_unread: false,
       side_chat_unread_count: 0,
     };
@@ -303,7 +337,7 @@ export class LocalConversationStore implements ColcoorClient {
     return meta;
   }
 
-  async listConversations(): Promise<ConversationSummary[]> {
+  private async listMetas(predicate: (meta: ConvMeta) => boolean): Promise<ConvMeta[]> {
     let ids: string[];
     try {
       ids = await fs.readdir(this.conversationsDir());
@@ -313,10 +347,15 @@ export class LocalConversationStore implements ColcoorClient {
     const metas: ConvMeta[] = [];
     for (const id of ids) {
       const meta = await this.loadMeta(id);
-      if (meta && !meta.deleted_at) {
+      if (meta && predicate(meta)) {
         metas.push(meta);
       }
     }
+    return metas;
+  }
+
+  async listConversations(): Promise<ConversationSummary[]> {
+    const metas = await this.listMetas((m) => !m.deleted_at);
     metas.sort((a, b) => {
       if (a.pinned !== b.pinned) {
         return a.pinned ? -1 : 1;
@@ -326,9 +365,20 @@ export class LocalConversationStore implements ColcoorClient {
     return metas.map((m) => this.metaToSummary(m));
   }
 
+  async listDeletedConversations(): Promise<ConversationSummary[]> {
+    const metas = await this.listMetas((m) => Boolean(m.deleted_at));
+    metas.sort((a, b) => {
+      const da = a.deleted_at ?? "";
+      const db = b.deleted_at ?? "";
+      return db.localeCompare(da);
+    });
+    return metas.map((m) => this.metaToSummary(m));
+  }
+
   async createConversation(body: {
     title?: string | null;
     metadata_json?: Record<string, unknown> | null;
+    root_notes?: string[];
   }): Promise<ConversationSummary> {
     const profile = await this.ensureProfile();
     const now = nowIso();
@@ -357,12 +407,24 @@ export class LocalConversationStore implements ColcoorClient {
       created_at: now,
       updated_at: now,
       deleted_at: null,
+      deletion_group_id: null,
       active_event_id: rootId,
       needs_context_rebuild: false,
       side_chat_last_read_seq: 0,
     };
+    const rootNotes = instantiateRootNoteContents(body.root_notes ?? [], conversationId).map(
+      (content, index): StoredNote => ({
+        id: randomUUID(),
+        event_id: rootId,
+        author_user_id: profile.id,
+        content,
+        created_at: new Date(Date.parse(now) + index).toISOString(),
+        updated_at: new Date(Date.parse(now) + index).toISOString(),
+      }),
+    );
     await fs.mkdir(this.convDir(conversationId), { recursive: true });
     await this.writeJsonl(this.eventsPath(conversationId), [root]);
+    await this.writeJsonl(this.notesPath(conversationId), rootNotes);
     await this.writeJson(this.metaPath(conversationId), meta);
     return this.metaToSummary(meta);
   }
@@ -391,15 +453,69 @@ export class LocalConversationStore implements ColcoorClient {
   }
 
   async deleteConversation(conversationId: string): Promise<EventSubtreeSoftDeleteOut> {
-    const meta = await this.loadLiveMeta(conversationId);
-    const events = await this.readJsonl<StoredEvent>(this.eventsPath(conversationId));
-    meta.deleted_at = nowIso();
-    meta.updated_at = meta.deleted_at;
+    const meta = await this.loadMeta(conversationId);
+    if (!meta) {
+      throw new Error(`conversation not found: ${conversationId}`);
+    }
+    if (meta.deleted_at) {
+      return { deleted_count: 0, deletion_group_id: null };
+    }
+    const events = await this.loadEvents(conversationId);
+    const live = events.filter((e) => !e.deleted_at);
+    if (live.length === 0) {
+      return { deleted_count: 0, deletion_group_id: null };
+    }
+    const now = nowIso();
+    const deletionGroupId = randomUUID();
+    const rootId = events.find((e) => e.parent_event_id === null)?.id ?? meta.active_event_id;
+    for (const e of live) {
+      e.deleted_at = now;
+      e.deletion_group_id = deletionGroupId;
+      e.updated_at = now;
+      e.starred = false;
+    }
+    await this.writeJsonl(this.eventsPath(conversationId), events);
+    meta.deleted_at = now;
+    meta.deletion_group_id = deletionGroupId;
+    meta.active_event_id = rootId;
+    meta.needs_context_rebuild = true;
+    meta.updated_at = now;
     await this.writeJson(this.metaPath(conversationId), meta);
-    return {
-      deleted_count: events.filter((e) => !e.deleted_at).length,
-      deletion_group_id: null,
-    };
+    return { deleted_count: live.length, deletion_group_id: deletionGroupId };
+  }
+
+  /**
+   * Clear soft-delete on every event (and matching conversation meta) that shares
+   * ``deletionGroupId``. Mirrors backend ``_restore_soft_deleted_graph_by_deletion_group``.
+   */
+  private async restoreByDeletionGroup(
+    conversationId: string,
+    deletionGroupId: string,
+  ): Promise<number> {
+    const events = await this.loadEvents(conversationId);
+    const now = nowIso();
+    let restored = 0;
+    for (const e of events) {
+      if (e.deleted_at && e.deletion_group_id === deletionGroupId) {
+        e.deleted_at = null;
+        e.deletion_group_id = null;
+        e.updated_at = now;
+        restored += 1;
+      }
+    }
+    if (restored === 0) {
+      return 0;
+    }
+    await this.writeJsonl(this.eventsPath(conversationId), events);
+    const meta = await this.loadMeta(conversationId);
+    if (meta && meta.deletion_group_id === deletionGroupId) {
+      meta.deleted_at = null;
+      meta.deletion_group_id = null;
+      meta.needs_context_rebuild = true;
+      meta.updated_at = now;
+      await this.writeJson(this.metaPath(conversationId), meta);
+    }
+    return restored;
   }
 
   async restoreDeletedConversation(conversationId: string): Promise<RestoreSubtreeOut> {
@@ -407,10 +523,14 @@ export class LocalConversationStore implements ColcoorClient {
     if (!meta) {
       throw new Error(`conversation not found: ${conversationId}`);
     }
-    meta.deleted_at = null;
-    meta.updated_at = nowIso();
-    await this.writeJson(this.metaPath(conversationId), meta);
-    return { restored_count: 1 };
+    if (!meta.deleted_at) {
+      throw new Error("conversation is not deleted");
+    }
+    if (!meta.deletion_group_id) {
+      throw new Error("conversation has no deletion_group_id; cannot restore");
+    }
+    const restored = await this.restoreByDeletionGroup(conversationId, meta.deletion_group_id);
+    return { restored_count: restored };
   }
 
   // ---------------------------------------------------------------------------
@@ -674,18 +794,10 @@ export class LocalConversationStore implements ColcoorClient {
     conversationId: string,
     deletionGroupId: string,
   ): Promise<RestoreSubtreeOut> {
-    const events = await this.loadEvents(conversationId);
-    const now = nowIso();
-    let restored = 0;
-    for (const e of events) {
-      if (e.deleted_at && e.deletion_group_id === deletionGroupId) {
-        e.deleted_at = null;
-        e.deletion_group_id = null;
-        e.updated_at = now;
-        restored += 1;
-      }
+    const restored = await this.restoreByDeletionGroup(conversationId, deletionGroupId);
+    if (restored === 0) {
+      throw new Error("deletion group not found or undo window expired");
     }
-    await this.writeJsonl(this.eventsPath(conversationId), events);
     return { restored_count: restored };
   }
 
@@ -698,19 +810,13 @@ export class LocalConversationStore implements ColcoorClient {
     if (!anchor) {
       throw new Error(`event not found: ${eventId}`);
     }
-    const group = anchor.deletion_group_id;
-    const now = nowIso();
-    let restored = 0;
-    for (const e of events) {
-      const inGroup = group ? e.deletion_group_id === group : e.id === eventId;
-      if (e.deleted_at && inGroup) {
-        e.deleted_at = null;
-        e.deletion_group_id = null;
-        e.updated_at = now;
-        restored += 1;
-      }
+    if (!anchor.deleted_at) {
+      throw new Error("event is not soft-deleted");
     }
-    await this.writeJsonl(this.eventsPath(conversationId), events);
+    if (!anchor.deletion_group_id) {
+      throw new Error("subtree has no deletion_group_id; cannot restore");
+    }
+    const restored = await this.restoreByDeletionGroup(conversationId, anchor.deletion_group_id);
     return { restored_count: restored };
   }
 
@@ -738,6 +844,45 @@ export class LocalConversationStore implements ColcoorClient {
     };
     await this.appendJsonl(this.notesPath(conversationId), note);
     return note;
+  }
+
+  async appendMissingRootNotes(
+    conversationId: string,
+    body: { notes: string[] },
+  ): Promise<NoteOut[]> {
+    const profile = await this.ensureProfile();
+    const meta = await this.loadLiveMeta(conversationId);
+    const events = await this.readJsonl<StoredEvent>(this.eventsPath(conversationId));
+    const root = events.find((event) => event.parent_event_id === null && !event.deleted_at);
+    if (!root) throw new Error(`conversation root not found: ${conversationId}`);
+    const existing = await this.readJsonl<StoredNote>(this.notesPath(conversationId));
+    const existingRootContents = new Set(
+      existing
+        .filter((note) => note.event_id === root.id)
+        .map((note) =>
+          note.content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim(),
+        ),
+    );
+    const now = nowIso();
+    const created = instantiateRootNoteContents(body.notes, conversationId)
+      .filter((content) => !existingRootContents.has(content))
+      .map(
+        (content, index): StoredNote => ({
+          id: randomUUID(),
+          event_id: root.id,
+          author_user_id: profile.id,
+          content,
+          created_at: new Date(Date.parse(now) + index + 1).toISOString(),
+          updated_at: new Date(Date.parse(now) + index + 1).toISOString(),
+        }),
+      );
+    if (created.length > 0) {
+      await this.writeJsonl(this.notesPath(conversationId), [...existing, ...created]);
+      meta.needs_context_rebuild = true;
+      meta.updated_at = now;
+      await this.writeJson(this.metaPath(conversationId), meta);
+    }
+    return created;
   }
 
   async patchNote(

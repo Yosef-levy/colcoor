@@ -6,6 +6,16 @@ import {
   scheduleRefreshAgentModelCatalog,
 } from "../agent/agentModelCatalogCache";
 import type { CursorAgentModelEntry } from "../agent/cursorAgentModelCatalog";
+import { resolveProviderId } from "../agent/providerApiKey";
+import {
+  buildColcoorContextSummaryLines,
+  buildSlashCommandCatalog,
+  dispatchSlashCommand,
+  resolveProviderCommandCatalog,
+  resolveProviderSlashCapabilities,
+  type SlashCommand,
+  type SlashCommandResult,
+} from "../commands/slash";
 import type {
   ColcoorClient,
   ConversationListItemOut,
@@ -48,9 +58,11 @@ import { buildUserImageDataUrlsByEventId } from "./conversationImageDataUrls";
 import { runColcoorUserTurn } from "./runUserTurn";
 import { shouldAutoSelectPersistedUserMessage } from "./persistedUserSelection";
 import { enrichGraphEventsWithComposerDisplay } from "./enrichGraphEventsWithComposerDisplay";
+import { hasDisplayableMetadata } from "./messageMetadataCore";
 import { appendPendingPlainThreadFragment, buildPlainThread } from "./threadPlainText";
 import { buildThreadSegments, type ThreadSegment } from "./threadSegments";
 import { pendingUserHtmlForPanelState } from "./pendingUserHtmlForPanelState";
+import { markdownToSafeHtml } from "./threadMarkdown";
 import {
   staleTreeMissingSelectionPromptKey,
   staleTreeRemoteCollaboratorGrowthFingerprint,
@@ -271,12 +283,14 @@ type WebviewStateMessage = {
   pendingSideChatGraphReferenceSummary: string | null;
   /** One-shot composer fill after “Edit message” (consumed on next state post). */
   composerPrefill?: ComposerPrefillPayload | null;
-  /** Curated Cursor CLI models for the composer dropdown (`id` + display `label`). */
+  /** Curated models for the composer dropdown (`id` + display `label`). */
   agentModelOptions: CursorAgentModelEntry[];
   /** `auto` or a model id from {@link agentModelOptions} / full picker. */
   agentModelSelected: string;
-  /** Shown as the model dropdown title when the CLI list is empty or failed. */
+  /** Shown as the model dropdown title when the model list is empty or failed. */
   agentModelsListHint: string | null;
+  /** Whether the dropdown lists Cursor CLI models or direct provider models. */
+  agentModelSource: "cursor" | "provider";
   /** Cursor CLI mode for sends in this conversation. */
   agentModeSelected: CursorCliMode;
   /** Short label for the in-flight assistant reply (tree/thread headers while busy). */
@@ -297,11 +311,23 @@ type WebviewStateMessage = {
     email?: string | null;
     handle?: string | null;
   }[];
+  /** Slash-command catalog for the main composer autocomplete. */
+  slashCommands: {
+    name: string;
+    description: string;
+    argumentHint?: string;
+    source: string;
+    available: boolean;
+    unavailableReason?: string;
+  }[];
+  /** Transient HTML for local slash-command results (help/context/skills); not persisted. */
+  slashResultHtml: string | null;
 };
 
 type FromWebview =
   | { type: "ready" }
   | { type: "audioUnlocked" }
+  | { type: "dismissSlashResult" }
   | {
       type: "send";
       text: string;
@@ -397,6 +423,7 @@ type FromWebview =
   | { type: "chooseListForSelection"; selection: Record<string, unknown> | null }
   | { type: "createListItemWithNewList"; selection: Record<string, unknown> | null }
   | { type: "rename" }
+  | { type: "applyConversationTemplate" }
   | { type: "togglePin" }
   | { type: "toggleStar" }
   | { type: "addNote" }
@@ -417,6 +444,9 @@ const WEBVIEW_ACCOUNT_COMMAND_ALLOWLIST = new Set<string>([
   "colcoor.setupCursorCli",
   "colcoor.setCursorAgentApiKey",
   "colcoor.signOut",
+  "colcoor.buildListFromConversation",
+  "colcoor.runAgentOnLists",
+  "colcoor.openListAgentJobs",
 ]);
 
 function randomNonce(): string {
@@ -454,6 +484,8 @@ export function createConversationPanelController(
   ) => Promise<void>;
   /** Close the webview panel if it is showing this conversation (e.g. after delete). */
   closeIfShowingConversation: (conversationId: string) => void;
+  /** Refresh notes in the webview when it is showing this conversation. */
+  refreshIfShowingConversation: (conversationId: string) => Promise<void>;
   /** Star or unstar the selected tree node via API (command palette). */
   toggleStarSelectedMessage: () => Promise<void>;
   /** Attach a note to the selected event (owner/editor); refreshes tree. */
@@ -480,6 +512,8 @@ export function createConversationPanelController(
   jumpToLatestInConversation: () => Promise<void>;
   /** Copy selected tree message body to the system clipboard ([ui-features.md] §7). */
   copySelectedMessage: () => Promise<void>;
+  /** Open metadata drawer for the selected message (usage + graph fields). */
+  viewMessageMetadata: () => Promise<void>;
   /** Reload tree + thread from the API (same as webview “Refresh conversation tree”). */
   refreshConversationTree: (opts?: { quiet?: boolean }) => Promise<void>;
   /** Soft-delete the selected node and its subtree (owner/editor). */
@@ -599,6 +633,8 @@ export function createConversationPanelController(
   /** Last state flags sent to webview; reused for lightweight local selection refreshes. */
   let lastPostedBusy = false;
   let lastPostedError: string | null = null;
+  /** Transient sanitized HTML for local slash-command results (cleared on dismiss / next send). */
+  let slashResultHtml: string | null = null;
   /** True between the first `postState` of a tree load and the final snapshot (clears stale error UI). */
   let conversationTreeLoading = false;
 
@@ -1672,6 +1708,7 @@ export function createConversationPanelController(
     agentModelOptions: CursorAgentModelEntry[];
     agentModelSelected: string;
     agentModelsListHint: string | null;
+    agentModelSource: "cursor" | "provider";
     agentModeSelected: CursorCliMode;
   } {
     const map = readAgentModelByConversationMap(context.workspaceState);
@@ -1692,16 +1729,159 @@ export function createConversationPanelController(
       agentModelOptions: options,
       agentModelSelected: selected,
       agentModelsListHint: catalog.hint,
+      agentModelSource: resolveProviderId() === "cursor" ? "cursor" : "provider",
       agentModeSelected: modeSelected,
     };
   }
 
+  function settingsAgentMode(): string {
+    const raw = vscode.workspace.getConfiguration("colcoor").get<string>("agentMode") ?? "auto";
+    return raw === "headless" || raw === "stub" || raw === "auto" ? raw : "auto";
+  }
+
+  function slashCommandCatalogForWebview(): WebviewStateMessage["slashCommands"] {
+    const catalog = buildSlashCommandCatalog(buildSlashCommandContext());
+    return catalog.map((c) => ({
+      name: c.name,
+      description: c.description,
+      ...(c.argumentHint ? { argumentHint: c.argumentHint } : {}),
+      source: c.source,
+      available: c.availability.kind === "available",
+      ...(c.availability.kind === "unavailable"
+        ? { unavailableReason: c.availability.reason }
+        : {}),
+    }));
+  }
+
+  function buildSlashCommandContext() {
+    const providerId = resolveProviderId();
+    const cliMode = cliModeForConversationRuns();
+    const agentMode = settingsAgentMode();
+    const capabilities = resolveProviderSlashCapabilities({ providerId, cliMode, agentMode });
+    const modelFields = agentModelFieldsForWebview();
+    const ws = getWorkspaceRoot();
+    // Always load seeds + disk + SDK cache so the picker reflects provider commands even when
+    // the current mode cannot execute them (shown as unavailable).
+    const providerCommands: SlashCommand[] = resolveProviderCommandCatalog(ws, providerId);
+    return {
+      conversationId: conversationId ?? "",
+      providerId,
+      cliMode,
+      agentMode,
+      workspaceRoot: ws,
+      capabilities,
+      selectedModel: modelFields.agentModelSelected,
+      modelOptions: modelFields.agentModelOptions.map((m) => ({ id: m.id, label: m.label })),
+      providerCommands,
+      contextSummaryLines: conversationId
+        ? buildColcoorContextSummaryLines({
+            conversationId,
+            providerId,
+            cliMode,
+            selectedModel: modelFields.agentModelSelected,
+            capabilities,
+            events: lastTreeEvents,
+            conversationMetadataJson,
+          })
+        : undefined,
+    };
+  }
+
+  function setSlashResultMarkdown(markdown: string | null): void {
+    slashResultHtml = markdown?.trim() ? markdownToSafeHtml(markdown) : null;
+  }
+
+  function refreshSlashCatalogInWebview(): void {
+    if (!panel || !conversationId || !webviewReady) {
+      return;
+    }
+    postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+  }
+
+  async function applySlashCommandResult(
+    result: SlashCommandResult,
+    sendArgs: {
+      privateBranch: boolean;
+      pastedImages?: { dataUrl: string }[];
+      imageRefs?: ColcoorUserMediaImageRef[];
+      busySendMode?: "queue" | "branch";
+    },
+  ): Promise<void> {
+    if (result.action === "error") {
+      setSlashResultMarkdown(result.message);
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+      return;
+    }
+    if (result.action === "local") {
+      setSlashResultMarkdown(result.message);
+      if (result.statusBar) {
+        void vscode.window.setStatusBarMessage(`Colcoor: ${result.statusBar}`, 3000);
+      }
+      postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+      return;
+    }
+    if (result.action === "resend") {
+      setSlashResultMarkdown(null);
+      if (result.message) {
+        void vscode.window.setStatusBarMessage(`Colcoor: ${result.message}`, 2500);
+      }
+      await handleResend();
+      return;
+    }
+    if (result.action === "turn-transform") {
+      if (!conversationId) {
+        return;
+      }
+      if (result.patch.cliMode) {
+        await writeSelectedAgentModeForConversation(
+          context.workspaceState,
+          conversationId,
+          result.patch.cliMode,
+        );
+      }
+      if (result.patch.cliModel) {
+        await writeSelectedAgentModelForConversation(
+          context.workspaceState,
+          conversationId,
+          result.patch.cliModel,
+        );
+      }
+      const body = normalizePersistedUserInputText(result.userMessage);
+      if (!body) {
+        setSlashResultMarkdown(result.message ?? "Done.");
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+        return;
+      }
+      setSlashResultMarkdown(null);
+      const priv = result.patch.privateBranch ?? sendArgs.privateBranch;
+      await handleSendAfterSlash(body, priv, sendArgs.pastedImages, sendArgs.imageRefs, sendArgs.busySendMode);
+      return;
+    }
+    if (result.action === "provider") {
+      setSlashResultMarkdown(null);
+      await handleSendAfterSlash(
+        result.userMessage,
+        sendArgs.privateBranch,
+        sendArgs.pastedImages,
+        sendArgs.imageRefs,
+        sendArgs.busySendMode,
+        {
+          slashMeta: result.slashMeta,
+          providerSlashCommand: result.userMessage,
+        },
+      );
+    }
+  }
+
   async function showFullAgentModelPicker(): Promise<void> {
     const catalog = getAgentModelCatalog();
+    const isCursorProvider = resolveProviderId() === "cursor";
     if (catalog.all.length === 0) {
       scheduleRefreshAgentModelCatalog(context.secrets);
       void vscode.window.showInformationMessage(
-        "Colcoor: loading Cursor CLI models… Try again in a moment, or check API key / `agent` on PATH.",
+        isCursorProvider
+          ? "Colcoor: loading Cursor CLI models… Try again in a moment, or check API key / `agent` on PATH."
+          : "Colcoor: provider models are unavailable. Check agent mode and provider settings.",
       );
       return;
     }
@@ -1716,7 +1896,9 @@ export function createConversationPanelController(
     const items: PickItem[] = [
       {
         label: "Auto",
-        description: "Cursor picks the model",
+        description: isCursorProvider
+          ? "Cursor picks the model"
+          : "Use configured default (Settings → ask/agent model)",
         modelId: AGENT_MODEL_AUTO,
         picked: current === AGENT_MODEL_AUTO,
       },
@@ -1728,8 +1910,8 @@ export function createConversationPanelController(
       })),
     ];
     const pick = await vscode.window.showQuickPick(items, {
-      title: "Colcoor — Cursor CLI model",
-      placeHolder: "Full list from `agent models`",
+      title: isCursorProvider ? "Colcoor — Cursor CLI model" : "Colcoor — Anthropic model",
+      placeHolder: isCursorProvider ? "Full list from `agent models`" : "Available Anthropic models",
       matchOnDescription: true,
     });
     if (!pick) {
@@ -1941,6 +2123,8 @@ export function createConversationPanelController(
           email: m.email ?? null,
           handle: m.handle ?? null,
         })),
+        slashCommands: slashCommandCatalogForWebview(),
+        slashResultHtml,
         ...(options?.preserveThreadScroll ? { preserveThreadScroll: true } : {}),
       };
       pendingComposerPrefill = null;
@@ -2036,6 +2220,8 @@ export function createConversationPanelController(
           pendingSideChatGraphReferenceSummary: pendingSideChatGraphReferenceSummaryForWebview(),
           ...agentModelFieldsForWebview(),
           pendingAssistantModelLabel: null,
+          slashCommands: slashCommandCatalogForWebview(),
+          slashResultHtml,
         };
         void panel.webview.postMessage(fallback);
       } catch {
@@ -2509,6 +2695,44 @@ export function createConversationPanelController(
       return;
     }
 
+    // Local / provider slash commands are dispatched before creating a user turn.
+    if (trimmed.startsWith("/")) {
+      const slash = dispatchSlashCommand({ text: trimmed, ctx: buildSlashCommandContext() });
+      if (slash) {
+        await applySlashCommandResult(slash, {
+          privateBranch,
+          pastedImages,
+          imageRefs,
+          busySendMode,
+        });
+        return;
+      }
+    }
+
+    await handleSendAfterSlash(trimmed, privateBranch, pastedImages, imageRefs, busySendMode);
+  }
+
+  async function handleSendAfterSlash(
+    text: string,
+    privateBranch: boolean,
+    pastedImages?: { dataUrl: string }[],
+    imageRefs?: ColcoorUserMediaImageRef[],
+    busySendMode?: "queue" | "branch",
+    slashOpts?: {
+      slashMeta?: { command: string; args: string; source: string };
+      providerSlashCommand?: string;
+    },
+  ): Promise<void> {
+    const trimmed = normalizePersistedUserInputText(text);
+    const hasPasted =
+      Array.isArray(pastedImages) && pastedImages.some((x) => typeof x?.dataUrl === "string" && x.dataUrl.trim());
+    const hasRefs =
+      Array.isArray(imageRefs) &&
+      imageRefs.some((r) => typeof r?.id === "string" && r.id.trim() && typeof r?.mime_type === "string");
+    if ((!trimmed && !hasPasted && !hasRefs) || !conversationId || !selectedEventId) {
+      return;
+    }
+
     const selectedRun = findRunForEventId(selectedEventId);
     if (selectedRun && selectedRun.userEventId) {
       if (!busySendMode) {
@@ -2544,6 +2768,8 @@ export function createConversationPanelController(
           imageRefs,
           replyParentEventId: parent,
           selectPersistedUser: true,
+          slashMeta: slashOpts?.slashMeta,
+          providerSlashCommand: slashOpts?.providerSlashCommand,
         });
         return;
       }
@@ -2556,6 +2782,8 @@ export function createConversationPanelController(
       imageRefs,
       replyParentEventId: selectedEventId,
       selectPersistedUser: true,
+      slashMeta: slashOpts?.slashMeta,
+      providerSlashCommand: slashOpts?.providerSlashCommand,
     });
   }
 
@@ -2567,6 +2795,8 @@ export function createConversationPanelController(
     replyParentEventId: string;
     selectPersistedUser: boolean;
     existingUserEventId?: string;
+    slashMeta?: { command: string; args: string; source: string };
+    providerSlashCommand?: string;
   }): Promise<void> {
     if (!conversationId) {
       return;
@@ -2637,6 +2867,13 @@ export function createConversationPanelController(
             ? { prefetchedGraph: { events: lastTreeEvents, notes: lastNotes } }
             : {}),
           ...(userMediaContentJson ? { userMediaContentJson } : {}),
+          ...(args.slashMeta ? { slashMeta: args.slashMeta } : {}),
+          ...(args.providerSlashCommand
+            ? { providerSlashCommand: args.providerSlashCommand }
+            : {}),
+          onProviderCommandsChanged: () => {
+            refreshSlashCatalogInWebview();
+          },
           onUserMessagePersisted: async ({ userEventId }) => {
             run.pendingUserMarkdown = undefined;
             run.userEventId = userEventId;
@@ -2865,6 +3102,14 @@ export function createConversationPanelController(
   const subscription = vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration("colcoor.conversationAgentTraceOpen") && panel && webviewReady && conversationId) {
       postState(lastTreeEvents, false, null);
+    } else if (
+      e.affectsConfiguration("colcoor.provider") ||
+      e.affectsConfiguration("colcoor.agentMode")
+    ) {
+      scheduleRefreshCachedAgentModels();
+      if (panel && webviewReady && conversationId) {
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+      }
     } else if (e.affectsConfiguration("colcoor") && panel) {
       void vscode.window.showInformationMessage(
         "Colcoor settings changed — close and reopen the conversation panel if the backend URL or agent mode should apply.",
@@ -3637,6 +3882,12 @@ export function createConversationPanelController(
         await handleRename();
         return;
       }
+      if (msg.type === "applyConversationTemplate" && conversationId) {
+        await vscode.commands.executeCommand("colcoor.applyConversationTemplate", {
+          conv: { id: conversationId, title: conversationTitle ?? null },
+        });
+        return;
+      }
       if (msg.type === "togglePin") {
         await handleTogglePin();
         return;
@@ -3659,6 +3910,11 @@ export function createConversationPanelController(
       }
       if (msg.type === "editMessageTitle") {
         await editMessageTitleForEvent();
+        return;
+      }
+      if (msg.type === "dismissSlashResult") {
+        setSlashResultMarkdown(null);
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
         return;
       }
       if (msg.type === "send" && typeof msg.text === "string") {
@@ -4110,6 +4366,11 @@ export function createConversationPanelController(
   }
 
   return {
+    async refreshIfShowingConversation(convId: string): Promise<void> {
+      if (conversationId === convId && panel) {
+        await mergeNotesIntoCachedTreeAndPost();
+      }
+    },
     async reveal(convId: string, title: string | null): Promise<void> {
       const cid = normalizeOptionalGraphEventId(convId);
       if (cid === undefined) {
@@ -4348,6 +4609,34 @@ export function createConversationPanelController(
       }
       await vscode.env.clipboard.writeText(text);
       void vscode.window.setStatusBarMessage("Colcoor: message copied to clipboard.", 2500);
+    },
+    async viewMessageMetadata(): Promise<void> {
+      const gate = evaluateContinueFromHere(
+        conversationId,
+        selectedEventId,
+        lastTreeEvents.map((e) => e.id),
+      );
+      if (gate === "no_context") {
+        void vscode.window.showWarningMessage(
+          "Colcoor: open a conversation and select a message in the tree.",
+        );
+        return;
+      }
+      if (gate === "not_in_tree") {
+        void vscode.window.showWarningMessage(
+          `Colcoor: selection is not in the loaded tree — try ${COLOOR_REFRESH_CONVERSATION_TREE_PANEL_BUTTON_LABEL}.`,
+        );
+        return;
+      }
+      if (!selectedEventId || !panel) {
+        return;
+      }
+      const ev = lastTreeEvents.find((e) => e.id === selectedEventId);
+      if (!ev || !hasDisplayableMetadata(ev)) {
+        void vscode.window.showInformationMessage("Colcoor: no metadata to show for the selected message.");
+        return;
+      }
+      await panel.webview.postMessage({ type: "openMessageMetadata", eventId: selectedEventId });
     },
     async refreshConversationTree(opts?: { quiet?: boolean }): Promise<void> {
       if (!conversationId) {

@@ -2,6 +2,7 @@ import { evaluateResendAssistantGate } from "./resendAssistantGate";
 import { evaluateEditUserMessageGate } from "./editUserMessageGate";
 import { hasUserMediaImages } from "./userEventMedia";
 import { normalizePersistedUserInputText } from "./normalizeUserInputText";
+import { hasDisplayableMetadata } from "./messageMetadataCore";
 
 export type MessageContextMenuGateEvent = {
   id: string;
@@ -20,6 +21,7 @@ export type MessageContextMenuOptions = {
   title: boolean;
   resend: boolean;
   addNote: boolean;
+  metadata: boolean;
   starLabel: "Star" | "Unstar";
 };
 
@@ -49,6 +51,7 @@ export function messageContextMenuOptions(
   const title = ev.kind === "user_input" || ev.kind === "assistant_output";
   const addNote = viewerRole !== "viewer";
   const starred = ev.starred === true;
+  const metadata = hasDisplayableMetadata(ev);
   return {
     continueFromHere: true,
     copy,
@@ -57,6 +60,7 @@ export function messageContextMenuOptions(
     title,
     resend,
     addNote,
+    metadata,
     starLabel: starred ? "Unstar" : "Star",
   };
 }

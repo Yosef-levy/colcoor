@@ -93,6 +93,18 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 | `updated_at` | string (ISO-8601 timestamptz) | yes |
 | `side_chat_has_unread` | boolean | yes | `true` when the caller’s side-chat read cursor is behind the latest **non-deleted** side-chat message in that conversation |
 | `side_chat_unread_count` | integer | yes | Number of **non-deleted** side-chat messages with `seq > last_read_seq` for the caller in this conversation |
+| `deleted_at` | string (ISO-8601 timestamptz) \| null | no | Always **null** on this live list; set on **§3.1a** deleted list |
+
+### 3.1a `GET /api/v1/conversations/deleted`
+
+**Purpose:** List soft-deleted conversations the caller is still a member of (**Recently Deleted**). **Order:** **`conversations.deleted_at`** descending. Soft-deleted rows remain until hard purge after the retention window (default 14 days; see backend config `COLCOOR_EVENT_SOFT_DELETE_RETENTION_HOURS`).
+
+| | |
+|--|--|
+| **Auth** | Bearer JWT |
+| **200** | array of `ConversationOut` with **`deleted_at`** set |
+| **401** | missing/invalid token |
+| **503** | database not configured |
 
 ### 3.2 `POST /api/v1/conversations`
 
@@ -108,10 +120,11 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 
 **Request body `ConversationCreate`:**
 
-| Field | Type | Required |
-|-------|------|----------|
-| `title` | string \| null | no |
-| `metadata_json` | object \| null | no |
+| Field | Type | Required | Constraints / semantics |
+|-------|------|----------|-------------------------|
+| `title` | string \| null | no | |
+| `metadata_json` | object \| null | no | |
+| `root_notes` | array of string | no | At most 32 non-empty notes, each at most 12,000 characters. Created on the bootstrap root in the same transaction. Literal `<conversation_id>` tokens are resolved before persistence. |
 
 ### 3.3 `PATCH /api/v1/conversations/{conversation_id}`
 
@@ -148,12 +161,17 @@ Clients **MAY** still accept legacy FastAPI **`{ "detail": string | array }`** d
 
 ### 3.5 `POST /api/v1/conversations/{conversation_id}/restore-deleted`
 
-**Purpose:** Clear soft-delete for the whole conversation graph (**owner** or **editor**) using the conversation’s **`deletion_group_id`** (after the undo window has expired). Same restored event set as **`POST …/events/{root}/restore-subtree`** when the delete was a full conversation delete.
+**Purpose:** Clear soft-delete for the whole conversation graph (**owner** or **editor**) using the conversation’s **`deletion_group_id`**. Use this after the short undo window has expired, or from the extension’s **Recently Deleted** list / **Restore deleted conversation…** command. Same restored event set as **`POST …/events/{root}/restore-subtree`** when the delete was a full conversation delete. On success the conversation reappears in **§3.1** and leaves **§3.1a**.
 
+| | |
+|--|--|
+| **Auth** | Bearer JWT |
 | **200** | JSON `{ "restored_count": <int> }` |
 | **403** | viewer |
 | **404** | not a member |
 | **422** | conversation is not deleted, or **`deletion_group_id`** is null |
+
+Within a few minutes of delete, clients may instead call **`POST …/events/undo-delete`** with the **`deletion_group_id`** returned by **§3.4** (same batch restore; subject to the undo window and `deleted_by_user_id` checks).
 
 ---
 
@@ -395,6 +413,20 @@ Upload limits: MIME types `image/png`, `image/jpeg`, `image/webp`, `image/gif` o
 
 | **200** | `NoteOut` |
 | **403** | viewer role |
+
+### 7.2a `POST /api/v1/conversations/{conversation_id}/root-notes`
+
+**Purpose:** Instantiate a template's notes on the live conversation root. Owner/editor only.
+Line endings and outer whitespace are normalized, literal `<conversation_id>` tokens are replaced,
+and content already present exactly on the root is omitted.
+
+**Request body:** `{ "notes": ["first note", "second note"] }` (1–32 non-empty strings, at most
+12,000 characters each).
+
+| **200** | array of newly created `NoteOut` rows; empty when every note already exists |
+| **403** | viewer role or not a member |
+| **404** | conversation or live root not found |
+| **422** | note count/content validation error |
 
 ### 7.3 `PATCH /api/v1/conversations/{conversation_id}/notes/{note_id}`
 

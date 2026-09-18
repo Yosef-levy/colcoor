@@ -5,6 +5,8 @@ import type { CursorSession } from "../auth/cursorSession";
 import type { createConversationPanelController } from "../conversation/conversationPanel";
 import type { DrawersPanelController } from "../conversation/drawersPanelController";
 import type { UserTurnResult } from "../conversation/runUserTurn";
+import type { ConversationTemplateRepository } from "../templates/conversationTemplates";
+import type { TemplateManagerPanelController } from "../templates/templateManagerPanel";
 
 export const SECRET_KEY_BACKEND_JWT = "colcoor.backendJwt";
 export const BACKEND_URL_ENV_VAR = "COLCOOR_API_URL";
@@ -33,4 +35,7 @@ export type ColcoorExtensionDeps = {
   pickConversationInteractively: () => Promise<PickedConversation | undefined>;
   refreshConversationsWelcomeContext: () => Promise<void>;
   drawers: DrawersPanelController;
+  listAgentJobs: import("../listAgents/listAgentJobPanel").ListAgentJobPanelController;
+  conversationTemplates: ConversationTemplateRepository;
+  templateManager: TemplateManagerPanelController;
 };

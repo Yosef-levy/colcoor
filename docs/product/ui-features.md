@@ -15,6 +15,9 @@ Default UX: select node → run → see result; no raw transcript or prompt plum
 - **Side chat notification sounds** — toggles for **desktop notifications** and **sounds** (general traffic and **@mentions** separately where offered), plus **volume** for sounds — product-defined granularity in settings.
 - **Display name** — how the user appears in **side chat** (persisted on the backend).
 - **Avatar** — user-set or chosen **avatar** for side chat and account UI (backend persists URL or asset reference; source is product-defined).
+- **Conversation templates** — manage machine-local custom root-note templates (create, edit,
+  reorder, duplicate, delete, import/export); built-ins remain read-only
+  ([conversation-templates.md](../features/conversation-templates.md)).
 
 **Theme** follows **Cursor**; a separate global dark/light toggle is optional if the IDE already controls it.
 
@@ -49,8 +52,13 @@ When the Colcoor API rejects the stored JWT (**HTTP 401** — invalid or expired
 
 - List conversations: **per-user pinned** rows first, then unpinned, each group by **recency** (`updated_at`); show **title** and **last updated**.
 - **Select** a conversation to load tree and thread.
-- **Per-conversation menu** (e.g. ⋮): **Add editor/viewer**, **Change name** (where role allows), **Pin / Unpin**, **Delete conversation**.
-- **Create conversation:** optional title; optional **first message** in a single-line prompt — leave empty, confirm with Enter, or Esc to create with title only (no agent run until you send from the thread).
+- **Per-conversation menu** (e.g. ⋮): **Add editor/viewer**, **Apply conversation template**,
+  **Change name** (where role allows), **Pin / Unpin**, **Delete conversation**.
+- **Create conversation:** optional title, optional **conversation template**, then optional
+  **first message** in a single-line prompt. **No template** remains a first-class choice. Leave
+  the first message empty, confirm with Enter, or Esc to create with title only (no agent run until
+  you send from the thread). See
+  [conversation-templates.md](../features/conversation-templates.md).
 
 The list panel MUST be **minimizable** (collapse to strip or icon).
 
@@ -115,6 +123,7 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 - **Add NOTE** and **Add message title** (modal or inline).
 - **NOTES (attached)** with edit/delete and **Reference in side chat** on notes.
 - **Reference in side chat** for the selected **message**; short note that **notes are not tree nodes**.
+- **View metadata…** (Message menu or context menu) — per-message **provider usage** (model, mode, tokens, cache hit, cost, duration) and **Colcoor graph fields** (event id, session, checkpoint). Conversation-level context savings stay in the thread bar, not this popup.
 
 ---
 
@@ -163,10 +172,10 @@ Normative **state model, interactions, metadata, and layout independence:** **[t
 
 | Section | Topic |
 |---------|--------|
-| §1 | Settings (sounds, name, avatar), refresh, **401** session handling |
+| §1 | Settings (sounds, name, avatar, conversation templates), refresh, **401** session handling |
 | §2 | About |
 | §3 | Account + paywall |
-| §4 | Conversation list + minimize |
+| §4 | Conversation list + templates + minimize |
 | §5 | Resizers |
 | §6 | Tree ([tree-ui-contract.md](tree-ui-contract.md) normative) |
 | §7 | Thread (no tool rows) |

@@ -76,13 +76,36 @@ describe("buildAgentPrintArgs", () => {
     ]);
   });
 
-  it("includes --mode when provided", () => {
+  it("includes --mode for ask and plan", () => {
     expect(buildAgentPrintArgs(ws, prompt, "text", undefined, "ask")).toEqual([
       "-p",
       "--output-format",
       "text",
       "--mode",
       "ask",
+      "--trust",
+      "--workspace",
+      ws,
+      prompt,
+    ]);
+    expect(buildAgentPrintArgs(ws, prompt, "text", undefined, "plan")).toEqual([
+      "-p",
+      "--output-format",
+      "text",
+      "--mode",
+      "plan",
+      "--trust",
+      "--workspace",
+      ws,
+      prompt,
+    ]);
+  });
+
+  it("omits --mode for agent (CLI default)", () => {
+    expect(buildAgentPrintArgs(ws, prompt, "text", undefined, "agent")).toEqual([
+      "-p",
+      "--output-format",
+      "text",
       "--trust",
       "--workspace",
       ws,
@@ -106,7 +129,7 @@ describe("buildAgentResumeArgs", () => {
     ]);
   });
 
-  it("includes --mode on resume when provided", () => {
+  it("includes --mode on resume for plan", () => {
     expect(
       buildAgentResumeArgs("/tmp/ws", "sess-abc", "continue please", "stream-json", undefined, "plan"),
     ).toEqual([
@@ -115,6 +138,22 @@ describe("buildAgentResumeArgs", () => {
       "stream-json",
       "--mode",
       "plan",
+      "--trust",
+      "--workspace",
+      "/tmp/ws",
+      "--resume",
+      "sess-abc",
+      "continue please",
+    ]);
+  });
+
+  it("omits --mode on resume for agent", () => {
+    expect(
+      buildAgentResumeArgs("/tmp/ws", "sess-abc", "continue please", "stream-json", undefined, "agent"),
+    ).toEqual([
+      "-p",
+      "--output-format",
+      "stream-json",
       "--trust",
       "--workspace",
       "/tmp/ws",

@@ -31,10 +31,21 @@ The transcript consists of:
 - <<<LLM>>> blocks (assistant responses)
 - <<<NOTE>>> blocks (user-authored state notes)
 
-NOTES are contextual clarifications or decisions and must be treated as part of the conversation state.
+The conversation is a branching tree. This transcript is the current branch only: the messages leading to the point you are continuing from. Other branches, if any, are not visible to you. Do not infer their contents, conclusions, or state.
+
+NOTES are contextual clarifications or decisions and must be treated as part of the conversation state. A NOTE attached to a message is visible on every branch that continues through that message.
+
+Treat the conversation as an ongoing, deliberate process. Understand the place and role of the current request within it, and respond in a way that serves the conversation's overall purpose.
+
+You may remark on how the work is organized, in at most one short sentence in your reply, and only in these cases:
+- The request belongs elsewhere: it clearly continues a different part of the tree rather than this branch. Say where it would sit more naturally, and then answer it here regardless.
+- Your reply opens independent directions: it presents parallel approaches, or sub-topics or sub-tasks that would contaminate each other's context if pursued in the same branch. Say they could be taken up as separate branches from this reply.
+- Your reply carries beyond this branch: it reaches a conclusion or insight that other branches also strongly depend on. Say which earlier message it could be recorded on as a NOTE, so it stays visible wherever the conversation continues.
+
+Otherwise do not comment on how the conversation is organized. Never suggest a change merely because the work could be subdivided, and never ask the user to move, branch, or add a NOTE instead of answering. Conversation structure must never delay or replace an answer to the current request.
 
 Continue the conversation by responding as the LLM.
-Output only your next single reply (plain text) and use Cursor tools if needed.
+Output only your next single reply, as prose; markdown formatting is fine. Use available tools when needed.
 Do not add Chain-of-Thought text.
 Do not reproduce wrapper tags.
 Do not output further USER, NOTE, or LLM turns — only one assistant reply.
@@ -100,10 +111,21 @@ The transcript consists of:
 - <<<LLM>>> blocks (assistant responses)
 - <<<NOTE>>> blocks (user-authored state notes)
 
-NOTES are contextual clarifications or decisions and must be treated as part of the conversation state.
+The conversation is a branching tree. This transcript is the current branch only: the messages leading to the point you are continuing from. Other branches, if any, are not visible to you. Do not infer their contents, conclusions, or state.
+
+NOTES are contextual clarifications or decisions and must be treated as part of the conversation state. A NOTE attached to a message is visible on every branch that continues through that message.
+
+Treat the conversation as an ongoing, deliberate process. Understand the place and role of the current request within it, and respond in a way that serves the conversation's overall purpose.
+
+You may remark on how the work is organized, in at most one short sentence in your reply, and only in these cases:
+- The request belongs elsewhere: it clearly continues a different part of the tree rather than this branch. Say where it would sit more naturally, and then answer it here regardless.
+- Your reply opens independent directions: it presents parallel approaches, or sub-topics or sub-tasks that would contaminate each other's context if pursued in the same branch. Say they could be taken up as separate branches from this reply.
+- Your reply carries beyond this branch: it reaches a conclusion or insight that other branches also strongly depend on. Say which earlier message it could be recorded on as a NOTE, so it stays visible wherever the conversation continues.
+
+Otherwise do not comment on how the conversation is organized. Never suggest a change merely because the work could be subdivided, and never ask the user to move, branch, or add a NOTE instead of answering. Conversation structure must never delay or replace an answer to the current request.
 
 Continue the conversation by responding as the LLM.
-Output only your next single reply (plain text) and use Cursor tools if needed.
+Output only your next single reply, as prose; markdown formatting is fine. Use available tools when needed.
 Do not add Chain-of-Thought text.
 Do not reproduce wrapper tags.
 Do not output further USER, NOTE, or LLM turns — only one assistant reply.

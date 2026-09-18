@@ -19,6 +19,9 @@ export function registerMessagePanelCommands(deps: ColcoorExtensionDeps): vscode
     vscode.commands.registerCommand("colcoor.copySelectedMessage", async () => {
       await conversationPanel.copySelectedMessage();
     }),
+    vscode.commands.registerCommand("colcoor.viewMessageMetadata", async () => {
+      await conversationPanel.viewMessageMetadata();
+    }),
     vscode.commands.registerCommand("colcoor.editUserMessage", async () => {
       await conversationPanel.editUserMessage();
     }),

@@ -5,8 +5,10 @@ import { CursorSession } from "../auth/cursorSession";
 import { refreshAgentModelCatalogWhenSignedIn } from "../agent/agentModelCatalogCache";
 import { AgentRunner } from "../agent/agentRunner";
 import { SECRET_CURSOR_AGENT_API_KEY } from "../agent/cursorAgentApiKey";
+import { SECRET_ANTHROPIC_API_KEY } from "../agent/providerApiKey";
 import { createConversationPanelController } from "../conversation/conversationPanel";
 import { createDrawersPanelController } from "../conversation/drawersPanelController";
+import { createListAgentJobPanelController } from "../listAgents/listAgentJobPanel";
 import { notifyUserTurnOutcomeAndSyncConversationPanel } from "../conversation/userTurnOutcomeNotify";
 import { invalidateConversationListCache } from "../conversations/conversationsListCache";
 import { syncConversationsWelcomeContextKeys } from "../conversations/conversationsWelcomeContext";
@@ -22,6 +24,8 @@ import {
   SECRET_KEY_BACKEND_JWT,
   type ColcoorExtensionDeps,
 } from "./colcoorExtensionDeps";
+import { ConversationTemplateRepository } from "../templates/conversationTemplates";
+import { createTemplateManagerPanelController } from "../templates/templateManagerPanel";
 
 export type BootstrapColcoorResult = {
   deps: ColcoorExtensionDeps;
@@ -110,7 +114,7 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
   void refreshConversationsWelcomeContext();
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
-      if (e.key === SECRET_CURSOR_AGENT_API_KEY) {
+      if (e.key === SECRET_CURSOR_AGENT_API_KEY || e.key === SECRET_ANTHROPIC_API_KEY) {
         void (async () => {
           await refreshConversationsWelcomeContext();
           refreshAgentModelCatalogWhenSignedIn(context.secrets, await isReady());
@@ -134,9 +138,19 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
     pickConversationInteractively,
   });
 
+  const listAgentJobs = createListAgentJobPanelController(context, {
+    api,
+    agent,
+    getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
+  });
+  context.subscriptions.push(new vscode.Disposable(() => listAgentJobs.dispose()));
+  const conversationTemplates = new ConversationTemplateRepository(context.globalStorageUri);
+  const templateManager = createTemplateManagerPanelController(context, conversationTemplates);
+  context.subscriptions.push(new vscode.Disposable(() => templateManager.dispose()));
+
   const treeView = vscode.window.createTreeView("colcoor.conversations", {
     treeDataProvider: treeProvider,
-    showCollapseAll: false,
+    showCollapseAll: true,
   });
   context.subscriptions.push(treeView);
   markActivationStep("tree-view:ready");
@@ -174,6 +188,9 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
     pickConversationInteractively,
     refreshConversationsWelcomeContext,
     drawers,
+    listAgentJobs,
+    conversationTemplates,
+    templateManager,
   };
 
   return {

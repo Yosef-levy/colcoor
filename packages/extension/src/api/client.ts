@@ -28,6 +28,8 @@ export type ConversationSummary = {
   pinned: boolean;
   /** ISO 8601; used for sidebar ordering and “last updated”. */
   updated_at?: string;
+  /** ISO 8601 when soft-deleted; present on GET …/conversations/deleted. */
+  deleted_at?: string | null;
   /** True when side-chat max seq is ahead of this user’s read cursor (GET /conversations). */
   side_chat_has_unread?: boolean;
   /** Count of unread, non-deleted side-chat rows for the caller (GET /conversations). */
@@ -253,9 +255,12 @@ export interface ColcoorClient {
   patchMe(body: MePatchBody): Promise<MeOut>;
   cursorExchange(body: CursorExchangeBody): Promise<AuthResponseBody>;
   listConversations(): Promise<ConversationSummary[]>;
+  /** Soft-deleted conversations the caller can restore (Recently Deleted). */
+  listDeletedConversations(): Promise<ConversationSummary[]>;
   createConversation(body: {
     title?: string | null;
     metadata_json?: Record<string, unknown> | null;
+    root_notes?: string[];
   }): Promise<ConversationSummary>;
   patchConversation(
     conversationId: string,
@@ -296,6 +301,10 @@ export interface ColcoorClient {
     conversationId: string,
     body: { event_id: string; content: string },
   ): Promise<NoteOut>;
+  appendMissingRootNotes(
+    conversationId: string,
+    body: { notes: string[] },
+  ): Promise<NoteOut[]>;
   patchNote(
     conversationId: string,
     noteId: string,
@@ -539,15 +548,28 @@ export class ColcoorApiClient implements ColcoorClient {
     return JSON.parse(text) as ConversationSummary[];
   }
 
+  /** Soft-deleted conversations available for restore (GET /conversations/deleted). */
+  async listDeletedConversations(): Promise<ConversationSummary[]> {
+    const res = await this.fetchApi("/conversations/deleted", { method: "GET" });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "list deleted conversations");
+    return JSON.parse(text) as ConversationSummary[];
+  }
+
   /** Create a conversation; you are the owner (POST /conversations). */
   async createConversation(body: {
     title?: string | null;
     metadata_json?: Record<string, unknown> | null;
+    root_notes?: string[];
   }): Promise<ConversationSummary> {
     const res = await this.fetchApi("/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: body.title ?? null }),
+      body: JSON.stringify({
+        title: body.title ?? null,
+        metadata_json: body.metadata_json ?? null,
+        root_notes: body.root_notes ?? [],
+      }),
     });
     const text = await res.text();
     this.assertOkResponse(res, text, "create conversation");
@@ -741,6 +763,20 @@ export class ColcoorApiClient implements ColcoorClient {
     const text = await res.text();
     this.assertOkResponse(res, text, "create note");
     return JSON.parse(text) as NoteOut;
+  }
+
+  async appendMissingRootNotes(
+    conversationId: string,
+    body: { notes: string[] },
+  ): Promise<NoteOut[]> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/root-notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    this.assertOkResponse(res, text, "apply conversation template");
+    return JSON.parse(text) as NoteOut[];
   }
 
   async patchNote(
