@@ -31,7 +31,6 @@ import { persistOperatorReplyArtifacts } from "./persistOperatorArtifacts";
 import type {
   ListAgentJobManifest,
   ListProposal,
-  ListProposalRepair,
   ListRepairsFile,
   LiteEvent,
   ScanState as ScanStateType,

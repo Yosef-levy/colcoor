@@ -52,7 +52,6 @@ export function createListAgentJobPanelController(
   let panel: vscode.WebviewPanel | undefined;
   let currentJobId: string | undefined;
   let activeRun: ActiveRun | undefined;
-  let webviewReady = false;
   let pendingSnapshotJobId: string | undefined;
 
   function workspaceRoot(): string {
@@ -74,7 +73,6 @@ export function createListAgentJobPanelController(
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, retainContextWhenHidden: true },
     );
-    webviewReady = false;
 
     // Register message handler BEFORE setting HTML so the initial `ready` is not lost.
     panel.webview.onDidReceiveMessage(async (msg: unknown) => {
@@ -86,7 +84,6 @@ export function createListAgentJobPanelController(
       if (!m?.type) return;
       try {
         if (m.type === "ready") {
-          webviewReady = true;
           const jobId = pendingSnapshotJobId ?? currentJobId;
           if (jobId) {
             await postSnapshot(jobId);
@@ -128,7 +125,6 @@ export function createListAgentJobPanelController(
 
     panel.onDidDispose(() => {
       panel = undefined;
-      webviewReady = false;
       // Closing UI does not cancel the run
     });
 
