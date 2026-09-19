@@ -1,7 +1,7 @@
 import type { CursorCliMode } from "../../agent/cursorCliMode";
-import { CURSOR_CLI_MODE_ASK } from "../../agent/cursorCliMode";
 import type { ProviderId } from "../../agent/providers/types";
 import type { ProviderSlashCapabilities } from "./types";
+import { providerDescriptor } from "../../agent/providers/providerDescriptors";
 
 /**
  * Slash-command capabilities for the active provider × mode combination.
@@ -14,35 +14,14 @@ export function resolveProviderSlashCapabilities(params: {
   cliMode: CursorCliMode;
   agentMode: string;
 }): ProviderSlashCapabilities {
-  if (params.agentMode === "stub") {
-    return {
-      supportsProviderCommands: false,
-      supportsSkills: false,
-      supportsProviderContext: false,
-      supportsDisallowedTools: false,
-    };
-  }
-  if (params.providerId === "cursor") {
-    return {
-      supportsProviderCommands: true,
-      supportsSkills: true,
-      supportsProviderContext: false,
-      supportsDisallowedTools: false,
-    };
-  }
-  // anthropic
-  if (params.cliMode === CURSOR_CLI_MODE_ASK) {
-    return {
-      supportsProviderCommands: false,
-      supportsSkills: false,
-      supportsProviderContext: false,
-      supportsDisallowedTools: false,
-    };
-  }
+  const capabilities = providerDescriptor(params.providerId).capabilities(
+    params.cliMode,
+    params.agentMode,
+  );
   return {
-    supportsProviderCommands: true,
-    supportsSkills: true,
-    supportsProviderContext: true,
-    supportsDisallowedTools: true,
+    supportsProviderCommands: capabilities.supportsProviderCommands,
+    supportsSkills: capabilities.supportsSkills,
+    supportsProviderContext: capabilities.supportsProviderContext,
+    supportsDisallowedTools: capabilities.supportsDisallowedTools,
   };
 }

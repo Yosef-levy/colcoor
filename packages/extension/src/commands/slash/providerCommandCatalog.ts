@@ -3,16 +3,27 @@ import type { SlashCommand } from "./types";
 import { discoverLocalProviderCommands, providerCommandsFromSdk } from "./discoverLocalCommands";
 import { seedProviderCommands } from "./seedProviderCommands";
 
-/** In-memory cache of provider slash commands keyed by workspace root. */
+/** In-memory cache keyed by provider + workspace so switching providers cannot leak commands. */
 const cacheByWorkspace = new Map<string, SlashCommand[]>();
 
-export function getCachedProviderCommands(workspaceRoot: string): SlashCommand[] {
-  const key = workspaceRoot.trim() || ".";
+function cacheKey(workspaceRoot: string, providerId: ProviderId): string {
+  return `${providerId}\0${workspaceRoot.trim() || "."}`;
+}
+
+export function getCachedProviderCommands(
+  workspaceRoot: string,
+  providerId: ProviderId = "anthropic",
+): SlashCommand[] {
+  const key = cacheKey(workspaceRoot, providerId);
   return cacheByWorkspace.get(key) ?? [];
 }
 
-export function setCachedProviderCommands(workspaceRoot: string, commands: SlashCommand[]): void {
-  const key = workspaceRoot.trim() || ".";
+export function setCachedProviderCommands(
+  workspaceRoot: string,
+  commands: SlashCommand[],
+  providerId: ProviderId = "anthropic",
+): void {
+  const key = cacheKey(workspaceRoot, providerId);
   cacheByWorkspace.set(key, commands);
 }
 
@@ -26,15 +37,16 @@ export function clearProviderCommandCatalogCache(): void {
  */
 export function resolveProviderCommandCatalog(
   workspaceRoot: string,
-  providerId: ProviderId = "anthropic",
+  providerId: ProviderId,
 ): SlashCommand[] {
-  const key = workspaceRoot.trim() || ".";
+  const workspace = workspaceRoot.trim() || ".";
+  const key = cacheKey(workspace, providerId);
   const byName = new Map<string, SlashCommand>();
 
   for (const c of seedProviderCommands(providerId)) {
     byName.set(c.name.toLowerCase(), c);
   }
-  for (const c of discoverLocalProviderCommands(key)) {
+  for (const c of discoverLocalProviderCommands(workspace)) {
     byName.set(c.name.toLowerCase(), c);
   }
   for (const c of cacheByWorkspace.get(key) ?? []) {
@@ -52,9 +64,9 @@ export function updateProviderCommandCatalogFromSdk(
     argumentHint?: string;
     aliases?: string[];
   }>,
-  providerId: ProviderId = "anthropic",
+  providerId: ProviderId,
 ): SlashCommand[] {
   const mapped = providerCommandsFromSdk(sdkCommands);
-  setCachedProviderCommands(workspaceRoot, mapped);
+  setCachedProviderCommands(workspaceRoot, mapped, providerId);
   return resolveProviderCommandCatalog(workspaceRoot, providerId);
 }

@@ -3,11 +3,11 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { processEnvForCursorCli } from "./agentPathEnv";
+import { processEnvForAgentCli } from "./agentPathEnv";
 
-describe("processEnvForCursorCli", () => {
+describe("processEnvForAgentCli", () => {
   it("prepends ~/.local/bin to PATH", () => {
-    const env = processEnvForCursorCli();
+    const env = processEnvForAgentCli();
     const localBin = join(homedir(), ".local", "bin");
     expect(env.PATH).toContain(localBin);
     expect(env.PATH?.startsWith(localBin)).toBe(true);
@@ -15,7 +15,7 @@ describe("processEnvForCursorCli", () => {
 
   it("keeps the original PATH after the prefixed segment", () => {
     const orig = process.env.PATH ?? "";
-    const env = processEnvForCursorCli();
+    const env = processEnvForAgentCli();
     const sep = process.platform === "win32" ? ";" : ":";
     if (!orig) {
       expect(env.PATH?.length).toBeGreaterThan(0);
@@ -25,7 +25,7 @@ describe("processEnvForCursorCli", () => {
   });
 
   it("includes non-PATH variables from the current process", () => {
-    const env = processEnvForCursorCli();
+    const env = processEnvForAgentCli();
     if (process.platform === "win32") {
       expect(env).toHaveProperty("SystemRoot");
     } else {
@@ -38,7 +38,7 @@ describe("processEnvForCursorCli", () => {
     if (process.platform === "win32") {
       return;
     }
-    const env = processEnvForCursorCli();
+    const env = processEnvForAgentCli();
     expect(env.PATH).toContain(join(homedir(), ".cursor", "bin"));
   });
 });

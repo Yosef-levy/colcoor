@@ -1,7 +1,8 @@
 import { resolvePromptCacheTtl } from "../agent/providers/anthropicConfig";
+import { resolveProviderId } from "../agent/providerApiKey";
 import type { AgentRunner } from "../agent/agentRunner";
 import type { CursorCliMode } from "../agent/cursorCliMode";
-import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
+import type { AgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
@@ -31,7 +32,7 @@ export type RunResendAssistantOptions = {
   signal?: AbortSignal;
   onAssistantTextDelta?: (textSoFar: string) => void;
   /** Structured assistant/activity display sequence while the Cursor CLI stream grows. */
-  onAssistantDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
+  onAssistantDisplayParts?: (parts: AgentDisplayPart[]) => void;
   /** When set (e.g. from the conversation panel), skips the initial tree + notes round-trip. */
   prefetchedGraph?: PrefetchedConversationGraph;
   /** Cursor CLI `--model`; omit for automatic model selection. */
@@ -111,7 +112,7 @@ export async function runResendAssistant(
   const llmRequest = await hydrateLlmRequestImages(api, conversationId, llmRequestBase, {
     pathFromRoot: pathTurns,
   });
-  const agentSession = resolveAgentSessionPlan(events, userNode);
+  const agentSession = resolveAgentSessionPlan(events, userNode, resolveProviderId());
   const contextSavings = buildContextSavingsTurn({
     kind: "resend",
     linearContextTokensBeforeRun: options?.linearContextTokensBeforeRun ?? 0,

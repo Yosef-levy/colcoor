@@ -5,7 +5,7 @@ import { CursorSession } from "../auth/cursorSession";
 import { refreshAgentModelCatalogWhenSignedIn } from "../agent/agentModelCatalogCache";
 import { AgentRunner } from "../agent/agentRunner";
 import { SECRET_CURSOR_AGENT_API_KEY } from "../agent/cursorAgentApiKey";
-import { SECRET_ANTHROPIC_API_KEY } from "../agent/providerApiKey";
+import { SECRET_ANTHROPIC_API_KEY, SECRET_GEMINI_API_KEY } from "../agent/providerApiKey";
 import { createConversationPanelController } from "../conversation/conversationPanel";
 import { createDrawersPanelController } from "../conversation/drawersPanelController";
 import { createListAgentJobPanelController } from "../listAgents/listAgentJobPanel";
@@ -114,7 +114,11 @@ export async function bootstrapColcoor(context: vscode.ExtensionContext): Promis
   void refreshConversationsWelcomeContext();
   context.subscriptions.push(
     context.secrets.onDidChange((e) => {
-      if (e.key === SECRET_CURSOR_AGENT_API_KEY || e.key === SECRET_ANTHROPIC_API_KEY) {
+      if (
+        e.key === SECRET_CURSOR_AGENT_API_KEY ||
+        e.key === SECRET_ANTHROPIC_API_KEY ||
+        e.key === SECRET_GEMINI_API_KEY
+      ) {
         void (async () => {
           await refreshConversationsWelcomeContext();
           refreshAgentModelCatalogWhenSignedIn(context.secrets, await isReady());

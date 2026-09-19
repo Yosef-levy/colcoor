@@ -1,8 +1,13 @@
 import * as vscode from "vscode";
 
 import type { ProviderId } from "./providers/types";
+import {
+  isProviderId,
+  providerDescriptor,
+} from "./providers/providerDescriptors";
 
 export const SECRET_ANTHROPIC_API_KEY = "colcoor.anthropicApiKey";
+export const SECRET_GEMINI_API_KEY = "colcoor.geminiApiKey";
 
 export const URL_ANTHROPIC_API_KEYS = "https://console.anthropic.com/settings/keys";
 
@@ -10,17 +15,20 @@ export const URL_ANTHROPIC_API_KEYS = "https://console.anthropic.com/settings/ke
 export function resolveProviderId(): ProviderId {
   const cfg = vscode.workspace.getConfiguration("colcoor");
   const raw = cfg.get<string>("provider")?.trim();
-  return raw === "cursor" ? "cursor" : "anthropic";
+  return isProviderId(raw) ? raw : "anthropic";
 }
 
 /** Secret storage key holding the API key for the active provider. */
 export function secretKeyForProvider(provider: ProviderId): string {
-  return provider === "cursor" ? "colcoor.cursorAgentApiKey" : SECRET_ANTHROPIC_API_KEY;
+  return providerDescriptor(provider).secretKey;
 }
 
 /** True when an API key is stored for the active provider (drives the welcome view context key). */
 export async function hasProviderApiKey(secrets: vscode.SecretStorage): Promise<boolean> {
   const provider = resolveProviderId();
+  if (providerDescriptor(provider).apiKeyRequirement === "ask-only") {
+    return true;
+  }
   const key = (await secrets.get(secretKeyForProvider(provider)))?.trim();
   return Boolean(key);
 }
@@ -35,53 +43,54 @@ export async function promptStoreProviderApiKey(secrets: vscode.SecretStorage): 
     return;
   }
 
-  const secretKey = SECRET_ANTHROPIC_API_KEY;
+  const descriptor = providerDescriptor(provider);
+  const secretKey = descriptor.secretKey;
   const hasStored = Boolean(await secrets.get(secretKey));
   const items: (vscode.QuickPickItem & { action: ApiKeyStep })[] = [
     {
-      label: "$(link-external) Get an Anthropic API key",
-      description: "console.anthropic.com → Settings → API Keys",
+      label: `$(link-external) Get a ${descriptor.displayName} API key`,
+      description: descriptor.apiKeyConsoleUrl,
       action: "console",
     },
     {
       label: "$(key) I have my key — paste it now",
-      description: "Stored in VS Code SecretStorage and used for Anthropic APIs",
+      description: `Stored in VS Code SecretStorage and used for ${descriptor.displayName} APIs`,
       action: "paste",
     },
   ];
   if (hasStored) {
     items.push({
       label: "$(trash) Remove stored key from Colcoor",
-      description: "Clears the saved Anthropic API key",
+      description: `Clears the saved ${descriptor.displayName} API key`,
       action: "clear",
     });
   }
 
   const step = await vscode.window.showQuickPick(items, {
-    title: "Colcoor — Anthropic API key",
-    placeHolder: "Get a key from Anthropic first, or paste if you already have one",
+    title: `Colcoor — ${descriptor.displayName} API key`,
+    placeHolder: `Get a key from ${descriptor.displayName} first, or paste if you already have one`,
   });
   if (!step) {
     return;
   }
 
   if (step.action === "console") {
-    await vscode.env.openExternal(vscode.Uri.parse(URL_ANTHROPIC_API_KEYS));
+    await vscode.env.openExternal(vscode.Uri.parse(descriptor.apiKeyConsoleUrl));
     await vscode.window.showInformationMessage(
-      "Colcoor: create an API key in the Anthropic console, then run " +
+      `Colcoor: create an API key for ${descriptor.displayName}, then run ` +
         "“Colcoor: Set provider API key” again and choose “I have my key — paste it now”.",
     );
     return;
   }
   if (step.action === "clear") {
     await secrets.delete(secretKey);
-    await vscode.window.showInformationMessage("Colcoor: stored Anthropic API key removed.");
+    await vscode.window.showInformationMessage(`Colcoor: stored ${descriptor.displayName} API key removed.`);
     return;
   }
 
   const key = await vscode.window.showInputBox({
-    title: "Colcoor — paste Anthropic API key",
-    prompt: "Paste your Anthropic API key (starts with sk-ant-). Leave empty and Enter to cancel.",
+    title: `Colcoor — paste ${descriptor.displayName} API key`,
+    prompt: `Paste your ${descriptor.displayName} API key (${descriptor.apiKeyHint}). Leave empty and Enter to cancel.`,
     password: true,
     ignoreFocusOut: true,
     placeHolder: hasStored ? "Replace existing key, or clear field + Enter to remove" : "Paste key",
@@ -93,10 +102,10 @@ export async function promptStoreProviderApiKey(secrets: vscode.SecretStorage): 
   if (trimmed === "") {
     if (hasStored) {
       await secrets.delete(secretKey);
-      await vscode.window.showInformationMessage("Colcoor: stored Anthropic API key removed.");
+      await vscode.window.showInformationMessage(`Colcoor: stored ${descriptor.displayName} API key removed.`);
     }
     return;
   }
   await secrets.store(secretKey, trimmed);
-  await vscode.window.showInformationMessage("Colcoor: Anthropic API key saved.");
+  await vscode.window.showInformationMessage(`Colcoor: ${descriptor.displayName} API key saved.`);
 }

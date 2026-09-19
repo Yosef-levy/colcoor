@@ -1,5 +1,6 @@
 import type { GraphEventNode } from "../api/client";
 import type { AgentSessionPlan } from "../agent/providers/types";
+import type { ProviderId } from "../agent/providers/types";
 
 export const COLCOOR_AGENT_SESSION_KEY = "colcoor_agent_session";
 
@@ -62,6 +63,7 @@ export function buildAgentSessionJson(input: {
 export function resolveAgentSessionPlan(
   events: readonly GraphEventNode[],
   attachNode: GraphEventNode,
+  activeProvider: ProviderId = "anthropic",
 ): AgentSessionPlan {
   const byId = new Map(events.map((e) => [e.id, e]));
   const hasChildren = new Set<string>();
@@ -77,6 +79,10 @@ export function resolveAgentSessionPlan(
     seen.add(cur.id);
     const session = readAgentSession(cur.content_json ?? undefined);
     if (session) {
+      const sessionProvider = session.provider || "anthropic";
+      if (sessionProvider !== activeProvider) {
+        return { kind: "fresh" };
+      }
       const isTip = cur.id === attachNode.id && !hasChildren.has(cur.id);
       if (isTip) {
         return { kind: "resume", sessionId: session.session_id };

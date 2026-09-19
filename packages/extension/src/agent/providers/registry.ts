@@ -1,11 +1,14 @@
 import * as vscode from "vscode";
 
-import { CURSOR_CLI_MODE_ASK, type CursorCliMode } from "../cursorCliMode";
+import type { CursorCliMode } from "../cursorCliMode";
 import { resolveProviderId } from "../providerApiKey";
 import { AnthropicLlmProvider } from "./anthropicLlmProvider";
 import { ClaudeAgentProvider } from "./claudeAgentProvider";
 import { CursorCliAgentProvider } from "./cursorCliAgentProvider";
+import { GeminiAgentProvider } from "./geminiAgentProvider";
+import { GeminiLlmProvider } from "./geminiLlmProvider";
 import type { AgentBackend, ProviderCapabilities, ProviderId } from "./types";
+import { providerDescriptor } from "./providerDescriptors";
 
 export type BackendSelection = { kind: "stub" } | { kind: "backend"; backend: AgentBackend };
 
@@ -27,10 +30,22 @@ export function selectAgentBackend(
       backend: new CursorCliAgentProvider(secrets, params.agentMode === "auto"),
     };
   }
-  if (params.cliMode === CURSOR_CLI_MODE_ASK) {
-    return { kind: "backend", backend: new AnthropicLlmProvider(secrets) };
+  if (provider === "gemini") {
+    return {
+      kind: "backend",
+      backend:
+        params.cliMode === "ask"
+          ? new GeminiLlmProvider(secrets)
+          : new GeminiAgentProvider(secrets),
+    };
   }
-  return { kind: "backend", backend: new ClaudeAgentProvider(secrets) };
+  return {
+    kind: "backend",
+    backend:
+      params.cliMode === "ask"
+        ? new AnthropicLlmProvider(secrets)
+        : new ClaudeAgentProvider(secrets),
+  };
 }
 
 /**
@@ -43,47 +58,5 @@ export function resolveProviderCapabilities(params: {
   cliMode: CursorCliMode;
 }): ProviderCapabilities {
   const providerId = params.providerId ?? resolveProviderId();
-  if (params.agentMode === "stub") {
-    return {
-      supportsProviderCommands: false,
-      supportsSkills: false,
-      supportsProviderContext: false,
-      supportsDisallowedTools: false,
-      supportsSessionFork: false,
-      supportsStructuredMessages: false,
-      supportsDisplayParts: false,
-    };
-  }
-  if (providerId === "cursor") {
-    return {
-      // Slash text is forwarded as the Cursor CLI prompt (no separate command API).
-      supportsProviderCommands: true,
-      supportsSkills: true,
-      supportsProviderContext: false,
-      supportsDisallowedTools: false,
-      supportsSessionFork: false,
-      supportsStructuredMessages: false,
-      supportsDisplayParts: true,
-    };
-  }
-  if (params.cliMode === CURSOR_CLI_MODE_ASK) {
-    return {
-      supportsProviderCommands: false,
-      supportsSkills: false,
-      supportsProviderContext: false,
-      supportsDisallowedTools: false,
-      supportsSessionFork: false,
-      supportsStructuredMessages: true,
-      supportsDisplayParts: false,
-    };
-  }
-  return {
-    supportsProviderCommands: true,
-    supportsSkills: true,
-    supportsProviderContext: true,
-    supportsDisallowedTools: true,
-    supportsSessionFork: true,
-    supportsStructuredMessages: false,
-    supportsDisplayParts: false,
-  };
+  return providerDescriptor(providerId).capabilities(params.cliMode, params.agentMode);
 }

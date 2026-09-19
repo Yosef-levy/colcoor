@@ -66,6 +66,12 @@ backend per turn by mode:
   provider session id (and a fork anchor) in the assistant event's `content_json`
   (`colcoor_agent_session`) so a new turn can **resume** the session's tip, **fork** it when branching
   from the middle, or start **fresh** — avoiding a new session (and its startup cost) per message.
+- **Gemini** → ask uses `@google/genai`; plan/agent use the ACP protocol exposed by pinned Gemini
+  CLI `0.60.0` via `gemini --acp`. ACP streams assistant/tool updates and sends
+  `session/request_permission` to Colcoor. Plan requests ACP `plan` (read-only), while Agent
+  requests `default` (interactive approval). Auto Edit/YOLO require an explicit setting and are
+  never fallback behavior. ACP supports session load but not branch fork, so Gemini branches start
+  fresh from the authoritative transcript.
 - Cursor's headless CLI (`agent -p`) remains available as a **legacy** backend (`colcoor.provider =
   cursor`) but is no longer the default; it requires a Cursor account.
 
@@ -80,7 +86,9 @@ This **documentation set** defines the Colcoor extension product **on its own**.
 
 - No server-side main-thread streaming completion API; use **`append-event`** plus the configured provider ([data-flow-and-api.md](data-flow-and-api.md)).
 - **Colcoor-hosted** web search and code execution as main-thread tools remain **out of scope**.
-- Ask mode (Anthropic Messages API) may enable **Anthropic-hosted** server tools (`web_search`, `web_fetch`) and a workspace-scoped client `read_file` tool; Colcoor does not run its own search or code-execution backend.
+- Ask mode may enable provider-hosted web tools plus workspace-scoped, read-only `list_files` and
+  `read_file` tools. Both tools enforce the workspace boundary; `list_files` is bounded and
+  ignore-aware. Colcoor does not run a code-execution backend for Ask.
 
 ## 7. Side chat
 

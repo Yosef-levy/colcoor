@@ -1,11 +1,18 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import type { UsageMetadata } from "@google/genai";
 import type { CursorCliMode } from "../agent/cursorCliMode";
 import type { AgentSessionPlan } from "../agent/providers/types";
 import type { PromptCacheTtl } from "../agent/providers/anthropicConfig";
 
 export const COLOOR_PROVIDER_USAGE_KEY = "colcoor_provider_usage";
 
-export type ProviderBackend = "messages_api" | "claude_agent_sdk" | "cursor_cli";
+export type KnownProviderBackend =
+  | "messages_api"
+  | "claude_agent_sdk"
+  | "gemini_api"
+  | "gemini_cli_acp"
+  | "cursor_cli";
+export type ProviderBackend = KnownProviderBackend | (string & {});
 export type ProviderMode = "ask" | "plan" | "agent";
 export type ContinuationKind = "fresh" | "resume" | "fork";
 
@@ -74,11 +81,11 @@ export function readColcoorProviderUsage(
   if (o.version !== 1) {
     return undefined;
   }
-  const backend = o.backend;
+  const backend = typeof o.backend === "string" ? o.backend.trim() : "";
   const mode = o.mode;
   const model = typeof o.model === "string" ? o.model.trim() : "";
   if (
-    (backend !== "messages_api" && backend !== "claude_agent_sdk" && backend !== "cursor_cli") ||
+    !backend ||
     (mode !== "ask" && mode !== "plan" && mode !== "agent") ||
     !model
   ) {
@@ -275,6 +282,39 @@ export function providerUsageFromSdkResult(
     cost_usd: result.total_cost_usd,
     permission_denials: denials,
     tokens: mapSdkUsage(result.usage),
+    captured_at: new Date().toISOString(),
+  };
+}
+
+export function providerUsageFromGemini(
+  usage: UsageMetadata | undefined,
+  opts: {
+    mode: ProviderMode;
+    model: string;
+    durationMs?: number;
+    stopReason?: string | null;
+    cancelled?: boolean;
+    numTurns?: number;
+  },
+): ColcoorProviderUsage {
+  const cached = usage?.cachedContentTokenCount ?? 0;
+  const prompt = usage?.promptTokenCount ?? 0;
+  return {
+    version: 1,
+    provider: "gemini",
+    backend: "gemini_api",
+    mode: opts.mode,
+    model: opts.model.trim(),
+    stop_reason: opts.stopReason ?? null,
+    cancelled: opts.cancelled === true ? true : undefined,
+    duration_ms: opts.durationMs,
+    num_turns: opts.numTurns,
+    tokens: {
+      input: Math.max(0, prompt - cached),
+      output: usage?.responseTokenCount ?? 0,
+      ...(cached > 0 ? { cache_read: cached } : {}),
+      ...(usage?.thoughtsTokenCount != null ? { thinking: usage.thoughtsTokenCount } : {}),
+    },
     captured_at: new Date().toISOString(),
   };
 }

@@ -13,7 +13,7 @@ export type StreamJsonLineEffect =
   | { kind: "append_assistant"; delta: string; timestampMs?: number }
   | { kind: "terminal_success"; fullText: string };
 
-export type CursorAgentDisplayPart =
+export type AgentDisplayPart =
   | { kind: "assistant"; text: string }
   | { kind: "activity"; entries: unknown[] };
 
@@ -178,19 +178,19 @@ export function createStreamJsonStdoutFeed(options?: {
   push(
     chunk: string,
     onResolvedSoFar?: (textSoFar: string) => void,
-    onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void,
+    onDisplayParts?: (parts: AgentDisplayPart[]) => void,
   ): void;
   /** Parse any trailing bytes after the stream closes (last line may lack a newline). */
   flushTail(
     onResolvedSoFar?: (textSoFar: string) => void,
-    onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void,
+    onDisplayParts?: (parts: AgentDisplayPart[]) => void,
   ): void;
   /** Plain assistant text for persistence (prefers terminal `result` over summed assistant deltas). */
   getResolvedText(): string;
   /** Sanitized NDJSON-derived objects in stream order (for `events.content_json`). */
   getTimeline(): unknown[];
   /** Assistant/activity sequence for stable UI rendering across streaming and persisted views. */
-  getDisplayParts(): CursorAgentDisplayPart[];
+  getDisplayParts(): AgentDisplayPart[];
   /** Model id from the stream `system` / `init` line when present. */
   getSessionModel(): string | undefined;
 } {
@@ -201,7 +201,7 @@ export function createStreamJsonStdoutFeed(options?: {
   let sawStreamingDelta = false;
   let lastAssistantDeltaTimestampMs: number | undefined;
   const timeline: unknown[] = [];
-  const displayParts: CursorAgentDisplayPart[] = [];
+  const displayParts: AgentDisplayPart[] = [];
 
   function resolvedSoFar(): string {
     const hasActivity = displayParts.some((p) => p.kind === "activity");
@@ -216,7 +216,7 @@ export function createStreamJsonStdoutFeed(options?: {
       : (terminal ?? (displayText || fromAssistant));
   }
 
-  function clonedDisplayParts(): CursorAgentDisplayPart[] {
+  function clonedDisplayParts(): AgentDisplayPart[] {
     return displayParts.map((part) =>
       part.kind === "assistant"
         ? { kind: "assistant", text: part.text }
@@ -249,7 +249,7 @@ export function createStreamJsonStdoutFeed(options?: {
   function applyEffect(
     effect: StreamJsonLineEffect,
     on?: (t: string) => void,
-    onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void,
+    onDisplayParts?: (parts: AgentDisplayPart[]) => void,
   ): void {
     if (effect.kind === "terminal_success") {
       terminal = effect.fullText;
@@ -285,7 +285,7 @@ export function createStreamJsonStdoutFeed(options?: {
   function processCompleteLine(
     line: string,
     onResolvedSoFar?: (textSoFar: string) => void,
-    onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void,
+    onDisplayParts?: (parts: AgentDisplayPart[]) => void,
   ): void {
     const o = tryParseNdjsonObject(line);
     if (o) {
@@ -326,7 +326,7 @@ export function createStreamJsonStdoutFeed(options?: {
     push(
       chunk: string,
       onResolvedSoFar?: (textSoFar: string) => void,
-      onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void,
+      onDisplayParts?: (parts: AgentDisplayPart[]) => void,
     ) {
       lineBuf += chunk;
       const normalized = normalizeStdoutNewlinesForNdjson(lineBuf);
@@ -338,7 +338,7 @@ export function createStreamJsonStdoutFeed(options?: {
     },
     flushTail(
       onResolvedSoFar?: (textSoFar: string) => void,
-      onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void,
+      onDisplayParts?: (parts: AgentDisplayPart[]) => void,
     ) {
       const tail = lineBuf.trim();
       lineBuf = "";

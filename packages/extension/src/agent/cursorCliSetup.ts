@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import * as vscode from "vscode";
 
-import { processEnvForCursorCli } from "./agentPathEnv";
+import { processEnvForAgentCli } from "./agentPathEnv";
 
 const DOCS_INSTALL = "https://cursor.com/docs/cli/installation";
 const DOCS_HEADLESS = "https://cursor.com/docs/cli/headless";
@@ -16,7 +16,7 @@ export function probeAgentExecutable(executable: string, timeoutMs = 5000): Prom
     const child = spawn(executable, ["-v"], {
       shell: false,
       windowsHide: true,
-      env: processEnvForCursorCli(),
+      env: processEnvForAgentCli(),
     });
     const timer = setTimeout(() => {
       child.kill();

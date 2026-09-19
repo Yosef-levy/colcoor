@@ -1,6 +1,7 @@
 import type { CursorAgentModelEntry } from "./cursorAgentModelCatalog";
 import type { ProviderId } from "./providers/types";
 import type { AgentModelCatalogSnapshot } from "./agentModelCatalogCache";
+import { providerDescriptor } from "./providers/providerDescriptors";
 
 /** Known Anthropic model ids for the VS Code (provider-direct) extension path. */
 export const ANTHROPIC_PROVIDER_MODELS: CursorAgentModelEntry[] = [
@@ -23,16 +24,19 @@ export function curateProviderModelsForComposer(
 }
 
 export function providerModelCatalogSnapshot(provider: ProviderId): AgentModelCatalogSnapshot {
-  if (provider !== "anthropic") {
+  if (provider === "cursor") {
     return {
       curated: [],
       all: [],
       hint: "No model list for this provider.",
     };
   }
-  const all = [...ANTHROPIC_PROVIDER_MODELS];
+  const descriptor = providerDescriptor(provider);
+  const all = [...descriptor.models];
+  const wanted = new Set(descriptor.curatedModelIds);
+  const curated = all.filter((entry) => wanted.has(entry.id));
   return {
-    curated: curateProviderModelsForComposer(all),
+    curated: provider === "anthropic" ? curateProviderModelsForComposer(all) : curated,
     all,
     hint: null,
   };

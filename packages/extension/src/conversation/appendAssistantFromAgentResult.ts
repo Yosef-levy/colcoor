@@ -16,8 +16,8 @@ function assistantContentJson(
   contextSavings?: ContextSavingsTurn,
   usageContext?: ProviderUsagePersistContext,
 ): Record<string, unknown> | undefined {
-  const entries = runResult.cursorCliTimeline;
-  const displayParts = runResult.cursorCliDisplayParts;
+  const entries = runResult.agentTimeline;
+  const displayParts = runResult.agentDisplayParts;
   const traceJson =
     entries?.length ?
       {
@@ -32,7 +32,7 @@ function assistantContentJson(
   const metaJson = buildColcoorAgentMeta(modelId, undefined);
   const sessionJson = runResult.providerSessionId
     ? buildAgentSessionJson({
-        provider: "anthropic",
+        provider: runResult.providerId ?? "anthropic",
         sessionId: runResult.providerSessionId,
         lastMessageId: runResult.providerMessageId,
         model: modelId,

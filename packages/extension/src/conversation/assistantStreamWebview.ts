@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
+import type { AgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { markdownToSafeHtml } from "./threadMarkdown";
 
 /**
@@ -18,13 +18,13 @@ export function createAssistantStreamPusher(
   },
 ): {
   pushDelta: (rawText: string) => void;
-  pushDisplayParts: (parts: CursorAgentDisplayPart[]) => void;
+  pushDisplayParts: (parts: AgentDisplayPart[]) => void;
   dispose: () => void;
 } {
   let lastRaw = "";
-  let lastParts: CursorAgentDisplayPart[] = [];
+  let lastParts: AgentDisplayPart[] = [];
 
-  function renderDisplayParts(parts: CursorAgentDisplayPart[]): unknown[] {
+  function renderDisplayParts(parts: AgentDisplayPart[]): unknown[] {
     return parts.map((part) =>
       part.kind === "assistant"
         ? { kind: "assistant", html: markdownToSafeHtml(part.text) }
@@ -53,7 +53,7 @@ export function createAssistantStreamPusher(
       lastRaw = raw;
       flushNow();
     },
-    pushDisplayParts(parts: CursorAgentDisplayPart[]) {
+    pushDisplayParts(parts: AgentDisplayPart[]) {
       lastParts = parts.map((part) =>
         part.kind === "assistant"
           ? { kind: "assistant", text: part.text }

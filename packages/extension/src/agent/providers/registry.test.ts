@@ -15,6 +15,9 @@ import { resolveProviderCapabilities, selectAgentBackend } from "./registry";
 import { AnthropicLlmProvider } from "./anthropicLlmProvider";
 import { ClaudeAgentProvider } from "./claudeAgentProvider";
 import { CursorCliAgentProvider } from "./cursorCliAgentProvider";
+import { GeminiAgentProvider } from "./geminiAgentProvider";
+import { GeminiLlmProvider } from "./geminiLlmProvider";
+import { PROVIDER_DESCRIPTORS } from "./providerDescriptors";
 
 const secrets = {
   get: vi.fn(),
@@ -64,6 +67,16 @@ describe("selectAgentBackend", () => {
     }
   });
 
+  it("uses Gemini API for ask and Gemini ACP for plan/agent", () => {
+    withConfig({ provider: "gemini" });
+    const ask = selectAgentBackend(secrets, { agentMode: "auto", cliMode: "ask" });
+    expect(ask.kind).toBe("backend");
+    if (ask.kind === "backend") expect(ask.backend).toBeInstanceOf(GeminiLlmProvider);
+    const agent = selectAgentBackend(secrets, { agentMode: "auto", cliMode: "agent" });
+    expect(agent.kind).toBe("backend");
+    if (agent.kind === "backend") expect(agent.backend).toBeInstanceOf(GeminiAgentProvider);
+  });
+
   it("defaults to Anthropic when provider is unset", () => {
     withConfig({});
     const sel = selectAgentBackend(secrets, { agentMode: "auto", cliMode: "ask" });
@@ -71,6 +84,16 @@ describe("selectAgentBackend", () => {
     if (sel.kind === "backend") {
       expect(sel.backend).toBeInstanceOf(AnthropicLlmProvider);
     }
+  });
+});
+
+describe("provider descriptors", () => {
+  it("covers every configured provider id", () => {
+    expect(Object.keys(PROVIDER_DESCRIPTORS).sort()).toEqual([
+      "anthropic",
+      "cursor",
+      "gemini",
+    ]);
   });
 });
 

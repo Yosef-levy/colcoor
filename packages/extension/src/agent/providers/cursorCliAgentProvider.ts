@@ -72,9 +72,10 @@ export class CursorCliAgentProvider implements AgentBackend {
         return {
           text: normalizePersistedUserInputText(stdout),
           stub: "none",
+          providerId: "cursor",
           cancelled: true,
-          cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
-          cursorCliDisplayParts: displayParts?.length ? displayParts : undefined,
+          agentTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
+          agentDisplayParts: displayParts?.length ? displayParts : undefined,
           cliModelId,
         };
       }
@@ -110,8 +111,9 @@ export class CursorCliAgentProvider implements AgentBackend {
       return {
         text,
         stub: "none",
-        cursorCliTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
-        cursorCliDisplayParts: displayParts?.length ? displayParts : undefined,
+        providerId: "cursor",
+        agentTimeline: ndjsonTimeline?.length ? ndjsonTimeline : undefined,
+        agentDisplayParts: displayParts?.length ? displayParts : undefined,
         cliModelId,
       };
     } catch (e) {

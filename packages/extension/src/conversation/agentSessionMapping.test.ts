@@ -99,4 +99,24 @@ describe("resolveAgentSessionPlan", () => {
       upToMessageId: "msg-1",
     });
   });
+
+  it("starts fresh when the nearest session belongs to another provider", () => {
+    const root = node({ id: "u1", kind: "user_input" });
+    const asst = node({
+      id: "a1",
+      parent_event_id: "u1",
+      content_json: sessionJson("claude-session"),
+    });
+    expect(resolveAgentSessionPlan([root, asst], asst, "gemini")).toEqual({ kind: "fresh" });
+  });
+
+  it("treats a blank legacy provider as Anthropic", () => {
+    const root = node({ id: "u1", kind: "user_input" });
+    const content_json = buildAgentSessionJson({ provider: "", sessionId: "legacy" });
+    const asst = node({ id: "a1", parent_event_id: "u1", content_json });
+    expect(resolveAgentSessionPlan([root, asst], asst, "anthropic")).toEqual({
+      kind: "resume",
+      sessionId: "legacy",
+    });
+  });
 });

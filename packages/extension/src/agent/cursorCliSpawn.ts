@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
-import { processEnvForCursorCli } from "./agentPathEnv";
-import { createStreamJsonStdoutFeed, type CursorAgentDisplayPart } from "./cursorAgentStreamJson";
+import { processEnvForAgentCli } from "./agentPathEnv";
+import { createStreamJsonStdoutFeed, type AgentDisplayPart } from "./cursorAgentStreamJson";
 import {
   enrichToolCallRejection,
   normalizeToolCallId,
@@ -115,7 +115,7 @@ export type CursorCliSpawnResult = {
   /** Present for stream-json modes: sanitized NDJSON objects in order (for `content_json`). */
   ndjsonTimeline?: unknown[];
   /** Assistant/activity sequence from stream-json, used to preserve UI segment boundaries. */
-  displayParts?: CursorAgentDisplayPart[];
+  displayParts?: AgentDisplayPart[];
   /** From NDJSON `system` / `init` when streaming (actual model when `--model` omitted). */
   cliSessionModel?: string;
 };
@@ -126,7 +126,7 @@ export type CursorCliSpawnResult = {
  * often cause "invalid API key loaded from environment variable").
  */
 export function buildEnvForAgentSpawn(storedCursorApiKey: string | undefined): NodeJS.ProcessEnv {
-  const base = processEnvForCursorCli();
+  const base = processEnvForAgentCli();
   const trimmed = storedCursorApiKey?.trim();
   if (!trimmed) {
     return base;
@@ -161,7 +161,7 @@ function spawnCursorAgentPrintOnce(params: {
   storedCursorApiKey?: string;
   signal?: AbortSignal;
   onStdoutAccumulated?: (stdoutSoFar: string) => void;
-  onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
+  onDisplayParts?: (parts: AgentDisplayPart[]) => void;
   outputMode: AgentCliOutputMode;
   cliModel?: string;
   cliMode?: CursorCliMode;
@@ -325,7 +325,7 @@ function spawnCursorAgentPrintOnce(params: {
       }
       let stdoutForResult: string;
       let ndjsonTimeline: unknown[] | undefined;
-      let displayParts: CursorAgentDisplayPart[] | undefined;
+      let displayParts: AgentDisplayPart[] | undefined;
       let cliSessionModel: string | undefined;
       if (jsonFeed) {
         jsonFeed.flushTail(params.onStdoutAccumulated, params.onDisplayParts);
@@ -395,7 +395,7 @@ export async function spawnCursorAgentPrint(params: {
   /** Called after each stdout chunk with full stdout captured so far (UTF-8). */
   onStdoutAccumulated?: (stdoutSoFar: string) => void;
   /** Called when the structured assistant/activity display sequence changes. */
-  onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
+  onDisplayParts?: (parts: AgentDisplayPart[]) => void;
   /** Defaults to stream-json + partial deltas. Use `text` if your `agent` build rejects streaming flags. */
   outputMode?: AgentCliOutputMode;
   /** When set, passed as `--model` (omit for Cursor default / automatic). */

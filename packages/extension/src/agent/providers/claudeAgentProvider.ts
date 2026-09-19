@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 
 import { updateProviderCommandCatalogFromSdk } from "../../commands/slash/providerCommandCatalog";
 import { normalizePersistedUserInputText } from "../../conversation/normalizeUserInputText";
-import { enqueueToolCallApproval } from "../cursorToolCallApprovalQueue";
 import { SECRET_ANTHROPIC_API_KEY } from "../providerApiKey";
 import {
   agentSessionToContinuation,
@@ -12,6 +11,7 @@ import {
 } from "../../conversation/messageProviderUsage";
 import { resolveAgentModel, resolveRunModel } from "./anthropicConfig";
 import type { AgentBackend, AgentBackendRunInput, AgentRunResult, AgentSessionPlan } from "./types";
+import { bridgeClaudeToolApproval } from "./providerToolApproval";
 
 type SdkSlashCommand = {
   name: string;
@@ -84,69 +84,6 @@ function promptForPlan(input: AgentBackendRunInput, plan: AgentSessionPlan): str
   }
   const base = input.userMessage.trim() || input.transcriptText;
   return appendix ? `${base}${appendix}` : base;
-}
-
-function formatToolInputDetail(input: Record<string, unknown>): string {
-  const preferredKeys = [
-    "file_path",
-    "path",
-    "filePath",
-    "command",
-    "pattern",
-    "url",
-    "query",
-    "notebook_path",
-  ];
-  const lines: string[] = [];
-  for (const key of preferredKeys) {
-    const v = input[key];
-    if (typeof v === "string" && v.trim()) {
-      lines.push(`${key}: ${v.trim().slice(0, 400)}`);
-    }
-  }
-  const content = input.content ?? input.new_string ?? input.new_str ?? input.text;
-  if (typeof content === "string" && content.trim()) {
-    const preview = content.trim().replace(/\s+/g, " ").slice(0, 240);
-    lines.push(`content preview: ${preview}${content.trim().length > 240 ? "…" : ""}`);
-  }
-  if (lines.length === 0) {
-    try {
-      const raw = JSON.stringify(input);
-      if (raw && raw !== "{}") {
-        lines.push(raw.length > 500 ? `${raw.slice(0, 500)}…` : raw);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  return lines.join("\n");
-}
-
-async function bridgeToolApproval(
-  toolName: string,
-  input: Record<string, unknown>,
-  options: { title?: string; blockedPath?: string; decisionReason?: string } | undefined,
-  branchLabel: string | undefined,
-): Promise<{ behavior: "allow" } | { behavior: "deny"; message: string }> {
-  return enqueueToolCallApproval(async () => {
-    const branchLine = branchLabel?.trim() ? `Reply branch: ${branchLabel.trim()}` : "";
-    const title =
-      typeof options?.title === "string" && options.title.trim()
-        ? options.title.trim()
-        : `Agent wants to use "${toolName}"`;
-    const detail = formatToolInputDetail(input ?? {});
-    const extras: string[] = [];
-    if (options?.blockedPath) extras.push(`Blocked path: ${options.blockedPath}`);
-    if (options?.decisionReason) extras.push(`Reason: ${options.decisionReason}`);
-    const body = ["Colcoor: " + title, branchLine, ...extras, detail, "Allow this tool call?"]
-      .filter((s) => Boolean(s && String(s).trim()))
-      .join("\n\n");
-    const choice = await vscode.window.showInformationMessage(body, { modal: true }, "Allow", "Skip");
-    if (choice === "Allow") {
-      return { behavior: "allow" as const };
-    }
-    return { behavior: "deny" as const, message: "User skipped this tool call." };
-  });
 }
 
 async function refreshCommandCatalog(
@@ -236,7 +173,7 @@ export class ClaudeAgentProvider implements AgentBackend {
               decisionReason?: string;
             },
           ) =>
-            bridgeToolApproval(toolName, toolInput, toolOptions, input.toolApprovalBranchLabel),
+            bridgeClaudeToolApproval(toolName, toolInput, toolOptions, input.toolApprovalBranchLabel),
         },
       });
 
@@ -300,6 +237,7 @@ export class ClaudeAgentProvider implements AgentBackend {
         return {
           text: normalizePersistedUserInputText(text),
           stub: "none",
+          providerId: "anthropic",
           cancelled: true,
           providerSessionId: sessionId,
           providerMessageId: lastMessageId,
@@ -313,6 +251,7 @@ export class ClaudeAgentProvider implements AgentBackend {
       return {
         text: resolved,
         stub: "none",
+        providerId: "anthropic",
         cliModelId: model,
         providerSessionId: sessionId,
         providerMessageId: lastMessageId,

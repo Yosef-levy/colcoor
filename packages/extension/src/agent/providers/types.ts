@@ -1,5 +1,5 @@
 import type { CursorCliMode } from "../cursorCliMode";
-import type { CursorAgentDisplayPart } from "../cursorAgentStreamJson";
+import type { AgentDisplayPart } from "../cursorAgentStreamJson";
 import type { ColcoorProviderUsage } from "../../conversation/messageProviderUsage";
 
 /** How the assistant body was produced (for UI; persisted text stays short when execution is unavailable). */
@@ -10,10 +10,10 @@ export type AgentRunResult = {
   stub: AssistantStubKind;
   /** Set when the user aborted the run; `text` may be partial output. */
   cancelled?: boolean;
-  /** Sanitized stream-json timeline for `assistant_output.content_json` (Cursor CLI only). */
-  cursorCliTimeline?: unknown[];
-  /** Structured assistant/activity display sequence (Cursor CLI stream-json only). */
-  cursorCliDisplayParts?: CursorAgentDisplayPart[];
+  /** Sanitized provider activity timeline for `assistant_output.content_json`. */
+  agentTimeline?: unknown[];
+  /** Structured assistant/activity display sequence. */
+  agentDisplayParts?: AgentDisplayPart[];
   /** Model id reported by the backend (Cursor `--model`, CLI init line, or provider model). */
   cliModelId?: string;
   /** Provider agent session id to persist for resume/fork (plan/agent backends). */
@@ -22,6 +22,8 @@ export type AgentRunResult = {
   providerMessageId?: string;
   /** Token/cost/latency envelope for the metadata popup (`colcoor_provider_usage`). */
   providerUsage?: ColcoorProviderUsage;
+  /** Provider that produced session/usage metadata. */
+  providerId?: ProviderId;
 };
 
 /** Base64 image part for Messages API vision (ask path). */
@@ -68,7 +70,7 @@ export type AgentBackendRunInput = {
   /** Full assistant text so far (grows incrementally). */
   onTextDelta?: (textSoFar: string) => void;
   /** Structured assistant/activity display sequence while the stream grows. */
-  onDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
+  onDisplayParts?: (parts: AgentDisplayPart[]) => void;
   /** Model flag for the Cursor CLI backend; omit for automatic selection. */
   cliModel?: string;
   /** ask / plan / agent. */
@@ -100,7 +102,7 @@ export interface AgentBackend {
 }
 
 /** Supplier that provides the ask (LLM) and plan/agent (agentic) APIs. */
-export type ProviderId = "anthropic" | "cursor";
+export type ProviderId = "anthropic" | "gemini" | "cursor";
 
 /**
  * Slash-command / skill capabilities for a provider × mode selection.

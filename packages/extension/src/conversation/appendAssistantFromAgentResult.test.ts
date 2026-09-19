@@ -24,7 +24,7 @@ describe("appendAssistantFromAgentResult", () => {
       text: "\r\npartial\r\n",
       stub: "explicit",
       cancelled: true,
-      cursorCliTimeline: [{ t: "x" }],
+      agentTimeline: [{ t: "x" }],
     });
     expect(appendEvent).toHaveBeenCalledTimes(1);
     expect(appendEvent).toHaveBeenCalledWith("conv", {
@@ -72,8 +72,8 @@ describe("appendAssistantFromAgentResult", () => {
     await appendAssistantFromAgentResult(mockApi(appendEvent), "conv", "userEv", {
       text: "preface\n\nanswer",
       stub: "none",
-      cursorCliTimeline: [{ colcoor_row: "read", text: "Read README.md" }],
-      cursorCliDisplayParts: [
+      agentTimeline: [{ colcoor_row: "read", text: "Read README.md" }],
+      agentDisplayParts: [
         { kind: "assistant", text: "preface" },
         { kind: "activity", entries: [{ colcoor_row: "read", text: "Read README.md" }] },
         { kind: "assistant", text: "answer" },

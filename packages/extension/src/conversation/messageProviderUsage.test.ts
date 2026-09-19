@@ -3,6 +3,7 @@ import { computeCacheHitPercent } from "./messageMetadataCore";
 import {
   finalizeProviderUsage,
   providerUsageFromAnthropicMessage,
+  providerUsageFromGemini,
   providerUsageFromSdkResult,
   readColcoorProviderUsage,
   sumAnthropicUsageTokens,
@@ -128,5 +129,34 @@ describe("messageProviderUsage", () => {
       computeCacheHitPercent({ input: 100, output: 0, cache_read: 900, cache_creation: 0 }),
     ).toBe(90);
     expect(computeCacheHitPercent({ input: 0, output: 0 })).toBeNull();
+  });
+
+  it("accepts forward-compatible backend identifiers", () => {
+    const raw = providerUsageFromSdkResult(
+      { usage: { input_tokens: 1, output_tokens: 2 } },
+      { mode: "agent", model: "m" },
+    );
+    const parsed = readColcoorProviderUsage({
+      colcoor_provider_usage: { ...raw, backend: "future_provider_backend" },
+    });
+    expect(parsed?.backend).toBe("future_provider_backend");
+  });
+
+  it("subtracts Gemini cached tokens from uncached input", () => {
+    const usage = providerUsageFromGemini(
+      {
+        promptTokenCount: 1000,
+        cachedContentTokenCount: 800,
+        responseTokenCount: 50,
+        thoughtsTokenCount: 20,
+      },
+      { mode: "ask", model: "gemini" },
+    );
+    expect(usage.tokens).toEqual({
+      input: 200,
+      output: 50,
+      cache_read: 800,
+      thinking: 20,
+    });
   });
 });

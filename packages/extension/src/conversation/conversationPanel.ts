@@ -1602,7 +1602,11 @@ export function createConversationPanelController(
       return undefined;
     }
     const map = readAgentModelByConversationMap(context.workspaceState);
-    return agentModelCliFlag(readSelectedAgentModelForConversation(map, conversationId));
+    const selected = readSelectedAgentModelForConversation(map, conversationId);
+    const model = agentModelCliFlag(selected);
+    if (!model) return undefined;
+    const catalog = getAgentModelCatalog();
+    return catalog.all.some((entry) => entry.id === model) ? model : undefined;
   }
 
   function cliModeForConversationRuns(): CursorCliMode {

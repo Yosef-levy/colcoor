@@ -414,14 +414,16 @@
           "order": 2,
           "enum": [
             "anthropic",
+            "gemini",
             "cursor"
           ],
           "enumDescriptions": [
             "Use Anthropic APIs directly: ask mode via the Messages API, plan/agent via the Claude Agent SDK. Bring your own Anthropic API key.",
+            "Use Google Gemini: ask mode via the Gemini API, plan/agent via Gemini CLI ACP with Colcoor-mediated tool approvals.",
             "Legacy: run the Cursor headless CLI (`agent -p`). Requires a Cursor account and the `agent` binary on PATH."
           ],
           "default": "anthropic",
-          "description": "Which supplier runs the assistant. anthropic (default): direct Anthropic APIs with your own key, no Cursor account. cursor: legacy Cursor CLI backend."
+          "description": "Which supplier runs the assistant. anthropic (default), gemini, or the legacy cursor CLI backend."
         },
         "colcoor.storageMode": {
           "type": "string",
@@ -446,6 +448,36 @@
           "type": "string",
           "default": "claude-sonnet-4-5",
           "description": "Model id for Plan/Agent mode (Claude Agent SDK). Ignored when colcoor.provider is cursor."
+        },
+        "colcoor.geminiAskModel": {
+          "type": "string",
+          "default": "gemini-3.5-flash",
+          "description": "Model id for Ask mode when colcoor.provider is gemini."
+        },
+        "colcoor.geminiAgentModel": {
+          "type": "string",
+          "default": "gemini-3.1-pro-preview",
+          "description": "Model id passed to Gemini CLI ACP for Plan/Agent mode."
+        },
+        "colcoor.geminiExecutable": {
+          "type": "string",
+          "default": "gemini",
+          "description": "Gemini CLI executable name or absolute path. Colcoor supports Gemini CLI 0.60.0 via its --acp mode."
+        },
+        "colcoor.geminiAutoApprove": {
+          "type": "string",
+          "enum": [
+            "off",
+            "edits",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Prompt in Colcoor for every gated Agent-mode tool call.",
+            "Explicitly auto-approve edit tools; other gated tools still prompt.",
+            "Explicitly auto-approve all tools (YOLO). Use only in a trusted workspace."
+          ],
+          "default": "off",
+          "description": "Gemini Agent approval policy. Plan mode remains read-only regardless of this setting."
         },
         "colcoor.promptCacheTtl": {
           "type": "string",
@@ -561,8 +593,10 @@
     "vitest": "^3.0.5"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
     "@anthropic-ai/claude-agent-sdk": "^0.3.205",
     "@anthropic-ai/sdk": "^0.110.0",
+    "@google/genai": "^2.23.0",
     "marked": "^9.1.6",
     "sanitize-html": "^2.17.2",
     "temml": "^0.13.2"

@@ -1,7 +1,7 @@
 import { resolvePromptCacheTtl } from "../agent/providers/anthropicConfig";
 import type { AgentRunner, AssistantStubKind } from "../agent/agentRunner";
 import type { CursorCliMode } from "../agent/cursorCliMode";
-import type { CursorAgentDisplayPart } from "../agent/cursorAgentStreamJson";
+import type { AgentDisplayPart } from "../agent/cursorAgentStreamJson";
 import { collectWorkspaceHintsForAgent } from "../agent/workspaceHintsForAgent";
 import type { ColcoorClient, GraphEventNode, NoteOut } from "../api/client";
 import { buildAuthoritativeTranscript } from "../transcript/buildTranscript";
@@ -29,6 +29,7 @@ import {
   indexNotesByEventId,
   pathFromRootToTip,
 } from "./treeEvents";
+import { resolveProviderId } from "../agent/providerApiKey";
 
 export const COLOOR_SLASH_META_KEY = "colcoor_slash_meta";
 
@@ -64,7 +65,7 @@ export type RunUserTurnOptions = {
   /** Incremental assistant body while the Cursor CLI prints stdout (same string grows over time). */
   onAssistantTextDelta?: (textSoFar: string) => void;
   /** Structured assistant/activity display sequence while the Cursor CLI stream grows. */
-  onAssistantDisplayParts?: (parts: CursorAgentDisplayPart[]) => void;
+  onAssistantDisplayParts?: (parts: AgentDisplayPart[]) => void;
   /** Invoked after `user_input` is stored and before the agent runs (e.g. refresh UI so the new row appears while streaming). */
   onUserMessagePersisted?: (args: { userEventId: string }) => void | Promise<void>;
   /** Optional display-only label on the new `user_input` (`events.checkpoint_label`; [ui-features.md] §8). */
@@ -197,7 +198,8 @@ export async function runColcoorUserTurn(
     pathFromRoot: pathTurns,
     finalUserMediaContentJson: mediaJson,
   });
-  const agentSession = resolveAgentSessionPlan(events, attach);
+  const activeProvider = resolveProviderId();
+  const agentSession = resolveAgentSessionPlan(events, attach, activeProvider);
   const contextSavings = buildContextSavingsTurn({
     kind: "send",
     linearContextTokensBeforeRun: options?.linearContextTokensBeforeRun ?? 0,

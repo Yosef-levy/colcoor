@@ -16,11 +16,12 @@ import {
 } from "./anthropicConfig";
 import type { AgentBackend, AgentBackendRunInput, AgentRunResult, LlmMessage } from "./types";
 import { executeWorkspaceReadFile } from "./workspaceReadFileTool";
+import { executeWorkspaceListFiles } from "./workspaceListFilesTool";
 
 const DEFAULT_MAX_TOKENS = 8192;
 const MAX_TOOL_ROUNDS = 8;
 
-const ASK_SYSTEM_ADDENDUM = `You may call tools when helpful: read_file (workspace files), web_search, and web_fetch. Prefer tools over guessing file contents or live web facts.`;
+const ASK_SYSTEM_ADDENDUM = `You may call tools when helpful: list_files and read_file (workspace files), web_search, and web_fetch. Use list_files to orient yourself before guessing workspace paths. Prefer tools over guessing file contents or live web facts.`;
 
 const READ_FILE_TOOL: Anthropic.Tool = {
   name: "read_file",
@@ -38,10 +39,24 @@ const READ_FILE_TOOL: Anthropic.Tool = {
   },
 };
 
+const LIST_FILES_TOOL: Anthropic.Tool = {
+  name: "list_files",
+  description: "List a bounded tree of files and directories under the user's workspace.",
+  input_schema: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Workspace-relative directory; defaults to ." },
+      depth: { type: "number", description: "Traversal depth from 0 to 4; defaults to 2" },
+      max_entries: { type: "number", description: "Maximum entries from 1 to 1000" },
+    },
+  },
+};
+
 const ASK_TOOLS: Anthropic.ToolUnion[] = [
   { type: "web_search_20250305", name: "web_search" },
   { type: "web_fetch_20250910", name: "web_fetch" },
   READ_FILE_TOOL,
+  LIST_FILES_TOOL,
 ];
 
 /**
@@ -177,13 +192,19 @@ function readFilePathFromInput(input: unknown): string {
   return typeof path === "string" ? path : "";
 }
 
+function numberFromInput(input: unknown, key: string): number | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = (input as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : undefined;
+}
+
 async function runClientTools(
   workspaceRoot: string,
   toolUses: Anthropic.ToolUseBlock[],
 ): Promise<Anthropic.ToolResultBlockParam[]> {
   const results: Anthropic.ToolResultBlockParam[] = [];
   for (const tu of toolUses) {
-    if (tu.name !== "read_file") {
+    if (tu.name !== "read_file" && tu.name !== "list_files") {
       results.push({
         type: "tool_result",
         tool_use_id: tu.id,
@@ -192,7 +213,13 @@ async function runClientTools(
       });
       continue;
     }
-    const result = await executeWorkspaceReadFile(workspaceRoot, readFilePathFromInput(tu.input));
+    const result =
+      tu.name === "list_files"
+        ? await executeWorkspaceListFiles(workspaceRoot, readFilePathFromInput(tu.input) || ".", {
+            depth: numberFromInput(tu.input, "depth"),
+            maxEntries: numberFromInput(tu.input, "max_entries"),
+          })
+        : await executeWorkspaceReadFile(workspaceRoot, readFilePathFromInput(tu.input));
     results.push({
       type: "tool_result",
       tool_use_id: tu.id,
@@ -331,6 +358,7 @@ export class AnthropicLlmProvider implements AgentBackend {
         return {
           text: resolved,
           stub: "none",
+          providerId: "anthropic",
           cliModelId: finalMessage.model || model,
           providerUsage,
         };

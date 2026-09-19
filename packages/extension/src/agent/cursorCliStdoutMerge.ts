@@ -1,4 +1,4 @@
-import type { CursorAgentDisplayPart } from "./cursorAgentStreamJson";
+import type { AgentDisplayPart } from "./cursorAgentStreamJson";
 
 /** Merge assistant stdout captured before and after a tool-approval resume. */
 export function mergeAgentStdoutAcrossResume(base: string, next: string): string {
@@ -20,10 +20,10 @@ export function mergeAgentStdoutAcrossResume(base: string, next: string): string
 }
 
 export function mergeAgentDisplayPartsAcrossResume(
-  prior: readonly CursorAgentDisplayPart[],
-  current: readonly CursorAgentDisplayPart[],
-): CursorAgentDisplayPart[] {
-  const clone = (part: CursorAgentDisplayPart): CursorAgentDisplayPart =>
+  prior: readonly AgentDisplayPart[],
+  current: readonly AgentDisplayPart[],
+): AgentDisplayPart[] {
+  const clone = (part: AgentDisplayPart): AgentDisplayPart =>
     part.kind === "assistant"
       ? { kind: "assistant", text: part.text }
       : { kind: "activity", entries: [...part.entries] };

@@ -146,6 +146,8 @@ export function createMessageMetadataApi() {
   function backendLabel(backend: unknown): string | undefined {
     if (backend === "messages_api") return "Messages API";
     if (backend === "claude_agent_sdk") return "Claude Agent SDK";
+    if (backend === "gemini_api") return "Gemini API";
+    if (backend === "gemini_cli_acp") return "Gemini CLI (ACP)";
     if (backend === "cursor_cli") return "Cursor CLI";
     return typeof backend === "string" ? backend : undefined;
   }

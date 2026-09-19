@@ -42,11 +42,20 @@ The extension is responsible for:
 
 - **anthropic** (default): ask mode uses the **Anthropic Messages API**; plan/agent modes use the
   **Claude Agent SDK**. The user brings their own Anthropic API key — no Cursor account required.
+- **gemini**: ask mode uses the **Gemini API** (`@google/genai`) with read-only workspace tools;
+  plan/agent modes use **Gemini CLI 0.60.0 ACP** (`gemini --acp`). Plan selects ACP's read-only
+  `plan` mode. Agent selects `default`, so gated edits and shell commands are approved in Colcoor.
+  Auto Edit and YOLO are separate, explicit `colcoor.geminiAutoApprove` choices; failures never
+  silently widen permissions.
 - **cursor** (legacy): Cursor's headless `agent -p`. Retained for compatibility, not the default.
 
 For stateful (plan/agent) providers, Colcoor persists the provider session id and a fork anchor in
 the assistant event so a later turn can **resume**, **fork-from-the-middle**, or start **fresh**,
 preserving prompt-cache hits across branches.
+
+Provider session ids are provider-scoped. Switching providers starts a fresh provider session;
+Gemini ACP can load an existing Gemini session but cannot fork one, so a branch starts a new ACP
+session from Colcoor's authoritative transcript.
 
 **Integration quality:** avoid fragile UI automation. Prefer **stable programmatic or supported**
 API paths.

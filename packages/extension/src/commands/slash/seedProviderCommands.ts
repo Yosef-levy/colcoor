@@ -66,7 +66,7 @@ const ANTHROPIC_BUILTIN_COMMANDS: readonly Omit<SlashCommand, "availability">[] 
  * - Cursor: none — the catalog comes from real Skills dirs on disk
  */
 export function seedProviderCommands(providerId?: ProviderId): SlashCommand[] {
-  if (providerId === "cursor") {
+  if (providerId !== "anthropic") {
     return [];
   }
   return ANTHROPIC_BUILTIN_COMMANDS.map((c) => ({
