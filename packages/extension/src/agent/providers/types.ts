@@ -75,6 +75,9 @@ export type AgentBackendRunInput = {
   cliModel?: string;
   /** ask / plan / agent. */
   cliMode?: CursorCliMode;
+  /** Deterministic generation controls supported by Gemini Ask. */
+  generationSeed?: number;
+  generationTemperature?: number;
   /** Shown in tool-approval modals so parallel runs are distinguishable. */
   toolApprovalBranchLabel?: string;
   /**

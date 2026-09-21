@@ -81,6 +81,9 @@ export type RunUserTurnOptions = {
   cliModel?: string;
   /** Cursor CLI `--mode`; Colcoor's UI defaults this to Ask mode. */
   cliMode?: CursorCliMode;
+  /** Deterministic Gemini Ask controls. */
+  generationSeed?: number;
+  generationTemperature?: number;
   /** Incremental linear-chat token baseline before this pending user message. */
   linearContextTokensBeforeRun?: number;
   /** Shown in tool-approval modals so parallel runs are distinguishable. */
@@ -239,6 +242,8 @@ export async function runColcoorUserTurn(
       onDisplayParts: options?.onAssistantDisplayParts,
       cliModel: options?.cliModel,
       cliMode: options?.cliMode,
+      generationSeed: options?.generationSeed,
+      generationTemperature: options?.generationTemperature,
       toolApprovalBranchLabel: options?.toolApprovalBranchLabel,
       llmRequest,
       agentSession,

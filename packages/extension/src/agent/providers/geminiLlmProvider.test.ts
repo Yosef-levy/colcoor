@@ -20,6 +20,7 @@ import {
   GEMINI_ASK_FINAL_TOOL_CONFIG,
   GEMINI_ASK_TOOL_CONFIG,
   GeminiLlmProvider,
+  geminiGenerationControls,
   toGeminiContents,
 } from "./geminiLlmProvider";
 
@@ -124,5 +125,15 @@ describe("Gemini request mapping", () => {
     ).rejects.toThrow(
       /Calls: r1:list_files\("src"\).*r8:list_files\("src"\).*Final: STOP; thought/,
     );
+  });
+
+  it("maps deterministic generation controls into Gemini config", () => {
+    expect(
+      geminiGenerationControls({
+        generationSeed: 42,
+        generationTemperature: 0,
+      }),
+    ).toEqual({ seed: 42, temperature: 0 });
+    expect(geminiGenerationControls({})).toEqual({});
   });
 });

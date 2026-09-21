@@ -37,6 +37,8 @@ export type ColcoorProviderUsage = {
   cancelled?: boolean;
   continuation?: ContinuationKind;
   prompt_cache_ttl?: PromptCacheTtl;
+  seed?: number;
+  temperature?: number;
   duration_ms?: number;
   duration_api_ms?: number;
   num_turns?: number;
@@ -133,6 +135,8 @@ export function readColcoorProviderUsage(
     ...(o.prompt_cache_ttl === "5m" || o.prompt_cache_ttl === "1h"
       ? { prompt_cache_ttl: o.prompt_cache_ttl }
       : {}),
+    ...(typeof o.seed === "number" ? { seed: o.seed } : {}),
+    ...(typeof o.temperature === "number" ? { temperature: o.temperature } : {}),
     ...(typeof o.duration_ms === "number" ? { duration_ms: o.duration_ms } : {}),
     ...(typeof o.duration_api_ms === "number" ? { duration_api_ms: o.duration_api_ms } : {}),
     ...(typeof o.num_turns === "number" ? { num_turns: o.num_turns } : {}),
@@ -295,6 +299,8 @@ export function providerUsageFromGemini(
     stopReason?: string | null;
     cancelled?: boolean;
     numTurns?: number;
+    seed?: number;
+    temperature?: number;
   },
 ): ColcoorProviderUsage {
   const cached = usage?.cachedContentTokenCount ?? 0;
@@ -307,6 +313,8 @@ export function providerUsageFromGemini(
     model: opts.model.trim(),
     stop_reason: opts.stopReason ?? null,
     cancelled: opts.cancelled === true ? true : undefined,
+    seed: opts.seed,
+    temperature: opts.temperature,
     duration_ms: opts.durationMs,
     num_turns: opts.numTurns,
     tokens: {

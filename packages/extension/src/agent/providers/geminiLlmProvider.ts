@@ -4,6 +4,7 @@ import {
   Type,
   type Content,
   type FunctionCall,
+  type GenerateContentConfig,
   type Part,
   type Tool,
   type ToolConfig,
@@ -29,6 +30,17 @@ const ASK_SYSTEM_ADDENDUM =
   "You may call list_files and read_file for read-only workspace access, plus Google Search and URL context. Use workspace tools only when the request requires workspace information. When it does, use list_files before guessing workspace paths.";
 const TOOL_BUDGET_EXHAUSTED_ADDENDUM =
   "The workspace tool budget is exhausted. Answer now using the tool results already present in the conversation. Do not request another workspace tool.";
+
+export function geminiGenerationControls(
+  input: Pick<AgentBackendRunInput, "generationSeed" | "generationTemperature">,
+): Pick<GenerateContentConfig, "seed" | "temperature"> {
+  return {
+    ...(input.generationSeed !== undefined ? { seed: input.generationSeed } : {}),
+    ...(input.generationTemperature !== undefined
+      ? { temperature: input.generationTemperature }
+      : {}),
+  };
+}
 
 function messageParts(message: LlmMessage): Part[] {
   const parts: Part[] = [{ text: message.content }];
@@ -206,6 +218,7 @@ export class GeminiLlmProvider implements AgentBackend {
             tools,
             toolConfig: GEMINI_ASK_TOOL_CONFIG,
             abortSignal: input.signal,
+            ...geminiGenerationControls(input),
           },
         });
         for await (const chunk of stream) {
@@ -236,6 +249,8 @@ export class GeminiLlmProvider implements AgentBackend {
               durationMs: Date.now() - startedAt,
               stopReason,
               numTurns: rounds,
+              seed: input.generationSeed,
+              temperature: input.generationTemperature,
             }),
           };
         }
@@ -275,6 +290,7 @@ export class GeminiLlmProvider implements AgentBackend {
           maxOutputTokens: DEFAULT_MAX_TOKENS,
           toolConfig: GEMINI_ASK_FINAL_TOOL_CONFIG,
           abortSignal: input.signal,
+          ...geminiGenerationControls(input),
         },
       });
       for await (const chunk of finalStream) {
@@ -310,6 +326,8 @@ export class GeminiLlmProvider implements AgentBackend {
           durationMs: Date.now() - startedAt,
           stopReason,
           numTurns: rounds + 1,
+          seed: input.generationSeed,
+          temperature: input.generationTemperature,
         }),
       };
     } catch (error) {
@@ -327,6 +345,8 @@ export class GeminiLlmProvider implements AgentBackend {
             stopReason,
             cancelled: true,
             numTurns: rounds || undefined,
+            seed: input.generationSeed,
+            temperature: input.generationTemperature,
           }),
         };
       }

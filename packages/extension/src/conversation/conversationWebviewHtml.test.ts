@@ -645,4 +645,15 @@ describe("getConversationWebviewHtml", () => {
     expect(html).toContain('vscode.postMessage({ type: "restoreMessageBranch" });');
   });
 
+  it("includes controlled seed menu and composer controls", () => {
+    const html = getConversationWebviewHtml("vscode-resource://test", "nonce123");
+    expect(html).toContain('data-conv-action="toggleControlledSeedMode"');
+    expect(html).toContain('id="controlledSeedControls"');
+    expect(html).toContain('id="generationSeed"');
+    expect(html).toContain('id="generationTemperature"');
+    expect(html).toContain('type: "setGenerationSeed"');
+    expect(html).toContain('type: "setGenerationTemperature"');
+    expect(html).toContain("payload.generationSeed");
+  });
+
 });

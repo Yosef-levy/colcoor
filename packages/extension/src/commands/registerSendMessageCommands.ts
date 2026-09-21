@@ -21,11 +21,18 @@ import {
   resolveProviderSlashCapabilities,
 } from "./slash";
 import { CURSOR_CLI_MODE_ASK } from "../agent/cursorCliMode";
+import {
+  controlledSeedUnavailableReason,
+  parseControlledSeed,
+  readControlledSeedByConversationMap,
+  readControlledSeedForConversation,
+} from "../conversation/conversationControlledSeed";
 
 export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.Disposable[] {
   const {
     api,
     agent,
+    context,
     conversationPanel,
     pickConversationInteractively,
     notifyUserTurnOutcomeAndSyncConversationPanel,
@@ -93,6 +100,32 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
         });
         const privateBranch = isPrivateBranchFromPrivacyPick(privacyPick);
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+        const controlled = readControlledSeedForConversation(
+          readControlledSeedByConversationMap(context.workspaceState),
+          convId,
+        );
+        const generationForMode = (
+          mode: "ask" | "plan" | "agent",
+        ): { generationSeed?: number; generationTemperature?: number } | undefined => {
+          if (!controlled.enabled) return {};
+          const unavailable = controlledSeedUnavailableReason(resolveProviderId(), mode);
+          if (unavailable) {
+            void vscode.window.showWarningMessage(`Colcoor: ${unavailable}`);
+            return undefined;
+          }
+          try {
+            const parsed = parseControlledSeed(controlled.seed, controlled.temperature);
+            return {
+              generationSeed: parsed.seed,
+              generationTemperature: parsed.temperature,
+            };
+          } catch (error) {
+            void vscode.window.showWarningMessage(
+              `Colcoor: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return undefined;
+          }
+        };
         try {
           if (normalized.startsWith("/")) {
             const providerId = resolveProviderId();
@@ -140,6 +173,8 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
                   void vscode.window.showInformationMessage(slash.message ?? "Done.");
                   return;
                 }
+                const generation = generationForMode(slash.patch.cliMode ?? CURSOR_CLI_MODE_ASK);
+                if (!generation) return;
                 const result = await runColcoorUserTurn(
                   api,
                   agent,
@@ -151,12 +186,15 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
                     ...(slash.patch.privateBranch || privateBranch ? { privateBranch: true } : {}),
                     ...(slash.patch.cliMode ? { cliMode: slash.patch.cliMode } : {}),
                     ...(slash.patch.cliModel ? { cliModel: slash.patch.cliModel } : {}),
+                    ...generation,
                   },
                 );
                 await notifyUserTurnOutcomeAndSyncConversationPanel(result);
                 return;
               }
               if (slash.action === "provider") {
+                const generation = generationForMode(CURSOR_CLI_MODE_ASK);
+                if (!generation) return;
                 const result = await runColcoorUserTurn(
                   api,
                   agent,
@@ -168,6 +206,7 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
                     ...(privateBranch ? { privateBranch: true } : {}),
                     slashMeta: slash.slashMeta,
                     providerSlashCommand: slash.userMessage,
+                    ...generation,
                   },
                 );
                 await notifyUserTurnOutcomeAndSyncConversationPanel(result);
@@ -175,6 +214,8 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
               }
             }
           }
+          const generation = generationForMode(CURSOR_CLI_MODE_ASK);
+          if (!generation) return;
           const result = await runColcoorUserTurn(
             api,
             agent,
@@ -184,6 +225,7 @@ export function registerSendMessageCommands(deps: ColcoorExtensionDeps): vscode.
             workspaceRoot,
             {
               ...(privateBranch ? { privateBranch: true } : {}),
+              ...generation,
             },
           );
           await notifyUserTurnOutcomeAndSyncConversationPanel(result);
