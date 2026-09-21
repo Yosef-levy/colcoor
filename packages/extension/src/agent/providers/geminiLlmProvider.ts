@@ -1,10 +1,12 @@
 import {
+  FunctionCallingConfigMode,
   GoogleGenAI,
   Type,
   type Content,
   type FunctionCall,
   type Part,
   type Tool,
+  type ToolConfig,
   type UsageMetadata,
 } from "@google/genai";
 import * as vscode from "vscode";
@@ -24,7 +26,9 @@ import { executeWorkspaceReadFile } from "./workspaceReadFileTool";
 const DEFAULT_MAX_TOKENS = 8192;
 const MAX_TOOL_ROUNDS = 8;
 const ASK_SYSTEM_ADDENDUM =
-  "You may call list_files and read_file for read-only workspace access, plus Google Search and URL context. Use list_files before guessing workspace paths.";
+  "You may call list_files and read_file for read-only workspace access, plus Google Search and URL context. Use workspace tools only when the request requires workspace information. When it does, use list_files before guessing workspace paths.";
+const TOOL_BUDGET_EXHAUSTED_ADDENDUM =
+  "The workspace tool budget is exhausted. Answer now using the tool results already present in the conversation. Do not request another workspace tool.";
 
 function messageParts(message: LlmMessage): Part[] {
   const parts: Part[] = [{ text: message.content }];
@@ -41,37 +45,54 @@ export function toGeminiContents(messages: LlmMessage[]): Content[] {
   }));
 }
 
+const workspaceTool: Tool = {
+  functionDeclarations: [
+    {
+      name: "read_file",
+      description: "Read a text file under the current workspace.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          path: { type: Type.STRING, description: "Workspace-relative or absolute path" },
+        },
+        required: ["path"],
+      },
+    },
+    {
+      name: "list_files",
+      description: "List a bounded tree under a workspace directory.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          path: { type: Type.STRING, description: "Workspace-relative directory" },
+          depth: { type: Type.NUMBER, description: "Depth from 0 to 4" },
+          max_entries: { type: Type.NUMBER, description: "Entry cap from 1 to 1000" },
+        },
+      },
+    },
+  ],
+};
+
 const tools: Tool[] = [
   { googleSearch: {} },
   { urlContext: {} },
-  {
-    functionDeclarations: [
-      {
-        name: "read_file",
-        description: "Read a text file under the current workspace.",
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            path: { type: Type.STRING, description: "Workspace-relative or absolute path" },
-          },
-          required: ["path"],
-        },
-      },
-      {
-        name: "list_files",
-        description: "List a bounded tree under a workspace directory.",
-        parameters: {
-          type: Type.OBJECT,
-          properties: {
-            path: { type: Type.STRING, description: "Workspace-relative directory" },
-            depth: { type: Type.NUMBER, description: "Depth from 0 to 4" },
-            max_entries: { type: Type.NUMBER, description: "Entry cap from 1 to 1000" },
-          },
-        },
-      },
-    ],
-  },
+  workspaceTool,
 ];
+
+/** Required when Gemini combines hosted tools (Search/URL Context) with function calling. */
+export const GEMINI_ASK_TOOL_CONFIG = {
+  functionCallingConfig: {
+    mode: FunctionCallingConfigMode.VALIDATED,
+  },
+  includeServerSideToolInvocations: true,
+} satisfies ToolConfig;
+
+/** Force the bounded loop's final pass to synthesize text from existing results. */
+export const GEMINI_ASK_FINAL_TOOL_CONFIG = {
+  functionCallingConfig: {
+    mode: FunctionCallingConfigMode.NONE,
+  },
+} satisfies ToolConfig;
 
 function stringArg(call: FunctionCall, name: string): string {
   const value = call.args?.[name];
@@ -81,6 +102,37 @@ function stringArg(call: FunctionCall, name: string): string {
 function numberArg(call: FunctionCall, name: string): number | undefined {
   const value = call.args?.[name];
   return typeof value === "number" ? value : undefined;
+}
+
+function summarizeFunctionCall(call: FunctionCall): string {
+  const name = call.name || "(unnamed)";
+  const path = stringArg(call, "path");
+  return path ? `${name}(${JSON.stringify(path)})` : name;
+}
+
+function partKind(part: Part): string {
+  if (part.functionCall) return `functionCall:${part.functionCall.name || "(unnamed)"}`;
+  if (part.functionResponse) return `functionResponse:${part.functionResponse.name || "(unnamed)"}`;
+  if (part.toolCall) return "serverToolCall";
+  if (part.toolResponse) return "serverToolResponse";
+  if (part.text) return part.thought ? "thought" : "text";
+  return "other";
+}
+
+function synthesisContext(parts: Part[]): string[] {
+  const lines: string[] = [];
+  for (const part of parts) {
+    if (part.text && !part.thought) {
+      lines.push(`Assistant draft: ${part.text}`);
+    } else if (part.functionResponse) {
+      lines.push(
+        `Workspace tool result (${part.functionResponse.name || "unknown"}): ${JSON.stringify(part.functionResponse.response)}`,
+      );
+    } else if (part.toolResponse) {
+      lines.push(`Server tool result: ${JSON.stringify(part.toolResponse.response)}`);
+    }
+  }
+  return lines;
 }
 
 async function runFunctionCall(workspaceRoot: string, call: FunctionCall): Promise<Part> {
@@ -137,6 +189,8 @@ export class GeminiLlmProvider implements AgentBackend {
     let usage: UsageMetadata | undefined;
     let stopReason: string | null = null;
     let rounds = 0;
+    const toolTrace: string[] = [];
+    const completedToolContext: string[] = [];
 
     try {
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -150,6 +204,7 @@ export class GeminiLlmProvider implements AgentBackend {
             systemInstruction: `${input.llmRequest.system}\n\n${ASK_SYSTEM_ADDENDUM}`,
             maxOutputTokens: DEFAULT_MAX_TOKENS,
             tools,
+            toolConfig: GEMINI_ASK_TOOL_CONFIG,
             abortSignal: input.signal,
           },
         });
@@ -186,12 +241,77 @@ export class GeminiLlmProvider implements AgentBackend {
         }
 
         contents.push({ role: "model", parts: responseParts });
+        completedToolContext.push(...synthesisContext(responseParts));
+        toolTrace.push(`r${round + 1}:${calls.map(summarizeFunctionCall).join(",")}`);
+        const functionResponses = await Promise.all(
+          calls.map((call) => runFunctionCall(input.workspaceRoot, call)),
+        );
+        completedToolContext.push(...synthesisContext(functionResponses));
         contents.push({
           role: "user",
-          parts: await Promise.all(calls.map((call) => runFunctionCall(input.workspaceRoot, call))),
+          parts: functionResponses,
         });
       }
-      throw new Error(`Gemini ask tool loop exceeded ${MAX_TOOL_ROUNDS} rounds.`);
+      // A bounded tool loop must still give the model a chance to synthesize an answer.
+      // Use a clean history without structured calls: Gemini may continue function calling from
+      // structured history even when the final request sets function calling to NONE.
+      const finalPartKinds: string[] = [];
+      const synthesisContents = toGeminiContents(input.llmRequest.messages);
+      synthesisContents.push({
+        role: "user",
+        parts: [
+          {
+            text:
+              "Use the following completed tool results to answer the request now. No additional tools are available.\n\n" +
+              completedToolContext.join("\n\n"),
+          },
+        ],
+      });
+      const finalStream = await ai.models.generateContentStream({
+        model,
+        contents: synthesisContents,
+        config: {
+          systemInstruction: `${input.llmRequest.system}\n\n${TOOL_BUDGET_EXHAUSTED_ADDENDUM}`,
+          maxOutputTokens: DEFAULT_MAX_TOKENS,
+          toolConfig: GEMINI_ASK_FINAL_TOOL_CONFIG,
+          abortSignal: input.signal,
+        },
+      });
+      for await (const chunk of finalStream) {
+        usage = chunk.usageMetadata ?? usage;
+        const candidate = chunk.candidates?.[0];
+        if (candidate?.finishReason) stopReason = String(candidate.finishReason);
+        for (const part of candidate?.content?.parts ?? []) {
+          finalPartKinds.push(partKind(part));
+          if (part.text && !part.thought) {
+            text += part.text;
+            input.onTextDelta?.(text);
+          }
+        }
+      }
+
+      const resolved = normalizePersistedUserInputText(text);
+      if (!resolved) {
+        const trace = toolTrace.join("; ");
+        const finalSummary = finalPartKinds.length ? finalPartKinds.join(",") : "no parts";
+        throw new Error(
+          `Gemini produced no answer after ${MAX_TOOL_ROUNDS} tool rounds. ` +
+            `Calls: ${trace || "none"}. Final: ${stopReason || "no finish reason"}; ${finalSummary}.`,
+        );
+      }
+      return {
+        text: resolved,
+        stub: "none",
+        providerId: "gemini",
+        cliModelId: model,
+        providerUsage: providerUsageFromGemini(usage, {
+          mode: normalizeProviderMode(input.cliMode),
+          model,
+          durationMs: Date.now() - startedAt,
+          stopReason,
+          numTurns: rounds + 1,
+        }),
+      };
     } catch (error) {
       if (input.signal?.aborted || isAbortError(error)) {
         return {
