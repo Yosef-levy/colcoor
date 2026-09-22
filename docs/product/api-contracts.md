@@ -462,15 +462,32 @@ and content already present exactly on the root is omitted.
 | **200** | JSON `{ "restored_count": <int> }` |
 | **403** | not a member |
 | **404** | group not found, wrong deleter, or undo window expired |
+| **422** | this batch’s parent branch is still deleted (a later ancestor delete). Undo the ancestor batch first, or use **§7.7** with **`include_deleted_ancestors=true`**. |
+
+### 7.6a `GET /api/v1/conversations/{conversation_id}/events/deleted-branches`
+
+**Purpose:** List restorable **message-branch** roots for a **live** conversation (**owner** or **editor**). One row per **`deletion_group_id`**: the cut-edge event whose parent is not in that group (not every deleted message). Omits conversation-root batches (**§3.4**) and private roots the caller cannot see.
+
+Each row includes **`ancestor_deletion_group_ids`**: still-deleted ancestor batches. Restoring that row without **`include_deleted_ancestors`** (**§7.7**) returns **422**.
+
+| **200** | JSON array of `DeletedBranchOut`: `event_id`, `deletion_group_id`, `parent_event_id`, `kind`, `actor_type`, `content_text`, `checkpoint_label`, `deleted_at`, `event_count`, `ancestor_deletion_group_ids` |
+| **403** | not a member, or **viewer** |
+| **404** | conversation missing or owner-soft-deleted |
+
+**Order:** **`deleted_at`** descending.
 
 ### 7.7 `POST /api/v1/conversations/{conversation_id}/events/{event_id}/restore-subtree`
 
 **Purpose:** Clear soft-delete for a whole branch (**owner** or **editor**). The anchor row must have **`deletion_group_id`** set (same batch as **`DELETE …/events/{id}`** or **§3.4** **`DELETE …/conversations/{id}`** on the graph root); all events in the conversation with that group and a non-null **`deleted_at`** are restored, and the conversation row is cleared when it shares that group.
 
+The check is on the **group root**, so **any** event id in the batch is treated the same. If that root’s parent is still deleted (nested delete: leaf batch then ancestor batch), the request **MUST** return **422** unless query **`include_deleted_ancestors=true`**, which also restores those ancestor batches (after the client has warned the user).
+
+**Query:** `include_deleted_ancestors` (boolean, optional, default **false**).
+
 | **200** | JSON `{ "restored_count": <int> }` |
 | **403** | viewer, or event not visible (`visible_to`) |
 | **404** | conversation/event missing |
-| **422** | anchor is not soft-deleted, or **`deletion_group_id`** is null |
+| **422** | anchor is not soft-deleted, **`deletion_group_id`** is null, or a parent branch is still deleted and **`include_deleted_ancestors`** is not true |
 
 ---
 

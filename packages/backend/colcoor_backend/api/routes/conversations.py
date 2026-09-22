@@ -36,6 +36,7 @@ from colcoor_backend.api.schemas import (
     RootNotesCreateBody,
     SetActiveBody,
     EventSubtreeSoftDeleteOut,
+    DeletedBranchOut,
     RestoreSubtreeOut,
     TreeResponse,
     UndoEventDeletionBody,
@@ -73,6 +74,7 @@ from colcoor_backend.services.graph import (
     undo_soft_delete_by_deletion_group,
     update_conversation_member_role,
     update_note_content,
+    list_deleted_event_branches,
 )
 from colcoor_backend.services.conversation_images import (
     delete_conversation_image,
@@ -1074,6 +1076,39 @@ async def delete_event_subtree(
     )
 
 
+@router.get(
+    "/{conversation_id}/events/deleted-branches",
+    response_model=list[DeletedBranchOut],
+)
+async def list_deleted_branches(
+    session: DbSession,
+    user_id: CurrentUserId,
+    conversation_id: UUID,
+) -> list[DeletedBranchOut]:
+    """Soft-deleted message-branch roots (one per ``deletion_group_id``) the caller can restore."""
+    try:
+        rows = await list_deleted_event_branches(session, conversation_id, user_id)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    return [
+        DeletedBranchOut(
+            event_id=b.event_id,
+            deletion_group_id=b.deletion_group_id,
+            parent_event_id=b.parent_event_id,
+            kind=b.kind,
+            actor_type=b.actor_type,
+            content_text=b.content_text,
+            checkpoint_label=b.checkpoint_label,
+            deleted_at=b.deleted_at,
+            event_count=b.event_count,
+            ancestor_deletion_group_ids=list(b.ancestor_deletion_group_ids),
+        )
+        for b in rows
+    ]
+
+
 @router.post(
     "/{conversation_id}/events/undo-delete",
     response_model=RestoreSubtreeOut,
@@ -1099,6 +1134,8 @@ async def undo_event_deletion(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
     await session.commit()
     return RestoreSubtreeOut(restored_count=n)
 
@@ -1112,6 +1149,7 @@ async def restore_event_subtree(
     user_id: CurrentUserId,
     conversation_id: UUID,
     event_id: UUID,
+    include_deleted_ancestors: Annotated[bool, Query()] = False,
 ) -> RestoreSubtreeOut:
     """Clear soft-delete for a subtree (owner/editor); anchor must carry ``deletion_group_id``."""
     try:
@@ -1120,6 +1158,7 @@ async def restore_event_subtree(
             conversation_id=conversation_id,
             user_id=user_id,
             event_id=event_id,
+            include_deleted_ancestors=include_deleted_ancestors,
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden") from None

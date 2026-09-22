@@ -36,6 +36,7 @@ The extension SHOULD enforce these rules in **central command handlers**, not in
 | Soft-delete main-thread subtree (`DELETE …/events/{id}`)   | Allow                 | Allow  | Deny   |
 | Undo own recent subtree delete (`POST …/events/undo-delete`) | Own batch only      | Own batch only | Deny |
 | Restore soft-deleted subtree (`POST …/events/{id}/restore-subtree`) | Allow        | Allow  | Deny   |
+| List deleted message branches (`GET …/events/deleted-branches`) | Allow        | Allow  | Deny   |
 | Restore owner-deleted conversation (`POST …/restore-deleted`) | Allow             | Allow  | Deny   |
 | Add note on visible event                                 | Allow                 | Allow  | Deny   |
 | Edit note                                                 | Allow                 | Allow  | Deny   |

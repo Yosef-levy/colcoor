@@ -30,6 +30,10 @@ import type {
 } from "../api/client";
 import { confirmDestructiveActionByTypingDelete } from "./destructiveDeleteConfirm";
 import { countSubtreeNodes, SUBTREE_TYPED_DELETE_THRESHOLD } from "./destructiveDeleteCount";
+import {
+  confirmRestoreDeletedAncestors,
+  pickDeletedMessageBranchInteractively,
+} from "./pickDeletedMessageBranch";
 import { getColcoorOutputLog } from "../util/colcoorOutputLog";
 import { reportPanelApiError } from "../util/reportPanelApiError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
@@ -4498,21 +4502,20 @@ export function createConversationPanelController(
       void vscode.window.showWarningMessage("Colcoor: viewers cannot restore a message branch.");
       return;
     }
-    const raw = await vscode.window.showInputBox({
-      title: "Colcoor — restore message branch",
-      prompt: "Paste the event id (UUID) of any message in the soft-deleted branch.",
-      ignoreFocusOut: true,
-    });
-    if (raw === undefined) {
+    const branch = await pickDeletedMessageBranchInteractively(api, cid);
+    if (!branch) {
       return;
     }
-    const eid = normalizeOptionalGraphEventId(raw.trim());
-    if (eid === undefined) {
-      void vscode.window.showWarningMessage("Colcoor: that is not a valid event id.");
-      return;
+    let includeDeletedAncestors = false;
+    if (branch.ancestor_deletion_group_ids.length > 0) {
+      const ok = await confirmRestoreDeletedAncestors(branch.ancestor_deletion_group_ids.length);
+      if (!ok) {
+        return;
+      }
+      includeDeletedAncestors = true;
     }
     try {
-      const r = await api.restoreEventSubtree(cid, eid);
+      const r = await api.restoreEventSubtree(cid, branch.event_id, { includeDeletedAncestors });
       void vscode.window.setStatusBarMessage(
         `Colcoor: restored ${r.restored_count} message(s).`,
         3500,

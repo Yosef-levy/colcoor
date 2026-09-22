@@ -42,6 +42,7 @@
 | AppendUserMessage / AppendAssistantMessage | POST | `/conversations/{id}/append-event` |
 | SoftDeleteEventSubtree | DELETE | `/conversations/{id}/events/{event_id}` |
 | UndoEventSubtreeDelete | POST | `/conversations/{id}/events/undo-delete` |
+| ListDeletedEventBranches | GET | `/conversations/{id}/events/deleted-branches` |
 | RestoreEventSubtree | POST | `/conversations/{id}/events/{event_id}/restore-subtree` |
 | SetEventDisplayTitle | PATCH | `/conversations/{id}/events/{event_id}/display-title` *recommended* |
 | ListNotes | GET | `/conversations/{id}/notes` |
@@ -208,7 +209,8 @@ Exchange an external IdP token for an API bearer token.
 |--------|------|-----------|
 | DELETE | `…/events/{event_id}` | SoftDeleteEventSubtree |
 | POST | `…/events/undo-delete` | UndoEventSubtreeDelete — `{ deletion_group_id }` |
-| POST | `…/events/{event_id}/restore-subtree` | RestoreEventSubtree |
+| GET | `…/events/deleted-branches` | ListDeletedEventBranches |
+| POST | `…/events/{event_id}/restore-subtree` | RestoreEventSubtree — query `include_deleted_ancestors` |
 
 ---
 

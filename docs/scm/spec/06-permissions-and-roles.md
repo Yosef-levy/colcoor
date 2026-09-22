@@ -46,6 +46,7 @@ Stored per `(conversation_id, user_id)` as **`role`**:
 | DeletePrivateDraft | Allow | Allow | Allow |
 | SoftDeleteEventSubtree | Allow | Allow | Deny |
 | UndoEventSubtreeDelete | Own batch | Own batch | Deny |
+| ListDeletedEventBranches | Allow | Allow | Deny |
 | RestoreEventSubtree | Allow | Allow | Deny |
 | RestoreConversation | Allow | Allow | Deny |
 | CreateNote / UpdateNote / DeleteNote | Allow | Allow | Deny |

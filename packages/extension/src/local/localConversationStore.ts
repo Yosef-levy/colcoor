@@ -17,12 +17,14 @@ import type {
   ConversationMember,
   ConversationSummary,
   ConversationUserStateOut,
+  DeletedBranchOut,
   EventSubtreeSoftDeleteOut,
   GraphEventNode,
   MeOut,
   MePatchBody,
   MemberInviteSearchCandidate,
   NoteOut,
+  RestoreEventSubtreeOptions,
   RestoreSubtreeOut,
   SetConversationActiveBody,
   SideChatMessageOut,
@@ -79,6 +81,13 @@ type StoredNote = {
   created_at: string;
   updated_at: string;
 };
+
+const PARENT_BRANCH_STILL_DELETED =
+  "cannot restore this branch while an ancestor branch is still deleted; retry with include_deleted_ancestors=true to restore ancestor branches too";
+const PARENT_BRANCH_STILL_DELETED_UNDO =
+  "cannot undo this deletion while an ancestor branch is still deleted";
+const ANCESTOR_MISSING_DELETION_GROUP =
+  "cannot restore: an ancestor is deleted without a deletion_group_id";
 
 type StoredImageIndexEntry = {
   id: string;
@@ -751,6 +760,109 @@ export class LocalConversationStore implements ColcoorClient {
     return ids;
   }
 
+  private deletionGroupMembers(events: readonly StoredEvent[], deletionGroupId: string): StoredEvent[] {
+    return events.filter((e) => e.deleted_at && e.deletion_group_id === deletionGroupId);
+  }
+
+  private canonicalDeletionGroupRoot(members: readonly StoredEvent[]): StoredEvent | undefined {
+    if (members.length === 0) {
+      return undefined;
+    }
+    const memberIds = new Set(members.map((e) => e.id));
+    const roots = members.filter(
+      (e) => e.parent_event_id === null || !memberIds.has(e.parent_event_id),
+    );
+    if (roots.length === 0) {
+      return undefined;
+    }
+    return [...roots].sort((a, b) => {
+      const t = a.created_at.localeCompare(b.created_at);
+      return t !== 0 ? t : a.id.localeCompare(b.id);
+    })[0];
+  }
+
+  private ancestorDeletionGroupIds(
+    events: readonly StoredEvent[],
+    startParentId: string | null,
+  ): string[] {
+    const byId = new Map(events.map((e) => [e.id, e]));
+    const out: string[] = [];
+    const seen = new Set<string>();
+    let curId = startParentId;
+    while (curId) {
+      const cur = byId.get(curId);
+      if (!cur || !cur.deleted_at) {
+        break;
+      }
+      if (!cur.deletion_group_id) {
+        throw new Error(ANCESTOR_MISSING_DELETION_GROUP);
+      }
+      if (!seen.has(cur.deletion_group_id)) {
+        seen.add(cur.deletion_group_id);
+        out.push(cur.deletion_group_id);
+      }
+      curId = cur.parent_event_id;
+    }
+    return out;
+  }
+
+  private nestedAncestorGroupsForDeletionGroup(
+    events: readonly StoredEvent[],
+    deletionGroupId: string,
+  ): string[] {
+    const members = this.deletionGroupMembers(events, deletionGroupId);
+    const root = this.canonicalDeletionGroupRoot(members);
+    if (!root) {
+      return [];
+    }
+    return this.ancestorDeletionGroupIds(events, root.parent_event_id);
+  }
+
+  async listDeletedEventBranches(conversationId: string): Promise<DeletedBranchOut[]> {
+    await this.loadLiveMeta(conversationId);
+    const events = await this.loadEvents(conversationId);
+    const groups = new Map<string, StoredEvent[]>();
+    for (const e of events) {
+      if (!e.deleted_at || !e.deletion_group_id) {
+        continue;
+      }
+      const arr = groups.get(e.deletion_group_id);
+      if (arr) {
+        arr.push(e);
+      } else {
+        groups.set(e.deletion_group_id, [e]);
+      }
+    }
+    const out: DeletedBranchOut[] = [];
+    for (const [gid, members] of groups) {
+      const root = this.canonicalDeletionGroupRoot(members);
+      if (!root || !root.deleted_at || root.parent_event_id === null) {
+        continue;
+      }
+      let ancestorIds: string[];
+      try {
+        ancestorIds = this.ancestorDeletionGroupIds(events, root.parent_event_id);
+      } catch {
+        continue;
+      }
+      out.push({
+        event_id: root.id,
+        deletion_group_id: gid,
+        parent_event_id: root.parent_event_id,
+        kind: root.kind,
+        actor_type: root.actor_type,
+        content_text: root.content_text,
+        checkpoint_label: root.checkpoint_label ?? null,
+        deleted_at: root.deleted_at,
+        event_count: members.length,
+        ancestor_deletion_group_ids: ancestorIds,
+      });
+    }
+    out.sort((a, b) => a.event_id.localeCompare(b.event_id));
+    out.sort((a, b) => b.deleted_at.localeCompare(a.deleted_at));
+    return out;
+  }
+
   async deleteEventSubtree(
     conversationId: string,
     eventId: string,
@@ -794,6 +906,10 @@ export class LocalConversationStore implements ColcoorClient {
     conversationId: string,
     deletionGroupId: string,
   ): Promise<RestoreSubtreeOut> {
+    const events = await this.loadEvents(conversationId);
+    if (this.nestedAncestorGroupsForDeletionGroup(events, deletionGroupId).length > 0) {
+      throw new Error(PARENT_BRANCH_STILL_DELETED_UNDO);
+    }
     const restored = await this.restoreByDeletionGroup(conversationId, deletionGroupId);
     if (restored === 0) {
       throw new Error("deletion group not found or undo window expired");
@@ -804,6 +920,7 @@ export class LocalConversationStore implements ColcoorClient {
   async restoreEventSubtree(
     conversationId: string,
     eventId: string,
+    options?: RestoreEventSubtreeOptions,
   ): Promise<RestoreSubtreeOut> {
     const events = await this.loadEvents(conversationId);
     const anchor = events.find((e) => e.id === eventId);
@@ -816,7 +933,22 @@ export class LocalConversationStore implements ColcoorClient {
     if (!anchor.deletion_group_id) {
       throw new Error("subtree has no deletion_group_id; cannot restore");
     }
-    const restored = await this.restoreByDeletionGroup(conversationId, anchor.deletion_group_id);
+    const ancestorGids = this.nestedAncestorGroupsForDeletionGroup(events, anchor.deletion_group_id);
+    if (ancestorGids.length > 0 && !options?.includeDeletedAncestors) {
+      throw new Error(PARENT_BRANCH_STILL_DELETED);
+    }
+    const groups: string[] = [];
+    const seen = new Set<string>();
+    for (const gid of [...ancestorGids, anchor.deletion_group_id]) {
+      if (!seen.has(gid)) {
+        seen.add(gid);
+        groups.push(gid);
+      }
+    }
+    let restored = 0;
+    for (const gid of groups) {
+      restored += await this.restoreByDeletionGroup(conversationId, gid);
+    }
     return { restored_count: restored };
   }
 

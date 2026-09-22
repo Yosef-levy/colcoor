@@ -1166,6 +1166,87 @@ def test_soft_delete_event_subtree_http(monkeypatch: pytest.MonkeyPatch, postgre
     get_settings.cache_clear()
 
 
+def test_deleted_branches_list_and_nested_restore(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
+    """List group roots only; nested restore is blocked for every UUID unless ancestors are included."""
+    secret = "x" * 40
+    monkeypatch.setenv("DATABASE_URL", postgres_url)
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setenv("COLCOOR_ENV", "development")
+    get_settings.cache_clear()
+    token = asyncio.run(_seed_user_and_mint_jwt(postgres_url))
+    auth = {"Authorization": f"Bearer {token}"}
+
+    def _append(client: TestClient, cid: str, parent_id: str, kind: str, content: str) -> str:
+        r = client.post(
+            f"/api/v1/conversations/{cid}/append-event",
+            headers=_append_event_headers(auth),
+            json={
+                "kind": kind,
+                "parent_event_id": parent_id,
+                "content": content,
+                "author": "end_user" if kind == "user_input" else "cursor_agent",
+                "private_branch": False,
+            },
+        )
+        assert r.status_code == 200, r.text
+        return r.json()["id"]
+
+    with TestClient(create_app()) as client:
+        r = client.post("/api/v1/conversations", headers=auth, json={"title": "nested-del"})
+        assert r.status_code == 200, r.text
+        cid = r.json()["id"]
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        root_id = next(e["id"] for e in r.json()["events"] if e["parent_event_id"] is None)
+
+        outer_id = _append(client, cid, root_id, "user_input", "outer")
+        outer_asst_id = _append(client, cid, outer_id, "assistant_output", "outer reply")
+        inner_id = _append(client, cid, outer_asst_id, "user_input", "inner")
+        inner_asst_id = _append(client, cid, inner_id, "assistant_output", "inner reply")
+
+        r = client.delete(f"/api/v1/conversations/{cid}/events/{inner_id}", headers=auth)
+        assert r.status_code == 200, r.text
+        inner_gid = r.json()["deletion_group_id"]
+        r = client.delete(f"/api/v1/conversations/{cid}/events/{outer_id}", headers=auth)
+        assert r.status_code == 200, r.text
+        outer_gid = r.json()["deletion_group_id"]
+
+        r = client.get(f"/api/v1/conversations/{cid}/events/deleted-branches", headers=auth)
+        assert r.status_code == 200, r.text
+        rows = r.json()
+        ids = {row["event_id"] for row in rows}
+        assert ids == {inner_id, outer_id}
+        inner_row = next(row for row in rows if row["event_id"] == inner_id)
+        assert inner_row["ancestor_deletion_group_ids"] == [outer_gid]
+        outer_row = next(row for row in rows if row["event_id"] == outer_id)
+        assert outer_row["ancestor_deletion_group_ids"] == []
+
+        r = client.post(f"/api/v1/conversations/{cid}/events/{inner_id}/restore-subtree", headers=auth)
+        assert r.status_code == 422, r.text
+        r = client.post(f"/api/v1/conversations/{cid}/events/{inner_asst_id}/restore-subtree", headers=auth)
+        assert r.status_code == 422, r.text
+        r = client.post(
+            f"/api/v1/conversations/{cid}/events/undo-delete",
+            headers=auth,
+            json={"deletion_group_id": inner_gid},
+        )
+        assert r.status_code == 422, r.text
+
+        r = client.post(
+            f"/api/v1/conversations/{cid}/events/{inner_asst_id}/restore-subtree",
+            headers=auth,
+            params={"include_deleted_ancestors": True},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["restored_count"] == 4
+        r = client.get(f"/api/v1/conversations/{cid}/tree", headers=auth)
+        live = {e["id"] for e in r.json()["events"]}
+        assert {outer_id, outer_asst_id, inner_id, inner_asst_id}.issubset(live)
+        r = client.get(f"/api/v1/conversations/{cid}/events/deleted-branches", headers=auth)
+        assert r.json() == []
+
+    get_settings.cache_clear()
+
+
 def test_patch_me_http(monkeypatch: pytest.MonkeyPatch, postgres_url: str) -> None:
     """PATCH /me updates display_name and avatar_url (api-contracts §9.1)."""
     secret = "x" * 40

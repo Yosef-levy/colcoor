@@ -1894,7 +1894,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" data-conv-action="rename">Rename…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="togglePin">Pin</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="toggleControlledSeedMode">Controlled seed mode</button>
-            <button type="button" class="menu-item" role="menuitem" data-conv-action="restoreMessageBranch" title="Restore a soft-deleted message branch by event id">Restore message branch (soft-deleted)…</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="restoreMessageBranch" title="Restore a soft-deleted message branch">Restore message branch (soft-deleted)…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="deleteConversation" title="Delete this conversation">Delete conversation…</button>
           </div>
         </div>

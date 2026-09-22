@@ -54,7 +54,7 @@ There are **no** other main-thread event kinds in this product scope.
 - **Appending** with **`parent_event_id`** pointing at a soft-deleted anchor **inherits** the parent’s **`deleted_at`** on the new row so **late or racing writes** still land in the hidden subtree.
 - The **conversation root** (the single **`parent_event_id IS NULL`** non-deleted row) **MUST NOT** be soft-deleted.
 - **Retention:** the server **may** permanently delete soft-deleted rows after a configurable age (default **14 days**). Dependent rows with **`ON DELETE CASCADE`** (e.g. **notes**, **stars**) disappear with the event; **`active_event_id`** is repointed to the live root before hard delete.
-- **Deletion batch:** each subtree delete assigns a shared **`deletion_group_id`** and records **`deleted_by_user_id`**. The same user may **undo** within a short window (default **5 minutes**) via the API. **Owner** and **editor** may **restore** later by **`POST …/events/{anchor}/restore-subtree`**, which clears soft-delete for every row still sharing that anchor’s **`deletion_group_id`**.
+- **Deletion batch:** each subtree delete assigns a shared **`deletion_group_id`** and records **`deleted_by_user_id`**. The same user may **undo** within a short window (default **5 minutes**) via the API. **Owner** and **editor** may **restore** later by **`POST …/events/{anchor}/restore-subtree`**, which clears soft-delete for every row still sharing that anchor’s **`deletion_group_id`**. **`GET …/events/deleted-branches`** lists one **root** per batch (the cut-edge whose parent is not in the group). If a later ancestor delete left that root’s parent deleted, restore of **any** id in the inner batch is **422** unless **`include_deleted_ancestors=true`**.
 
 ---
 
