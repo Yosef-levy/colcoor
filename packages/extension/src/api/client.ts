@@ -74,6 +74,25 @@ export type RestoreSubtreeOut = {
   restored_count: number;
 };
 
+export type RestoreEventSubtreeOptions = {
+  /** Also restore still-deleted ancestor batches (nested delete). Default false — API returns 422. */
+  includeDeletedAncestors?: boolean;
+};
+
+/** One restorable message-branch root from GET …/events/deleted-branches. */
+export type DeletedBranchOut = {
+  event_id: string;
+  deletion_group_id: string;
+  parent_event_id: string | null;
+  kind: string;
+  actor_type: string;
+  content_text: string | null;
+  checkpoint_label: string | null;
+  deleted_at: string;
+  event_count: number;
+  ancestor_deletion_group_ids: string[];
+};
+
 export type ConversationMember = {
   user_id: string;
   role: "owner" | "editor" | "viewer";
@@ -295,7 +314,12 @@ export interface ColcoorClient {
   deleteStar(conversationId: string, eventId: string): Promise<void>;
   deleteEventSubtree(conversationId: string, eventId: string): Promise<EventSubtreeSoftDeleteOut>;
   undoEventDeletion(conversationId: string, deletionGroupId: string): Promise<RestoreSubtreeOut>;
-  restoreEventSubtree(conversationId: string, eventId: string): Promise<RestoreSubtreeOut>;
+  listDeletedEventBranches(conversationId: string): Promise<DeletedBranchOut[]>;
+  restoreEventSubtree(
+    conversationId: string,
+    eventId: string,
+    options?: RestoreEventSubtreeOptions,
+  ): Promise<RestoreSubtreeOut>;
   listNotes(conversationId: string): Promise<NoteOut[]>;
   createNote(
     conversationId: string,
@@ -736,10 +760,27 @@ export class ColcoorApiClient implements ColcoorClient {
     return JSON.parse(t) as RestoreSubtreeOut;
   }
 
+  /** Soft-deleted message-branch roots (one per deletion_group_id). */
+  async listDeletedEventBranches(conversationId: string): Promise<DeletedBranchOut[]> {
+    const res = await this.fetchApi(`/conversations/${conversationId}/events/deleted-branches`, {
+      method: "GET",
+    });
+    const t = await res.text();
+    this.assertOkResponse(res, t, "list deleted message branches");
+    return JSON.parse(t) as DeletedBranchOut[];
+  }
+
   /** Restore a soft-deleted subtree by anchor event id (owner/editor). */
-  async restoreEventSubtree(conversationId: string, eventId: string): Promise<RestoreSubtreeOut> {
+  async restoreEventSubtree(
+    conversationId: string,
+    eventId: string,
+    options?: RestoreEventSubtreeOptions,
+  ): Promise<RestoreSubtreeOut> {
+    const qs = options?.includeDeletedAncestors
+      ? "?include_deleted_ancestors=true"
+      : "";
     const res = await this.fetchApi(
-      `/conversations/${conversationId}/events/${eventId}/restore-subtree`,
+      `/conversations/${conversationId}/events/${eventId}/restore-subtree${qs}`,
       { method: "POST" },
     );
     const t = await res.text();

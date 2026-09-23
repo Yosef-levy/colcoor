@@ -521,3 +521,21 @@ class RestoreSubtreeOut(BaseModel):
     """Response for undo-delete and restore-subtree."""
 
     restored_count: int = Field(..., ge=0)
+
+
+class DeletedBranchOut(BaseModel):
+    """One restorable message branch (group root) from GET …/events/deleted-branches."""
+
+    event_id: UUID
+    deletion_group_id: UUID
+    parent_event_id: UUID | None
+    kind: str
+    actor_type: str
+    content_text: str | None = None
+    checkpoint_label: str | None = None
+    deleted_at: datetime
+    event_count: int = Field(..., ge=1)
+    ancestor_deletion_group_ids: list[UUID] = Field(
+        default_factory=list,
+        description="Deletion groups of still-deleted ancestors. Restore is blocked unless include_deleted_ancestors=true.",
+    )

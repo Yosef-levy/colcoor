@@ -38,34 +38,81 @@ const ALLOWED_MATHML_TAGS = [
 
 marked.use({ gfm: true, breaks: true });
 
-function normalizeMathExpression(expr: string): string {
-  return expr.replace(/\\\\/g, "\\").trim();
+function normalizeMathExpression(expr: string, collapseEscapedBackslashes: boolean): string {
+  const trimmed = expr.trim();
+  return collapseEscapedBackslashes ? trimmed.replace(/\\\\/g, "\\") : trimmed;
 }
 
-function renderMathExpression(expr: string, displayMode: boolean): string {
+function renderMathExpression(
+  expr: string,
+  displayMode: boolean,
+  collapseEscapedBackslashes: boolean,
+): string {
+  const normalized = normalizeMathExpression(expr, collapseEscapedBackslashes);
   try {
-    const mathml = temml.renderToString(normalizeMathExpression(expr), {
+    const mathml = temml.renderToString(normalized, {
       displayMode,
       throwOnError: false,
       annotate: true,
     });
     return `<span class="${displayMode ? "math-block" : "math-inline"}">${mathml}</span>`;
   } catch {
-    const safe = sanitizeHtml(normalizeMathExpression(expr), { allowedTags: [], allowedAttributes: {} });
+    const safe = sanitizeHtml(normalized, { allowedTags: [], allowedAttributes: {} });
     return displayMode
       ? `<pre class="math-block math-fallback">${safe}</pre>`
       : `<code class="math-inline math-fallback">${safe}</code>`;
   }
 }
 
-function replaceMathDelimiters(input: string): string {
-  return input
-    .replace(/\\{1,2}\[\s*([\s\S]*?)\s*\\{1,2}\]/g, (_m, expr: string) =>
-      renderMathExpression(expr, true),
+type MathReplacement = {
+  markdown: string;
+  mathHtml: string[];
+};
+
+function replaceMathDelimiters(input: string): MathReplacement {
+  const codeSegments: string[] = [];
+  const protectedInput = input.replace(
+    /```[\s\S]*?```|~~~[\s\S]*?~~~|(`+)[^\n]*?\1/g,
+    (code) => {
+      const token = `COLCOORCODEPLACEHOLDER${codeSegments.length}END`;
+      codeSegments.push(code);
+      return token;
+    },
+  );
+  const mathHtml: string[] = [];
+  const mathToken = (
+    expr: string,
+    displayMode: boolean,
+    collapseEscapedBackslashes: boolean,
+  ): string => {
+    const token = `COLCOORMATHPLACEHOLDER${mathHtml.length}END`;
+    mathHtml.push(renderMathExpression(expr, displayMode, collapseEscapedBackslashes));
+    return token;
+  };
+
+  const withMathTokens = protectedInput
+    .replace(/\$\$\s*([\s\S]*?)\s*\$\$/g, (_m, expr: string) =>
+      mathToken(expr, true, false),
     )
-    .replace(/\\{1,2}\(([\s\S]*?)\\{1,2}\)/g, (_m, expr: string) =>
-      renderMathExpression(expr, false),
+    .replace(
+      /(^|[^\\$])\$([^\n$]*?\S)\$(?!\$)/g,
+      (match, prefix: string, expr: string) =>
+        /^\s/u.test(expr) ? match : `${prefix}${mathToken(expr, false, false)}`,
+    )
+    .replace(
+      /(\\{1,2})\[\s*([\s\S]*?)\s*\1\]/g,
+      (_m, opener: string, expr: string) => mathToken(expr, true, opener.length === 2),
+    )
+    .replace(
+      /(\\{1,2})\(([\s\S]*?)\1\)/g,
+      (_m, opener: string, expr: string) => mathToken(expr, false, opener.length === 2),
     );
+
+  const markdown = withMathTokens.replace(
+    /COLCOORCODEPLACEHOLDER(\d+)END/g,
+    (_match, index: string) => codeSegments[Number(index)] ?? "",
+  );
+  return { markdown, mathHtml };
 }
 
 function wrapCodeBlocksWithCopyButton(html: string): string {
@@ -78,7 +125,12 @@ function wrapCodeBlocksWithCopyButton(html: string): string {
 
 export function markdownToSafeHtml(markdown: string): string {
   const raw = (markdown ?? "").replace(/\r\n/g, "\n");
-  const rendered = marked.parse(replaceMathDelimiters(raw), { async: false }) as string;
+  const math = replaceMathDelimiters(raw);
+  let rendered = marked.parse(math.markdown, { async: false }) as string;
+  rendered = rendered.replace(
+    /COLCOORMATHPLACEHOLDER(\d+)END/g,
+    (_match, index: string) => math.mathHtml[Number(index)] ?? "",
+  );
   const sanitized = sanitizeHtml(rendered, {
     allowedTags: sanitizeHtml.defaults.allowedTags.concat([
       "del",

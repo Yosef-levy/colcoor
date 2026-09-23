@@ -32,7 +32,9 @@ open workspace. Applying a template writes the instantiated notes to the convers
 Local mode mirrors the backend batch semantics:
 
 - **Delete message branch** tombstones the subtree with a shared `deletion_group_id` in
-  `events.jsonl`. Immediate **Undo** (and **Restore message branch…**) clear that batch.
+  `events.jsonl`. Immediate **Undo** (and **Restore message branch…**, which lists each
+  batch’s root) clear that batch. Nested restore (inner batch under a later ancestor
+  delete) is blocked unless you confirm restoring the parent batch too.
 - **Delete conversation** tombstones every live event **and** sets `meta.json`
   `deleted_at` / `deletion_group_id` to the same group. The conversation leaves the live
   sidebar list and appears under **Recently Deleted**.

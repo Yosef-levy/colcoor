@@ -201,6 +201,66 @@ describe("LocalConversationStore", () => {
     expect(afterRestore.events.map((e) => e.id).sort()).toEqual([root.id, user.id, asst.id].sort());
   });
 
+  it("lists only deletion-group roots and blocks nested restore unless ancestors are included", async () => {
+    const conv = await store.createConversation({ title: null });
+    const root = (await store.getTree(conv.id)).events[0];
+    const outer = await store.appendEvent(conv.id, {
+      kind: "user_input",
+      parent_event_id: root.id,
+      content: "outer",
+      author: "end_user",
+    });
+    const outerAsst = await store.appendEvent(conv.id, {
+      kind: "assistant_output",
+      parent_event_id: outer.id,
+      content: "outer reply",
+      author: "cursor_agent",
+    });
+    const inner = await store.appendEvent(conv.id, {
+      kind: "user_input",
+      parent_event_id: outerAsst.id,
+      content: "inner",
+      author: "end_user",
+    });
+    const innerAsst = await store.appendEvent(conv.id, {
+      kind: "assistant_output",
+      parent_event_id: inner.id,
+      content: "inner reply",
+      author: "cursor_agent",
+    });
+
+    const innerDel = await store.deleteEventSubtree(conv.id, inner.id);
+    const outerDel = await store.deleteEventSubtree(conv.id, outer.id);
+    expect(innerDel.deletion_group_id).toBeTruthy();
+    expect(outerDel.deletion_group_id).toBeTruthy();
+
+    const listed = await store.listDeletedEventBranches(conv.id);
+    expect(listed.map((b) => b.event_id).sort()).toEqual([inner.id, outer.id].sort());
+    expect(listed.some((b) => b.event_id === innerAsst.id)).toBe(false);
+    const innerRow = listed.find((b) => b.event_id === inner.id);
+    expect(innerRow?.ancestor_deletion_group_ids).toEqual([outerDel.deletion_group_id]);
+    const outerRow = listed.find((b) => b.event_id === outer.id);
+    expect(outerRow?.ancestor_deletion_group_ids).toEqual([]);
+
+    await expect(store.restoreEventSubtree(conv.id, inner.id)).rejects.toThrow(/ancestor branch is still deleted/);
+    await expect(store.restoreEventSubtree(conv.id, innerAsst.id)).rejects.toThrow(
+      /ancestor branch is still deleted/,
+    );
+    await expect(store.undoEventDeletion(conv.id, innerDel.deletion_group_id as string)).rejects.toThrow(
+      /ancestor branch is still deleted/,
+    );
+
+    const restored = await store.restoreEventSubtree(conv.id, innerAsst.id, {
+      includeDeletedAncestors: true,
+    });
+    expect(restored.restored_count).toBe(4);
+    const after = await store.getTree(conv.id);
+    expect(after.events.map((e) => e.id).sort()).toEqual(
+      [root.id, outer.id, outerAsst.id, inner.id, innerAsst.id].sort(),
+    );
+    expect(await store.listDeletedEventBranches(conv.id)).toEqual([]);
+  });
+
   it("soft-deletes a whole conversation with a shared deletion group and restores it", async () => {
     const conv = await store.createConversation({ title: "Gone" });
     const root = (await store.getTree(conv.id)).events[0];

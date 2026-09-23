@@ -150,7 +150,7 @@ describe("messageProviderUsage", () => {
         responseTokenCount: 50,
         thoughtsTokenCount: 20,
       },
-      { mode: "ask", model: "gemini" },
+      { mode: "ask", model: "gemini", seed: 42, temperature: 0 },
     );
     expect(usage.tokens).toEqual({
       input: 200,
@@ -158,5 +158,10 @@ describe("messageProviderUsage", () => {
       cache_read: 800,
       thinking: 20,
     });
+    expect(usage.seed).toBe(42);
+    expect(usage.temperature).toBe(0);
+    expect(
+      readColcoorProviderUsage({ colcoor_provider_usage: usage }),
+    ).toMatchObject({ seed: 42, temperature: 0 });
   });
 });

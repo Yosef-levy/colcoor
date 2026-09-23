@@ -648,7 +648,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
     }
     .composer .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
     .composer select.agent-model-select,
-    .composer select.agent-mode-select {
+    .composer select.agent-mode-select,
+    .composer input.generation-control-input {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
       color: var(--vscode-foreground);
@@ -658,6 +659,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       padding: 4px 6px;
       max-width: 14rem;
       min-width: 7rem;
+    }
+    .composer input.generation-control-input {
+      box-sizing: border-box;
+      min-width: 0;
+      width: 6.5rem;
     }
     .composer select.agent-model-select:disabled,
     .composer select.agent-mode-select:disabled {
@@ -1887,7 +1893,8 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             <button type="button" class="menu-item" role="menuitem" data-conv-action="applyTemplate">Apply conversation template…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="rename">Rename…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="togglePin">Pin</button>
-            <button type="button" class="menu-item" role="menuitem" data-conv-action="restoreMessageBranch" title="Restore a soft-deleted message branch by event id">Restore message branch (soft-deleted)…</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="toggleControlledSeedMode">Controlled seed mode</button>
+            <button type="button" class="menu-item" role="menuitem" data-conv-action="restoreMessageBranch" title="Restore a soft-deleted message branch">Restore message branch (soft-deleted)…</button>
             <button type="button" class="menu-item" role="menuitem" data-conv-action="deleteConversation" title="Delete this conversation">Delete conversation…</button>
           </div>
         </div>
@@ -2215,6 +2222,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <select id="agentModel" class="agent-model-select" title="Model for this conversation">
             <option value="auto">Auto</option>
           </select>
+          <span id="controlledSeedControls" class="row" style="display:none;margin-top:0">
+            <label class="hint" for="generationSeed" style="margin:0">Seed</label>
+            <input id="generationSeed" class="generation-control-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Generation seed" />
+            <label class="hint" for="generationTemperature" style="margin:0">Temp</label>
+            <input id="generationTemperature" class="generation-control-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Generation temperature" />
+          </span>
           <label class="hint" for="agentMode" style="margin:0">Mode</label>
           <select id="agentMode" class="agent-mode-select" title="Cursor CLI mode for this conversation">
             <option value="ask" selected>Ask</option>
@@ -2225,6 +2238,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           <button id="stop" type="button" class="btn-secondary" disabled>Stop</button>
           <span class="hint" id="busy" style="display:none">Working…</span>
         </div>
+        <div class="hint" id="controlledSeedHint" style="display:none"></div>
       </div>
     </div>
     <div id="colSideChat" class="col-sidechat" style="display:none" aria-hidden="true">
@@ -2644,6 +2658,11 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       agentModelsListHint: null,
       agentModelSource: "provider",
       agentModeSelected: "ask",
+      controlledSeedEnabled: false,
+      controlledSeed: "",
+      controlledTemperature: "0",
+      controlledSeedAvailable: false,
+      controlledSeedUnavailableReason: null,
       pendingAssistantModelLabel: null,
       gettingStartedVisible: false,
       tryThisNextVisible: false,
@@ -2839,6 +2858,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
           else if (ca === "applyTemplate") vscode.postMessage({ type: "applyConversationTemplate" });
           else if (ca === "rename") vscode.postMessage({ type: "rename" });
           else if (ca === "togglePin") vscode.postMessage({ type: "togglePin" });
+          else if (ca === "toggleControlledSeedMode") vscode.postMessage({ type: "toggleControlledSeedMode" });
           else if (ca === "restoreMessageBranch") vscode.postMessage({ type: "restoreMessageBranch" });
           else if (ca === "deleteConversation") vscode.postMessage({ type: "deleteConversation" });
           else return;
@@ -3524,6 +3544,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       var pin = convMenuPanel.querySelector('[data-conv-action="togglePin"]');
       if (pin) {
         pin.textContent = state.conversationPinned ? "Unpin" : "Pin";
+      }
+      var controlled = convMenuPanel.querySelector('[data-conv-action="toggleControlledSeedMode"]');
+      if (controlled) {
+        controlled.textContent = state.controlledSeedEnabled
+          ? "Turn off controlled seed mode"
+          : "Controlled seed mode";
       }
     }
 
@@ -5262,6 +5288,29 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             : "Run Cursor CLI in Agent mode";
     }
 
+    function updateControlledSeedControls() {
+      var controls = document.getElementById("controlledSeedControls");
+      var seed = document.getElementById("generationSeed");
+      var temp = document.getElementById("generationTemperature");
+      var hint = document.getElementById("controlledSeedHint");
+      var enabled = state.controlledSeedEnabled === true;
+      if (controls) controls.style.display = enabled ? "flex" : "none";
+      if (seed && seed.value !== String(state.controlledSeed || "")) {
+        seed.value = String(state.controlledSeed || "");
+      }
+      if (temp && temp.value !== String(state.controlledTemperature || "0")) {
+        temp.value = String(state.controlledTemperature || "0");
+      }
+      var unavailable =
+        enabled && state.controlledSeedAvailable !== true
+          ? String(state.controlledSeedUnavailableReason || "Controlled seed mode requires Gemini in Ask mode.")
+          : "";
+      if (hint) {
+        hint.style.display = unavailable ? "" : "none";
+        hint.textContent = unavailable;
+      }
+    }
+
     function updateComposerSendEnabled() {
       var sendBtn = document.getElementById("send");
       var ta = document.getElementById("input");
@@ -5272,18 +5321,20 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       }
       var hasText = ta && String(ta.value || "").trim().length > 0;
       var has = hasText || pendingSendImages.length > 0 || pendingSendImageRefs.length > 0;
+      var controlledUnavailable =
+        state.controlledSeedEnabled === true && state.controlledSeedAvailable !== true;
       var wf = state.waitingForAssistant === true;
       var selectedRunActive = !!state.selectedRun;
       if (selectedRunActive && wf) {
         sendBtn.disabled = true;
         if (qBtn) {
-          qBtn.disabled = !has;
+          qBtn.disabled = !has || controlledUnavailable;
           qBtn.title = has
             ? "Queue this message: it will be sent as the next user line under the assistant reply that is generating."
             : "Type a message or paste an image first.";
         }
         if (bBtn) {
-          bBtn.disabled = !has;
+          bBtn.disabled = !has || controlledUnavailable;
           bBtn.title = has
             ? "Send as a sibling branch from the message you replied to. Uses “Private (draft)” below — shared when unchecked, private when checked."
             : "Type a message or paste an image first.";
@@ -5296,8 +5347,10 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (bBtn) bBtn.disabled = true;
         return;
       }
-      sendBtn.disabled = !has;
-      sendBtn.title = has
+      sendBtn.disabled = !has || controlledUnavailable;
+      sendBtn.title = controlledUnavailable
+        ? String(state.controlledSeedUnavailableReason || "Controlled seed mode requires Gemini in Ask mode.")
+        : has
         ? ""
         : "Type a message or paste an image. Shift+Enter for newline, Enter to send.";
       if (qBtn) qBtn.disabled = true;
@@ -5541,6 +5594,7 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
         if (priv) priv.disabled = false;
         updateAgentModelSelect();
         updateAgentModeSelect();
+        updateControlledSeedControls();
         updateSlashResultBanner();
         if (busyEl) {
           busyEl.style.display = state.busy ? "inline" : "none";
@@ -6800,6 +6854,16 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
             m.agentModeSelected === "agent" || m.agentModeSelected === "plan"
               ? m.agentModeSelected
               : "ask",
+          controlledSeedEnabled: m.controlledSeedEnabled === true,
+          controlledSeed:
+            typeof m.controlledSeed === "string" ? m.controlledSeed : "",
+          controlledTemperature:
+            typeof m.controlledTemperature === "string" ? m.controlledTemperature : "0",
+          controlledSeedAvailable: m.controlledSeedAvailable === true,
+          controlledSeedUnavailableReason:
+            typeof m.controlledSeedUnavailableReason === "string"
+              ? m.controlledSeedUnavailableReason
+              : null,
           pendingSideChatGraphReferenceSummary:
             typeof m.pendingSideChatGraphReferenceSummary === "string" &&
             m.pendingSideChatGraphReferenceSummary.trim()
@@ -7058,6 +7122,12 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       if (!text && !imgs.length && !refs.length) return;
       var privEl = document.getElementById("privateBranch");
       var payload = { type: "send", text: ta.value.trimEnd(), privateBranch: false };
+      if (state.controlledSeedEnabled === true) {
+        var seedEl = document.getElementById("generationSeed");
+        var tempEl = document.getElementById("generationTemperature");
+        payload.generationSeed = seedEl ? String(seedEl.value || "") : "";
+        payload.generationTemperature = tempEl ? String(tempEl.value || "") : "0";
+      }
       if (busySendMode === "queue") {
         payload.busySendMode = "queue";
         payload.privateBranch = false;
@@ -7095,6 +7165,26 @@ export function getConversationWebviewHtml(cspSource: string, nonce: string): st
       modeSel.addEventListener("change", function () {
         vscode.postMessage({ type: "setAgentMode", mode: modeSel.value || "ask" });
       });
+    })();
+
+    (function wireControlledSeedInputs() {
+      var seed = document.getElementById("generationSeed");
+      var temp = document.getElementById("generationTemperature");
+      if (seed) {
+        seed.addEventListener("input", function () {
+          state.controlledSeed = String(seed.value || "");
+          vscode.postMessage({ type: "setGenerationSeed", seed: state.controlledSeed });
+        });
+      }
+      if (temp) {
+        temp.addEventListener("input", function () {
+          state.controlledTemperature = String(temp.value || "");
+          vscode.postMessage({
+            type: "setGenerationTemperature",
+            temperature: state.controlledTemperature,
+          });
+        });
+      }
     })();
 
     document.getElementById("send").addEventListener("click", () => {

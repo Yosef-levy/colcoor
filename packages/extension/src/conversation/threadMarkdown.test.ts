@@ -59,7 +59,9 @@ describe("markdownToSafeHtml", () => {
   });
 
   it("renders LaTeX delimiters as readable math blocks", () => {
-    const html = markdownToSafeHtml("Inline \\(a_t = \\\\ddot{s}\\) and block:\\n\\[m\\\\ell\\\\ddot{\\\\theta}=-mg\\\\sin\\\\theta\\]");
+    const html = markdownToSafeHtml(
+      "Inline \\(a_t = \\ddot{s}\\) and block:\n\\[m\\ell\\ddot{\\theta}=-mg\\sin\\theta\\]",
+    );
     expect(html).toContain('class="math-inline"');
     expect(html).toContain('class="math-block"');
     expect(html).not.toContain("\\(");
@@ -67,10 +69,46 @@ describe("markdownToSafeHtml", () => {
   });
 
   it("also supports model-escaped delimiters with doubled backslashes", () => {
-    const html = markdownToSafeHtml("Inline \\\\(m\\\\) and block:\\n\\\\[F=-mg\\\\sin\\\\theta\\\\]");
+    const html = markdownToSafeHtml(
+      "Inline \\\\(m\\\\) and block:\n\\\\[F=-mg\\\\sin\\\\theta\\\\]",
+    );
     expect(html).toContain('class="math-inline"');
     expect(html).toContain('class="math-block"');
     expect(html).not.toContain("\\\\(");
     expect(html).not.toContain("\\\\[");
+  });
+
+  it("renders Gemini-style dollar math and preserves matrix row separators", () => {
+    const html = markdownToSafeHtml(
+      "For example, a vector like $\\begin{bmatrix} 3 \\\\ 1 \\end{bmatrix}$.",
+    );
+    expect(html).toContain('class="math-inline"');
+    expect(html).toContain("<mtable");
+    expect(html).not.toContain("$\\begin");
+  });
+
+  it("preserves matrix row separators with backslash delimiters", () => {
+    const html = markdownToSafeHtml(
+      "Vector: \\(\\begin{bmatrix} 3 \\\\ 1 \\end{bmatrix}\\)",
+    );
+    expect(html).toContain('class="math-inline"');
+    expect(html).toContain("<mtable");
+  });
+
+  it("renders double-dollar display math", () => {
+    const html = markdownToSafeHtml("Before\n\n$$x^2 + y^2 = z^2$$\n\nAfter");
+    expect(html).toContain('class="math-block"');
+    expect(html).not.toContain("$$");
+  });
+
+  it("does not render dollar math inside code or ordinary currency text", () => {
+    const html = markdownToSafeHtml(
+      "Price $5 and $10.\n\n`$x$`\n\n```text\n$$not math$$\n```",
+    );
+    expect(html).toContain("Price $5 and $10.");
+    expect(html).toContain("<code>$x$</code>");
+    expect(html).toContain("$$not math$$");
+    expect(html).not.toContain('class="math-inline"');
+    expect(html).not.toContain('class="math-block"');
   });
 });

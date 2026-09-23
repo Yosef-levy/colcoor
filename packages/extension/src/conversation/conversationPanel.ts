@@ -30,6 +30,10 @@ import type {
 } from "../api/client";
 import { confirmDestructiveActionByTypingDelete } from "./destructiveDeleteConfirm";
 import { countSubtreeNodes, SUBTREE_TYPED_DELETE_THRESHOLD } from "./destructiveDeleteCount";
+import {
+  confirmRestoreDeletedAncestors,
+  pickDeletedMessageBranchInteractively,
+} from "./pickDeletedMessageBranch";
 import { getColcoorOutputLog } from "../util/colcoorOutputLog";
 import { reportPanelApiError } from "../util/reportPanelApiError";
 import { createAssistantStreamPusher } from "./assistantStreamWebview";
@@ -85,6 +89,15 @@ import {
   readSelectedAgentModeForConversation,
   writeSelectedAgentModeForConversation,
 } from "./conversationAgentMode";
+import {
+  controlledSeedUnavailableReason,
+  parseControlledSeed,
+  randomGenerationSeed,
+  readControlledSeedByConversationMap,
+  readControlledSeedForConversation,
+  writeControlledSeedForConversation,
+  type ParsedControlledSeed,
+} from "./conversationControlledSeed";
 import { resolveAgentModelShortLabel } from "./agentModelDisplay";
 import { evaluateContinueFromHere } from "./continueFromHereGate";
 import { clipboardTextForTreeMessage } from "./selectedMessageClipboardText";
@@ -163,6 +176,8 @@ type QueuedMainSendItem =
     privateBranch: boolean;
     cliModel?: string;
     cliMode: CursorCliMode;
+    generationSeed?: number;
+    generationTemperature?: number;
   };
 
 type ActiveMainRun = {
@@ -293,6 +308,12 @@ type WebviewStateMessage = {
   agentModelSource: "cursor" | "provider";
   /** Cursor CLI mode for sends in this conversation. */
   agentModeSelected: CursorCliMode;
+  /** Per-conversation deterministic Gemini Ask controls. */
+  controlledSeedEnabled: boolean;
+  controlledSeed: string;
+  controlledTemperature: string;
+  controlledSeedAvailable: boolean;
+  controlledSeedUnavailableReason: string | null;
   /** Short label for the in-flight assistant reply (tree/thread headers while busy). */
   pendingAssistantModelLabel: string | null;
   /** When true, re-render the thread without scrolling to the bottom (note add/edit/delete). */
@@ -341,6 +362,8 @@ type FromWebview =
        * or start a sibling branch from the anchor of the in-flight send (`privateBranch` follows the composer checkbox).
        */
       busySendMode?: "queue" | "branch";
+      generationSeed?: string;
+      generationTemperature?: string;
     }
   | { type: "editUserMessage" }
   | { type: "select"; id: string }
@@ -359,6 +382,9 @@ type FromWebview =
   | { type: "setAgentModel"; model: string }
   | { type: "openAgentModelPicker" }
   | { type: "setAgentMode"; mode: string }
+  | { type: "toggleControlledSeedMode" }
+  | { type: "setGenerationSeed"; seed: string }
+  | { type: "setGenerationTemperature"; temperature: string }
   | { type: "copy"; text: string }
   | { type: "copyThread"; text: string }
   | {
@@ -1616,6 +1642,53 @@ export function createConversationPanelController(
       : "ask";
   }
 
+  function controlledSeedFieldsForWebview(): Pick<
+    WebviewStateMessage,
+    | "controlledSeedEnabled"
+    | "controlledSeed"
+    | "controlledTemperature"
+    | "controlledSeedAvailable"
+    | "controlledSeedUnavailableReason"
+  > {
+    const stored = conversationId
+      ? readControlledSeedForConversation(
+          readControlledSeedByConversationMap(context.workspaceState),
+          conversationId,
+        )
+      : { enabled: false, seed: "", temperature: "0" };
+    const unavailable = controlledSeedUnavailableReason(
+      resolveProviderId(),
+      cliModeForConversationRuns(),
+    );
+    return {
+      controlledSeedEnabled: stored.enabled,
+      controlledSeed: stored.seed,
+      controlledTemperature: stored.temperature,
+      controlledSeedAvailable: unavailable === undefined,
+      controlledSeedUnavailableReason: unavailable ?? null,
+    };
+  }
+
+  function parseControlledSeedForRun(
+    seed: string | undefined,
+    temperature: string | undefined,
+  ): ParsedControlledSeed | undefined {
+    if (!conversationId) return undefined;
+    const stored = readControlledSeedForConversation(
+      readControlledSeedByConversationMap(context.workspaceState),
+      conversationId,
+    );
+    if (!stored.enabled) return undefined;
+    const unavailable = controlledSeedUnavailableReason(
+      resolveProviderId(),
+      cliModeForConversationRuns(),
+    );
+    if (unavailable) {
+      throw new Error(unavailable);
+    }
+    return parseControlledSeed(seed ?? stored.seed, temperature ?? stored.temperature);
+  }
+
   function assistantModelLabelForCurrentSelection(): string | null {
     const map = readAgentModelByConversationMap(context.workspaceState);
     const selected = conversationId
@@ -1714,7 +1787,7 @@ export function createConversationPanelController(
     agentModelsListHint: string | null;
     agentModelSource: "cursor" | "provider";
     agentModeSelected: CursorCliMode;
-  } {
+  } & ReturnType<typeof controlledSeedFieldsForWebview> {
     const map = readAgentModelByConversationMap(context.workspaceState);
     const selected = conversationId
       ? readSelectedAgentModelForConversation(map, conversationId)
@@ -1735,6 +1808,7 @@ export function createConversationPanelController(
       agentModelsListHint: catalog.hint,
       agentModelSource: resolveProviderId() === "cursor" ? "cursor" : "provider",
       agentModeSelected: modeSelected,
+      ...controlledSeedFieldsForWebview(),
     };
   }
 
@@ -1809,6 +1883,7 @@ export function createConversationPanelController(
       pastedImages?: { dataUrl: string }[];
       imageRefs?: ColcoorUserMediaImageRef[];
       busySendMode?: "queue" | "branch";
+      generation?: ParsedControlledSeed;
     },
   ): Promise<void> {
     if (result.action === "error") {
@@ -1858,7 +1933,15 @@ export function createConversationPanelController(
       }
       setSlashResultMarkdown(null);
       const priv = result.patch.privateBranch ?? sendArgs.privateBranch;
-      await handleSendAfterSlash(body, priv, sendArgs.pastedImages, sendArgs.imageRefs, sendArgs.busySendMode);
+      await handleSendAfterSlash(
+        body,
+        priv,
+        sendArgs.pastedImages,
+        sendArgs.imageRefs,
+        sendArgs.busySendMode,
+        undefined,
+        sendArgs.generation,
+      );
       return;
     }
     if (result.action === "provider") {
@@ -1873,6 +1956,7 @@ export function createConversationPanelController(
           slashMeta: result.slashMeta,
           providerSlashCommand: result.userMessage,
         },
+        sendArgs.generation,
       );
     }
   }
@@ -2581,6 +2665,8 @@ export function createConversationPanelController(
             onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
             cliModel: item.cliModel,
             cliMode: item.cliMode,
+            generationSeed: item.generationSeed,
+            generationTemperature: item.generationTemperature,
             linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
             toolApprovalBranchLabel: toolApprovalBranchLabel(trimmed || "Queued message"),
             ...(userMediaContentJson ? { userMediaContentJson } : {}),
@@ -2688,6 +2774,8 @@ export function createConversationPanelController(
     pastedImages?: { dataUrl: string }[],
     imageRefs?: ColcoorUserMediaImageRef[],
     busySendMode?: "queue" | "branch",
+    generationSeed?: string,
+    generationTemperature?: string,
   ): Promise<void> {
     const trimmed = normalizePersistedUserInputText(text);
     const hasPasted =
@@ -2696,6 +2784,15 @@ export function createConversationPanelController(
       Array.isArray(imageRefs) &&
       imageRefs.some((r) => typeof r?.id === "string" && r.id.trim() && typeof r?.mime_type === "string");
     if ((!trimmed && !hasPasted && !hasRefs) || !conversationId || !selectedEventId) {
+      return;
+    }
+    let generation: ParsedControlledSeed | undefined;
+    try {
+      generation = parseControlledSeedForRun(generationSeed, generationTemperature);
+    } catch (error) {
+      void vscode.window.showWarningMessage(
+        `Colcoor: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return;
     }
 
@@ -2708,12 +2805,21 @@ export function createConversationPanelController(
           pastedImages,
           imageRefs,
           busySendMode,
+          generation,
         });
         return;
       }
     }
 
-    await handleSendAfterSlash(trimmed, privateBranch, pastedImages, imageRefs, busySendMode);
+    await handleSendAfterSlash(
+      trimmed,
+      privateBranch,
+      pastedImages,
+      imageRefs,
+      busySendMode,
+      undefined,
+      generation,
+    );
   }
 
   async function handleSendAfterSlash(
@@ -2726,6 +2832,7 @@ export function createConversationPanelController(
       slashMeta?: { command: string; args: string; source: string };
       providerSlashCommand?: string;
     },
+    generation?: ParsedControlledSeed,
   ): Promise<void> {
     const trimmed = normalizePersistedUserInputText(text);
     const hasPasted =
@@ -2760,6 +2867,8 @@ export function createConversationPanelController(
           privateBranch,
           cliModel: cliModelForConversationRuns(),
           cliMode: cliModeForConversationRuns(),
+          generationSeed: generation?.seed,
+          generationTemperature: generation?.temperature,
         });
         postState(lastTreeEvents, true, lastPostedError);
         return;
@@ -2774,6 +2883,7 @@ export function createConversationPanelController(
           selectPersistedUser: true,
           slashMeta: slashOpts?.slashMeta,
           providerSlashCommand: slashOpts?.providerSlashCommand,
+          generation,
         });
         return;
       }
@@ -2788,6 +2898,7 @@ export function createConversationPanelController(
       selectPersistedUser: true,
       slashMeta: slashOpts?.slashMeta,
       providerSlashCommand: slashOpts?.providerSlashCommand,
+      generation,
     });
   }
 
@@ -2801,6 +2912,7 @@ export function createConversationPanelController(
     existingUserEventId?: string;
     slashMeta?: { command: string; args: string; source: string };
     providerSlashCommand?: string;
+    generation?: ParsedControlledSeed;
   }): Promise<void> {
     if (!conversationId) {
       return;
@@ -2863,6 +2975,8 @@ export function createConversationPanelController(
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
           cliMode: cliModeForConversationRuns(),
+          generationSeed: args.generation?.seed,
+          generationTemperature: args.generation?.temperature,
           linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
           toolApprovalBranchLabel: toolApprovalBranchLabel(
             trimmed || (hasPasted || hasRefs ? "Image message" : "New message"),
@@ -2937,6 +3051,15 @@ export function createConversationPanelController(
     if (!conversationId || !eventId) {
       return;
     }
+    let generation: ParsedControlledSeed | undefined;
+    try {
+      generation = parseControlledSeedForRun(undefined, undefined);
+    } catch (error) {
+      void vscode.window.showWarningMessage(
+        `Colcoor: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
     if (targetEventId !== undefined && selectedEventId !== eventId) {
       const prevSel = selectedEventId;
       selectedEventId = eventId;
@@ -2993,6 +3116,8 @@ export function createConversationPanelController(
           onAssistantDisplayParts: (parts) => stream.pushDisplayParts(parts),
           cliModel: cliModelForConversationRuns(),
           cliMode: cliModeForConversationRuns(),
+          generationSeed: generation?.seed,
+          generationTemperature: generation?.temperature,
           linearContextTokensBeforeRun: currentLinearContextTokens(conversationMetadataJson),
           toolApprovalBranchLabel: toolApprovalBranchLabel(resendUserBody),
           ...(lastTreeEvents.length > 0
@@ -3168,6 +3293,37 @@ export function createConversationPanelController(
           msg.mode,
         );
         postState(lastTreeEvents, lastPostedBusy, lastPostedError, { preserveThreadScroll: true });
+        return;
+      }
+      if (msg.type === "toggleControlledSeedMode" && conversationId) {
+        const current = readControlledSeedForConversation(
+          readControlledSeedByConversationMap(context.workspaceState),
+          conversationId,
+        );
+        await writeControlledSeedForConversation(context.workspaceState, conversationId, {
+          enabled: !current.enabled,
+          ...(!current.seed ? { seed: randomGenerationSeed() } : {}),
+          ...(!current.temperature ? { temperature: "0" } : {}),
+        });
+        postState(lastTreeEvents, lastPostedBusy, lastPostedError, {
+          preserveThreadScroll: true,
+        });
+        return;
+      }
+      if (msg.type === "setGenerationSeed" && typeof msg.seed === "string" && conversationId) {
+        await writeControlledSeedForConversation(context.workspaceState, conversationId, {
+          seed: msg.seed,
+        });
+        return;
+      }
+      if (
+        msg.type === "setGenerationTemperature" &&
+        typeof msg.temperature === "string" &&
+        conversationId
+      ) {
+        await writeControlledSeedForConversation(context.workspaceState, conversationId, {
+          temperature: msg.temperature,
+        });
         return;
       }
       if (msg.type === "openAgentModelPicker") {
@@ -3928,6 +4084,8 @@ export function createConversationPanelController(
           msg.images,
           msg.imageRefs,
           msg.busySendMode,
+          msg.generationSeed,
+          msg.generationTemperature,
         );
         return;
       }
@@ -4344,21 +4502,20 @@ export function createConversationPanelController(
       void vscode.window.showWarningMessage("Colcoor: viewers cannot restore a message branch.");
       return;
     }
-    const raw = await vscode.window.showInputBox({
-      title: "Colcoor — restore message branch",
-      prompt: "Paste the event id (UUID) of any message in the soft-deleted branch.",
-      ignoreFocusOut: true,
-    });
-    if (raw === undefined) {
+    const branch = await pickDeletedMessageBranchInteractively(api, cid);
+    if (!branch) {
       return;
     }
-    const eid = normalizeOptionalGraphEventId(raw.trim());
-    if (eid === undefined) {
-      void vscode.window.showWarningMessage("Colcoor: that is not a valid event id.");
-      return;
+    let includeDeletedAncestors = false;
+    if (branch.ancestor_deletion_group_ids.length > 0) {
+      const ok = await confirmRestoreDeletedAncestors(branch.ancestor_deletion_group_ids.length);
+      if (!ok) {
+        return;
+      }
+      includeDeletedAncestors = true;
     }
     try {
-      const r = await api.restoreEventSubtree(cid, eid);
+      const r = await api.restoreEventSubtree(cid, branch.event_id, { includeDeletedAncestors });
       void vscode.window.setStatusBarMessage(
         `Colcoor: restored ${r.restored_count} message(s).`,
         3500,

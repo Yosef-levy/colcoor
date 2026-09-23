@@ -202,6 +202,73 @@ describe("ColcoorApiClient note mutations", () => {
     expect(init.method).toBe("DELETE");
   });
 
+  it("listDeletedEventBranches GETs …/events/deleted-branches", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify([
+          {
+            event_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            deletion_group_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            parent_event_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            kind: "user_input",
+            actor_type: "user",
+            content_text: "gone",
+            checkpoint_label: null,
+            deleted_at: "2026-01-02T00:00:00Z",
+            event_count: 2,
+            ancestor_deletion_group_ids: [],
+          },
+        ]),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    const rows = await api.listDeletedEventBranches("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].event_count).toBe(2);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(
+      "/conversations/cccccccc-cccc-4ccc-8ccc-cccccccccccc/events/deleted-branches",
+    );
+    expect(init.method).toBe("GET");
+  });
+
+  it("restoreEventSubtree POSTs …/restore-subtree with optional ancestor query", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ restored_count: 4 }),
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const api = new ColcoorApiClient({
+      baseUrl: "http://127.0.0.1:8000",
+      getAccessToken: async () => "jwt-test",
+    });
+    await api.restoreEventSubtree(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    );
+    expect((fetchMock.mock.calls[0] as [string, RequestInit])[0]).toContain(
+      "/events/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/restore-subtree",
+    );
+    expect((fetchMock.mock.calls[0] as [string, RequestInit])[0]).not.toContain(
+      "include_deleted_ancestors",
+    );
+
+    await api.restoreEventSubtree(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      { includeDeletedAncestors: true },
+    );
+    expect((fetchMock.mock.calls[1] as [string, RequestInit])[0]).toContain(
+      "include_deleted_ancestors=true",
+    );
+  });
+
   it("searchConversationMemberInviteCandidates sends GET with encoded q", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

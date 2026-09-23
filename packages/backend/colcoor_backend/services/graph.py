@@ -31,6 +31,31 @@ class SoftDeleteSubtreeResult:
     deletion_group_id: uuid.UUID | None
 
 
+#: Restore of a nested deletion group whose parent branch is still deleted.
+PARENT_BRANCH_STILL_DELETED = (
+    "cannot restore this branch while an ancestor branch is still deleted; "
+    "retry with include_deleted_ancestors=true to restore ancestor branches too"
+)
+PARENT_BRANCH_STILL_DELETED_UNDO = "cannot undo this deletion while an ancestor branch is still deleted"
+ANCESTOR_MISSING_DELETION_GROUP = "cannot restore: an ancestor is deleted without a deletion_group_id"
+
+
+@dataclass(frozen=True)
+class DeletedEventBranch:
+    """One restorable message-branch root (exactly one row per ``deletion_group_id``)."""
+
+    event_id: uuid.UUID
+    deletion_group_id: uuid.UUID
+    parent_event_id: uuid.UUID | None
+    kind: str
+    actor_type: str
+    content_text: str | None
+    checkpoint_label: str | None
+    deleted_at: datetime
+    event_count: int
+    ancestor_deletion_group_ids: tuple[uuid.UUID, ...]
+
+
 async def upsert_user_from_verified_identity(
     session: AsyncSession,
     identity: VerifiedCursorIdentity,
@@ -227,6 +252,101 @@ async def _collect_non_deleted_subtree_event_ids(
     return out
 
 
+def _deletion_group_members(events: list[Event], deletion_group_id: uuid.UUID) -> list[Event]:
+    return [
+        e
+        for e in events
+        if e.deleted_at is not None and e.deletion_group_id == deletion_group_id
+    ]
+
+
+def _canonical_deletion_group_root(members: list[Event]) -> Event | None:
+    """The cut-edge of a deletion batch: parent is not in the same group."""
+    if not members:
+        return None
+    member_ids = {e.id for e in members}
+    roots = [e for e in members if e.parent_event_id is None or e.parent_event_id not in member_ids]
+    if not roots:
+        return None
+    roots.sort(key=lambda e: (e.created_at, str(e.id)))
+    return roots[0]
+
+
+def _ancestor_deletion_group_ids(
+    by_id: dict[uuid.UUID, Event], start_parent_id: uuid.UUID | None
+) -> list[uuid.UUID]:
+    """Walk toward the live tree; collect distinct deletion groups of still-deleted ancestors."""
+    out: list[uuid.UUID] = []
+    seen: set[uuid.UUID] = set()
+    cur_id = start_parent_id
+    while cur_id is not None:
+        cur = by_id.get(cur_id)
+        if cur is None or cur.deleted_at is None:
+            break
+        gid = cur.deletion_group_id
+        if gid is None:
+            raise ValueError(ANCESTOR_MISSING_DELETION_GROUP)
+        if gid not in seen:
+            seen.add(gid)
+            out.append(gid)
+        cur_id = cur.parent_event_id
+    return out
+
+
+async def _load_conversation_events(session: AsyncSession, conversation_id: uuid.UUID) -> list[Event]:
+    res = await session.execute(select(Event).where(Event.conversation_id == conversation_id))
+    return list(res.scalars().all())
+
+
+async def list_deleted_event_branches(
+    session: AsyncSession, conversation_id: uuid.UUID, user_id: uuid.UUID
+) -> list[DeletedEventBranch]:
+    """One row per message-level ``deletion_group_id`` (group root only). Conversation-root batches omitted."""
+    member = await get_conversation_member(session, conversation_id, user_id)
+    if member is None:
+        raise PermissionError("not a member")
+    if member.role == "viewer":
+        raise PermissionError("viewers cannot restore graph subtrees")
+    await require_live_conversation(session, conversation_id)
+    events = await _load_conversation_events(session, conversation_id)
+    by_id = {e.id: e for e in events}
+    groups: dict[uuid.UUID, list[Event]] = defaultdict(list)
+    for e in events:
+        if e.deleted_at is None or e.deletion_group_id is None:
+            continue
+        groups[e.deletion_group_id].append(e)
+    out: list[DeletedEventBranch] = []
+    for gid, members in groups.items():
+        root = _canonical_deletion_group_root(members)
+        if root is None or root.deleted_at is None:
+            continue
+        if root.parent_event_id is None:
+            continue
+        if root.visible_to is not None and root.visible_to != user_id:
+            continue
+        try:
+            ancestor_ids = tuple(_ancestor_deletion_group_ids(by_id, root.parent_event_id))
+        except ValueError:
+            continue
+        out.append(
+            DeletedEventBranch(
+                event_id=root.id,
+                deletion_group_id=gid,
+                parent_event_id=root.parent_event_id,
+                kind=root.kind,
+                actor_type=root.actor_type,
+                content_text=root.content_text,
+                checkpoint_label=root.checkpoint_label,
+                deleted_at=root.deleted_at,
+                event_count=len(members),
+                ancestor_deletion_group_ids=ancestor_ids,
+            )
+        )
+    out.sort(key=lambda b: b.event_id)
+    out.sort(key=lambda b: b.deleted_at, reverse=True)
+    return out
+
+
 async def soft_delete_event_subtree(
     session: AsyncSession,
     conversation_id: uuid.UUID,
@@ -358,6 +478,9 @@ async def undo_soft_delete_by_deletion_group(
     ids = [row[0] for row in res.all()]
     if not ids:
         raise LookupError("deletion group not found or undo window expired")
+    events = await _load_conversation_events(session, conversation_id)
+    if _nested_ancestor_groups_for_deletion_group(events, deletion_group_id):
+        raise ValueError(PARENT_BRANCH_STILL_DELETED_UNDO)
     now = datetime.now(tz=UTC)
     await session.execute(
         update(Event)
@@ -391,13 +514,31 @@ async def undo_soft_delete_by_deletion_group(
     return len(ids)
 
 
+def _nested_ancestor_groups_for_deletion_group(
+    events: list[Event], deletion_group_id: uuid.UUID
+) -> list[uuid.UUID]:
+    members = _deletion_group_members(events, deletion_group_id)
+    root = _canonical_deletion_group_root(members)
+    if root is None:
+        return []
+    by_id = {e.id: e for e in events}
+    return _ancestor_deletion_group_ids(by_id, root.parent_event_id)
+
+
 async def restore_soft_deleted_subtree(
     session: AsyncSession,
     conversation_id: uuid.UUID,
     user_id: uuid.UUID,
     event_id: uuid.UUID,
+    *,
+    include_deleted_ancestors: bool = False,
 ) -> int:
-    """Clear soft-delete for all events sharing the anchor row’s ``deletion_group_id``."""
+    """Clear soft-delete for all events sharing the anchor row’s ``deletion_group_id``.
+
+    If the group’s parent is still deleted (a later ancestor delete), restore is refused unless
+    ``include_deleted_ancestors`` is true, which also restores those ancestor batches. The check
+    uses the group root, so any event id in the group is blocked the same way.
+    """
     member = await get_conversation_member(session, conversation_id, user_id)
     if member is None:
         raise PermissionError("not a member")
@@ -412,9 +553,20 @@ async def restore_soft_deleted_subtree(
         raise PermissionError("event not visible")
     if anchor.deletion_group_id is None:
         raise ValueError("subtree has no deletion_group_id; cannot restore")
-    return await _restore_soft_deleted_graph_by_deletion_group(
-        session, conversation_id, anchor.deletion_group_id
-    )
+    events = await _load_conversation_events(session, conversation_id)
+    ancestor_gids = _nested_ancestor_groups_for_deletion_group(events, anchor.deletion_group_id)
+    if ancestor_gids and not include_deleted_ancestors:
+        raise ValueError(PARENT_BRANCH_STILL_DELETED)
+    groups: list[uuid.UUID] = []
+    seen: set[uuid.UUID] = set()
+    for gid in [*ancestor_gids, anchor.deletion_group_id]:
+        if gid not in seen:
+            seen.add(gid)
+            groups.append(gid)
+    restored = 0
+    for gid in groups:
+        restored += await _restore_soft_deleted_graph_by_deletion_group(session, conversation_id, gid)
+    return restored
 
 
 async def restore_soft_deleted_conversation_graph(

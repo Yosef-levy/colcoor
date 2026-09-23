@@ -221,6 +221,11 @@ export function createMessageMetadataApi() {
       push("Model", model);
       push("Mode", modeLabel(usage?.mode));
       push("Backend", backendLabel(usage?.backend) ?? (trace ? "Cursor CLI" : undefined));
+      push("Seed", typeof usage?.seed === "number" ? String(usage.seed) : undefined, true);
+      push(
+        "Temperature",
+        typeof usage?.temperature === "number" ? String(usage.temperature) : undefined,
+      );
       push("Estimated cost (USD)", formatUsd(usage?.cost_usd));
       const tokens = usage?.tokens as Record<string, number> | undefined;
       if (tokens && typeof tokens.input === "number") {

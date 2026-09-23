@@ -83,6 +83,7 @@ Verify each [spec/05](../spec/05-operations-and-state-transitions.md) operation 
 | AppendAssistantMessage | | |
 | SoftDeleteEventSubtree | | |
 | UndoEventSubtreeDelete | | |
+| ListDeletedEventBranches | | |
 | RestoreEventSubtree | | |
 | CommitPrivateBranch | | |
 | DeletePrivateDraft | | |

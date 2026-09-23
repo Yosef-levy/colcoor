@@ -21,6 +21,8 @@ const assistantWithUsage = {
       backend: "messages_api",
       mode: "ask",
       model: "claude-sonnet-4-5",
+      seed: 42,
+      temperature: 0,
       duration_ms: 1800,
       tokens: { input: 100, output: 50, cache_read: 900, cache_creation: 0 },
       captured_at: "2026-07-09T12:00:01.000Z",
@@ -34,6 +36,8 @@ describe("messageMetadata", () => {
     expect(vm?.role).toBe("assistant");
     const summary = vm?.sections.find((s) => s.title === "Summary");
     expect(summary?.rows.some((r) => r.label === "Cache hit" && r.value === "90%")).toBe(true);
+    expect(summary?.rows).toContainEqual({ label: "Seed", value: "42", mono: true });
+    expect(summary?.rows).toContainEqual({ label: "Temperature", value: "0", mono: false });
     expect(vm?.sections.some((s) => s.title === "Tokens")).toBe(true);
     expect(formatMessageMetadataHtml(vm!)).toContain("Assistant message metadata");
   });

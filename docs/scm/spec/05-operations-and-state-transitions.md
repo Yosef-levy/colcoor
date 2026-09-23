@@ -206,18 +206,26 @@ After any sequence of operations, a conforming client **MUST** be able to observ
 
 | | |
 |--|--|
-| **Preconditions** | Caller is `deleted_by_user_id`; within undo window |
+| **Preconditions** | Caller is `deleted_by_user_id`; within undo window; parent of the batch root is not still deleted |
 | **Input** | `deletion_group_id` |
 | **Effects** | Clear soft-delete for batch |
+| **Profile** | L1+ |
+
+### 5.5a `ListDeletedEventBranches`
+
+| | |
+|--|--|
+| **Preconditions** | **Owner or editor**; conversation live |
+| **Returns** | One group-root per message-level `deletion_group_id` (not every deleted event) |
 | **Profile** | L1+ |
 
 ### 5.6 `RestoreEventSubtree`
 
 | | |
 |--|--|
-| **Preconditions** | **Owner or editor** |
-| **Input** | `anchor_event_id` with deletion batch |
-| **Effects** | Clear soft-delete for all events sharing batch |
+| **Preconditions** | **Owner or editor**; if the batch root’s parent is still deleted, `include_deleted_ancestors` required |
+| **Input** | `anchor_event_id` with deletion batch; optional `include_deleted_ancestors` |
+| **Effects** | Clear soft-delete for all events sharing batch; with the flag, also restore still-deleted ancestor batches |
 | **Profile** | L1+ |
 
 ### 5.7 `CommitPrivateBranch`
