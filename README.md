@@ -1,90 +1,122 @@
-# Colcoor (Cursor extension)
+# Colcoor
 
-[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
+**Structured AI conversations for learning and research.**
 
-## Project philosophy
+Colcoor turns long, linear AI conversations into navigable conversation trees.
 
-Large language models have transformed how we interact with knowledge. However, most AI systems still force users into linear conversations that are difficult to revisit, extend, or collaborate on.
+In the controlled learning experiment described below, Colcoor improved adherence to the predefined learning plan while reducing cumulative conversation context by **90.1%** compared with a conventional linear conversation.
 
-Colcoor is built around a different idea:
+Learning and research rarely happen in a straight line. You explore an idea, branch into a question, compare alternatives, revisit an earlier assumption, and then return to the main thread. In a traditional chat, all of those explorations accumulate into a single growing transcript — making the conversation harder to navigate and repeatedly sending the model context that is no longer relevant to the current task.
 
-> **Complex AI conversations should become structured knowledge, not disposable chat history.**
+Colcoor makes that structure explicit.
 
-Colcoor is an event-driven platform for orchestrating AI-assisted research workflows inside Cursor. It represents conversations as deterministic event graphs, enabling branching exploration, reproducible reasoning paths, collaborative knowledge building, and structured tool-assisted workflows.
+Any point in a conversation can become the starting point for a new branch. The model receives only the context along the selected conversation path, while the rest of the exploration remains available to the user without being carried into every future request.
 
-Instead of treating AI conversations as disposable chat history, Colcoor treats them as persistent knowledge that can be explored, extended, reproduced, and shared. Notes, starred messages, and conversation drawers help users summarize, revisit, and organize important reasoning paths over time.
+This makes long-running AI work:
+
+- **Navigable** — return to any point and continue from there.
+- **Focused** — each branch carries only the context relevant to that line of thought.
+- **Efficient** — side explorations do not permanently inflate the context of the main conversation.
+- **Reproducible** — the exact context behind a response is explicit rather than reconstructed through hidden memory or summarization.
+- **Explorable** — investigate questions, alternatives, and dead ends without disrupting the main learning or research path.
+- **Collaborative** — multiple people can work around the same structured conversation.
 
 > **Project status:** Active development.
 
 Website: [colcoor.com](https://www.colcoor.com/)
 
-## Why Colcoor?
+## Why this matters
 
-Current AI chat interfaces work well for short conversations, but they begin to break down during long-running research and learning projects:
+AI models can increasingly work with large context windows and large collections of sources. But the interaction itself is still usually organized as a linear chat.
 
-- Conversations become long and filled with irrelevant context.
-- Starting a new chat loses valuable reasoning.
-- Comparing alternative approaches is difficult.
-- Revisiting previous ideas is cumbersome.
-- Collaboration around AI conversations is hard to coordinate.
+For short conversations, that works well.
 
-Colcoor addresses these challenges by replacing linear conversations with structured conversation graphs.
+For a multi-hour learning session, literature investigation, technical research project, or any process involving repeated exploration and revision, the conversation itself becomes part of the knowledge structure.
 
-## Core concepts
+A learner may stop to clarify a definition, explore an example, solve several exercises, and then return to the original lesson. A researcher may investigate competing explanations, discard one path, and later revisit another. In a linear chat, all of those paths remain mixed together in every subsequent turn.
 
-### Conversation graphs
+Colcoor makes the structure of that process first-class.
 
-Every user input and assistant response becomes part of a deterministic event graph rather than only a linear transcript.
+## Evidence: structured vs. linear conversation
 
-This enables:
+To measure the effect, the same proof-based linear algebra learning program was conducted twice:
 
-- Branching exploration
-- Parallel hypotheses
-- Persistent reasoning history
-- Reproducible AI workflows
+1. once using a conventional linear conversation; and
+2. once using Colcoor's branching conversation structure.
 
-### Deterministic context
+Both runs used the same model, syllabus, generation settings, and corresponding learning tasks. Where applicable, corresponding model calls used the **same seed and a temperature of 0** to reduce run-to-run variation. This made the comparison controlled; it did not make model generation perfectly deterministic.
 
-Instead of relying on conversation summarization or heuristic memory, Colcoor reconstructs the agent transcript from the explicit conversation path selected by the user.
+The Colcoor run contained 104 model responses and the linear run contained 81. The different turn counts reflect how each learning process unfolded. In addition, 43 user prompts were exactly identical across the two runs, providing a narrower apples-to-apples comparison.
 
-Every main-thread assistant response is generated from a defined reasoning path.
+### Context usage
 
-### Research-first design
+| Metric                       | Colcoor tree | Linear conversation |
+| ---------------------------- | -----------: | ------------------: |
+| Model responses              |          104 |                  81 |
+| Cumulative context tokens    |      422,195 |           4,248,190 |
+| Average context per response |        4,060 |              52,447 |
 
-Colcoor is designed for knowledge-intensive work such as:
+These measurements count the conversation context processed by the model for each response, including input tokens served from cache. They do not include output tokens and should not be interpreted as total API token usage.
 
-- Scientific research
-- Learning complex subjects
-- Literature review
-- Technical investigations
-- Architecture exploration
-- Long-running AI-assisted projects
+Despite containing more model responses, the Colcoor run used **90.1% less cumulative conversation context** and **92.3% less context per model response**.
 
-### Collaborative knowledge building
+On the 43 exactly identical user prompts, the Colcoor run used approximately **92% less context**.
 
-Multiple users can contribute to the same conversation graph, with role-based access and shared conversation state.
+> Near the end of the experiment, equivalent requests sometimes required only **~4–5K context tokens with Colcoor versus more than 100K in the linear conversation**.
 
-Side chat gives humans a separate discussion space beside the main reasoning path, so they can coordinate, ask questions, and reference messages or notes without changing the canonical conversation graph.
+The difference was small near the beginning, when both histories were short, and grew as the learner asked more questions and explored more side topics.
 
-Knowledge evolves collaboratively rather than being scattered across independent chat sessions.
+This is the behavior Colcoor is designed for: a clarification asked early in a course remains available where it belongs, but it does not have to be resent to the model during every later topic.
 
-### Tool-assisted workflows
+### Response quality
 
-Colcoor runs the main assistant through the Cursor agent and preserves the resulting transcript in the conversation graph. Tool approvals, side chat references, notes, and selected workspace hints can become part of a reproducible workflow around the saved conversation.
+Both runs produced mathematically correct responses overall in the review conducted for this comparison. The observable difference was adherence to the predefined syllabus.
 
-## Key features
+The linear run showed four clear syllabus-adherence failures, including omitted required material, premature completion of partially covered material, restructuring of predefined modules, and substitution of unscheduled material. None of these discrepancies occurred in the Colcoor run.
 
-- Conversation graphs instead of linear chats
-- Branch-first exploration
-- Deterministic transcript reconstruction
-- Persistent research history
-- Collaborative conversation membership
-- Notes attached to messages
-- Starred messages and TODO-note drawers
-- Conversation lists for organizing work
-- In-conversation search and navigation
-- Cursor agent integration
-- Event-driven backend architecture
+In this experiment, the tree-structured run therefore showed better syllabus and task-structure adherence. This is evidence from one learning program, not a claim that tree-structured conversations always produce better answers.
+
+### What this experiment does — and does not — show
+
+This is one controlled learning experiment, not a claim that every conversation will achieve a 90% reduction or that tree-structured conversations will always produce better answers.
+
+The benefit depends on the shape of the interaction. Short or nearly linear conversations should show little difference. The advantage grows when users ask clarification questions, revisit earlier material, explore alternatives, or otherwise create branches that would remain permanently embedded in a conventional chat history.
+
+The combined conversation graph, model metadata, embedded syllabus, measurement methodology, and token counts are available here:
+
+**[View the controlled comparison →](experiments/linear-algebra/README.md)**
+
+## Why conversation structure matters
+
+**Large context windows solve capacity. Colcoor addresses relevance.**
+
+A larger context window determines how much history a model can receive, but not which parts of that history are relevant to the current task. In a long linear chat, clarifications, alternatives, and abandoned paths remain in every later request simply because they happened earlier.
+
+Colcoor treats conversation structure as part of context management. Each branch carries the history needed for its current line of reasoning without forcing unrelated explorations into every future model call.
+
+In this experiment, focused context coincided with both dramatically less repeated conversation context and better preservation of the predefined learning structure. One experiment cannot establish that relationship universally, but it shows why conversation structure matters beyond navigation or UI.
+
+## Features for learning and research
+
+### Branching with explicit context
+
+Branch from any message, continue from an earlier point, resend a prompt, or explore privately before committing a branch to the shared conversation. Checkpoints label important milestones. For every response, Colcoor constructs the model context deterministically from the selected root-to-node path and its notes—not from the rest of the tree.
+
+### Structured learning workflows
+
+Start with built-in templates for **Learning / tutoring**, a **Structured learning program**, or **Research**. Templates are stored as notes at the conversation root, so their guidance is present on every branch. The structured learning template supports a stable syllabus and progress tracking across branches in `.colcoor/docs/<conversation_id>_syllabus.md`; machine-local custom templates can be created, reordered, imported, and exported.
+
+### Tools for working with knowledge
+
+Attach notes to messages, star important responses, track TODO notes, search across a conversation, and organize material into conversation lists. List agents can build structured lists from a conversation or work on existing lists. Threads render Markdown, code, and LaTeX for technical and mathematical work.
+
+### Collaboration without context pollution
+
+Owners, editors, and viewers can work in the same conversation. A separate side chat lets collaborators discuss and reference messages or notes without inserting that coordination into the model's reasoning path.
+
+### Flexible providers and storage
+
+Use Anthropic by default with your own API key, Gemini, or the Cursor agent provider. Run with the shared backend for collaboration, or use offline single-user mode to keep conversations in the workspace under `.colcoor/`.
 
 ## Technology stack
 
@@ -101,25 +133,17 @@ Colcoor runs the main assistant through the Cursor agent and preserves the resul
 - TypeScript
 - VS Code / Cursor extension APIs
 - Webview-based UI
-- Cursor CLI agent integration
-
-## Roadmap
-
-- Multi-user collaboration improvements
-- Advanced knowledge search
-- Enhanced tool and MCP approval workflows
-- AI-assisted research agents
-- Rich visualization of knowledge graphs
+- Anthropic, Gemini, and Cursor agent integrations
 
 ## Repository guide
 
-Monorepo for the **Colcoor Cursor extension** and its **extension-dedicated backend**. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/product/api-contracts.md`](docs/product/api-contracts.md). **Roles:** [`docs/product/permissions.md`](docs/product/permissions.md). **Usage / billing:** [`docs/auth/billing-usage.md`](docs/auth/billing-usage.md).
+Monorepo for the **Colcoor editor extension** and its backend for structured learning and research conversations. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/product/api-contracts.md`](docs/product/api-contracts.md). **Roles:** [`docs/product/permissions.md`](docs/product/permissions.md). **Usage / billing:** [`docs/auth/billing-usage.md`](docs/auth/billing-usage.md).
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| [`packages/extension`](packages/extension) | VS Code / Cursor extension (transcript construction, agent invocation, UI shell) |
+| [`packages/extension`](packages/extension) | VS Code / Cursor UI, deterministic transcript construction, and Anthropic, Gemini, or Cursor assistant invocation |
 | [`packages/backend`](packages/backend) | HTTP API: event graph, tree, side chat, auth — **no** main-thread LLM or transcript-over-HTTP |
 
 ## Database
@@ -195,6 +219,8 @@ Output directory: **`dist/colcoor-gcp-production-BE…-EXT…/`** (customer entr
 On a **Docker-only** server without extension dev deps, use **`npm run bundle:gcp-production:skip-vsix`** and copy the `.vsix` from a machine where `npm install` and **`npm run package:extension`** work.
 
 ## License
+
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE)
 
 Colcoor is **Source Available (BUSL-1.1)** under the **Business Source License 1.1**. It is not an OSI-approved Open Source project.
 
