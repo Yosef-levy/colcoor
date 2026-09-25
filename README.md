@@ -118,6 +118,26 @@ Owners, editors, and viewers can work in the same conversation. A separate side 
 
 Use Anthropic by default with your own API key, Gemini, or the Cursor agent provider. Run with the shared backend for collaboration, or use offline single-user mode to keep conversations in the workspace under `.colcoor/`.
 
+## Download
+
+Colcoor is currently available as a beta extension for VS Code and Cursor. You do not need to clone or build this repository to try it.
+
+Download the VSIX that matches your platform:
+
+| Platform | Download |
+| --- | --- |
+| Windows x64 | [Download VSIX](https://github.com/Yosef-levy/colcoor/releases/download/colcoor-extension-0.0.1/colcoor-extension-0.0.1-win32-x64.vsix) |
+| macOS Apple Silicon (M1/M2/M3/M4) | [Download VSIX](https://github.com/Yosef-levy/colcoor/releases/download/colcoor-extension-0.0.1/colcoor-extension-0.0.1-darwin-arm64.vsix) |
+| macOS Intel | [Download VSIX](https://github.com/Yosef-levy/colcoor/releases/download/colcoor-extension-0.0.1/colcoor-extension-0.0.1-darwin-x64.vsix) |
+| Linux x64 | [Download VSIX](https://github.com/Yosef-levy/colcoor/releases/download/colcoor-extension-0.0.1/colcoor-extension-0.0.1-linux-x64.vsix) |
+| Linux ARM64 | [Download VSIX](https://github.com/Yosef-levy/colcoor/releases/download/colcoor-extension-0.0.1/colcoor-extension-0.0.1-linux-arm64.vsix) |
+
+Then follow the [Quick Start Guide](docs/guides/quick-start.md).
+
+> Colcoor is currently in beta. Features, configuration, and installation details may change between releases.
+
+[View all releases](https://github.com/Yosef-levy/colcoor/releases)
+
 ## Technology stack
 
 **Backend**
@@ -139,6 +159,8 @@ Use Anthropic by default with your own API key, Gemini, or the Cursor agent prov
 
 Monorepo for the **Colcoor editor extension** and its backend for structured learning and research conversations. Product semantics are under [`docs/README.md`](docs/README.md). **Normative HTTP:** [`docs/product/api-contracts.md`](docs/product/api-contracts.md). **Roles:** [`docs/product/permissions.md`](docs/product/permissions.md). **Usage / billing:** [`docs/auth/billing-usage.md`](docs/auth/billing-usage.md).
 
+The following setup instructions are for developers working from source. End users can install a release VSIX from the [Download](#download) section without cloning the repository.
+
 ## Layout
 
 | Path | Role |
@@ -150,13 +172,13 @@ Monorepo for the **Colcoor editor extension** and its backend for structured lea
 
 Canonical PostgreSQL schema (tables, columns, constraints, DDL): **[`docs/product/database.md`](docs/product/database.md)**.
 
-## Prerequisites
+## Development prerequisites
 
 - Node.js 20+ and npm (for the extension workspace)
 - Python 3.12+ and pip (for the backend)
 - Docker (optional) for local PostgreSQL via `docker compose up -d`
 
-## Quick start
+## Development quick start
 
 **Backend**
 
